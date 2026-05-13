@@ -69,6 +69,12 @@ devenv.local.nix
 .direnv/
 result*
 
+# Python build outputs
+build/
+dist/
+*.egg-info/
+__pycache__/
+
 AGENTS.md
 
 agent-config/

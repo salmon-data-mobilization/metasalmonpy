@@ -48,6 +48,8 @@ def _empty_terms(role=None) -> pd.DataFrame:
             "match_type": pd.Series(dtype=object),
             "definition": pd.Series(dtype=object),
             "alignment_only": pd.Series(dtype=bool),
+            "score": pd.Series(dtype=float),
+            "agreement_sources": pd.Series(dtype="Int64"),
         }
     )
 
@@ -478,6 +480,128 @@ def _search_worms(query: str, role) -> pd.DataFrame:
     return df.drop_duplicates(subset=["iri"]).reset_index(drop=True)
 
 
+def _ontology_index_empty() -> pd.DataFrame:
+    return pd.DataFrame(
+        columns=[
+            "iri",
+            "label",
+            "alt_labels",
+            "definition",
+            "resource_kind",
+            "in_scheme",
+            "parent_iris",
+            "type_iris",
+            "search_text",
+            "is_variable",
+            "is_property",
+            "is_entity",
+            "is_constraint",
+            "is_method",
+            "role_hints",
+        ]
+    )
+
+
+def _smn_term_index(refresh: bool = False) -> pd.DataFrame:
+    return _ontology_index_empty()
+
+
+def _gcdfo_term_index(refresh: bool = False) -> pd.DataFrame:
+    return _ontology_index_empty()
+
+
+def _filter_local_index(index: pd.DataFrame, query: str, role, source: str, ontology: str) -> pd.DataFrame:
+    if index.empty:
+        return _empty_terms(role)
+    q_tokens = {tok for tok in re.sub(r"[^a-z0-9]+", " ", str(query).lower()).split() if tok}
+    if not q_tokens:
+        return _empty_terms(role)
+    role_col = f"is_{role}" if role in {"variable", "property", "entity", "constraint", "method"} else None
+    df = index.copy()
+    if role_col and role_col in df.columns:
+        df = df[df[role_col].fillna(False).astype(bool)]
+    text = df.get("search_text", df.get("label", pd.Series("", index=df.index))).fillna("").astype(str).str.lower()
+    keep = text.apply(lambda value: all(token in value for token in q_tokens))
+    df = df[keep].copy()
+    if df.empty:
+        return _empty_terms(role)
+    return pd.DataFrame(
+        {
+            "label": df["label"].fillna(""),
+            "iri": df["iri"].fillna(""),
+            "source": source,
+            "ontology": ontology,
+            "role": role,
+            "match_type": "label",
+            "definition": df.get("definition", pd.Series("", index=df.index)).fillna(""),
+            "role_hints": df.get("role_hints", pd.Series(pd.NA, index=df.index)),
+        }
+    )
+
+
+def _search_smn(query: str, role) -> pd.DataFrame:
+    return _filter_local_index(_smn_term_index(), query, role, "smn", "smn")
+
+
+def _search_gcdfo(query: str, role) -> pd.DataFrame:
+    return _filter_local_index(_gcdfo_term_index(), query, role, "gcdfo", "gcdfo")
+
+
+def _expand_query(query: str, role) -> List[str]:
+    query = str(query)
+    if role is None or pd.isna(role) or str(role) == "":
+        return [query]
+    role_key = str(role).lower()
+    out = [query]
+    q_lower = query.lower().strip()
+    if role_key == "unit":
+        unit_map = {"kg": "kilogram", "g": "gram", "m": "meter", "cm": "centimeter", "mm": "millimeter"}
+        if q_lower in unit_map:
+            out.append(unit_map[q_lower])
+        if "unit" not in q_lower:
+            out.append(f"{query} unit")
+    elif role_key == "method" and "method" not in q_lower:
+        out.append(f"{query} method")
+    elif role_key == "entity":
+        parts = query.split()
+        if len(parts) >= 2 and re.match(r"^[A-Z][a-z]+$", parts[0]):
+            out.append(parts[0])
+    seen = set()
+    result = []
+    for item in out:
+        if item and item.lower() not in seen:
+            result.append(item)
+            seen.add(item.lower())
+    return result
+
+
+def _apply_cross_source_agreement(df: pd.DataFrame, iri_boost: float = 0.5, label_boost: float = 0.2) -> pd.DataFrame:
+    if df.empty:
+        return df
+    out = df.copy()
+    if "score" not in out.columns:
+        out["score"] = 0.0
+    out["agreement_sources"] = 1
+    iri_counts = (
+        out[~out["iri"].isna() & (out["iri"].astype(str) != "")]
+        .groupby("iri")["source"]
+        .nunique()
+        .to_dict()
+    )
+    label_counts = out.groupby(out["label"].fillna("").astype(str).str.lower())["source"].nunique().to_dict()
+    for idx, row in out.iterrows():
+        iri_count = iri_counts.get(row.get("iri"), 1)
+        label_count = label_counts.get(str(row.get("label", "")).lower(), 1)
+        agreement = max(int(iri_count), int(label_count), 1)
+        out.at[idx, "agreement_sources"] = agreement
+        if iri_count > 1:
+            out.at[idx, "score"] = out.at[idx, "score"] + ((iri_count - 1) * iri_boost)
+        elif label_count > 1:
+            out.at[idx, "score"] = out.at[idx, "score"] + ((label_count - 1) * label_boost)
+    out["agreement_sources"] = out["agreement_sources"].astype(int)
+    return out
+
+
 def _score_and_rank_terms(df: pd.DataFrame, role, vocab_tbl: pd.DataFrame, query: Optional[str] = None) -> pd.DataFrame:
     if df.empty:
         return df
@@ -485,6 +609,8 @@ def _score_and_rank_terms(df: pd.DataFrame, role, vocab_tbl: pd.DataFrame, query
     df = df.copy()
     role_prefs = _load_role_preferences()
     base_source_weight = {
+        "smn": 1.2,
+        "gcdfo": 1.0,
         "ols": 0.3,
         "nvs": 0.6,
         "zooma": 0.5,
@@ -495,11 +621,11 @@ def _score_and_rank_terms(df: pd.DataFrame, role, vocab_tbl: pd.DataFrame, query
     }
     role_boost = {
         "unit": {"qudt": 1.5, "nvs": 1.2, "ols": 0.3},
-        "property": {"nvs": 1.0, "ols": 0.4},
-        "variable": {"nvs": 0.6, "ols": 0.2, "bioportal": 0.4},
-        "entity": {"gbif": 1.3, "worms": 1.3, "bioportal": 0.4, "ols": 0.4},
-        "constraint": {"ols": 0.4, "bioportal": 0.4},
-        "method": {"bioportal": 0.4, "ols": 0.4},
+        "property": {"smn": 1.4, "gcdfo": 1.0, "nvs": 1.0, "ols": 0.4},
+        "variable": {"smn": 1.5, "gcdfo": 1.0, "nvs": 0.6, "ols": 0.2, "bioportal": 0.4},
+        "entity": {"smn": 1.5, "gcdfo": 1.0, "gbif": 1.3, "worms": 1.3, "bioportal": 0.4, "ols": 0.4},
+        "constraint": {"smn": 1.3, "gcdfo": 1.0, "ols": 0.4, "bioportal": 0.4},
+        "method": {"smn": 1.3, "gcdfo": 1.0, "bioportal": 0.4, "ols": 0.4},
     }
 
     df["score"] = df["source"].map(base_source_weight).fillna(0)
@@ -563,68 +689,169 @@ def _score_and_rank_terms(df: pd.DataFrame, role, vocab_tbl: pd.DataFrame, query
     else:
         df["alignment_only"] = df["alignment_only"] | df["iri"].str.contains("wikidata.org", case=False, na=False)
 
+    df = _apply_cross_source_agreement(df)
     return df.sort_values(by=["score", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
 
 
 def sources_for_role(role: Optional[str]) -> List[str]:
     if role is None or role == "":
-        return ["ols", "nvs"]
+        return ["smn", "gcdfo", "ols", "nvs"]
 
     role_key = str(role).lower()
     if role_key == "unit":
         return ["qudt", "nvs", "ols"]
     if role_key == "property":
-        return ["nvs", "ols", "zooma"]
+        return ["smn", "gcdfo", "nvs", "ols", "zooma"]
     if role_key == "entity":
-        return ["gbif", "worms", "bioportal", "ols"]
+        return ["smn", "gcdfo", "gbif", "worms", "bioportal", "ols"]
     if role_key == "method":
-        return ["bioportal", "ols", "zooma"]
+        return ["smn", "gcdfo", "bioportal", "ols", "zooma"]
     if role_key == "variable":
-        return ["nvs", "ols", "zooma"]
+        return ["smn", "gcdfo", "nvs", "ols", "zooma"]
     if role_key == "constraint":
-        return ["ols"]
-    return ["ols", "nvs"]
+        return ["smn", "gcdfo", "ols"]
+    return ["smn", "gcdfo", "ols", "nvs"]
 
 
-def find_terms(query: str, role: Optional[str] = None, sources: Sequence[str] = ("ols", "nvs")) -> pd.DataFrame:
+def find_terms(
+    query: str,
+    role: Optional[str] = None,
+    sources: Sequence[str] = ("smn", "gcdfo", "ols", "nvs"),
+    expand_query: bool = True,
+) -> pd.DataFrame:
     """
     Find ontology terms across OLS, NVS, and other vocab sources.
     """
     if not sources or query is None or query == "":
         return _empty_terms(role)
 
-    cache_key = (query, role, tuple(sorted(sources)))
+    cache_key = (query, role, tuple(sorted(sources)), expand_query)
     if _cache_enabled and cache_key in _term_cache:
         return _term_cache[cache_key].copy()
 
+    queries = _expand_query(query, role) if expand_query else [query]
     results = []
-    for src in sources:
-        if src == "ols":
-            results.append(_search_ols(query, role))
-        elif src == "nvs":
-            results.append(_search_nvs(query, role))
-        elif src == "zooma":
-            results.append(_search_zooma(query, role))
-        elif src == "bioportal":
-            results.append(_search_bioportal(query, role))
-        elif src == "qudt":
-            results.append(_search_qudt(query, role))
-        elif src == "gbif":
-            results.append(_search_gbif(query, role))
-        elif src == "worms":
-            results.append(_search_worms(query, role))
-        else:
-            results.append(_empty_terms(role))
+    diagnostics = []
+    for query_variant in queries:
+        for src in sources:
+            try:
+                if src == "smn":
+                    res = _search_smn(query_variant, role)
+                elif src == "gcdfo":
+                    res = _search_gcdfo(query_variant, role)
+                elif src == "ols":
+                    res = _search_ols(query_variant, role)
+                elif src == "nvs":
+                    res = _search_nvs(query_variant, role)
+                elif src == "zooma":
+                    res = _search_zooma(query_variant, role)
+                elif src == "bioportal":
+                    res = _search_bioportal(query_variant, role)
+                elif src == "qudt":
+                    res = _search_qudt(query_variant, role)
+                elif src == "gbif":
+                    res = _search_gbif(query_variant, role)
+                elif src == "worms":
+                    res = _search_worms(query_variant, role)
+                else:
+                    res = _empty_terms(role)
+                diagnostics.append({"source": src, "query": query_variant, "status": "success", "count": len(res), "error": ""})
+                results.append(res)
+            except Exception as exc:
+                diagnostics.append({"source": src, "query": query_variant, "status": "error", "count": 0, "error": str(exc)})
+                results.append(_empty_terms(role))
 
     combined = pd.concat(results, ignore_index=True) if results else _empty_terms(role)
     vocab_tbl = _load_iadopt_vocab()
     ranked = _score_and_rank_terms(combined, role, vocab_tbl, query)
     if "alignment_only" not in ranked.columns:
         ranked["alignment_only"] = False
-    ranked = ranked[["label", "iri", "source", "ontology", "role", "match_type", "definition", "alignment_only"]]
+    if "score" not in ranked.columns:
+        ranked["score"] = pd.Series(dtype=float)
+    if "agreement_sources" not in ranked.columns:
+        ranked["agreement_sources"] = 1
+    ranked = ranked[
+        [
+            "label",
+            "iri",
+            "source",
+            "ontology",
+            "role",
+            "match_type",
+            "definition",
+            "score",
+            "alignment_only",
+            "agreement_sources",
+        ]
+        + [col for col in ["role_hints", "zooma_confidence", "zooma_annotator"] if col in ranked.columns]
+    ]
+    ranked.attrs["diagnostics"] = pd.DataFrame(diagnostics)
     if _cache_enabled:
         _term_cache[cache_key] = ranked.copy()
     return ranked
 
 
-__all__ = ["find_terms", "sources_for_role"]
+def benchmark_term_ranking_fixtures(
+    fixture_path: Optional[str] = None,
+    profiles: Optional[dict] = None,
+    top_k: int = 3,
+    include_details: bool = True,
+    fixture_path_override: Optional[list] = None,
+) -> dict:
+    if fixture_path_override is not None:
+        fixtures = fixture_path_override
+    else:
+        if fixture_path is None:
+            fixture_path = str(resources.files("salmonpy").joinpath("tests/fixtures/semantic-ranking-fixtures.json"))
+        with open(fixture_path, "r", encoding="utf-8") as fp:
+            fixtures = json.load(fp)
+    profiles = profiles or {"baseline": None}
+    vocab = _load_iadopt_vocab()
+    summary_rows = []
+    per_case_rows = []
+    for profile_name, _profile in profiles.items():
+        top1_ok = 0
+        topk_ok = 0
+        mrr_total = 0.0
+        for case in fixtures:
+            candidates = pd.DataFrame(case.get("candidates", []))
+            ranked = _score_and_rank_terms(candidates, case.get("role"), vocab, case.get("query"))
+            expected = case.get("expected", {})
+            expected_top = expected.get("top", {})
+            expected_id = expected_top.get("candidate_id")
+            ids = ranked.get("candidate_id", pd.Series(range(len(ranked)))).astype(str).tolist()
+            position = (ids.index(str(expected_id)) + 1) if expected_id is not None and str(expected_id) in ids else None
+            case_top1 = position == 1
+            case_topk = position is not None and position <= top_k
+            top1_ok += int(case_top1)
+            topk_ok += int(case_topk)
+            mrr_total += (1.0 / position) if position else 0.0
+            if include_details:
+                per_case_rows.append(
+                    {
+                        "profile": profile_name,
+                        "case_id": case.get("case_id"),
+                        "top1_ok": case_top1,
+                        "top_k_ok": case_topk,
+                        "mrr": (1.0 / position) if position else 0.0,
+                        "top1_position": position,
+                    }
+                )
+        n = max(len(fixtures), 1)
+        summary_rows.append(
+            {
+                "profile": profile_name,
+                "top1_accuracy": top1_ok / n,
+                "top_k_accuracy": topk_ok / n,
+                "mrr": mrr_total / n,
+                "case_count": len(fixtures),
+            }
+        )
+    return {
+        "summary": pd.DataFrame(summary_rows),
+        "per_case": pd.DataFrame(per_case_rows),
+        "profiles": profiles,
+    }
+
+
+__all__ = ["benchmark_term_ranking_fixtures", "find_terms", "sources_for_role"]

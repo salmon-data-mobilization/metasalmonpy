@@ -3,12 +3,22 @@ from __future__ import annotations
 import datetime as _dt
 import re
 import warnings
-from typing import Iterable, Mapping, Optional, Sequence
+from collections.abc import Mapping
+from typing import Optional, Union
 
 try:
     import pandas as pd
 except ImportError as exc:  # pragma: no cover - import guard
     raise ImportError("salmonpy requires pandas; install via `pip install pandas`.") from exc
+
+from .metadata import (
+    ensure_resource_mapping,
+    infer_codes_from_resources,
+    infer_dataset_metadata_from_resources,
+    infer_table_metadata_from_resources,
+    normalize_dictionary,
+    parse_logical,
+)
 
 VALID_VALUE_TYPES = {"string", "integer", "number", "boolean", "date", "datetime"}
 VALID_COLUMN_ROLES = {"identifier", "attribute", "measurement", "temporal", "categorical"}
@@ -105,14 +115,61 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
 
 
 def infer_dictionary(
-    df: pd.DataFrame,
+    df: Union[pd.DataFrame, Mapping[str, pd.DataFrame]],
     guess_types: bool = True,
     dataset_id: str = "dataset-1",
     table_id: str = "table-1",
+    seed_semantics: bool = False,
+    semantic_sources: tuple[str, ...] = ("smn", "gcdfo", "ols", "nvs"),
+    semantic_max_per_role: int = 1,
+    seed_verbose: bool = True,
+    seed_codes: Optional[pd.DataFrame] = None,
+    seed_table_meta: Optional[pd.DataFrame] = None,
+    seed_dataset_meta: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
     Build a starter dictionary DataFrame aligned with the SDP schema.
     """
+    if isinstance(df, Mapping):
+        resources = ensure_resource_mapping(df, table_id=table_id)
+        parts = [
+            infer_dictionary(
+                resource_df,
+                guess_types=guess_types,
+                dataset_id=dataset_id,
+                table_id=resource_table_id,
+                seed_semantics=False,
+                semantic_sources=semantic_sources,
+                semantic_max_per_role=semantic_max_per_role,
+                seed_verbose=seed_verbose,
+            )
+            for resource_table_id, resource_df in resources.items()
+        ]
+        dict_df = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+        table_meta = seed_table_meta if seed_table_meta is not None else infer_table_metadata_from_resources(resources, dataset_id)
+        codes = seed_codes if seed_codes is not None else infer_codes_from_resources(resources, dataset_id)
+        dataset_meta = seed_dataset_meta if seed_dataset_meta is not None else infer_dataset_metadata_from_resources(resources, dataset_id)
+
+        if seed_semantics:
+            if seed_verbose:
+                print("Seeding semantic suggestions during infer_dictionary().")
+            from .semantics import suggest_semantics
+
+            dict_df = suggest_semantics(
+                next(iter(resources.values())),
+                dict_df,
+                sources=semantic_sources,
+                max_per_role=semantic_max_per_role,
+                codes=codes,
+                table_meta=table_meta,
+                dataset_meta=dataset_meta,
+            )
+            dict_df.attrs["inferred_table_meta"] = table_meta
+            dict_df.attrs["inferred_codes"] = codes
+            dict_df.attrs["inferred_dataset_meta"] = dataset_meta
+            dict_df.attrs["inferred_resources"] = list(resources.keys())
+        return dict_df
+
     data = _ensure_dataframe(df, "df")
     col_names = list(data.columns)
     n_cols = len(col_names)
@@ -144,6 +201,27 @@ def infer_dictionary(
             dict_df.at[idx, "value_type"] = infer_value_type(col)
             dict_df.at[idx, "column_role"] = infer_column_role(col_name, col)
 
+    if seed_semantics:
+        if seed_verbose:
+            print("Seeding semantic suggestions during infer_dictionary().")
+        from .semantics import suggest_semantics
+
+        dict_df = suggest_semantics(
+            data,
+            dict_df,
+            sources=semantic_sources,
+            max_per_role=semantic_max_per_role,
+            codes=seed_codes,
+            table_meta=seed_table_meta,
+            dataset_meta=seed_dataset_meta,
+        )
+        if seed_table_meta is not None:
+            dict_df.attrs["seed_table_meta"] = seed_table_meta
+        if seed_codes is not None:
+            dict_df.attrs["seed_codes"] = seed_codes
+        if seed_dataset_meta is not None:
+            dict_df.attrs["seed_dataset_meta"] = seed_dataset_meta
+
     return dict_df
 
 
@@ -154,11 +232,11 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
     if not isinstance(dict_df, pd.DataFrame):
         raise TypeError("dict must be a pandas DataFrame")
 
-    df = dict_df.copy()
-
-    missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    missing_cols = [c for c in REQUIRED_COLUMNS if c not in dict_df.columns]
     if missing_cols:
         raise ValueError(f"Dictionary missing required columns: {missing_cols}")
+
+    df = normalize_dictionary(dict_df)
 
     # Ensure optional semantic columns exist
     for col in SEMANTIC_COLUMNS:
@@ -180,10 +258,11 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
 
     # Required flag must be boolean
     if not pd.api.types.is_bool_dtype(df["required"]):
-        try:
-            df["required"] = df["required"].astype(bool)
-        except Exception as exc:
-            raise ValueError("required must be boolean") from exc
+        parsed_required = parse_logical(df["required"])
+        invalid_required = parsed_required.isna() & df["required"].notna() & (df["required"].astype(str).str.strip() != "")
+        if invalid_required.any():
+            raise ValueError("required must be boolean")
+        df["required"] = parsed_required.fillna(False).astype(bool)
 
     # Measurement guardrail: required in strict mode, optional with warning otherwise
     measurement_rows = (df["column_role"] == "measurement") & ~df["column_role"].isna()
@@ -235,6 +314,11 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
                 + "articles/reusing-standards-salmon-data-terms.html"
             )
             warnings.warn(message, UserWarning)
+
+    duplicates = df[df.duplicated(subset=["dataset_id", "table_id", "column_name"], keep=False)]
+    if not duplicates.empty:
+        names = duplicates["column_name"].dropna().astype(str).unique().tolist()
+        raise ValueError(f"Duplicate column names found in dictionary: {names}")
 
     return df
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+- Updated compatibility to align local helpers with metasalmon 0.0.13.
+- Added canonical SDP CSV read/write, from-data artifact inference, semantic suggestion application, NuSEDS method crosswalks, EDH XML export, DwC-DP descriptor alias, and ontology term-request helpers.
+- Fixed editable package metadata so `pip install -e .` exposes `salmonpy` and CLI helper modules.
+
 ## 0.1.2
 - Renamed the GitHub CSV helpers to generic names: `github_raw_url()` and `read_github_csv()` (`repo` is now required unless a full URL is provided).
 - Updated compatibility to align with metasalmon 0.0.5.

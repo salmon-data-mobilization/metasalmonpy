@@ -67,11 +67,11 @@ print(
 ## Running tests
 ```bash
 . .venv/bin/activate
-python -m unittest discover salmonpy/tests
+python -m unittest discover tests
 ```
 
 ## Compatibility
-- salmonpy 0.1.2 aligns with metasalmon 0.0.5 (parity tests in `tests/test_roundtrip.py`).
+- salmonpy 0.1.3 aligns with metasalmon 0.0.13 for the local package helpers, semantic suggestion workflow, NuSEDS method crosswalks, DwC-DP descriptor export, EDH XML bootstrap export, and term-request payload helpers.
 
 ## Extras
 - Validate an SDP: `python -m salmonpy.scripts.validate_sdp --dataset dataset.csv --tables tables.csv --dictionary column_dictionary.csv [--codes codes.csv] [--require-semantics]`

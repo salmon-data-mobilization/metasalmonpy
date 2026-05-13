@@ -82,6 +82,36 @@ def read_github_csv(
     return pd.read_csv(io.BytesIO(resp.content), **kwargs)
 
 
+def ms_setup_github(repo: str = "dfo-pacific-science/qualark-data", token: Optional[str] = None) -> str:
+    """
+    Verify GitHub token discovery for private-repository CSV access.
+
+    Python cannot safely create or store a PAT for you. Set GITHUB_PAT/GH_TOKEN
+    or configure git credentials, then call this to confirm the token works.
+    """
+    token_val = token or _github_token()
+    if not token_val:
+        raise ValueError("No GitHub token found. Set GITHUB_PAT/GH_TOKEN or configure git credentials.")
+    repo = repo.strip("/")
+    resp = requests.get(
+        f"https://api.github.com/repos/{repo}",
+        headers={
+            "Authorization": f"token {token_val}",
+            "User-Agent": _user_agent(),
+            "Accept": "application/vnd.github.v3+json",
+        },
+        timeout=15,
+    )
+    if resp.status_code == 401:
+        raise PermissionError("GitHub authentication failed. Refresh your PAT and retry.")
+    if resp.status_code == 403 and resp.headers.get("x-github-sso"):
+        raise PermissionError("Access blocked by org SSO. Re-authorize your PAT for this org in GitHub settings.")
+    if resp.status_code == 404:
+        raise FileNotFoundError(f"Repository '{repo}' was not found or token lacks access.")
+    resp.raise_for_status()
+    return token_val
+
+
 
 def _perform_request(url: str, headers: Dict[str, str], max_tries: int = 4) -> requests.Response:
     """Perform a GET with simple exponential backoff for transient errors."""
@@ -351,6 +381,7 @@ def read_github_csv_dir(
 
 __all__ = [
     "github_raw_url",
+    "ms_setup_github",
     "read_github_csv",
     "read_github_csv_dir"
 ]

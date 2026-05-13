@@ -30,8 +30,13 @@ def build_dwc_dp_descriptor(
     The schema URL is resolved to the canonical GitHub location for the given
     profile_version.
     """
+    if hasattr(resources, "to_dict"):
+        resources_iter = resources.to_dict(orient="records")
+    else:
+        resources_iter = resources
+
     res_list = []
-    for res in resources:
+    for res in resources_iter:
         if "name" not in res or "path" not in res or "schema" not in res:
             raise ValueError("Each resource must include 'name', 'path', and 'schema'")
         schema_name = res["schema"]
@@ -52,6 +57,26 @@ def build_dwc_dp_descriptor(
         "name": "dwc-dp-export",
         "resources": res_list,
     }
+    return descriptor
+
+
+def dwc_dp_build_descriptor(
+    resources: Iterable[dict],
+    profile_version: str = "master",
+    profile_url: str = "http://rs.tdwg.org/dwc/dwc-dp",
+    output_path: Optional[str] = None,
+    validate: bool = False,
+    python: str = "python3",
+) -> dict:
+    descriptor = build_dwc_dp_descriptor(
+        resources=resources,
+        profile_version=profile_version,
+        profile_url=profile_url,
+    )
+    if output_path is not None:
+        save_descriptor(descriptor, output_path)
+    if validate:
+        validate_descriptor(descriptor)
     return descriptor
 
 
@@ -77,4 +102,4 @@ def validate_descriptor(descriptor: dict) -> Optional[object]:
     return package.validate()
 
 
-__all__ = ["build_dwc_dp_descriptor", "save_descriptor", "validate_descriptor"]
+__all__ = ["build_dwc_dp_descriptor", "dwc_dp_build_descriptor", "save_descriptor", "validate_descriptor"]

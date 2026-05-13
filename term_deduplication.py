@@ -99,7 +99,7 @@ def deduplicate_proposed_terms(
 
     # Detect phase-stratified patterns (e.g., "Ocean Catch", "Terminal Run")
     phase_prefixes = ['ocean', 'terminal', 'mainstem', 'marine', 'freshwater', r'in[-\s]?river']
-    phase_pattern = r'^(' + '|'.join(phase_prefixes) + r')\s+'
+    phase_pattern = r'^(?:' + '|'.join(phase_prefixes) + r')\s+'
     df['is_phase_variant'] = df['label_pattern'].str.contains(phase_pattern, case=False, regex=True, na=False)
     df['phase_base_label'] = df['label_pattern'].str.replace(phase_pattern, '', case=False, regex=True).str.strip()
 
@@ -191,6 +191,9 @@ def deduplicate_proposed_terms(
     ]
     extra_cols = [col for col in result.columns if col not in columns_to_keep and col not in internal_cols]
     result = result[columns_to_keep + extra_cols]
+    for bool_col in ['is_base_term', 'needs_age_facet', 'needs_phase_facet']:
+        if bool_col in result.columns:
+            result[bool_col] = result[bool_col].apply(lambda value: bool(value)).astype(object)
 
     # Report results
     n_removed = len(proposed_terms) - len(result)
@@ -245,7 +248,7 @@ def suggest_facet_schemes(proposed_terms: pd.DataFrame) -> pd.DataFrame:
     schemes = []
 
     # Check for age patterns
-    age_matches = labels[labels.str.contains(r'(\bage\s*\d+\b|\bage\d+class\b|\bage\d+\b)', case=False, regex=True, na=False)]
+    age_matches = labels[labels.str.contains(r'(?:\bage\s*\d+\b|\bage\d+class\b|\bage\d+\b)', case=False, regex=True, na=False)]
     if len(age_matches) >= 3:
         # Extract age numbers
         age_nums = []
@@ -265,7 +268,7 @@ def suggest_facet_schemes(proposed_terms: pd.DataFrame) -> pd.DataFrame:
     phases_found = []
     for phase in phase_patterns:
         # Accept both "ocean" and "oceanphase" style tokens
-        if labels.str.contains(rf'\b{phase}(phase)?\b', case=False, regex=True, na=False).any():
+        if labels.str.contains(rf'\b{phase}(?:phase)?\b', case=False, regex=True, na=False).any():
             phases_found.append(f'{phase.capitalize()}Phase')
 
     if len(phases_found) >= 2:

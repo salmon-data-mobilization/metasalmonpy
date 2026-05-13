@@ -60,12 +60,12 @@ class TermSearchTests(unittest.TestCase):
 
     def test_sources_for_role_returns_expected_sources(self):
         self.assertEqual(ts.sources_for_role("unit"), ["qudt", "nvs", "ols"])
-        self.assertEqual(ts.sources_for_role("entity"), ["gbif", "worms", "bioportal", "ols"])
-        self.assertEqual(ts.sources_for_role("property"), ["nvs", "ols", "zooma"])
-        self.assertEqual(ts.sources_for_role("method"), ["bioportal", "ols", "zooma"])
-        self.assertEqual(ts.sources_for_role("variable"), ["nvs", "ols", "zooma"])
-        self.assertEqual(ts.sources_for_role("constraint"), ["ols"])
-        self.assertEqual(ts.sources_for_role(None), ["ols", "nvs"])
+        self.assertEqual(ts.sources_for_role("entity"), ["smn", "gcdfo", "gbif", "worms", "bioportal", "ols"])
+        self.assertEqual(ts.sources_for_role("property"), ["smn", "gcdfo", "nvs", "ols", "zooma"])
+        self.assertEqual(ts.sources_for_role("method"), ["smn", "gcdfo", "bioportal", "ols", "zooma"])
+        self.assertEqual(ts.sources_for_role("variable"), ["smn", "gcdfo", "nvs", "ols", "zooma"])
+        self.assertEqual(ts.sources_for_role("constraint"), ["smn", "gcdfo", "ols"])
+        self.assertEqual(ts.sources_for_role(None), ["smn", "gcdfo", "ols", "nvs"])
 
     def test_alignment_only_wikidata_penalized(self):
         df = pd.DataFrame(
@@ -101,6 +101,8 @@ class TermSearchTests(unittest.TestCase):
         called_url = mock_json.call_args[0][0]
         self.assertIn("rows=50", called_url)
         self.assertEqual(res.iloc[0]["label"], "Spawner count")
+        self.assertIn("score", res.columns)
+        self.assertIn("agreement_sources", res.columns)
 
     def test_score_and_rank_terms_uses_label_overlap(self):
         df = pd.DataFrame(
