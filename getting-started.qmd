@@ -1,0 +1,110 @@
+---
+title: "Get started"
+description: "Install salmonpy and create a review-ready Salmon Data Package."
+---
+
+## Install
+
+Install the released package directly from its GitHub tag:
+
+```bash
+python -m pip install \
+  "salmonpy @ git+https://github.com/salmon-data-mobilization/metaSmnPy@v0.1.6"
+```
+
+For development, clone the repository and install the test dependencies:
+
+```bash
+git clone https://github.com/salmon-data-mobilization/metaSmnPy.git
+cd metaSmnPy
+python -m venv .venv
+. .venv/bin/activate
+python -m pip install -e ".[test]"
+```
+
+The optional `context` extra adds Excel and PDF readers for LLM context:
+
+```bash
+python -m pip install -e ".[context,test]"
+```
+
+## Create a package
+
+Use `create_sdp()` for the standard one-call workflow. A single DataFrame uses
+`table_id`; a mapping of DataFrames uses each mapping key as its table id.
+
+```python
+import pandas as pd
+from salmonpy import create_sdp
+
+catch = pd.DataFrame(
+    {
+        "survey_year": [2024, 2025],
+        "species": ["Coho", "Coho"],
+        "catch_count": [42, 57],
+    }
+)
+
+path = create_sdp(
+    catch,
+    path="coho-catch-sdp",
+    dataset_id="coho-catch",
+    table_id="catch",
+    seed_semantics=False,
+)
+```
+
+Setting `seed_semantics=False` makes this example fully local. Semantic
+retrieval can contact configured ontology services; LLM review remains off
+unless `llm_assess=True`.
+
+## Review the output
+
+The canonical layout is:
+
+```text
+coho-catch-sdp/
+|-- .salmonpy-package
+|-- README-review.txt
+|-- datapackage.json
+|-- data/
+|   `-- catch.csv
+`-- metadata/
+    |-- dataset.csv
+    |-- tables.csv
+    |-- column_dictionary.csv
+    `-- codes.csv
+```
+
+Review the metadata in this order:
+
+1. Complete `metadata/dataset.csv` and `metadata/tables.csv`.
+2. Confirm roles, types, definitions, and semantic IRIs in
+   `metadata/column_dictionary.csv`.
+3. Confirm controlled values and IRIs in `metadata/codes.csv`.
+4. Replace every `MISSING` placeholder and `REVIEW:` IRI.
+5. Run strict validation.
+
+```python
+from salmonpy import validate_salmon_datapackage
+
+result = validate_salmon_datapackage(path, require_iris=True)
+print(result)
+```
+
+Strict validation fails while unresolved review markers remain. This protects
+the boundary between machine suggestions and curator-approved metadata.
+
+## Read the package
+
+```python
+from salmonpy import read_salmon_datapackage
+
+package = read_salmon_datapackage(path)
+dictionary = package["dictionary"]
+resources = package["resources"]
+```
+
+Continue with the [package lifecycle](guides/package-lifecycle.qmd) for
+multi-table packages and manual assembly, or the
+[semantic review guide](guides/semantic-review.qmd) for ontology suggestions.

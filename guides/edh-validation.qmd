@@ -1,0 +1,83 @@
+---
+title: "EDH and validation"
+description: "Validate reviewed metadata and build Enterprise Data Hub XML."
+---
+
+## Validate while reviewing
+
+Default validation reports structural problems and unresolved semantics without
+requiring every IRI:
+
+```python
+from salmonpy import validate_salmon_datapackage
+
+report = validate_salmon_datapackage("survey-sdp")
+```
+
+Use strict validation at the publication boundary:
+
+```python
+report = validate_salmon_datapackage(
+    "survey-sdp",
+    require_iris=True,
+)
+```
+
+Strict validation rejects unresolved `REVIEW:` markers, missing required
+metadata, broken dataset/table/column relationships, and invalid semantic IRI
+forms.
+
+For an in-memory dictionary, `validate_semantics()` returns normalized
+dictionary data plus separate issue and gap tables:
+
+```python
+from salmonpy import validate_semantics
+
+result = validate_semantics(dictionary, require_iris=False)
+print(result["issues"])
+print(result["missing_terms"])
+print(result["missing_semantics"])
+```
+
+## Create EDH metadata
+
+`create_sdp(include_edh_xml=True)` can create a draft HNAP export during
+scaffolding. If review markers remain, the function warns that the XML is a
+draft.
+
+After metadata review, rebuild from the package:
+
+```python
+from salmonpy import write_edh_xml_from_sdp
+
+xml = write_edh_xml_from_sdp(
+    "survey-sdp",
+    output_path="survey-sdp/metadata/metadata-edh-hnap.xml",
+)
+```
+
+`write_edh_xml_from_sdp()` reads the current reviewed `dataset.csv`, so the XML
+cannot silently remain tied to the original scaffold.
+
+For direct construction from a single-row dataset metadata DataFrame:
+
+```python
+from salmonpy import edh_build_hnap_xml
+
+xml = edh_build_hnap_xml(
+    dataset_meta,
+    output_path="metadata-edh-hnap.xml",
+)
+```
+
+`edh_build_iso19139_xml()` also exposes the generic ISO 19139 profile, while
+`edh_build_hnap_xml()` is the supported DFO EDH entry point.
+
+## Final publication checklist
+
+- The package contains the complete `data/` and `metadata/` directories.
+- Dataset, table, dictionary, and code identifiers align.
+- All required metadata is complete.
+- No `REVIEW:` or `MISSING` values remain.
+- Strict validation passes.
+- EDH XML was rebuilt after the final metadata edits.

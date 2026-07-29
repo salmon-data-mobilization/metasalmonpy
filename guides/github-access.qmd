@@ -1,0 +1,58 @@
+---
+title: "GitHub data access"
+description: "Read CSV resources from public or private GitHub repositories."
+---
+
+## Build a raw URL
+
+```python
+from salmonpy import github_raw_url
+
+url = github_raw_url(
+    "data/gold/dimension_tables/dim_date.csv",
+    repo="dfo-pacific-science/qualark-data",
+    ref="v0.3.0",
+)
+```
+
+Pin `ref` to a tag or commit when reproducibility matters. The default is
+`main`.
+
+## Read one CSV
+
+```python
+from salmonpy import read_github_csv
+
+dim_date = read_github_csv(
+    "data/gold/dimension_tables/dim_date.csv",
+    repo="dfo-pacific-science/qualark-data",
+    ref="v0.3.0",
+)
+```
+
+## Read a directory
+
+```python
+from salmonpy import read_github_csv_dir
+
+tables = read_github_csv_dir(
+    "data/gold/dimension_tables",
+    repo="dfo-pacific-science/qualark-data",
+    ref="v0.3.0",
+)
+```
+
+## Private repositories
+
+Token discovery checks `GITHUB_PAT`, `GH_TOKEN`, and the configured git
+credential store. Verify discovery without printing the token:
+
+```python
+from salmonpy import ms_setup_github
+
+ms_setup_github(repo="dfo-pacific-science/qualark-data")
+```
+
+Pass `token=` directly only when your application already manages credentials.
+Do not commit tokens to source, examples, notebooks, or `.env` files that are
+tracked by git.

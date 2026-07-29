@@ -1,0 +1,3 @@
+exclude scripts/manual_score_adjustments.py
+exclude scripts/score_results_alignment.py
+exclude scripts/transform_results_network.py

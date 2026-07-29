@@ -1,4 +1,4 @@
-name: Parity Tests
+name: Offline Tests and R Parity
 
 on:
   pull_request:
@@ -6,25 +6,60 @@ on:
     branches: [main, master]
 
 jobs:
-  parity:
+  python:
     runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      METASALMON_LLM_API_KEY: ""
+      CHAPI_API_KEY: ""
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
+      - name: Install package and test tools
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[test]"
+      - name: Run offline suite
+        run: python -m pytest -q
+      - name: Run smoke workflow
+        run: python tests/smoke.py
+      - name: Build distributions
+        run: python -m build
+
+  parity:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      METASALMON_LLM_API_KEY: ""
+      CHAPI_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
       - name: Set up R
         uses: r-lib/actions/setup-r@v2
         with:
           use-public-rspm: true
       - name: Install Python deps
-        run: python -m pip install --upgrade pip && python -m pip install -e .
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[test]"
       - name: Clone metasalmon
-        run: git clone https://github.com/DFO-PacSci/metasalmon /tmp/metasalmon
-      - name: Install metasalmon
+        run: git clone --depth 1 https://github.com/salmon-data-mobilization/metasalmon /tmp/metasalmon
+      - name: Install metasalmon dependencies
+        run: |
+          Rscript -e 'install.packages("remotes")'
+          Rscript -e 'remotes::install_deps("/tmp/metasalmon", dependencies = NA, upgrade = "never")'
+      - name: Create R library
+        run: mkdir -p /tmp/metasalmon-lib
+      - name: Install metasalmon package
         run: R CMD INSTALL /tmp/metasalmon -l /tmp/metasalmon-lib
       - name: Run parity test (R↔Python)
         env:
           R_LIBS: /tmp/metasalmon-lib
-        run: python -m unittest tests.test_roundtrip
+        run: python -m pytest -q tests/test_roundtrip.py

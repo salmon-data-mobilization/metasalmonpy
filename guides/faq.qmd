@@ -1,0 +1,51 @@
+---
+title: "Frequently asked questions"
+description: "Answers about package creation, semantic review, and release behavior."
+---
+
+## Does passing a context file call an LLM?
+
+No. LLM review runs only when `llm_assess=True`. Context supplied while review
+is disabled produces a warning and is ignored.
+
+## Can I pass a pandas DataFrame to `llm_context_files`?
+
+No. Pass local file paths. Use `llm_context_text` for inline text. Parsed
+pandas, XML, or document objects are rejected early.
+
+## What does `sources=["smn"]` mean?
+
+It is a strict allowlist. Initial search and retry search may use only SMN.
+Omitting `sources` uses role-aware defaults instead.
+
+## Are semantic suggestions written into the dictionary automatically?
+
+The package workflow may prefill variable, property, entity, and unit IRIs, but
+it marks them with `REVIEW:`. Method and constraint fields are never
+automatically applied. Strict validation fails until review is complete.
+
+## Will `overwrite=True` delete any directory?
+
+No. salmonpy replaces only directories it recognizes as salmonpy or SDP package
+directories. It refuses to delete an unrelated non-empty directory.
+
+## Does term-gap detection submit GitHub issues?
+
+No. Detection and rendering are local. Live submission requires
+`dry_run=False`, `confirm=True`, credentials, and confirmation for every issue.
+
+## Is salmonpy published on PyPI?
+
+Not currently. Install the released version from its GitHub tag. GitHub release
+artifacts include the source distribution and wheel.
+
+## Which package defines the shared contract?
+
+metasalmon is the normative R implementation for SDP and ontology behavior.
+salmonpy mirrors its user-facing workflows for Python users and documents
+intentional Python-native differences in the [parity guide](parity.qmd).
+
+## Do routine tests spend provider credits?
+
+No. Unit tests and CI blank provider credentials and use injected deterministic
+responses. Live-provider evaluation is an explicit maintainer activity.

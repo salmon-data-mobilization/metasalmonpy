@@ -1,0 +1,65 @@
+---
+title: "Glossary"
+description: "Terms used across salmonpy and Salmon Data Packages."
+---
+
+**Candidate**
+
+:   An ontology or vocabulary term returned by deterministic retrieval for a
+    semantic target.
+
+**Constraint**
+
+:   A qualifier that narrows the entity or property represented by a
+    measurement, such as a life stage, sex, or assessment phase.
+
+**EDH**
+
+:   Enterprise Data Hub, the DFO destination supported by salmonpy's HNAP-aware
+    ISO 19139 metadata export.
+
+**GCDFO**
+
+:   The DFO-specific salmon ontology namespace used for concepts whose scope is
+    narrower than the shared Salmon Domain Ontology.
+
+**HNAP**
+
+:   Harmonized North American Profile, the ISO metadata profile used by the
+    supported DFO EDH export.
+
+**I-ADOPT**
+
+:   A framework for decomposing an observed variable into property, entity,
+    constraint, and related components. salmonpy also records a whole-variable
+    term, unit, and method.
+
+**LLM assessment**
+
+:   An opt-in model decision about a deterministic candidate shortlist.
+    Assessments are provenance for curator review, not authority.
+
+**Review marker**
+
+:   The `REVIEW:` prefix added to inferred IRIs. Strict validation fails until
+    a human removes or resolves every marker.
+
+**Salmon Data Package (SDP)**
+
+:   A portable directory containing data resources, standardized metadata CSVs,
+    a Frictionless `datapackage.json`, and optional export artifacts.
+
+**Semantic target**
+
+:   A specific metadata field that needs an ontology or vocabulary IRI, such as
+    a measurement property, code value, table observation unit, or dataset
+    keyword.
+
+**SMN**
+
+:   The shared Salmon Domain Ontology namespace at `https://w3id.org/smn/`.
+
+**Structured term gap**
+
+:   A machine-readable record that a semantic target lacks an acceptable term
+    or received a final `request_new_term` assessment.

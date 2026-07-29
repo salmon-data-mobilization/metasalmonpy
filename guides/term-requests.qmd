@@ -1,0 +1,88 @@
+---
+title: "Ontology term requests"
+description: "Turn unresolved semantic targets into curator-reviewed request drafts."
+---
+
+## Detect structured gaps
+
+`detect_semantic_term_gaps()` combines deterministic candidate gaps with final
+LLM `request_new_term` assessments.
+
+```python
+from salmonpy import detect_semantic_term_gaps
+
+gaps = detect_semantic_term_gaps(reviewed)
+```
+
+When `suggestions` is omitted, the function reads both
+`semantic_suggestions` and `semantic_llm_assessments` from the dictionary
+attributes. When suggestions are supplied explicitly, only their embedded LLM
+fields are used.
+
+The `gap_detection_basis` field distinguishes:
+
+- `candidate_gap`;
+- `llm_request_new_term`; and
+- `candidate_gap_and_llm_request_new_term`.
+
+An explicit final LLM gap remains visible even when SMN candidates exist.
+Duplicate assessments with conflicting proposed-term fields are rejected rather
+than silently collapsed.
+
+## Route and render requests
+
+```python
+from salmonpy import render_ontology_term_request
+
+requests = render_ontology_term_request(gaps, scope="auto")
+```
+
+First-class scopes are:
+
+| Scope | Destination |
+|---|---|
+| `smn` | Shared Salmon Domain Ontology |
+| `gcdfo` | DFO-specific GCDFO Salmon Ontology |
+| `profile` | A local, program, or organization profile |
+| `uncertain` | Requires explicit routing |
+| `skip` | Do not prepare a request |
+
+Automatic routing uses explicit row overrides first, then a forced function
+scope, a recognized namespace suggestion, and finally the deterministic
+placement heuristic. `llm_new_term_namespace` is evidence, not authority.
+
+Profile requests require `profile_name` in non-interactive use:
+
+```python
+profile_requests = render_ontology_term_request(
+    gaps,
+    scope="profile",
+    profile_name="coho-monitoring-profile",
+)
+```
+
+The resulting DataFrame contains repository-specific titles and issue bodies
+matching the active SMN or GCDFO template.
+
+## Preview before submission
+
+```python
+from salmonpy import submit_term_request_issues
+
+preview = submit_term_request_issues(requests, dry_run=True)
+```
+
+Live submission is deliberately difficult to trigger accidentally. It requires
+`dry_run=False`, `confirm=True`, a GitHub token, and a separate interactive
+confirmation for every issue.
+
+```python
+submitted = submit_term_request_issues(
+    requests,
+    dry_run=False,
+    confirm=True,
+)
+```
+
+Generated requests are drafts for ontology curators. salmonpy never approves a
+new ontology term or submits one as a side effect of semantic review.

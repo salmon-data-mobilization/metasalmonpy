@@ -44,9 +44,12 @@ class PackageIOTests(unittest.TestCase):
         create_salmon_datapackage({"observations": df}, dataset_meta, table_meta, dict_df, path=tmpdir, overwrite=True)
         pkg = read_salmon_datapackage(tmpdir)
 
-        self.assertTrue(Path(tmpdir, "dataset.csv").exists())
-        self.assertTrue(Path(tmpdir, "tables.csv").exists())
-        self.assertTrue(Path(tmpdir, "column_dictionary.csv").exists())
+        self.assertTrue(Path(tmpdir, "metadata", "dataset.csv").exists())
+        self.assertTrue(Path(tmpdir, "metadata", "tables.csv").exists())
+        self.assertTrue(
+            Path(tmpdir, "metadata", "column_dictionary.csv").exists()
+        )
+        self.assertTrue(Path(tmpdir, "data", "observations.csv").exists())
         self.assertIn("observations", pkg["resources"])
         self.assertFalse(pkg["dictionary"].empty)
         self.assertEqual(pkg["dataset"]["dataset_id"].iloc[0], "demo")
@@ -96,15 +99,21 @@ class PackageIOTests(unittest.TestCase):
         self.assertFalse(artifacts["codes"].empty)
 
         tmpdir = tempfile.mkdtemp(prefix="salmonpy-from-data-")
+        legacy_xml = Path(tmpdir, "legacy-iso19139.xml")
         pkg_path = create_salmon_datapackage_from_data(
             resources,
             path=str(Path(tmpdir, "pkg")),
             dataset_id="demo",
             seed_semantics=False,
             overwrite=True,
+            include_edh_xml=True,
+            edh_profile="iso19139",
+            edh_xml_path=str(legacy_xml),
         )
-        self.assertTrue((pkg_path / "dataset.csv").exists())
-        self.assertTrue((pkg_path / "codes.csv").exists())
+        self.assertTrue((pkg_path / "metadata" / "dataset.csv").exists())
+        self.assertTrue((pkg_path / "metadata" / "codes.csv").exists())
+        self.assertTrue((pkg_path / "data" / "catches.csv").exists())
+        self.assertTrue(legacy_xml.exists())
 
 
 if __name__ == "__main__":  # pragma: no cover

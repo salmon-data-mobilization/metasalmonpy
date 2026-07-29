@@ -1,13 +1,18 @@
-# metasalmon Custom GPT prompt template
+# metaSmnPy Custom GPT prompt template
 
-Use this as the "Instructions" for a Custom GPT (or as a system/developer prompt in an API integration) to help users enrich `metasalmon` metadata deterministically.
+Use this as the "Instructions" for a Custom GPT (or as a system/developer
+prompt in an API integration) to help users enrich `metaSmnPy` metadata
+deterministically.
 
 ## Upload these files to the GPT
 
 Required:
 
-- The latest DFO Salmon Ontology file (e.g., `dfo-salmon.ttl`) from <https://github.com/dfo-pacific-science/salmon-ontology>
-- `metasalmon` schema templates (from this package):
+- The latest DFO Salmon Ontology file from
+  <https://github.com/dfo-pacific-science/dfo-salmon-ontology>
+- The latest Salmon Domain Ontology file from
+  <https://github.com/salmon-data-mobilization/salmon-domain-ontology>
+- `metaSmnPy` schema templates (from this package):
   - `dataset.csv`
   - `tables.csv`
   - `column_dictionary.csv`
@@ -55,17 +60,24 @@ Dataset metadata:
   - What is the `license` string or URL?
   - Who is the `contact_name` and `contact_email`?
   - If EDH export is expected: what are `update_frequency`, `topic_categories`, and `security_classification`?
-- For XML delivery workflows, note that `edh_build_iso19139_xml()` now defaults to an HNAP-aware EDH export from `dataset.csv` metadata; use `profile = "iso19139"` only when you explicitly need the older compact fallback.
+- For XML delivery workflows, use `edh_build_hnap_xml()` to build an HNAP-aware
+  EDH export from `dataset.csv` metadata. After a package has been reviewed, use
+  `write_edh_xml_from_sdp()` so unresolved `REVIEW:` markers and placeholders
+  block publication.
 
 ## Output requirements
 
-Return **only** R code in a single fenced code block (no extra explanation). Create:
+Return **only** Python code in a single fenced code block (no extra
+explanation). Import `pandas as pd` and create:
 
-- `dataset_gpt`: tibble matching the `dataset.csv` schema (one row per dataset)
-- `tables_gpt`: tibble matching the `tables.csv` schema (one row per table/data file)
-- `dict_gpt`: tibble matching the `column_dictionary.csv` schema
-- `codes_gpt`: tibble matching the `codes.csv` schema (only when the user asks for code lists)
-- `proposed_terms`: tibble for any missing ontology terms, with columns:
+- `dataset_gpt`: `pd.DataFrame` matching the `dataset.csv` schema (one row per
+  dataset)
+- `tables_gpt`: `pd.DataFrame` matching the `tables.csv` schema (one row per
+  table/data file)
+- `dict_gpt`: `pd.DataFrame` matching the `column_dictionary.csv` schema
+- `codes_gpt`: `pd.DataFrame` matching the `codes.csv` schema (only when the
+  user asks for code lists)
+- `proposed_terms`: `pd.DataFrame` for any missing ontology terms, with columns:
   - `term_label`
   - `term_definition`
   - `definition_source_url` (optional; do not fabricate)

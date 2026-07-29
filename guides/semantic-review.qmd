@@ -1,0 +1,111 @@
+---
+title: "Semantic review"
+description: "Retrieve, assess, and apply ontology candidates without weakening curator control."
+---
+
+## Deterministic suggestions
+
+`suggest_semantics()` searches for candidates for dictionary, code, table, and
+dataset targets. Measurement columns use six ordered semantic roles:
+variable, property, entity, unit, constraint, and method.
+
+```python
+from salmonpy import infer_dictionary, suggest_semantics
+
+dictionary = infer_dictionary(
+    observations,
+    dataset_id="catch-monitoring",
+    table_id="observations",
+)
+
+reviewed = suggest_semantics(
+    observations,
+    dictionary,
+    sources=["smn", "gcdfo"],
+    max_per_role=3,
+)
+
+suggestions = reviewed.attrs["semantic_suggestions"]
+```
+
+When `sources` is omitted, salmonpy chooses role-aware defaults. An explicitly
+supplied source list is a strict allowlist for initial and retry retrieval.
+For example, `sources="smn"` cannot introduce QUDT candidates.
+
+## LLM review is opt-in
+
+Context does not enable an LLM call. You must set `llm_assess=True` explicitly.
+Context file inputs must be local paths, not parsed pandas, XML, or document
+objects.
+
+```python
+reviewed = suggest_semantics(
+    observations,
+    dictionary,
+    sources=["smn"],
+    llm_assess=True,
+    llm_provider="openrouter",
+    llm_model="openai/gpt-5.4-mini",
+    llm_context_files=["data_dictionary.csv"],
+)
+
+assessments = reviewed.attrs["semantic_llm_assessments"]
+```
+
+Supplying `llm_context_files` or `llm_context_text` while
+`llm_assess=False` produces a warning and makes no provider request.
+
+## Bundle review
+
+Measurement targets are reviewed as one column bundle. The request contains the
+original dictionary row, existing semantics, value metadata, all six candidate
+slots, relevant context, and the retrieval-source policy.
+
+The adapter preserves the public per-target format:
+
+- `semantic_suggestions` remains the candidate table;
+- `semantic_llm_assessments` always uses the same 30-column schema;
+- positional candidate indices remain available to callers;
+- provider failures retain the deterministic shortlist; and
+- malformed individual slots fall back without discarding valid sibling slots.
+
+Retry processing is bounded to one round. An exact retry of the original query
+is preserved as a `retry_search` decision, marked with
+`llm_retry_query_rejection_reason="duplicate_original_query"`, and skipped.
+Near-duplicate queries remain eligible. Escalated shortlist rejections retain
+`llm_escalated_from="reject_shortlist"`.
+
+## Deterministic validators
+
+Pure validators can downgrade unsupported `accept` decisions to `review` for:
+
+- missing method evidence;
+- missing constraint evidence;
+- role and ontology-type incompatibility;
+- deterministically known unit/property dimensional conflicts; and
+- curated semantic redundancy.
+
+A downgrade clears the selected candidate but preserves model confidence and
+rationale as provenance. Validators never retrieve, substitute, or invent
+terms.
+
+## Apply reviewed choices
+
+```python
+from salmonpy import apply_semantic_suggestions
+
+updated = apply_semantic_suggestions(
+    reviewed,
+    strategy="llm",
+    roles=["variable", "property", "entity", "unit"],
+    min_llm_confidence=0.8,
+)
+```
+
+Only variable, property, entity, and unit roles are eligible for automatic
+prefill in the package workflow. Method and constraint decisions always remain
+for explicit review.
+
+For an interactive, resumable whole-variable review, use
+`chat_decomposition()`. It persists structured state and never submits a term
+request automatically.

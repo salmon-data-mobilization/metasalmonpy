@@ -694,6 +694,21 @@ def _score_and_rank_terms(df: pd.DataFrame, role, vocab_tbl: pd.DataFrame, query
 
 
 def sources_for_role(role: Optional[str]) -> List[str]:
+    """
+    Return the ordered default retrieval sources for a semantic role.
+
+    Parameters
+    ----------
+    role
+        One of variable, property, entity, unit, constraint, or method.
+        Unknown and empty roles receive the generic default.
+
+    Returns
+    -------
+    list of str
+        Ordered source identifiers. These defaults apply only when callers omit
+        sources; an explicit source list remains a strict allowlist.
+    """
     if role is None or role == "":
         return ["smn", "gcdfo", "ols", "nvs"]
 
@@ -713,19 +728,35 @@ def sources_for_role(role: Optional[str]) -> List[str]:
     return ["smn", "gcdfo", "ols", "nvs"]
 
 
+def _normalize_explicit_sources(sources: Sequence[str]) -> tuple[str, ...]:
+    values = (sources,) if isinstance(sources, str) else sources
+    return tuple(
+        dict.fromkeys(
+            str(source).strip().lower()
+            for source in values
+            if str(source).strip()
+        )
+    )
+
+
 def find_terms(
     query: str,
     role: Optional[str] = None,
-    sources: Sequence[str] = ("smn", "gcdfo", "ols", "nvs"),
+    sources: Optional[Sequence[str]] = None,
     expand_query: bool = True,
 ) -> pd.DataFrame:
     """
     Find ontology terms across OLS, NVS, and other vocab sources.
     """
-    if not sources or query is None or query == "":
+    resolved_sources = (
+        tuple(sources_for_role(role))
+        if sources is None
+        else _normalize_explicit_sources(sources)
+    )
+    if not resolved_sources or query is None or query == "":
         return _empty_terms(role)
 
-    cache_key = (query, role, tuple(sorted(sources)), expand_query)
+    cache_key = (query, role, tuple(sorted(resolved_sources)), expand_query)
     if _cache_enabled and cache_key in _term_cache:
         return _term_cache[cache_key].copy()
 
@@ -733,7 +764,7 @@ def find_terms(
     results = []
     diagnostics = []
     for query_variant in queries:
-        for src in sources:
+        for src in resolved_sources:
             try:
                 if src == "smn":
                     res = _search_smn(query_variant, role)
@@ -798,6 +829,27 @@ def benchmark_term_ranking_fixtures(
     include_details: bool = True,
     fixture_path_override: Optional[list] = None,
 ) -> dict:
+    """
+    Evaluate deterministic term ranking against versioned fixtures.
+
+    Parameters
+    ----------
+    fixture_path
+        JSON fixture path. Uses the packaged fixture path when omitted.
+    profiles
+        Named profile mapping included in the benchmark result.
+    top_k
+        Rank threshold used for top-k accuracy.
+    include_details
+        Include one result row per case when ``True``.
+    fixture_path_override
+        In-memory fixture list for tests.
+
+    Returns
+    -------
+    dict
+        Summary metrics, optional per-case results, and the supplied profiles.
+    """
     if fixture_path_override is not None:
         fixtures = fixture_path_override
     else:
