@@ -4,7 +4,7 @@ import datetime as _dt
 import re
 import warnings
 from collections.abc import Mapping
-from typing import Optional, Union
+from typing import Optional, Sequence, Union
 
 try:
     import pandas as pd
@@ -103,12 +103,15 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
     if re.search(r"^key$|_key$|^key_", name_lower):
         return "identifier"
 
-    if re.search(r"date|time|dtt|timestamp", name_lower):
+    if re.search(r"date|time|dtt|timestamp|(^|_)year($|_)", name_lower):
         return "temporal"
     if pd.api.types.is_datetime64_any_dtype(series):
         return "temporal"
 
-    if re.search(r"count|total|number|amount|quantity|measure", name_lower):
+    if re.search(
+        r"count|total|number|amount|quantity|measure|spawner|abundance|weight|length",
+        name_lower,
+    ):
         return "measurement"
 
     return "attribute"
@@ -120,16 +123,64 @@ def infer_dictionary(
     dataset_id: str = "dataset-1",
     table_id: str = "table-1",
     seed_semantics: bool = False,
-    semantic_sources: tuple[str, ...] = ("smn", "gcdfo", "ols", "nvs"),
+    semantic_sources: Optional[Sequence[str]] = None,
     semantic_max_per_role: int = 1,
     seed_verbose: bool = True,
     seed_codes: Optional[pd.DataFrame] = None,
     seed_table_meta: Optional[pd.DataFrame] = None,
     seed_dataset_meta: Optional[pd.DataFrame] = None,
+    llm_assess: bool = False,
+    llm_provider: str = "openai",
+    llm_model: Optional[str] = None,
+    llm_api_key: Optional[str] = None,
+    llm_base_url: Optional[str] = None,
+    llm_reasoning_effort: Optional[str] = None,
+    llm_top_n: int = 5,
+    llm_context_files=None,
+    llm_context_text=None,
+    llm_timeout_seconds: int = 60,
+    llm_request_fn=None,
 ) -> pd.DataFrame:
     """
     Build a starter dictionary DataFrame aligned with the SDP schema.
     """
+    if llm_context_files is not None:
+        from .llm_review import validate_context_files
+
+        validate_context_files(llm_context_files)
+    llm_requested = any(
+        (
+            llm_assess,
+            llm_model is not None,
+            llm_api_key is not None,
+            llm_base_url is not None,
+            llm_reasoning_effort is not None,
+            llm_context_files is not None,
+            llm_context_text is not None,
+            llm_request_fn is not None,
+        )
+    )
+    if not seed_semantics and llm_requested:
+        warnings.warn(
+            "LLM semantic-review options are ignored when seed_semantics=False.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    llm_options = {
+        "llm_assess": llm_assess,
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "llm_api_key": llm_api_key,
+        "llm_base_url": llm_base_url,
+        "llm_reasoning_effort": llm_reasoning_effort,
+        "llm_top_n": llm_top_n,
+        "llm_context_files": llm_context_files,
+        "llm_context_text": llm_context_text,
+        "llm_timeout_seconds": llm_timeout_seconds,
+        "llm_request_fn": llm_request_fn,
+    }
+
     if isinstance(df, Mapping):
         resources = ensure_resource_mapping(df, table_id=table_id)
         parts = [
@@ -156,13 +207,14 @@ def infer_dictionary(
             from .semantics import suggest_semantics
 
             dict_df = suggest_semantics(
-                next(iter(resources.values())),
+                resources,
                 dict_df,
                 sources=semantic_sources,
                 max_per_role=semantic_max_per_role,
                 codes=codes,
                 table_meta=table_meta,
                 dataset_meta=dataset_meta,
+                **llm_options,
             )
             dict_df.attrs["inferred_table_meta"] = table_meta
             dict_df.attrs["inferred_codes"] = codes
@@ -187,7 +239,7 @@ def infer_dictionary(
             "unit_iri": [pd.NA] * n_cols,
             "term_iri": [pd.NA] * n_cols,
             "term_type": [pd.NA] * n_cols,
-            "required": [False] * n_cols,
+            "required": [pd.NA] * n_cols,
             "property_iri": [pd.NA] * n_cols,
             "entity_iri": [pd.NA] * n_cols,
             "constraint_iri": [pd.NA] * n_cols,
@@ -200,6 +252,8 @@ def infer_dictionary(
             col = data[col_name]
             dict_df.at[idx, "value_type"] = infer_value_type(col)
             dict_df.at[idx, "column_role"] = infer_column_role(col_name, col)
+            if dict_df.at[idx, "column_role"] == "identifier":
+                dict_df.at[idx, "required"] = True
 
     if seed_semantics:
         if seed_verbose:
@@ -214,6 +268,7 @@ def infer_dictionary(
             codes=seed_codes,
             table_meta=seed_table_meta,
             dataset_meta=seed_dataset_meta,
+            **llm_options,
         )
         if seed_table_meta is not None:
             dict_df.attrs["seed_table_meta"] = seed_table_meta
@@ -262,7 +317,7 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
         invalid_required = parsed_required.isna() & df["required"].notna() & (df["required"].astype(str).str.strip() != "")
         if invalid_required.any():
             raise ValueError("required must be boolean")
-        df["required"] = parsed_required.fillna(False).astype(bool)
+        df["required"] = parsed_required.astype("boolean")
 
     # Measurement guardrail: required in strict mode, optional with warning otherwise
     measurement_rows = (df["column_role"] == "measurement") & ~df["column_role"].isna()
@@ -310,7 +365,7 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
                 + ", ".join(CORE_SEMANTIC_FIELDS)
                 + " for your measurement fields.\n"
                 + "See docs for I-ADOPT guidance: "
-                + "https://dfo-pacific-science.github.io/metasalmon/"
+                + "https://salmon-data-mobilization.github.io/metasalmon/"
                 + "articles/reusing-standards-salmon-data-terms.html"
             )
             warnings.warn(message, UserWarning)

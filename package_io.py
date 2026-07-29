@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import shutil
 import datetime as _dt
+import re
+import warnings
 from pathlib import Path
-from typing import Dict, Mapping, Optional
+from typing import Dict, Mapping, Optional, Sequence, Union
 
 try:
     import pandas as pd
@@ -23,6 +25,15 @@ from .metadata import (
     normalize_table_meta,
     parse_logical,
 )
+
+SDP_PROFILE_URL = (
+    "https://dfo-pacific-science.github.io/smn-data-pkg/"
+    "profiles/salmon-data-package/v0.2/profile.json"
+)
+SDP_RULES_URL = (
+    "https://dfo-pacific-science.github.io/smn-data-pkg/schema/sdp.rules.yaml"
+)
+PACKAGE_SENTINEL = ".salmonpy-package"
 
 
 def _clean(value):
@@ -58,7 +69,164 @@ def _read_metadata_csv(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, keep_default_na=False, na_values=[])
 
 
-def create_salmon_datapackage(
+def _is_review_value(value) -> bool:
+    if not _has_value(value):
+        return False
+    text = str(value).strip()
+    return text.upper().startswith(("REVIEW:", "MISSING ", "MISSING:"))
+
+
+def _metadata_path(target: Path, name: str) -> Path:
+    canonical = target / "metadata" / name
+    if canonical.exists():
+        return canonical
+    return target / name
+
+
+def _is_owned_package_dir(target: Path) -> bool:
+    if (target / PACKAGE_SENTINEL).exists():
+        return True
+    canonical = target / "metadata"
+    if all((canonical / name).exists() for name in ("dataset.csv", "tables.csv", "column_dictionary.csv")):
+        return True
+    return all((target / name).exists() for name in ("dataset.csv", "tables.csv", "column_dictionary.csv"))
+
+
+def _prepare_package_dir(target: Path, overwrite: bool) -> None:
+    if not target.exists():
+        target.mkdir(parents=True, exist_ok=True)
+        return
+    entries = list(target.iterdir())
+    if not entries:
+        return
+    if not overwrite:
+        raise FileExistsError(
+            f"Directory {target} already exists. Set overwrite=True to replace."
+        )
+    if not _is_owned_package_dir(target):
+        raise ValueError(
+            f"Refusing to overwrite non-salmonpy directory {target}. "
+            "Use a new or empty directory, or clean it manually."
+        )
+    for child in entries:
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+
+
+def _force_data_path(file_name, resource_name: str, format: str) -> str:
+    if not _has_value(file_name):
+        file_name = f"{resource_name}.{format}"
+    normalized = str(file_name).replace("\\", "/").strip()
+    if re.match(r"^(?:[A-Za-z]:)?/", normalized):
+        raise ValueError("Resource file_name must be a relative package path.")
+    if ".." in normalized.split("/"):
+        raise ValueError("Resource file_name must not contain '..' path segments.")
+    if not normalized or normalized.endswith("/"):
+        raise ValueError("Resource file_name must name a file.")
+    if normalized.startswith("data/"):
+        return normalized
+    return f"data/{Path(normalized).name}"
+
+
+def _is_semantic_code_candidate(column_name: str, series: pd.Series) -> bool:
+    if not (
+        pd.api.types.is_object_dtype(series)
+        or pd.api.types.is_string_dtype(series)
+        or isinstance(series.dtype, pd.CategoricalDtype)
+    ):
+        return False
+    if re.search(
+        r"comment|note|remark|description|details?|memo|narrative|summary|"
+        r"reason|explanation|text",
+        str(column_name),
+        flags=re.I,
+    ):
+        return False
+    values = series.dropna().astype(str).str.strip()
+    values = values[values != ""]
+    if values.empty:
+        return False
+    unique = values.drop_duplicates()
+    if len(unique) > 30:
+        return False
+    if len(unique) / len(values) <= 0.5:
+        return True
+    code_like = unique.map(
+        lambda value: len(value) <= 24
+        and (
+            re.search(r"\s", value) is None
+            or re.fullmatch(r"[A-Za-z0-9_./-]+", value) is not None
+        )
+    ).all()
+    return len(unique) <= 5 and bool(code_like)
+
+
+def _metadata_resource_entries(include_codes: bool) -> list[dict]:
+    entries = [
+        ("sdp_dataset", "metadata/dataset.csv", "Dataset metadata"),
+        ("sdp_tables", "metadata/tables.csv", "Table metadata"),
+        (
+            "sdp_column_dictionary",
+            "metadata/column_dictionary.csv",
+            "Column dictionary",
+        ),
+    ]
+    if include_codes:
+        entries.append(("sdp_codes", "metadata/codes.csv", "Code metadata"))
+    return [
+        {
+            "profile": "tabular-data-resource",
+            "name": name,
+            "path": path,
+            "title": title,
+        }
+        for name, path, title in entries
+    ]
+
+
+def _fill_review_placeholders(
+    dataset_meta: pd.DataFrame,
+    table_meta: pd.DataFrame,
+    dictionary: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    dataset_meta = dataset_meta.copy()
+    table_meta = table_meta.copy()
+    dictionary = dictionary.copy()
+
+    for column, label in (
+        ("title", "dataset title"),
+        ("description", "dataset description"),
+    ):
+        if column in dataset_meta:
+            missing = dataset_meta[column].isna() | (
+                dataset_meta[column].astype(str).str.strip() == ""
+            )
+            dataset_meta.loc[missing, column] = f"MISSING METADATA: {label}"
+
+    for column, label in (
+        ("description", "table description"),
+        ("observation_unit", "table observation unit"),
+    ):
+        if column in table_meta:
+            missing = table_meta[column].isna() | (
+                table_meta[column].astype(str).str.strip() == ""
+            )
+            table_meta.loc[missing, column] = f"MISSING METADATA: {label}"
+
+    if "column_description" in dictionary:
+        missing = dictionary["column_description"].isna() | (
+            dictionary["column_description"].astype(str).str.strip() == ""
+        )
+        dictionary.loc[missing, "column_description"] = dictionary.loc[
+            missing, "column_name"
+        ].map(lambda value: f"MISSING DESCRIPTION: {value}")
+
+    return dataset_meta, table_meta, dictionary
+
+
+def write_salmon_datapackage(
     resources: Mapping[str, pd.DataFrame],
     dataset_meta: pd.DataFrame,
     table_meta: pd.DataFrame,
@@ -67,9 +235,13 @@ def create_salmon_datapackage(
     path: str = ".",
     format: str = "csv",
     overwrite: bool = False,
+    write_datapackage: bool = True,
 ) -> Path:
     """
-    Write canonical Salmon Data Package CSV metadata plus datapackage.json.
+    Write the canonical Salmon Data Package layout.
+
+    Metadata is written under ``metadata/``, table resources under ``data/``,
+    and the Frictionless descriptor at the package root.
     """
     if format != "csv":
         raise ValueError("Only CSV format is supported. Use format='csv'.")
@@ -87,17 +259,26 @@ def create_salmon_datapackage(
     dataset_meta = normalize_dataset_meta(dataset_meta)
     table_meta = normalize_table_meta(table_meta)
     codes = normalize_codes(codes)
+    dataset_meta, table_meta, dict_valid = _fill_review_placeholders(
+        dataset_meta,
+        table_meta,
+        dict_valid,
+    )
+    for resource_name in resources:
+        table_rows = table_meta["table_id"] == resource_name
+        if not table_rows.any():
+            continue
+        file_name = table_meta.loc[table_rows, "file_name"].iloc[0]
+        table_meta.loc[table_rows, "file_name"] = _force_data_path(
+            file_name,
+            resource_name,
+            format,
+        )
 
     target = Path(path)
-    if target.exists() and not overwrite:
-        raise FileExistsError(f"Directory {target} already exists. Set overwrite=True to replace.")
-    if target.exists() and overwrite:
-        for child in target.iterdir():
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink()
-    target.mkdir(parents=True, exist_ok=True)
+    _prepare_package_dir(target, overwrite=overwrite)
+    (target / "metadata").mkdir(parents=True, exist_ok=True)
+    (target / "data").mkdir(parents=True, exist_ok=True)
 
     dataset_id = dataset_meta["dataset_id"].iloc[0]
 
@@ -105,12 +286,21 @@ def create_salmon_datapackage(
     for resource_name, resource_df in resources.items():
         table_info = table_meta[table_meta["table_id"] == resource_name]
         if table_info.empty:
+            warnings.warn(
+                f"No table metadata found for resource {resource_name!r}; "
+                "skipping it.",
+                UserWarning,
+                stacklevel=2,
+            )
             continue
-        file_name = table_info["file_name"].iloc[0] if "file_name" in table_info else f"{resource_name}.{format}"
-        if not _has_value(file_name):
-            file_name = f"{resource_name}.{format}"
-            table_meta.loc[table_meta["table_id"] == resource_name, "file_name"] = file_name
+        file_name = (
+            table_info["file_name"].iloc[0]
+            if "file_name" in table_info
+            else f"{resource_name}.{format}"
+        )
+        file_name = _force_data_path(file_name, resource_name, format)
         file_path = target / file_name
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         resource_df.to_csv(file_path, index=False)
 
         table_dict = dict_valid[
@@ -144,7 +334,7 @@ def create_salmon_datapackage(
         resource_entry = {
             "name": resource_name,
             "path": file_name,
-            "profile": "data-resource",
+            "profile": "tabular-data-resource",
             "schema": {"fields": fields},
         }
         if _has_value(table_info["table_label"].iloc[0]):
@@ -158,32 +348,84 @@ def create_salmon_datapackage(
         resource_entries.append(resource_entry)
 
     datapackage = {
-        "profile": "data-package",
-        "name": _clean(dataset_id),
+        "profile": SDP_PROFILE_URL,
+        "name": re.sub(r"[^a-z0-9._-]+", "-", str(dataset_id).lower()).strip("-"),
+        "id": _clean(dataset_id),
         "title": _clean(dataset_meta.get("title", pd.Series([None])).iloc[0]),
         "description": _clean(dataset_meta.get("description", pd.Series([None])).iloc[0]),
-        "resources": resource_entries,
+        "sdp": {
+            "specVersion": "sdp-0.2.0",
+            "profile": SDP_PROFILE_URL,
+            "rules": SDP_RULES_URL,
+            "metadata": {
+                "dataset": "metadata/dataset.csv",
+                "tables": "metadata/tables.csv",
+                "columnDictionary": "metadata/column_dictionary.csv",
+                "codes": "metadata/codes.csv" if codes is not None else None,
+            },
+        },
+        "resources": _metadata_resource_entries(codes is not None) + resource_entries,
     }
 
     # Optional metadata
-    for key in ["creator", "license"]:
-        if key in dataset_meta and pd.notna(dataset_meta[key].iloc[0]):
-            datapackage[key] = _clean(dataset_meta[key].iloc[0])
+    if "creator" in dataset_meta and _has_value(dataset_meta["creator"].iloc[0]):
+        datapackage["contributors"] = [
+            {"title": _clean(dataset_meta["creator"].iloc[0]), "role": "creator"}
+        ]
+    if "license" in dataset_meta and _has_value(dataset_meta["license"].iloc[0]):
+        license_value = dataset_meta["license"].iloc[0]
+        if not _is_review_value(license_value):
+            datapackage["licenses"] = [{"name": _clean(license_value)}]
     if "temporal_start" in dataset_meta and pd.notna(dataset_meta["temporal_start"].iloc[0]):
         datapackage["temporal"] = {"start": _clean(dataset_meta["temporal_start"].iloc[0])}
         if "temporal_end" in dataset_meta and pd.notna(dataset_meta["temporal_end"].iloc[0]):
             datapackage["temporal"]["end"] = _clean(dataset_meta["temporal_end"].iloc[0])
 
-    with (target / "datapackage.json").open("w", encoding="utf-8") as fp:
-        json.dump(datapackage, fp, indent=2)
+    if write_datapackage:
+        with (target / "datapackage.json").open("w", encoding="utf-8") as fp:
+            json.dump(datapackage, fp, indent=2)
 
-    _write_metadata_csv(dataset_meta, target / "dataset.csv")
-    _write_metadata_csv(table_meta, target / "tables.csv")
-    _write_metadata_csv(dict_valid, target / "column_dictionary.csv")
+    _write_metadata_csv(dataset_meta, target / "metadata" / "dataset.csv")
+    _write_metadata_csv(table_meta, target / "metadata" / "tables.csv")
+    _write_metadata_csv(
+        dict_valid,
+        target / "metadata" / "column_dictionary.csv",
+    )
     if codes is not None:
-        _write_metadata_csv(codes, target / "codes.csv")
+        _write_metadata_csv(codes, target / "metadata" / "codes.csv")
+    (target / PACKAGE_SENTINEL).write_text("salmonpy-owned\n", encoding="utf-8")
 
     return target
+
+
+def create_salmon_datapackage(
+    resources: Mapping[str, pd.DataFrame],
+    dataset_meta: pd.DataFrame,
+    table_meta: pd.DataFrame,
+    dict_df: pd.DataFrame,
+    codes: Optional[pd.DataFrame] = None,
+    path: str = ".",
+    format: str = "csv",
+    overwrite: bool = False,
+) -> Path:
+    """Compatibility alias for :func:`write_salmon_datapackage`."""
+    warnings.warn(
+        "create_salmon_datapackage() is deprecated; use "
+        "write_salmon_datapackage() for manual writes or create_sdp() "
+        "for the one-shot workflow.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return write_salmon_datapackage(
+        resources=resources,
+        dataset_meta=dataset_meta,
+        table_meta=table_meta,
+        dict_df=dict_df,
+        codes=codes,
+        path=path,
+        format=format,
+        overwrite=overwrite,
+    )
 
 
 def read_salmon_datapackage(path: str) -> Dict[str, object]:
@@ -194,17 +436,17 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
     if not target.exists():
         raise FileNotFoundError(f"Directory {target} does not exist.")
 
-    dataset_path = target / "dataset.csv"
-    tables_path = target / "tables.csv"
-    dict_path = target / "column_dictionary.csv"
-    codes_path = target / "codes.csv"
+    dataset_path = _metadata_path(target, "dataset.csv")
+    tables_path = _metadata_path(target, "tables.csv")
+    dict_path = _metadata_path(target, "column_dictionary.csv")
+    codes_path = _metadata_path(target, "codes.csv")
     json_path = target / "datapackage.json"
 
     if dataset_path.exists() and tables_path.exists() and dict_path.exists():
         dataset_meta = normalize_dataset_meta(_read_metadata_csv(dataset_path))
         table_meta = normalize_table_meta(_read_metadata_csv(tables_path))
         dictionary = normalize_dictionary(_read_metadata_csv(dict_path))
-        dictionary["required"] = parse_logical(dictionary["required"]).fillna(False).astype(bool)
+        dictionary["required"] = parse_logical(dictionary["required"])
     else:
         if not json_path.exists():
             raise FileNotFoundError(
@@ -217,7 +459,7 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
         dataset_meta = normalize_dataset_meta(
             pd.DataFrame(
                 {
-                    "dataset_id": [datapackage.get("name")],
+                    "dataset_id": [datapackage.get("id") or datapackage.get("name")],
                     "title": [datapackage.get("title")],
                     "description": [datapackage.get("description")],
                     "creator": [datapackage.get("creator")],
@@ -232,9 +474,12 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
         dict_rows = []
         for resource in datapackage.get("resources", []):
             resource_name = resource.get("name")
+            resource_path = str(resource.get("path") or "")
+            if resource_path.startswith("metadata/"):
+                continue
             table_rows.append(
                 {
-                    "dataset_id": datapackage.get("name"),
+                    "dataset_id": datapackage.get("id") or datapackage.get("name"),
                     "table_id": resource_name,
                     "file_name": resource.get("path"),
                     "table_label": resource.get("title") or resource_name,
@@ -253,7 +498,7 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
                     required = bool(field["constraints"]["required"])
                 dict_rows.append(
                     {
-                        "dataset_id": datapackage.get("name"),
+                        "dataset_id": datapackage.get("id") or datapackage.get("name"),
                         "table_id": resource_name,
                         "column_name": field.get("name"),
                         "column_label": field.get("title") or field.get("name"),
@@ -274,7 +519,7 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
 
         table_meta = normalize_table_meta(pd.DataFrame(table_rows))
         dictionary = normalize_dictionary(pd.DataFrame(dict_rows))
-        dictionary["required"] = parse_logical(dictionary["required"]).fillna(False).astype(bool)
+        dictionary["required"] = parse_logical(dictionary["required"])
 
     codes = None
     if codes_path.exists():
@@ -287,6 +532,8 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
         if not _has_value(resource_name) or not _has_value(file_name):
             continue
         file_path = target / str(file_name)
+        if not file_path.exists() and not str(file_name).startswith("data/"):
+            file_path = target / "data" / str(file_name)
         if file_path.exists():
             resources[str(resource_name)] = pd.read_csv(file_path)
 
@@ -305,13 +552,29 @@ def infer_salmon_datapackage_artifacts(
     table_id: str = "table-1",
     guess_types: bool = True,
     seed_semantics: bool = True,
-    semantic_sources: tuple[str, ...] = ("smn", "gcdfo", "ols", "nvs"),
+    semantic_sources: Optional[Sequence[str]] = None,
     semantic_max_per_role: int = 1,
     seed_verbose: bool = True,
     seed_codes: Optional[pd.DataFrame] = None,
     seed_table_meta: Optional[pd.DataFrame] = None,
     seed_dataset_meta: Optional[pd.DataFrame] = None,
+    semantic_code_scope: str = "factor",
+    llm_assess: bool = False,
+    llm_provider: str = "openai",
+    llm_model: Optional[str] = None,
+    llm_api_key: Optional[str] = None,
+    llm_base_url: Optional[str] = None,
+    llm_reasoning_effort: Optional[str] = None,
+    llm_top_n: int = 5,
+    llm_context_files=None,
+    llm_context_text=None,
+    llm_timeout_seconds: int = 60,
+    llm_request_fn=None,
 ) -> Dict[str, object]:
+    if semantic_code_scope not in {"factor", "all", "none"}:
+        raise ValueError(
+            "semantic_code_scope must be 'factor', 'all', or 'none'."
+        )
     resource_map = ensure_resource_mapping(resources, table_id=table_id)
     dict_df = infer_dictionary(
         resource_map,
@@ -332,22 +595,67 @@ def infer_salmon_datapackage_artifacts(
     )
 
     semantic_suggestions = None
+    semantic_llm_assessments = None
     if seed_semantics:
         if seed_verbose:
             print("Seeding semantic suggestions during infer_salmon_datapackage_artifacts().")
         from .semantics import suggest_semantics
 
+        semantic_codes = codes
+        if semantic_code_scope == "none":
+            semantic_codes = None
+        elif semantic_code_scope == "factor" and codes is not None:
+            categorical_keys = []
+            for resource_name, resource_df in resource_map.items():
+                for column in resource_df.columns:
+                    if _is_semantic_code_candidate(
+                        str(column),
+                        resource_df[column],
+                    ):
+                        categorical_keys.append((dataset_id, resource_name, column))
+            if categorical_keys:
+                allowed = pd.MultiIndex.from_tuples(
+                    categorical_keys,
+                    names=["dataset_id", "table_id", "column_name"],
+                )
+                code_keys = pd.MultiIndex.from_frame(
+                    codes[["dataset_id", "table_id", "column_name"]]
+                )
+                semantic_codes = codes.loc[code_keys.isin(allowed)].copy()
+            else:
+                semantic_codes = codes.iloc[0:0].copy()
+
         dict_df = suggest_semantics(
-            next(iter(resource_map.values())),
+            resource_map,
             dict_df,
             sources=semantic_sources,
             max_per_role=semantic_max_per_role,
             include_dwc=False,
-            codes=codes,
+            codes=semantic_codes,
             table_meta=table_meta,
             dataset_meta=dataset_meta,
+            llm_assess=llm_assess,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            llm_api_key=llm_api_key,
+            llm_base_url=llm_base_url,
+            llm_reasoning_effort=llm_reasoning_effort,
+            llm_top_n=llm_top_n,
+            llm_context_files=llm_context_files,
+            llm_context_text=llm_context_text,
+            llm_timeout_seconds=llm_timeout_seconds,
+            llm_request_fn=llm_request_fn,
         )
         semantic_suggestions = dict_df.attrs.get("semantic_suggestions")
+        semantic_llm_assessments = dict_df.attrs.get(
+            "semantic_llm_assessments"
+        )
+    elif llm_assess:
+        warnings.warn(
+            "LLM review options are ignored when seed_semantics=False.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     return {
         "resources": resource_map,
@@ -357,28 +665,182 @@ def infer_salmon_datapackage_artifacts(
         "codes": codes,
         "dataset_meta": dataset_meta,
         "semantic_suggestions": semantic_suggestions,
+        "semantic_llm_assessments": semantic_llm_assessments,
     }
 
 
-def create_salmon_datapackage_from_data(
+def _write_review_readme(package_path: Path, has_suggestions: bool) -> None:
+    suggestion_line = (
+        "Use semantic_suggestions.csv only as a fallback shortlist after "
+        "reviewing the authoritative metadata files."
+        if has_suggestions
+        else "No semantic_suggestions.csv was written for this package."
+    )
+    lines = [
+        "SALMON DATA PACKAGE REVIEW",
+        "",
+        "1. Review metadata/dataset.csv and metadata/tables.csv.",
+        "2. Review metadata/column_dictionary.csv and metadata/codes.csv.",
+        "3. Replace every MISSING placeholder and REVIEW: IRI.",
+        "4. Run validate_salmon_datapackage(path, require_iris=True).",
+        "5. Rebuild EDH XML with write_edh_xml_from_sdp(path), if needed.",
+        "",
+        suggestion_line,
+        "",
+        "Share the complete package directory or a zip of that directory.",
+    ]
+    (package_path / "README-review.txt").write_text(
+        "\n".join(lines) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _mark_review_iri(value):
+    if not _has_value(value):
+        return value
+    text = str(value)
+    return text if text.startswith("REVIEW:") else f"REVIEW:{text}"
+
+
+def _auto_apply_package_suggestions(artifacts: dict, llm_assess: bool) -> None:
+    suggestions = artifacts.get("semantic_suggestions")
+    if not isinstance(suggestions, pd.DataFrame) or suggestions.empty:
+        return
+    from .semantics import (
+        _table_suggestion_is_compatible,
+        apply_semantic_suggestions,
+    )
+
+    strategy = "llm" if llm_assess else "top"
+    auto_roles = ["variable", "property", "entity", "unit"]
+    before = artifacts["dict"].copy()
+    applied = apply_semantic_suggestions(
+        artifacts["dict"],
+        suggestions=suggestions,
+        strategy=strategy,
+        roles=auto_roles,
+        overwrite=False,
+        verbose=False,
+    )
+    role_fields = {
+        "variable": "term_iri",
+        "property": "property_iri",
+        "entity": "entity_iri",
+        "unit": "unit_iri",
+    }
+    for field in role_fields.values():
+        was_missing = before[field].apply(lambda value: not _has_value(value))
+        is_filled = applied[field].apply(_has_value)
+        applied.loc[was_missing & is_filled, field] = applied.loc[
+            was_missing & is_filled, field
+        ].map(_mark_review_iri)
+    artifacts["dict"] = applied
+
+    selected = suggestions.copy()
+    if llm_assess:
+        if {"llm_selected", "llm_decision"} <= set(selected.columns):
+            selected = selected[
+                selected["llm_selected"].fillna(False).astype(bool)
+                & (selected["llm_decision"] == "accept")
+            ]
+        else:
+            selected = selected.iloc[0:0]
+    table_contract = {
+        "target_scope",
+        "target_sdp_file",
+        "target_sdp_field",
+        "dictionary_role",
+    }
+    if table_contract <= set(selected.columns):
+        table_rows = selected[
+            (selected["target_scope"] == "table")
+            & (selected["target_sdp_file"] == "tables.csv")
+            & (selected["target_sdp_field"] == "observation_unit_iri")
+            & (selected["dictionary_role"] == "entity")
+        ]
+    else:
+        table_rows = selected.iloc[0:0]
+    for _, suggestion in table_rows.iterrows():
+        mask = (
+            artifacts["table_meta"]["dataset_id"].astype(str)
+            == str(suggestion.get("dataset_id"))
+        ) & (
+            artifacts["table_meta"]["table_id"].astype(str)
+            == str(suggestion.get("table_id"))
+        )
+        missing = artifacts["table_meta"]["observation_unit_iri"].apply(
+            lambda value: not _has_value(value)
+        )
+        compatible = artifacts["table_meta"].apply(
+            lambda table_row: _table_suggestion_is_compatible(
+                suggestion,
+                table_row,
+            ),
+            axis=1,
+        )
+        rows = mask & missing & compatible
+        if rows.any() and _has_value(suggestion.get("iri")):
+            artifacts["table_meta"].loc[
+                rows, "observation_unit_iri"
+            ] = _mark_review_iri(suggestion["iri"])
+            if "label" in suggestion and _has_value(suggestion.get("label")):
+                label_missing = artifacts["table_meta"][
+                    "observation_unit"
+                ].apply(lambda value: not _has_value(value) or _is_review_value(value))
+                artifacts["table_meta"].loc[
+                    rows & label_missing, "observation_unit"
+                ] = suggestion["label"]
+
+
+def create_sdp(
     resources,
-    path: str,
+    path: Optional[str] = None,
     dataset_id: str = "dataset-1",
-    table_id: str = "table-1",
+    table_id: str = "table_1",
     guess_types: bool = True,
     seed_semantics: bool = True,
-    semantic_sources: tuple[str, ...] = ("smn", "gcdfo", "ols", "nvs"),
+    semantic_sources: Optional[Sequence[str]] = None,
     semantic_max_per_role: int = 1,
     seed_verbose: bool = True,
     seed_codes: Optional[pd.DataFrame] = None,
     seed_table_meta: Optional[pd.DataFrame] = None,
     seed_dataset_meta: Optional[pd.DataFrame] = None,
+    semantic_code_scope: str = "factor",
+    llm_assess: bool = False,
+    llm_provider: str = "openai",
+    llm_model: Optional[str] = None,
+    llm_api_key: Optional[str] = None,
+    llm_base_url: Optional[str] = None,
+    llm_reasoning_effort: Optional[str] = None,
+    llm_top_n: int = 5,
+    llm_context_files=None,
+    llm_context_text=None,
+    llm_timeout_seconds: int = 60,
+    llm_request_fn=None,
+    check_updates: bool = False,
     format: str = "csv",
     overwrite: bool = False,
     include_edh_xml: bool = False,
-    edh_profile: str = "dfo_edh_hnap",
-    edh_xml_path: Optional[str] = None,
 ) -> Path:
+    """Create a review-ready Salmon Data Package in one call."""
+    if llm_context_files is not None:
+        from .llm_review import validate_context_files
+
+        validate_context_files(llm_context_files)
+    if (llm_context_files is not None or llm_context_text is not None) and not llm_assess:
+        warnings.warn(
+            "LLM context is ignored unless llm_assess=True.",
+            UserWarning,
+            stacklevel=2,
+        )
+    if path is None or not str(path).strip():
+        safe_id = re.sub(r"[^A-Za-z0-9._-]+", "-", dataset_id).strip("-")
+        path = str(Path.cwd() / f"{safe_id}-sdp")
+    if check_updates:
+        from .version_check import check_for_updates
+
+        check_for_updates(quiet=False)
+
     artifacts = infer_salmon_datapackage_artifacts(
         resources=resources,
         dataset_id=dataset_id,
@@ -391,8 +853,21 @@ def create_salmon_datapackage_from_data(
         seed_codes=seed_codes,
         seed_table_meta=seed_table_meta,
         seed_dataset_meta=seed_dataset_meta,
+        semantic_code_scope=semantic_code_scope,
+        llm_assess=llm_assess,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        llm_api_key=llm_api_key,
+        llm_base_url=llm_base_url,
+        llm_reasoning_effort=llm_reasoning_effort,
+        llm_top_n=llm_top_n,
+        llm_context_files=llm_context_files,
+        llm_context_text=llm_context_text,
+        llm_timeout_seconds=llm_timeout_seconds,
+        llm_request_fn=llm_request_fn,
     )
-    pkg_path = create_salmon_datapackage(
+    _auto_apply_package_suggestions(artifacts, llm_assess=llm_assess)
+    pkg_path = write_salmon_datapackage(
         resources=artifacts["resources"],
         dataset_meta=artifacts["dataset_meta"],
         table_meta=artifacts["table_meta"],
@@ -403,23 +878,218 @@ def create_salmon_datapackage_from_data(
         overwrite=overwrite,
     )
 
-    if include_edh_xml:
-        from .edh_xml import edh_build_iso19139_xml
-
-        default_name = "metadata-edh-hnap.xml" if edh_profile == "dfo_edh_hnap" else "metadata-iso19139.xml"
-        output = edh_xml_path or str(pkg_path / default_name)
-        edh_build_iso19139_xml(artifacts["dataset_meta"], output_path=output, profile=edh_profile)
-
-    print(
-        "Used one-shot bootstrap flow create_salmon_datapackage_from_data(); "
-        "semantic quality is provisional until reviewed and validated."
+    suggestions = artifacts.get("semantic_suggestions")
+    if isinstance(suggestions, pd.DataFrame) and not suggestions.empty:
+        suggestions.to_csv(
+            pkg_path / "semantic_suggestions.csv",
+            index=False,
+            na_rep="",
+        )
+    _write_review_readme(
+        pkg_path,
+        has_suggestions=isinstance(suggestions, pd.DataFrame)
+        and not suggestions.empty,
     )
+
+    if include_edh_xml:
+        from .edh_xml import edh_build_hnap_xml
+
+        output = pkg_path / "metadata" / "metadata-edh-hnap.xml"
+        package = read_salmon_datapackage(pkg_path)
+        edh_build_hnap_xml(
+            package["dataset"],
+            output_path=output,
+        )
+        if _collect_review_issues(package):
+            warnings.warn(
+                "Created EDH XML is a draft because package metadata still "
+                "contains unresolved review values. Review the package and "
+                "run write_edh_xml_from_sdp() to rebuild it.",
+                UserWarning,
+                stacklevel=2,
+            )
     return pkg_path
 
 
+def create_salmon_datapackage_from_data(
+    resources,
+    path: str,
+    dataset_id: str = "dataset-1",
+    table_id: str = "table-1",
+    guess_types: bool = True,
+    seed_semantics: bool = True,
+    semantic_sources: Optional[Sequence[str]] = (
+        "smn",
+        "gcdfo",
+        "ols",
+        "nvs",
+    ),
+    semantic_max_per_role: int = 1,
+    seed_verbose: bool = True,
+    seed_codes: Optional[pd.DataFrame] = None,
+    seed_table_meta: Optional[pd.DataFrame] = None,
+    seed_dataset_meta: Optional[pd.DataFrame] = None,
+    format: str = "csv",
+    overwrite: bool = False,
+    include_edh_xml: bool = False,
+    edh_profile: str = "dfo_edh_hnap",
+    edh_xml_path: Optional[str] = None,
+    **kwargs,
+) -> Path:
+    """Deprecated one-shot wrapper with its legacy call contract preserved."""
+    warnings.warn(
+        "create_salmon_datapackage_from_data() is deprecated; use create_sdp().",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    package_path = create_sdp(
+        resources=resources,
+        path=path,
+        dataset_id=dataset_id,
+        table_id=table_id,
+        guess_types=guess_types,
+        seed_semantics=seed_semantics,
+        semantic_sources=semantic_sources,
+        semantic_max_per_role=semantic_max_per_role,
+        seed_verbose=seed_verbose,
+        seed_codes=seed_codes,
+        seed_table_meta=seed_table_meta,
+        seed_dataset_meta=seed_dataset_meta,
+        format=format,
+        overwrite=overwrite,
+        include_edh_xml=False,
+        **kwargs,
+    )
+    if include_edh_xml:
+        from .edh_xml import edh_build_iso19139_xml
+
+        default_name = (
+            "metadata-edh-hnap.xml"
+            if edh_profile == "dfo_edh_hnap"
+            else "metadata-iso19139.xml"
+        )
+        output = (
+            Path(edh_xml_path)
+            if edh_xml_path is not None
+            else package_path / default_name
+        )
+        package = read_salmon_datapackage(package_path)
+        edh_build_iso19139_xml(
+            package["dataset"],
+            output_path=output,
+            profile=edh_profile,
+        )
+    return package_path
+
+
+def _collect_review_issues(package: Dict[str, object]) -> list[str]:
+    issues = []
+    tables = package["tables"]
+    if isinstance(tables, pd.DataFrame):
+        for idx, row in tables.iterrows():
+            if not _has_value(row.get("observation_unit_iri")):
+                issues.append(
+                    f"metadata/tables.csv row {idx + 1} has a blank "
+                    "observation_unit_iri."
+                )
+
+    for key, file_name in (
+        ("dataset", "metadata/dataset.csv"),
+        ("tables", "metadata/tables.csv"),
+        ("dictionary", "metadata/column_dictionary.csv"),
+        ("codes", "metadata/codes.csv"),
+    ):
+        frame = package.get(key)
+        if not isinstance(frame, pd.DataFrame):
+            continue
+        for column in frame.columns:
+            for idx, value in frame[column].items():
+                if _is_review_value(value):
+                    issues.append(
+                        f"{file_name} row {idx + 1} field {column} "
+                        f"contains unresolved review value {value!r}."
+                    )
+    return issues
+
+
+def validate_salmon_datapackage(
+    path: Union[str, Path],
+    require_iris: bool = False,
+) -> Dict[str, object]:
+    """Validate package structure, ID alignment, and semantic review state."""
+    target = Path(path)
+    package = read_salmon_datapackage(target)
+    dataset = package["dataset"]
+    tables = package["tables"]
+    dictionary = package["dictionary"]
+    codes = package["codes"]
+
+    dataset_ids = {
+        str(value)
+        for frame in (dataset, tables, dictionary, codes)
+        if isinstance(frame, pd.DataFrame) and "dataset_id" in frame
+        for value in frame["dataset_id"].dropna()
+        if str(value).strip()
+    }
+    if len(dataset_ids) > 1:
+        raise ValueError(
+            f"Dataset IDs are not aligned across package metadata: "
+            f"{sorted(dataset_ids)}"
+        )
+
+    for _, row in tables.iterrows():
+        table_id_value = str(row.get("table_id") or "")
+        if table_id_value not in package["resources"]:
+            raise ValueError(
+                f"Resource file is missing for table {table_id_value!r}."
+            )
+        expected = set(
+            dictionary.loc[
+                dictionary["table_id"].astype(str) == table_id_value,
+                "column_name",
+            ].astype(str)
+        )
+        actual = set(package["resources"][table_id_value].columns.astype(str))
+        if expected != actual:
+            raise ValueError(
+                f"Resource columns for table {table_id_value!r} do not match "
+                f"the dictionary: expected {sorted(expected)}, got "
+                f"{sorted(actual)}."
+            )
+
+    normalized = validate_dictionary(
+        dictionary,
+        require_iris=require_iris,
+    )
+    package["dictionary"] = normalized
+    from .validation import validate_semantics
+
+    semantic_validation = validate_semantics(
+        normalized,
+        require_iris=require_iris,
+    )
+    if require_iris:
+        review_issues = _collect_review_issues(package)
+        if review_issues:
+            preview = " ".join(review_issues[:5])
+            raise ValueError(
+                f"Final validation failed with {len(review_issues)} unresolved "
+                f"review issue(s). {preview}"
+            )
+
+    return {
+        "package": package,
+        "semantic_validation": semantic_validation,
+        "issues": pd.DataFrame(columns=["message"]),
+    }
+
+
 __all__ = [
+    "create_sdp",
     "create_salmon_datapackage",
     "create_salmon_datapackage_from_data",
     "infer_salmon_datapackage_artifacts",
     "read_salmon_datapackage",
+    "validate_salmon_datapackage",
+    "write_salmon_datapackage",
 ]

@@ -258,9 +258,80 @@ def edh_build_iso19139_xml(
         _text_node(resource, "gmd:description", _meta(row, "distribution_description", aliases=("download_description",)))
 
     xml_text = ET.tostring(root, encoding="unicode")
+    resolved_path = None
     if output_path is not None:
-        Path(output_path).write_text(xml_text, encoding="utf-8")
-    return {"xml": xml_text, "path": output_path}
+        resolved_path = Path(output_path)
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        resolved_path.write_text(xml_text, encoding="utf-8")
+    return {"xml": xml_text, "path": resolved_path}
 
 
-__all__ = ["edh_build_iso19139_xml"]
+def edh_build_hnap_xml(
+    dataset_meta: pd.DataFrame,
+    output_path: Optional[str] = None,
+    file_identifier: Optional[str] = None,
+    language: str = "eng",
+    date_stamp=None,
+) -> dict:
+    """Build the supported DFO EDH HNAP metadata export."""
+    return edh_build_iso19139_xml(
+        dataset_meta=dataset_meta,
+        output_path=output_path,
+        file_identifier=file_identifier,
+        language=language,
+        date_stamp=date_stamp,
+        profile="dfo_edh_hnap",
+    )
+
+
+def write_edh_xml_from_sdp(
+    path,
+    output_path=None,
+    overwrite: bool = True,
+    language: str = "eng",
+    file_identifier: Optional[str] = None,
+    date_stamp=None,
+) -> dict:
+    """Rebuild HNAP XML from reviewed package metadata."""
+    package_path = Path(path)
+    if not package_path.is_dir():
+        raise FileNotFoundError(
+            f"Salmon Data Package directory does not exist: {package_path}"
+        )
+    from .package_io import _collect_review_issues, read_salmon_datapackage
+
+    package = read_salmon_datapackage(package_path)
+    review_issues = _collect_review_issues(package)
+    if review_issues:
+        raise ValueError(
+            "Cannot rebuild EDH XML from unreviewed package metadata. "
+            + " ".join(review_issues[:5])
+        )
+    dataset_meta = package["dataset"]
+    if len(dataset_meta) != 1:
+        raise ValueError(
+            "metadata/dataset.csv must contain exactly one row."
+        )
+    target = (
+        Path(output_path)
+        if output_path is not None
+        else package_path / "metadata" / "metadata-edh-hnap.xml"
+    )
+    if target.exists() and not overwrite:
+        raise FileExistsError(
+            f"EDH XML already exists at {target}. Set overwrite=True to replace."
+        )
+    return edh_build_hnap_xml(
+        dataset_meta=dataset_meta,
+        output_path=target,
+        file_identifier=file_identifier,
+        language=language,
+        date_stamp=date_stamp,
+    )
+
+
+__all__ = [
+    "edh_build_hnap_xml",
+    "edh_build_iso19139_xml",
+    "write_edh_xml_from_sdp",
+]

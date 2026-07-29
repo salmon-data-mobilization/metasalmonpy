@@ -108,7 +108,7 @@ def normalize_codes(codes: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
 
 def parse_logical(values) -> pd.Series:
     if isinstance(values, pd.Series) and pd.api.types.is_bool_dtype(values):
-        return values
+        return values.copy()
 
     def one(value):
         if pd.isna(value):
@@ -116,13 +116,19 @@ def parse_logical(values) -> pd.Series:
         if isinstance(value, bool):
             return value
         token = str(value).strip().upper()
+        if not token:
+            return pd.NA
         if token == "TRUE":
             return True
         if token == "FALSE":
             return False
-        return bool(value)
+        return pd.NA
 
-    return pd.Series([one(v) for v in values], index=getattr(values, "index", None), dtype="object")
+    return pd.Series(
+        [one(v) for v in values],
+        index=getattr(values, "index", None),
+        dtype="boolean",
+    )
 
 
 def ensure_resource_mapping(resources, table_id: str = "table-1") -> dict[str, pd.DataFrame]:

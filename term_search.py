@@ -713,19 +713,35 @@ def sources_for_role(role: Optional[str]) -> List[str]:
     return ["smn", "gcdfo", "ols", "nvs"]
 
 
+def _normalize_explicit_sources(sources: Sequence[str]) -> tuple[str, ...]:
+    values = (sources,) if isinstance(sources, str) else sources
+    return tuple(
+        dict.fromkeys(
+            str(source).strip().lower()
+            for source in values
+            if str(source).strip()
+        )
+    )
+
+
 def find_terms(
     query: str,
     role: Optional[str] = None,
-    sources: Sequence[str] = ("smn", "gcdfo", "ols", "nvs"),
+    sources: Optional[Sequence[str]] = None,
     expand_query: bool = True,
 ) -> pd.DataFrame:
     """
     Find ontology terms across OLS, NVS, and other vocab sources.
     """
-    if not sources or query is None or query == "":
+    resolved_sources = (
+        tuple(sources_for_role(role))
+        if sources is None
+        else _normalize_explicit_sources(sources)
+    )
+    if not resolved_sources or query is None or query == "":
         return _empty_terms(role)
 
-    cache_key = (query, role, tuple(sorted(sources)), expand_query)
+    cache_key = (query, role, tuple(sorted(resolved_sources)), expand_query)
     if _cache_enabled and cache_key in _term_cache:
         return _term_cache[cache_key].copy()
 
@@ -733,7 +749,7 @@ def find_terms(
     results = []
     diagnostics = []
     for query_variant in queries:
-        for src in sources:
+        for src in resolved_sources:
             try:
                 if src == "smn":
                     res = _search_smn(query_variant, role)
