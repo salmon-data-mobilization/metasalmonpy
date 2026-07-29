@@ -242,8 +242,8 @@ css: styles/custom.css
     </div>
     <p class="text-muted mb-2" style="font-size: 0.9rem;">R package for ontology-aware salmon data packages with unified semantic fields and code lists.</p>
     <div class="mt-2 d-flex justify-content-between align-items-center">
-      <a href="https://dfo-pacific-science.github.io/metasalmon/" target="_blank" rel="noopener noreferrer" class="text-muted" onclick="event.stopPropagation();">Documentation</a>
-      <a href="https://github.com/dfo-pacific-science/metasalmon" target="_blank" rel="noopener noreferrer" class="text-muted" onclick="event.stopPropagation();">GitHub Repository</a>
+      <a href="https://salmon-data-mobilization.github.io/metasalmon/" target="_blank" rel="noopener noreferrer" class="text-muted" onclick="event.stopPropagation();">Documentation</a>
+      <a href="https://github.com/salmon-data-mobilization/metasalmon" target="_blank" rel="noopener noreferrer" class="text-muted" onclick="event.stopPropagation();">GitHub Repository</a>
     </div>
   </div>
 </div>
@@ -272,7 +272,7 @@ css: styles/custom.css
         <li>Clear ontology-gap handling with proposed terms and relationships (broader/narrower or superclass)</li>
       </ul>
       <p>
-        <a href="https://dfo-pacific-science.github.io/metasalmon/" target="_blank" rel="noopener noreferrer">
+        <a href="https://salmon-data-mobilization.github.io/metasalmon/" target="_blank" rel="noopener noreferrer">
           View Package
         </a>
       </p>

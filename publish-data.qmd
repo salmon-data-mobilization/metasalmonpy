@@ -81,7 +81,7 @@ CU,Conservation Unit,string,The conservation unit identifier,http://purl.dataone
 
 1. Create a directory for your package: `SDEP_yourproject/`
 2. Place your data files in a `data/` subdirectory
-3. Create metadata files:
+3. Create metadata files in a `metadata/` subdirectory:
    - `dataset.csv`: Dataset-level metadata
    - `tables.csv`: Table descriptions
    - `column_dictionary.csv`: Your completed data dictionary
@@ -91,13 +91,18 @@ CU,Conservation Unit,string,The conservation unit identifier,http://purl.dataone
 
 ```
 SDEP_escapement_2023/
-├── dataset.csv
-├── tables.csv
-├── column_dictionary.csv
-├── codes.csv
+├── datapackage.json
+├── metadata/
+│   ├── dataset.csv
+│   ├── tables.csv
+│   ├── column_dictionary.csv
+│   └── codes.csv
 └── data/
     └── escapement_data.csv
 ```
+
+Python users can scaffold this layout with
+`salmonpy.create_sdp(data, path="SDEP_escapement_2023")`.
 
 </div>
 

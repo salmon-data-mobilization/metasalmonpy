@@ -9,7 +9,11 @@ try:
 except ImportError:  # pragma: no cover
     pd = None
 
-from salmonpy import create_salmon_datapackage, read_salmon_datapackage, validate_dictionary
+from salmonpy import (
+    read_salmon_datapackage,
+    validate_dictionary,
+    write_salmon_datapackage,
+)
 
 
 R_LIB_PATH = "/tmp/metasalmon-lib"
@@ -33,7 +37,7 @@ class RoundTripTests(unittest.TestCase):
         table_meta <- data.frame(dataset_id="r-demo", table_id="observations", file_name="observations.csv", table_label="Observations")
         dict <- infer_dictionary(df, dataset_id="r-demo", table_id="observations")
         dict$column_role[dict$column_name == "count"] <- "attribute"
-        create_salmon_datapackage(resources=list(observations=df), dataset_meta=dataset_meta, table_meta=table_meta, dict=dict, path=dir, overwrite=TRUE)
+        write_salmon_datapackage(resources=list(observations=df), dataset_meta=dataset_meta, table_meta=table_meta, dict=dict, path=dir, overwrite=TRUE)
         """
         subprocess.run(["Rscript", "-e", r_script], env=env, check=True, text=True)
 
@@ -63,7 +67,14 @@ class RoundTripTests(unittest.TestCase):
         )
         dict_df = validate_dictionary(dict_df)
 
-        create_salmon_datapackage({"observations": df}, dataset_meta, table_meta, dict_df, path=pkg_dir, overwrite=True)
+        write_salmon_datapackage(
+            {"observations": df},
+            dataset_meta,
+            table_meta,
+            dict_df,
+            path=pkg_dir,
+            overwrite=True,
+        )
 
         env = os.environ.copy()
         env["R_LIBS"] = R_LIB_PATH

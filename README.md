@@ -1,41 +1,86 @@
 # salmonpy
 
-Python mirror of the metasalmon R package for working with Salmon Data Packages (SDPs). Provides helpers to infer and validate dictionaries, search ontology terms, suggest semantics, suggest DwC-DP table/field mappings, and build/read Frictionless-style SDP bundles.
+Python implementation of the
+[metasalmon](https://github.com/salmon-data-mobilization/metasalmon) workflows
+for Salmon Data Packages (SDPs). It provides the same core package-creation,
+semantic-review, term-governance, validation, and EDH metadata lifecycle for
+Python users.
 
 ## Quickstart
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e .
+pip install -e ".[test]"
 ```
 
 ```python
 import pandas as pd
-from salmonpy import (
-    create_salmon_datapackage,
-    infer_dictionary,
-    suggest_semantics,
-    validate_dictionary,
-)
+from salmonpy import create_sdp, validate_salmon_datapackage
 
 df = pd.DataFrame({"species": ["Coho", "Chinook"], "count": [100, 200]})
-dict_df = infer_dictionary(df, dataset_id="demo", table_id="observations")
-dict_df.loc[dict_df["column_name"] == "count", "column_role"] = "measurement"
+package_path = create_sdp(
+    df,
+    path="demo-sdp",
+    dataset_id="demo",
+    table_id="observations",
+    seed_semantics=False,
+)
 
-# Non-strict validation now warns (not aborts) if semantic IRIs are missing on measurement rows.
-validate_dictionary(dict_df)
+# After reviewing metadata and replacing MISSING/REVIEW values:
+validate_salmon_datapackage(package_path, require_iris=True)
+```
 
-# If you want an explicit hard check for complete semantic coverage, use strict mode:
-# validate_dictionary(dict_df, require_iris=True)
+`create_sdp()` writes data under `data/`, metadata under `metadata/`, a
+Frictionless `datapackage.json`, and a review checklist. Use
+`write_salmon_datapackage()` when the metadata tables are already prepared.
+The previous `create_salmon_datapackage*()` names remain as deprecated
+compatibility aliases.
 
-# Optional workflow:
-# dict_df = suggest_semantics(df, dict_df)  # attach candidate term/property/entity/unit IRIs
-# dict_df.loc[dict_df["column_name"] == "count", "term_iri"] = "https://w3id.org/gcdfo/salmon#..."
-# validate_dictionary(dict_df, require_iris=True)
-#
-# See for guidance:
-# https://dfo-pacific-science.github.io/metasalmon/articles/reusing-standards-salmon-data-terms.html
+## Semantic review
+
+Deterministic retrieval remains the default. LLM review is strictly opt-in:
+context files never enable it by themselves, and context inputs must be local
+paths rather than parsed pandas/XML objects.
+
+```python
+from salmonpy import infer_dictionary, suggest_semantics
+
+dictionary = infer_dictionary(
+    df,
+    dataset_id="demo",
+    table_id="observations",
+)
+
+reviewed = suggest_semantics(
+    df,
+    dictionary,
+    sources=["smn"],  # Explicit sources are a strict allowlist, including retries.
+    llm_assess=True,
+    llm_provider="openrouter",
+    llm_context_files=["data-dictionary.csv"],
+)
+
+suggestions = reviewed.attrs["semantic_suggestions"]
+assessments = reviewed.attrs["semantic_llm_assessments"]
+```
+
+Measurement candidates are reviewed as six-slot bundles: variable, property,
+entity, unit, constraint, and method. The stable 30-column assessment schema
+records retries and escalation provenance. Provider failures preserve the
+deterministic shortlist, and conservative validators can downgrade unsupported
+acceptances without inventing or substituting terms.
+
+Use `detect_semantic_term_gaps()` to combine candidate gaps with final
+`request_new_term` decisions. `render_ontology_term_request()` supports SMN,
+GCDFO, and local-profile routing; submission always requires explicit curator
+confirmation. `chat_decomposition()` provides a resumable interactive review
+for a measurement column.
+
+The optional `context` extra adds Excel and PDF context readers:
+
+```bash
+pip install -e ".[context,test]"
 ```
 
 ## Access private CSVs from GitHub
@@ -66,17 +111,25 @@ print(
 
 ## Running tests
 ```bash
-. .venv/bin/activate
-python -m unittest discover tests
+.venv/bin/python -m pytest -q
+.venv/bin/python tests/smoke.py
 ```
 
+Tests and CI use deterministic injected provider adapters. They blank provider
+credentials and never spend OpenAI/OpenRouter credits. Live-provider evaluation
+is a separate, explicitly invoked maintainer check.
+
 ## Compatibility
-- salmonpy 0.1.3 aligns with metasalmon 0.0.13 for the local package helpers, semantic suggestion workflow, NuSEDS method crosswalks, DwC-DP descriptor export, EDH XML bootstrap export, and term-request payload helpers.
+- salmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6.
+- The R package remains the normative SDP/ontology contract. Python-native
+  implementation details and test harnesses intentionally differ where the
+  public behavior does not.
 
 ## Extras
-- Validate an SDP: `python -m salmonpy.scripts.validate_sdp --dataset dataset.csv --tables tables.csv --dictionary column_dictionary.csv [--codes codes.csv] [--require-semantics]`
+- Validate metadata CSVs: `python -m salmonpy.scripts.validate_sdp --dataset metadata/dataset.csv --tables metadata/tables.csv --dictionary metadata/column_dictionary.csv [--codes metadata/codes.csv] [--require-semantics]`
 - Draft a new term request: `python -m salmonpy.scripts.draft_new_term --label "<label>" --definition "<definition>" --term-type skos_concept --parent-iri <iri>`
 - Enable term search cache: set `SALMONPY_CACHE=1`
+- Check explicitly for a newer release: `python -c "import salmonpy; print(salmonpy.check_for_updates())"`
 
 ## Publishing (PyPI)
 1) Bump the version in `pyproject.toml`.

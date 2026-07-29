@@ -279,7 +279,7 @@ def read_github_csv_dir(
     >>> # Read all CSVs from a directory
     >>> data = read_github_csv_dir(
     ...     "inst/extdata",
-    ...     repo="dfo-pacific-science/metasalmon",
+    ...     repo="salmon-data-mobilization/metasalmon",
     ...     ref="main"
     ... )
     >>> print(data.keys())  # dict_keys(['column_dictionary', 'nuseds-fraser-coho-sample', ...])
