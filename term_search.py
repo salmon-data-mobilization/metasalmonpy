@@ -694,6 +694,21 @@ def _score_and_rank_terms(df: pd.DataFrame, role, vocab_tbl: pd.DataFrame, query
 
 
 def sources_for_role(role: Optional[str]) -> List[str]:
+    """
+    Return the ordered default retrieval sources for a semantic role.
+
+    Parameters
+    ----------
+    role
+        One of variable, property, entity, unit, constraint, or method.
+        Unknown and empty roles receive the generic default.
+
+    Returns
+    -------
+    list of str
+        Ordered source identifiers. These defaults apply only when callers omit
+        sources; an explicit source list remains a strict allowlist.
+    """
     if role is None or role == "":
         return ["smn", "gcdfo", "ols", "nvs"]
 
@@ -814,6 +829,27 @@ def benchmark_term_ranking_fixtures(
     include_details: bool = True,
     fixture_path_override: Optional[list] = None,
 ) -> dict:
+    """
+    Evaluate deterministic term ranking against versioned fixtures.
+
+    Parameters
+    ----------
+    fixture_path
+        JSON fixture path. Uses the packaged fixture path when omitted.
+    profiles
+        Named profile mapping included in the benchmark result.
+    top_k
+        Rank threshold used for top-k accuracy.
+    include_details
+        Include one result row per case when ``True``.
+    fixture_path_override
+        In-memory fixture list for tests.
+
+    Returns
+    -------
+    dict
+        Summary metrics, optional per-case results, and the supplied profiles.
+    """
     if fixture_path_override is not None:
         fixtures = fixture_path_override
     else:

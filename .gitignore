@@ -1,6 +1,9 @@
 # quarto and site folders
 /.quarto/
 /_site/
+/_sidebar.yml
+/objects.json
+/reference/
 
 # History files
 .Rhistory

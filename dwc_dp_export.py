@@ -68,6 +68,27 @@ def dwc_dp_build_descriptor(
     validate: bool = False,
     python: str = "python3",
 ) -> dict:
+    """
+    Build, optionally write, and optionally validate a DwC-DP descriptor.
+
+    Parameters
+    ----------
+    resources
+        Resource mappings with ``name``, ``path``, and DwC-DP ``schema``.
+    profile_version
+        DwC-DP schema branch or version.
+    profile_url
+        Descriptor profile URL.
+    output_path
+        Optional JSON output path.
+    validate
+        Run Frictionless validation when the optional dependency is installed.
+
+    Returns
+    -------
+    dict
+        Frictionless-style DwC-DP package descriptor.
+    """
     descriptor = build_dwc_dp_descriptor(
         resources=resources,
         profile_version=profile_version,

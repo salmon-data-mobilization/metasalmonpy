@@ -17,6 +17,9 @@
   confirmation, and resumable measurement-column `chat_decomposition()`.
 - Updated CI to run offline without provider credentials and refreshed the
   canonical R/Python package round-trip test.
+- Added a Quarto and quartodoc documentation site with workflow guides,
+  grouped API reference, offline pull-request builds, and GitHub Pages
+  deployment from `main`.
 
 ## 0.1.3
 - Updated compatibility to align local helpers with metasalmon 0.0.13.

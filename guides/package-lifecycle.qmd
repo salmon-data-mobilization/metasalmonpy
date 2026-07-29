@@ -1,0 +1,97 @@
+---
+title: "Package lifecycle"
+description: "Infer, review, write, read, and validate an SDP."
+---
+
+## Choose the entry point
+
+Use `create_sdp()` for normal work. It infers metadata, optionally seeds
+semantic suggestions, writes the package, and adds a review checklist.
+
+Use `infer_salmon_datapackage_artifacts()` when you need to inspect or edit the
+inferred DataFrames before writing. Use `write_salmon_datapackage()` only when
+the metadata tables are already assembled.
+
+## Multi-table packages
+
+```python
+resources = {
+    "catch": catch_df,
+    "effort": effort_df,
+}
+
+path = create_sdp(
+    resources,
+    path="survey-sdp",
+    dataset_id="survey",
+    seed_semantics=False,
+)
+```
+
+Each mapping key becomes a table id and each resource is written under
+`data/`.
+
+## Inspect before writing
+
+```python
+from salmonpy import (
+    infer_salmon_datapackage_artifacts,
+    write_salmon_datapackage,
+)
+
+artifacts = infer_salmon_datapackage_artifacts(
+    resources,
+    dataset_id="survey",
+    seed_semantics=False,
+)
+
+artifacts["dataset_meta"].loc[0, "title"] = "Annual salmon survey"
+artifacts["dataset_meta"].loc[0, "description"] = (
+    "Catch and effort observations from the annual survey."
+)
+
+path = write_salmon_datapackage(
+    resources=artifacts["resources"],
+    dataset_meta=artifacts["dataset_meta"],
+    table_meta=artifacts["table_meta"],
+    dict_df=artifacts["dict"],
+    codes=artifacts["codes"],
+    path="survey-sdp",
+)
+```
+
+The returned artifact mapping also carries `semantic_suggestions` and
+`semantic_llm_assessments` when those stages are enabled.
+
+## Safe overwrite behavior
+
+`overwrite=True` replaces an existing directory only when salmonpy can
+recognize it as an owned package. It refuses to delete arbitrary non-package
+directories. This check is based on the package sentinel or the required SDP
+metadata files.
+
+```python
+create_sdp(
+    resources,
+    path="survey-sdp",
+    dataset_id="survey",
+    overwrite=True,
+)
+```
+
+## Compatibility aliases
+
+`create_salmon_datapackage()` and
+`create_salmon_datapackage_from_data()` remain available for older callers.
+New code should use `write_salmon_datapackage()` and `create_sdp()`
+respectively.
+
+## Publication boundary
+
+Publish the entire package directory, not individual metadata files. A package
+is ready only after:
+
+- `validate_salmon_datapackage(path, require_iris=True)` passes;
+- no `MISSING` or `REVIEW:` values remain;
+- metadata and semantic choices have received human review; and
+- any EDH XML has been rebuilt from the final metadata.

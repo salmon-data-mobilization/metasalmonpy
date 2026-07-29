@@ -113,6 +113,29 @@ def edh_build_iso19139_xml(
     date_stamp=None,
     profile: str = "dfo_edh_hnap",
 ) -> dict:
+    """
+    Build DFO HNAP or generic ISO 19139 XML from dataset metadata.
+
+    Parameters
+    ----------
+    dataset_meta
+        Single-row normalized dataset metadata DataFrame.
+    output_path
+        Optional XML output path.
+    file_identifier
+        Optional explicit metadata file identifier.
+    language
+        ISO 639-2 language code.
+    date_stamp
+        Optional metadata date override.
+    profile
+        ``"dfo_edh_hnap"`` or ``"iso19139"``.
+
+    Returns
+    -------
+    dict
+        XML text, output path when written, and profile metadata.
+    """
     if profile not in {"dfo_edh_hnap", "iso19139"}:
         raise ValueError("profile must be 'dfo_edh_hnap' or 'iso19139'.")
     if not isinstance(dataset_meta, pd.DataFrame) or len(dataset_meta) != 1:

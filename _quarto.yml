@@ -1,86 +1,189 @@
 project:
   type: website
-  title: "FADS Open Science Hub"
-  output-dir: ./_site
+  output-dir: _site
   render:
-    - "*.qmd"
-    - "!data/ontology/**"
-    - "!docs/**"
+    - index.qmd
+    - getting-started.qmd
+    - guides/*.qmd
+    - reference/*.qmd
 
-freeze: auto
+metadata-files:
+  - _sidebar.yml
+
+website:
+  title: "salmonpy"
+  description: "Python tools for creating and reviewing Salmon Data Packages"
+  site-url: https://salmon-data-mobilization.github.io/metaSmnPy/
+  repo-url: https://github.com/salmon-data-mobilization/metaSmnPy
+  repo-actions: [edit, source, issue]
+  bread-crumbs: true
+  page-navigation: true
+  back-to-top-navigation: true
+  open-graph: true
+  navbar:
+    background: "#17354d"
+    foreground: light
+    search: true
+    left:
+      - text: "Get started"
+        href: getting-started.qmd
+      - text: "Guides"
+        menu:
+          - text: "Package lifecycle"
+            href: guides/package-lifecycle.qmd
+          - text: "Semantic review"
+            href: guides/semantic-review.qmd
+          - text: "Term requests"
+            href: guides/term-requests.qmd
+          - text: "EDH and validation"
+            href: guides/edh-validation.qmd
+          - text: "GitHub data access"
+            href: guides/github-access.qmd
+          - text: "R and Python parity"
+            href: guides/parity.qmd
+      - text: "API reference"
+        href: reference/index.qmd
+    right:
+      - icon: github
+        href: https://github.com/salmon-data-mobilization/metaSmnPy
+        aria-label: "salmonpy on GitHub"
+  page-footer:
+    left: "salmonpy is maintained by the Salmon Data Mobilization community."
+    right: "Built with [Quarto](https://quarto.org/) and [quartodoc](https://machow.github.io/quartodoc/)."
 
 format:
   html:
     theme: cosmo
+    css:
+      - styles/custom.css
+      - reference/_styles-quartodoc.css
     toc: true
+    toc-depth: 3
+    code-copy: true
+    code-overflow: wrap
+    link-external-newwindow: true
     grid:
-      sidebar-width: 300px
-    linkcolor: "#446c8a"
+      sidebar-width: 285px
+      body-width: 860px
+      margin-width: 260px
 
-website:
-  favicon: images/logo.png
-  bread-crumbs: true
-
-  navbar:
-    search: true
-    left:
-      - text: "FADS Internal Wiki"
-        href: https://086gc.sharepoint.com/:u:/r/sites/FisheryAssessmentDataSectionWiki/SitePages/CollabHome.aspx?csf=1&web=1&e=tkJJk4
-      - text: "About"
-        href: about.qmd
-      - text: "Data Services"
-        href: fads-portfolio.qmd
-      - text: "Salmon Data Standards"
-        href: salmon-data-standards.qmd
-    tools:
-      - icon: github
-        menu:
-          - text: Source Code
-            href: https://github.com/dfo-pacific-science/data-stewardship-unit
-          - text: Report a Bug
-            href: https://github.com/dfo-pacific-science/data-stewardship-unit/issues
-    background: "#dae2e8"
-
+quartodoc:
+  style: pkgdown
+  dir: reference
+  title: "API reference"
+  package: salmonpy
+  version: "0.1.6"
+  parser: numpy
+  css: reference/_styles-quartodoc.css
+  options:
+    include_empty: true
+    signature_name: short
   sidebar:
-    collapse-level: 1
-    style: docked
-    background: light
-    contents:
-      - auto: how_to_guides
-      - section: "Reference Info"
-        contents:
-          - section: "Salmon Data Standards"
-            contents:
-              - text: "Overview"
-                href: salmon-data-standards.qmd
-              - section: "Guides"
-                contents:
-                  - standardize-data.qmd
-                  - publish-data.qmd
-                  - integrate-data.qmd
-              - reference_info/data_standards/controlled-vocabulary-thesauri.qmd
-              - reference_info/data_standards/salmon-data-exchange-package.qmd
-              - reference_info/ontology/formal-documentation.qmd
-              - reference_info/data_standards/ontology-data-package-gpt.qmd
-          - reference_info/dwc-obis-gbif.qmd
-          - reference_info/openDataPractices.qmd
-          - reference_info/publishing_data_externally.qmd
-          - section: "Tools"
-            contents:
-              - reference_info/tools/r_packages.qmd
-      - auto: tutorials
-      - section: "Deep Dives"
-        contents:
-          - /deep_dives/Stock Assessment Data 101 for Fisheries Science Reports.qmd
-    logo: images/logo.png
+    file: _sidebar.yml
+    style: floating
     search: true
-
-  repo-url: https://github.com/dfo-pacific-science/data-stewardship-unit
-  repo-actions: [edit, source, issue]
-  page-footer:
-    right: "This site was created with [Quarto](https://quarto.org/) and is hosted with [GitHub Pages](https://pages.github.com/)."
+    collapse-level: 2
+    contents:
+      - text: "Overview"
+        href: index.qmd
+      - text: "Get started"
+        href: getting-started.qmd
+      - section: "Guides"
+        contents:
+          - guides/package-lifecycle.qmd
+          - guides/semantic-review.qmd
+          - guides/term-requests.qmd
+          - guides/edh-validation.qmd
+          - guides/github-access.qmd
+          - guides/parity.qmd
+      - section: "Help"
+        contents:
+          - guides/glossary.qmd
+          - guides/faq.qmd
+      - section: "API reference"
+        contents:
+          - "{{ contents }}"
+  sections:
+    - title: "Start here"
+      desc: "Create, inspect, read, and validate Salmon Data Packages."
+      contents:
+        - create_sdp
+        - infer_salmon_datapackage_artifacts
+        - read_salmon_datapackage
+        - validate_salmon_datapackage
+    - title: "Advanced package assembly"
+      desc: "Write a package from metadata tables that have already been assembled."
+      contents:
+        - write_salmon_datapackage
+    - title: "Dictionary functions"
+      desc: "Infer, validate, apply, and inspect SDP data dictionaries."
+      contents:
+        - infer_dictionary
+        - validate_dictionary
+        - apply_salmon_dictionary
+        - apply_semantic_suggestions
+        - infer_column_role
+        - infer_value_type
+    - title: "Semantic helpers"
+      desc: "Search vocabularies, rank candidates, and review semantic decompositions."
+      contents:
+        - suggest_semantics
+        - name: chat_decomposition
+          dynamic: true
+        - find_terms
+        - sources_for_role
+        - benchmark_term_ranking_fixtures
+        - deduplicate_proposed_terms
+    - title: "Ontology and validation"
+      desc: "Fetch ontology sources and report semantic coverage."
+      contents:
+        - fetch_salmon_ontology
+        - validate_semantics
+        - suggest_facet_schemes
+    - title: "Term request workflow"
+      desc: "Detect ontology gaps and draft curator-reviewed requests."
+      contents:
+        - detect_semantic_term_gaps
+        - render_ontology_term_request
+        - submit_term_request_issues
+    - title: "NuSEDS helpers"
+      desc: "Crosswalk legacy NuSEDS method labels to canonical method families."
+      contents:
+        - nuseds_enumeration_method_crosswalk
+        - nuseds_estimate_method_crosswalk
+    - title: "Darwin Core"
+      desc: "Suggest and assemble Darwin Core Data Package exports."
+      contents:
+        - suggest_dwc_mappings
+        - dwc_dp_build_descriptor
+    - title: "Enterprise Data Hub"
+      desc: "Build HNAP-aware EDH metadata exports."
+      contents:
+        - edh_build_hnap_xml
+        - edh_build_iso19139_xml
+        - write_edh_xml_from_sdp
+    - title: "GitHub access"
+      desc: "Read CSV resources from public and private GitHub repositories."
+      contents:
+        - ms_setup_github
+        - github_raw_url
+        - read_github_csv
+        - read_github_csv_dir
+    - title: "ICES vocabulary"
+      desc: "Browse and search ICES reference codes."
+      contents:
+        - ices_code_types
+        - ices_codes
+        - ices_find_code_types
+        - ices_find_codes
+    - title: "Compatibility"
+      desc: "Legacy aliases retained for existing callers."
+      contents:
+        - create_salmon_datapackage
+        - create_salmon_datapackage_from_data
+    - title: "Maintenance"
+      desc: "Check explicitly for a newer release."
+      contents:
+        - check_for_updates
 
 lang: en
-
-execute:
-  freeze: auto

@@ -467,7 +467,35 @@ def suggest_semantics(
     llm_request_fn=None,
 ) -> pd.DataFrame:
     """
-    Suggest semantic annotations for dictionary, code, table, and dataset targets.
+    Suggest semantic annotations for SDP metadata targets.
+
+    Candidate retrieval covers dictionary columns, controlled codes, table
+    observation units, and dataset keywords. Measurement columns are expanded
+    into variable, property, entity, unit, constraint, and method roles.
+
+    Parameters
+    ----------
+    df
+        A DataFrame, a named mapping of DataFrames, or ``None`` when only
+        supplied metadata targets are being reviewed.
+    dict_df
+        SDP column dictionary.
+    sources
+        Retrieval sources. ``None`` uses role-aware defaults; any explicit
+        value is a strict allowlist for initial and retry retrieval.
+    llm_assess
+        Enable opt-in LLM assessment. Context alone never enables a provider
+        request.
+    llm_context_files
+        Local context file paths. Parsed DataFrames or document objects are
+        rejected.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A normalized dictionary carrying ``semantic_suggestions`` in
+        ``DataFrame.attrs`` and, when requested, the stable 30-column
+        ``semantic_llm_assessments`` table.
     """
     from .llm_review import (
         assess_semantic_suggestions,
@@ -900,6 +928,31 @@ def apply_semantic_suggestions(
     overwrite: bool = False,
     verbose: bool = True,
 ) -> pd.DataFrame:
+    """
+    Apply selected column-level semantic suggestions to a dictionary.
+
+    Parameters
+    ----------
+    dict_df
+        Dictionary to update.
+    suggestions
+        Candidate table. When omitted, uses
+        ``dict_df.attrs["semantic_suggestions"]``.
+    strategy
+        ``"top"`` chooses the first filtered candidate; ``"llm"`` requires a
+        reviewed candidate with decision ``accept``.
+    roles
+        Optional semantic-role filter. Package auto-prefill should remain
+        limited to variable, property, entity, and unit roles.
+    overwrite
+        Replace existing IRIs when ``True``. Existing values are preserved by
+        default.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Updated normalized dictionary.
+    """
     if strategy not in {"top", "llm"}:
         raise ValueError("Unsupported strategy: use 'top' or 'llm'.")
     out = normalize_dictionary(dict_df)

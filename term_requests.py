@@ -151,6 +151,34 @@ def detect_semantic_term_gaps(
     include_dictionary_roles: Optional[Sequence[str]] = None,
     min_score: Optional[float] = None,
 ) -> pd.DataFrame:
+    """
+    Detect structured ontology gaps from candidate and final LLM evidence.
+
+    When ``suggestions`` is omitted, both semantic attributes are read from
+    ``dict_df``. Explicit suggestions use only LLM fields embedded in that
+    table. Identical duplicate assessments are collapsed; conflicting proposed
+    term fields raise an error.
+
+    Parameters
+    ----------
+    dict_df
+        Dictionary carrying semantic result attributes.
+    suggestions
+        Explicit semantic suggestion table.
+    include_target_scopes
+        Target scopes to retain.
+    include_dictionary_roles
+        Optional semantic-role filter.
+    min_score
+        Candidate score threshold. Final LLM ``request_new_term`` evidence is
+        not removed by this threshold.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Stable structured gap rows with candidate evidence, detection basis,
+        LLM rationale, proposed-term metadata, and escalation provenance.
+    """
     suggestions_explicit = suggestions is not None
     assessments = None
     if suggestions is None:
@@ -531,6 +559,35 @@ def render_ontology_term_request(
     gcdfo_term_request_template: str = GCDFO_TERM_REQUEST_DEFAULT_TEMPLATE,
     gcdfo_repo: str = GCDFO_REPO,
 ) -> pd.DataFrame:
+    """
+    Render curator-reviewed ontology term request drafts.
+
+    Routing supports SMN, GCDFO, local profiles, uncertain rows, and skipped
+    rows. Automatic routing considers namespace suggestions as evidence rather
+    than authority and emits repository-specific issue bodies.
+
+    Parameters
+    ----------
+    gaps
+        Structured rows returned by :func:`detect_semantic_term_gaps`.
+    scope
+        Forced scope or ``"auto"``.
+    ask
+        Prompt for unresolved routing when ``True``.
+    profile_name
+        Required for non-interactive profile requests.
+    scope_overrides
+        Scalar or row-aligned explicit routing overrides.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Gap rows with request scope, repository, template, title, and body.
+
+    Notes
+    -----
+    This function only renders drafts. It never submits an issue.
+    """
     df = pd.DataFrame(gaps).copy()
     if df.empty:
         return pd.DataFrame()
@@ -816,6 +873,28 @@ def submit_term_request_issues(
     dry_run: bool = True,
     confirm: bool = False,
 ) -> pd.DataFrame:
+    """
+    Preview or explicitly submit rendered ontology request issues.
+
+    Parameters
+    ----------
+    requests_df
+        Output from :func:`render_ontology_term_request`.
+    repo
+        Fallback repository when a request row has no routed repository.
+    token
+        GitHub token. Normal token discovery runs when omitted.
+    dry_run
+        Return a submission preview without network mutation.
+    confirm
+        Required for live submission. Each request also receives its own
+        interactive confirmation.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Per-request preview or submission status and issue identifiers.
+    """
     df = pd.DataFrame(requests_df).copy()
     if df.empty:
         return pd.DataFrame()

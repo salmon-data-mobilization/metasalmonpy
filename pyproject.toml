@@ -13,7 +13,13 @@ dependencies = ["pandas>=1.5", "requests>=2.31"]
 
 [project.optional-dependencies]
 context = ["openpyxl>=3.1", "pypdf>=4", "xlrd>=2.0"]
+docs = ["quartodoc==0.11.1", "griffe<2"]
 test = ["build>=1.2", "pytest>=7"]
+
+[project.urls]
+Documentation = "https://salmon-data-mobilization.github.io/metaSmnPy/"
+Issues = "https://github.com/salmon-data-mobilization/metaSmnPy/issues"
+Repository = "https://github.com/salmon-data-mobilization/metaSmnPy"
 
 [tool.setuptools]
 packages = ["salmonpy", "salmonpy.data", "salmonpy.scripts"]

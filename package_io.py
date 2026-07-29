@@ -571,6 +571,35 @@ def infer_salmon_datapackage_artifacts(
     llm_timeout_seconds: int = 60,
     llm_request_fn=None,
 ) -> Dict[str, object]:
+    """
+    Infer the in-memory artifacts needed to write a Salmon Data Package.
+
+    This is the inspect-before-write entry point behind :func:`create_sdp`.
+    It normalizes one DataFrame or a named resource mapping, infers dataset,
+    table, dictionary, and code metadata, and optionally attaches deterministic
+    or opt-in LLM semantic review output.
+
+    Parameters
+    ----------
+    resources
+        A DataFrame or named mapping of DataFrames.
+    seed_semantics
+        Retrieve semantic candidates when ``True``.
+    semantic_sources
+        ``None`` uses role-aware source defaults. Explicit values form a strict
+        retrieval allowlist.
+    llm_assess
+        Enable LLM review. It has no effect when ``seed_semantics=False``.
+    llm_context_files
+        Local context paths used only when both semantic seeding and LLM review
+        are enabled.
+
+    Returns
+    -------
+    dict
+        Resource and metadata DataFrames plus ``semantic_suggestions`` and
+        ``semantic_llm_assessments`` when available.
+    """
     if semantic_code_scope not in {"factor", "all", "none"}:
         raise ValueError(
             "semantic_code_scope must be 'factor', 'all', or 'none'."
@@ -822,7 +851,23 @@ def create_sdp(
     overwrite: bool = False,
     include_edh_xml: bool = False,
 ) -> Path:
-    """Create a review-ready Salmon Data Package in one call."""
+    """
+    Create a review-ready Salmon Data Package in one call.
+
+    The function infers package artifacts, optionally seeds semantic
+    suggestions, writes the canonical ``data/`` and ``metadata/`` layout, and
+    adds a review checklist. Inferred IRIs retain the ``REVIEW:`` marker.
+
+    LLM assessment is strictly opt-in through ``llm_assess=True``. Supplying
+    context without enabling assessment warns and makes no provider request.
+    ``overwrite=True`` replaces only directories recognized as owned package
+    directories.
+
+    Returns
+    -------
+    pathlib.Path
+        Path to the created package directory.
+    """
     if llm_context_files is not None:
         from .llm_review import validate_context_files
 

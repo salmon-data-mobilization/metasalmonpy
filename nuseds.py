@@ -4,6 +4,14 @@ import pandas as pd
 
 
 def nuseds_enumeration_method_crosswalk() -> pd.DataFrame:
+    """
+    Return the curated NuSEDS enumeration-method crosswalk.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Legacy value, method family, candidate ontology term, and review notes.
+    """
     term_family = {
         "Bank Walk": "V",
         "Stream Walk": "V",
@@ -79,6 +87,14 @@ def nuseds_enumeration_method_crosswalk() -> pd.DataFrame:
 
 
 def nuseds_estimate_method_crosswalk() -> pd.DataFrame:
+    """
+    Return the curated NuSEDS estimate-method crosswalk.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Legacy value, method family, interpretation, ontology term, and notes.
+    """
     rows = [
         ("Fixed Site Census", "FS", "Enumeration device/mode (often stored as estimate method)", "gcdfo:FixedStationTally", ""),
         ("Resistivity Counter", "FS", "Enumeration device/mode (often stored as estimate method)", "gcdfo:FixedStationTally", "Enumerated as a device/mode; ensure bypass/coverage/QA metadata are captured."),

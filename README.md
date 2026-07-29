@@ -6,13 +6,28 @@ for Salmon Data Packages (SDPs). It provides the same core package-creation,
 semantic-review, term-governance, validation, and EDH metadata lifecycle for
 Python users.
 
-## Quickstart
+[Documentation](https://salmon-data-mobilization.github.io/metaSmnPy/) |
+[API reference](https://salmon-data-mobilization.github.io/metaSmnPy/reference/) |
+[Issue tracker](https://github.com/salmon-data-mobilization/metaSmnPy/issues)
+
+## Installation
+
+Install the released package from its GitHub tag:
+
+```bash
+python -m pip install \
+  "salmonpy @ git+https://github.com/salmon-data-mobilization/metaSmnPy@v0.1.6"
+```
+
+For development:
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -e ".[test]"
 ```
+
+## Quickstart
 
 ```python
 import pandas as pd
@@ -110,6 +125,7 @@ print(
 ```
 
 ## Running tests
+
 ```bash
 .venv/bin/python -m pytest -q
 .venv/bin/python tests/smoke.py
@@ -119,7 +135,23 @@ Tests and CI use deterministic injected provider adapters. They blank provider
 credentials and never spend OpenAI/OpenRouter credits. Live-provider evaluation
 is a separate, explicitly invoked maintainer check.
 
+## Building the documentation
+
+Install [Quarto](https://quarto.org/docs/get-started/) and the documentation
+extra, then generate the API pages and render the site:
+
+```bash
+python -m pip install -e ".[docs]"
+python -m quartodoc build
+quarto render
+```
+
+The source site is `_quarto.yml`, `index.qmd`, `getting-started.qmd`,
+`guides/`, and public Python docstrings. `reference/`, `_sidebar.yml`, and
+`_site/` are generated.
+
 ## Compatibility
+
 - salmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6.
 - The R package remains the normative SDP/ontology contract. Python-native
   implementation details and test harnesses intentionally differ where the
@@ -131,9 +163,8 @@ is a separate, explicitly invoked maintainer check.
 - Enable term search cache: set `SALMONPY_CACHE=1`
 - Check explicitly for a newer release: `python -c "import salmonpy; print(salmonpy.check_for_updates())"`
 
-## Publishing (PyPI)
-1) Bump the version in `pyproject.toml`.
-2) Install build tooling: `pip install build twine`.
-3) Build artifacts: `python -m build`.
-4) Upload: `twine upload dist/*` (requires PyPI credentials).
-5) Tag the release in git to match the version.
+## Releasing
+
+The public distribution currently uses GitHub Releases rather than PyPI.
+Release tags match the package version and include both the source distribution
+and wheel produced by `python -m build`.

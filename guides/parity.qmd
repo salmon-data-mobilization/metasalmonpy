@@ -1,0 +1,50 @@
+---
+title: "R and Python parity"
+description: "Understand the shared metasalmon contract and Python-native differences."
+---
+
+## Compatibility target
+
+salmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6. The
+R package remains the normative Salmon Data Package and ontology contract.
+Parity means equivalent workflows and safety behavior, not line-for-line
+implementations.
+
+| Workflow | metasalmon | salmonpy |
+|---|---|---|
+| One-call package creation | `create_sdp()` | `create_sdp()` |
+| Infer package artifacts | `infer_salmon_datapackage_artifacts()` | `infer_salmon_datapackage_artifacts()` |
+| Infer a dictionary | `infer_dictionary()` | `infer_dictionary()` |
+| Suggest semantics | `suggest_semantics()` | `suggest_semantics()` |
+| Apply suggestions | `apply_semantic_suggestions()` | `apply_semantic_suggestions()` |
+| Detect term gaps | `detect_semantic_term_gaps()` | `detect_semantic_term_gaps()` |
+| Validate a package | `validate_salmon_datapackage()` | `validate_salmon_datapackage()` |
+| Rebuild EDH XML | `write_edh_xml_from_sdp()` | `write_edh_xml_from_sdp()` |
+
+## Shared contracts
+
+- LLM review is strictly opt-in.
+- Context alone never triggers a provider call.
+- Explicit retrieval sources form a strict allowlist.
+- Measurement review uses variable, property, entity, unit, constraint, and
+  method slots.
+- Suggested IRIs retain the `REVIEW:` marker until human approval.
+- Method and constraint suggestions are never automatically applied.
+- Provider failures preserve deterministic candidates.
+- Term requests require curator review and explicit submission.
+
+## Python-native differences
+
+- pandas DataFrame attributes carry semantic suggestion and assessment tables.
+- Interactive chat uses a Python prompt loop and persistent JSON session state.
+- Excel and PDF context readers are optional dependencies.
+- Routine CI uses deterministic injected provider responses and never consumes
+  OpenAI or OpenRouter credits.
+- The resource-intensive live-provider evidence publisher remains an explicit
+  metasalmon maintainer activity rather than a salmonpy CI job.
+
+## Parity verification
+
+The repository runs an R-to-Python round trip against the current metasalmon
+`main` branch in CI. That test checks the package boundary and metadata
+contracts. Python unit tests cover its native adapters and safety behavior.

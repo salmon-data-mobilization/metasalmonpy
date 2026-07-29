@@ -357,11 +357,17 @@ def chat_decomposition(
     input_fn: Callable = input,
     output_fn: Callable = print,
 ) -> dict:
-    """Start or resume an explicit measurement-variable decomposition review.
+    """
+    Start or resume an explicit measurement-variable decomposition review.
 
     This first interactive slice reviews the whole-variable ``term_iri`` only.
     It persists structured state separately from the transcript and never
     approves or submits an ontology term request automatically.
+
+    Returns
+    -------
+    dict
+        Persisted session state, transcript path, and proposed dictionary patch.
     """
     del round_size  # Reserved for grouped decomposition questions in later slices.
 
