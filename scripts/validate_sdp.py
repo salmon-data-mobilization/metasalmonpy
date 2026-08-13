@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 try:
-    from salmonpy.dictionary import CORE_SEMANTIC_FIELDS
+    from metasalmonpy.dictionary import CORE_SEMANTIC_FIELDS
 except Exception:  # pragma: no cover - script fallback when executed directly
     from dictionary import CORE_SEMANTIC_FIELDS
 

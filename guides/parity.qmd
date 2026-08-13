@@ -5,12 +5,12 @@ description: "Understand the shared metasalmon contract and Python-native differ
 
 ## Compatibility target
 
-salmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6. The
+metasalmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6. The
 R package remains the normative Salmon Data Package and ontology contract.
 Parity means equivalent workflows and safety behavior, not line-for-line
 implementations.
 
-| Workflow | metasalmon | salmonpy |
+| Workflow | metasalmon | metasalmonpy |
 |---|---|---|
 | One-call package creation | `create_sdp()` | `create_sdp()` |
 | Infer package artifacts | `infer_salmon_datapackage_artifacts()` | `infer_salmon_datapackage_artifacts()` |
@@ -41,7 +41,7 @@ implementations.
 - Routine CI uses deterministic injected provider responses and never consumes
   OpenAI or OpenRouter credits.
 - The resource-intensive live-provider evidence publisher remains an explicit
-  metasalmon maintainer activity rather than a salmonpy CI job.
+  metasalmon maintainer activity rather than a metasalmonpy CI job.
 
 ## Parity verification
 

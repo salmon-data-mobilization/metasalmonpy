@@ -9,7 +9,7 @@ description: "Turn unresolved semantic targets into curator-reviewed request dra
 LLM `request_new_term` assessments.
 
 ```python
-from salmonpy import detect_semantic_term_gaps
+from metasalmonpy import detect_semantic_term_gaps
 
 gaps = detect_semantic_term_gaps(reviewed)
 ```
@@ -32,7 +32,7 @@ than silently collapsed.
 ## Route and render requests
 
 ```python
-from salmonpy import render_ontology_term_request
+from metasalmonpy import render_ontology_term_request
 
 requests = render_ontology_term_request(gaps, scope="auto")
 ```
@@ -67,7 +67,7 @@ matching the active SMN or GCDFO template.
 ## Preview before submission
 
 ```python
-from salmonpy import submit_term_request_issues
+from metasalmonpy import submit_term_request_issues
 
 preview = submit_term_request_issues(requests, dry_run=True)
 ```
@@ -84,5 +84,5 @@ submitted = submit_term_request_issues(
 )
 ```
 
-Generated requests are drafts for ontology curators. salmonpy never approves a
+Generated requests are drafts for ontology curators. metasalmonpy never approves a
 new ontology term or submits one as a side effect of semantic review.

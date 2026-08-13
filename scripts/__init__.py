@@ -1,2 +1,2 @@
-"""Command-line helpers shipped with salmonpy."""
+"""Command-line helpers shipped with metasalmonpy."""
 

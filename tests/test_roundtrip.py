@@ -9,7 +9,7 @@ try:
 except ImportError:  # pragma: no cover
     pd = None
 
-from salmonpy import (
+from metasalmonpy import (
     read_salmon_datapackage,
     validate_dictionary,
     write_salmon_datapackage,

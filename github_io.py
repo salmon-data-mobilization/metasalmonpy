@@ -18,7 +18,7 @@ import requests
 try:
     import pandas as pd
 except ImportError as exc:  # pragma: no cover - import guard
-    raise ImportError("salmonpy requires pandas; install via `pip install pandas`.") from exc
+    raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
 
 
 def github_raw_url(
@@ -224,10 +224,10 @@ def _resolve_github_path(path: str, ref: str, repo: Optional[str]) -> Dict[str, 
 
 def _user_agent() -> str:
     try:
-        version = importlib_metadata.version("salmonpy")
+        version = importlib_metadata.version("metasalmonpy")
     except Exception:  # pragma: no cover - fallback only
         version = "unknown"
-    return f"salmonpy/{version}"
+    return f"metasalmonpy/{version}"
 
 
 def read_github_csv_dir(

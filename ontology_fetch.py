@@ -32,7 +32,7 @@ def fetch_salmon_ontology(
         Accept header for content negotiation
     cache_dir : str, optional
         Directory to store cached ontology and headers.
-        Defaults to <temp>/salmonpy-ontology-cache
+        Defaults to <temp>/metasalmonpy-ontology-cache
     fallback_urls : List[str], optional
         List of fallback URLs to try if primary fails.
         Defaults to ["https://w3id.org/gcdfo/salmon"]
@@ -49,7 +49,7 @@ def fetch_salmon_ontology(
 
     Examples
     --------
-    >>> from salmonpy import fetch_salmon_ontology
+    >>> from metasalmonpy import fetch_salmon_ontology
     >>> ttl_path = fetch_salmon_ontology()
     >>> print(f"Ontology cached at: {ttl_path}")
     >>> # Read the ontology with rdflib or similar
@@ -60,7 +60,7 @@ def fetch_salmon_ontology(
         fallback_urls = ["https://w3id.org/gcdfo/salmon"]
 
     if cache_dir is None:
-        cache_dir = os.path.join(tempfile.gettempdir(), "salmonpy-ontology-cache")
+        cache_dir = os.path.join(tempfile.gettempdir(), "metasalmonpy-ontology-cache")
 
     # Create cache directory
     os.makedirs(cache_dir, exist_ok=True)

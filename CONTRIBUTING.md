@@ -1,14 +1,14 @@
-# Contributing to salmonpy
+# Contributing to metasalmonpy
 
-salmonpy mirrors the user-facing Salmon Data Package behavior of the metasalmon
+metasalmonpy mirrors the user-facing Salmon Data Package behavior of the metasalmon
 R package. Changes should preserve Python-native implementation quality while
 keeping the shared package and ontology contracts aligned.
 
 ## Development setup
 
 ```bash
-git clone https://github.com/salmon-data-mobilization/metaSmnPy.git
-cd metaSmnPy
+git clone https://github.com/salmon-data-mobilization/metasalmonpy.git
+cd metasalmonpy
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install -e ".[context,docs,test]"

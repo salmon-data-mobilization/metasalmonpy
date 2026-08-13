@@ -7,7 +7,7 @@ import warnings
 try:
     import pandas as pd
 except ImportError as exc:  # pragma: no cover - import guard
-    raise ImportError("salmonpy requires pandas; install via `pip install pandas`.") from exc
+    raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
 
 import re
 

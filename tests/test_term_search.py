@@ -9,8 +9,8 @@ except ImportError:  # pragma: no cover
 if pd is None:
     raise unittest.SkipTest("pandas not installed")
 
-import salmonpy.term_search as ts
-from salmonpy import find_terms
+import metasalmonpy.term_search as ts
+from metasalmonpy import find_terms
 
 
 class TermSearchTests(unittest.TestCase):

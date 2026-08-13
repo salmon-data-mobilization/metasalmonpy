@@ -1,5 +1,5 @@
 """
-salmonpy: Python helpers for Salmon Data Packages (SDPs).
+metasalmonpy: Python helpers for Salmon Data Packages (SDPs).
 
 This mirrors the metasalmon R package at a feature level so Python users can
 infer dictionaries, validate metadata, search ontology terms, and build/read

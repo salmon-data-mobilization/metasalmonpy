@@ -1,5 +1,5 @@
 """
-Minimal smoke script for salmonpy.
+Minimal smoke script for metasalmonpy.
 """
 
 import tempfile
@@ -9,14 +9,14 @@ try:
 except ImportError:  # pragma: no cover
     pd = None
 
-from salmonpy import create_sdp, read_salmon_datapackage
+from metasalmonpy import create_sdp, read_salmon_datapackage
 
 
 def run() -> None:
     if pd is None:
         raise RuntimeError("pandas not installed; install and rerun smoke test.")
     df = pd.DataFrame({"species": ["Coho", "Chinook"], "count": [100, 200]})
-    tempdir = tempfile.mkdtemp(prefix="salmonpy-smoke-")
+    tempdir = tempfile.mkdtemp(prefix="metasalmonpy-smoke-")
     create_sdp(
         df,
         path=tempdir,
@@ -31,4 +31,4 @@ def run() -> None:
 
 if __name__ == "__main__":
     run()
-    print("salmonpy smoke test passed")
+    print("metasalmonpy smoke test passed")

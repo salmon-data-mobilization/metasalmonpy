@@ -26,7 +26,7 @@ automatically applied. Strict validation fails until review is complete.
 
 ## Will `overwrite=True` delete any directory?
 
-No. salmonpy replaces only directories it recognizes as salmonpy or SDP package
+No. metasalmonpy replaces only directories it recognizes as metasalmonpy or SDP package
 directories. It refuses to delete an unrelated non-empty directory.
 
 ## Does term-gap detection submit GitHub issues?
@@ -34,7 +34,7 @@ directories. It refuses to delete an unrelated non-empty directory.
 No. Detection and rendering are local. Live submission requires
 `dry_run=False`, `confirm=True`, credentials, and confirmation for every issue.
 
-## Is salmonpy published on PyPI?
+## Is metasalmonpy published on PyPI?
 
 Not currently. Install the released version from its GitHub tag. GitHub release
 artifacts include the source distribution and wheel.
@@ -42,7 +42,7 @@ artifacts include the source distribution and wheel.
 ## Which package defines the shared contract?
 
 metasalmon is the normative R implementation for SDP and ontology behavior.
-salmonpy mirrors its user-facing workflows for Python users and documents
+metasalmonpy mirrors its user-facing workflows for Python users and documents
 intentional Python-native differences in the [parity guide](parity.qmd).
 
 ## Do routine tests spend provider credits?

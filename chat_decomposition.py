@@ -48,7 +48,7 @@ def _json_value(value):
 def _session_root(path=None) -> Path:
     if path is not None:
         return Path(path).expanduser()
-    return Path.home() / ".local" / "state" / "salmonpy" / "chat-decomposition"
+    return Path.home() / ".local" / "state" / "metasalmonpy" / "chat-decomposition"
 
 
 def _session_dir(session_id: str, root=None) -> Path:
@@ -77,6 +77,16 @@ def _load_session(session_id: str, root=None) -> tuple[dict, list[dict], Path]:
     directory = _session_dir(session_id, root)
     state_path = directory / "state.json"
     transcript_path = directory / "transcript.json"
+    if root is None and (not state_path.exists() or not transcript_path.exists()):
+        # Sessions persisted before the 2026-08-13 rename live under the old
+        # package name; read them from there rather than losing them.
+        legacy = (
+            Path.home() / ".local" / "state" / "salmonpy" / "chat-decomposition"
+        ) / str(session_id)
+        if (legacy / "state.json").exists() and (legacy / "transcript.json").exists():
+            directory = legacy
+            state_path = legacy / "state.json"
+            transcript_path = legacy / "transcript.json"
     if not state_path.exists() or not transcript_path.exists():
         raise FileNotFoundError(f"No persisted decomposition session found for {session_id!r}.")
     state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -411,7 +421,7 @@ def chat_decomposition(
         chat_request_fn,
     )
     intro = (
-        f"salmonpy decomposition session {state['session_id']} for "
+        f"metasalmonpy decomposition session {state['session_id']} for "
         f"{state['target'].get('column_name')}.\n{_preview(state)}"
     )
     output_fn(intro)

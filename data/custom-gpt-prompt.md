@@ -1,7 +1,7 @@
-# metaSmnPy Custom GPT prompt template
+# metasalmonpy Custom GPT prompt template
 
 Use this as the "Instructions" for a Custom GPT (or as a system/developer
-prompt in an API integration) to help users enrich `metaSmnPy` metadata
+prompt in an API integration) to help users enrich `metasalmonpy` metadata
 deterministically.
 
 ## Upload these files to the GPT
@@ -12,7 +12,7 @@ Required:
   <https://github.com/dfo-pacific-science/dfo-salmon-ontology>
 - The latest Salmon Domain Ontology file from
   <https://github.com/salmon-data-mobilization/salmon-domain-ontology>
-- `metaSmnPy` schema templates (from this package):
+- `metasalmonpy` schema templates (from this package):
   - `dataset.csv`
   - `tables.csv`
   - `column_dictionary.csv`

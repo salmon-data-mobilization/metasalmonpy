@@ -34,7 +34,7 @@ Each mapping key becomes a table id and each resource is written under
 ## Inspect before writing
 
 ```python
-from salmonpy import (
+from metasalmonpy import (
     infer_salmon_datapackage_artifacts,
     write_salmon_datapackage,
 )
@@ -65,7 +65,7 @@ The returned artifact mapping also carries `semantic_suggestions` and
 
 ## Safe overwrite behavior
 
-`overwrite=True` replaces an existing directory only when salmonpy can
+`overwrite=True` replaces an existing directory only when metasalmonpy can
 recognize it as an owned package. It refuses to delete arbitrary non-package
 directories. This check is based on the package sentinel or the required SDP
 metadata files.

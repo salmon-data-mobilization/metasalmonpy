@@ -6,14 +6,14 @@ from typing import List, Optional
 try:
     import pandas as pd
 except ImportError as exc:  # pragma: no cover - import guard
-    raise ImportError("salmonpy requires pandas; install via `pip install pandas`.") from exc
+    raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
 
 from importlib import resources
 
 
 def _load_dwc_dp_fields() -> pd.DataFrame:
     try:
-        fields_path = resources.files("salmonpy").joinpath("data/dwc-dp-fields.csv")
+        fields_path = resources.files("metasalmonpy").joinpath("data/dwc-dp-fields.csv")
         with resources.as_file(fields_path) as path:
             return pd.read_csv(path)
     except Exception:

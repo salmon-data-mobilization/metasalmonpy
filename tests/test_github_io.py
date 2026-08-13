@@ -4,8 +4,8 @@ from unittest import mock
 
 import requests
 
-from salmonpy import github_raw_url, read_github_csv
-from salmonpy import github_io
+from metasalmonpy import github_raw_url, read_github_csv
+from metasalmonpy import github_io
 
 
 class GithubIOTests(unittest.TestCase):
@@ -38,7 +38,7 @@ class GithubIOTests(unittest.TestCase):
         self.assertEqual(token_clean["url"], "https://raw.githubusercontent.com/owner/repo/main/path/to/file.csv")
 
     def test_read_github_csv_requires_token(self):
-        with mock.patch("salmonpy.github_io._github_token", return_value=None):
+        with mock.patch("metasalmonpy.github_io._github_token", return_value=None):
             with self.assertRaisesRegex(ValueError, "GitHub token"):
                 read_github_csv("data/gold/dimension_tables/dim_date.csv", repo="owner/repo", token="")
 
@@ -53,7 +53,7 @@ class GithubIOTests(unittest.TestCase):
         repo = os.getenv("SALMONPY_QUALARK_TEST_REPO", "dfo-pacific-science/qualark-data")
         path = os.getenv("SALMONPY_QUALARK_TEST_PATH", "data/gold/dimension_tables/dim_date.csv")
         ref = os.getenv("SALMONPY_QUALARK_TEST_REF", "main")
-        headers = {"Authorization": f"token {token}", "User-Agent": "salmonpy-test"}
+        headers = {"Authorization": f"token {token}", "User-Agent": "metasalmonpy-test"}
 
         try:
             resp = requests.get(f"https://api.github.com/repos/{repo}", headers=headers, timeout=10)

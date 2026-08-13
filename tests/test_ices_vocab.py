@@ -9,7 +9,7 @@ except ImportError:  # pragma: no cover
 if pd is None:
     raise unittest.SkipTest("pandas not installed")
 
-import salmonpy.ices_vocab as iv
+import metasalmonpy.ices_vocab as iv
 
 
 class IcesVocabTests(unittest.TestCase):

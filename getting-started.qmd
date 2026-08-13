@@ -1,6 +1,6 @@
 ---
 title: "Get started"
-description: "Install salmonpy and create a review-ready Salmon Data Package."
+description: "Install metasalmonpy and create a review-ready Salmon Data Package."
 ---
 
 ## Install
@@ -9,14 +9,14 @@ Install the released package directly from its GitHub tag:
 
 ```bash
 python -m pip install \
-  "salmonpy @ git+https://github.com/salmon-data-mobilization/metaSmnPy@v0.1.6"
+  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@v0.1.6"
 ```
 
 For development, clone the repository and install the test dependencies:
 
 ```bash
-git clone https://github.com/salmon-data-mobilization/metaSmnPy.git
-cd metaSmnPy
+git clone https://github.com/salmon-data-mobilization/metasalmonpy.git
+cd metasalmonpy
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install -e ".[test]"
@@ -35,7 +35,7 @@ Use `create_sdp()` for the standard one-call workflow. A single DataFrame uses
 
 ```python
 import pandas as pd
-from salmonpy import create_sdp
+from metasalmonpy import create_sdp
 
 catch = pd.DataFrame(
     {
@@ -64,7 +64,7 @@ The canonical layout is:
 
 ```text
 coho-catch-sdp/
-|-- .salmonpy-package
+|-- .metasalmonpy-package
 |-- README-review.txt
 |-- datapackage.json
 |-- data/
@@ -86,7 +86,7 @@ Review the metadata in this order:
 5. Run strict validation.
 
 ```python
-from salmonpy import validate_salmon_datapackage
+from metasalmonpy import validate_salmon_datapackage
 
 result = validate_salmon_datapackage(path, require_iris=True)
 print(result)
@@ -98,7 +98,7 @@ the boundary between machine suggestions and curator-approved metadata.
 ## Read the package
 
 ```python
-from salmonpy import read_salmon_datapackage
+from metasalmonpy import read_salmon_datapackage
 
 package = read_salmon_datapackage(path)
 dictionary = package["dictionary"]

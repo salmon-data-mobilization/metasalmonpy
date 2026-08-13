@@ -11,10 +11,10 @@ metadata-files:
   - _sidebar.yml
 
 website:
-  title: "salmonpy"
+  title: "metasalmonpy"
   description: "Python tools for creating and reviewing Salmon Data Packages"
-  site-url: https://salmon-data-mobilization.github.io/metaSmnPy/
-  repo-url: https://github.com/salmon-data-mobilization/metaSmnPy
+  site-url: https://salmon-data-mobilization.github.io/metasalmonpy/
+  repo-url: https://github.com/salmon-data-mobilization/metasalmonpy
   repo-actions: [edit, source, issue]
   bread-crumbs: true
   page-navigation: true
@@ -45,10 +45,10 @@ website:
         href: reference/index.qmd
     right:
       - icon: github
-        href: https://github.com/salmon-data-mobilization/metaSmnPy
-        aria-label: "salmonpy on GitHub"
+        href: https://github.com/salmon-data-mobilization/metasalmonpy
+        aria-label: "metasalmonpy on GitHub"
   page-footer:
-    left: "salmonpy is maintained by the Salmon Data Mobilization community."
+    left: "metasalmonpy is maintained by the Salmon Data Mobilization community."
     right: "Built with [Quarto](https://quarto.org/) and [quartodoc](https://machow.github.io/quartodoc/)."
 
 format:
@@ -71,7 +71,7 @@ quartodoc:
   style: pkgdown
   dir: reference
   title: "API reference"
-  package: salmonpy
+  package: metasalmonpy
   version: "0.1.6"
   parser: numpy
   css: reference/_styles-quartodoc.css

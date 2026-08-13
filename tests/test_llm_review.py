@@ -2,8 +2,8 @@ import json
 
 import pandas as pd
 
-from salmonpy import infer_dictionary, suggest_semantics
-from salmonpy.llm_review import (
+from metasalmonpy import infer_dictionary, suggest_semantics
+from metasalmonpy.llm_review import (
     LLM_ASSESSMENT_COLUMNS,
     load_context_chunks,
     normalize_assessment_rows,
