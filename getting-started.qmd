@@ -5,11 +5,11 @@ description: "Install metasalmonpy and create a review-ready Salmon Data Package
 
 ## Install
 
-Install the released package directly from its GitHub tag:
+Install from the repository (the `v0.1.6` tag predates the 2026-08-13 rename and still packages the old `salmonpy` name; the first tag installable as `metasalmonpy` will be the next parity release):
 
 ```bash
 python -m pip install \
-  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@v0.1.6"
+  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@main"
 ```
 
 For development, clone the repository and install the test dependencies:
