@@ -77,6 +77,16 @@ def _load_session(session_id: str, root=None) -> tuple[dict, list[dict], Path]:
     directory = _session_dir(session_id, root)
     state_path = directory / "state.json"
     transcript_path = directory / "transcript.json"
+    if root is None and (not state_path.exists() or not transcript_path.exists()):
+        # Sessions persisted before the 2026-08-13 rename live under the old
+        # package name; read them from there rather than losing them.
+        legacy = (
+            Path.home() / ".local" / "state" / "salmonpy" / "chat-decomposition"
+        ) / str(session_id)
+        if (legacy / "state.json").exists() and (legacy / "transcript.json").exists():
+            directory = legacy
+            state_path = legacy / "state.json"
+            transcript_path = legacy / "transcript.json"
     if not state_path.exists() or not transcript_path.exists():
         raise FileNotFoundError(f"No persisted decomposition session found for {session_id!r}.")
     state = json.loads(state_path.read_text(encoding="utf-8"))

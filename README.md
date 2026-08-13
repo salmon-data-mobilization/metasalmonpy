@@ -12,11 +12,13 @@ Python users.
 
 ## Installation
 
-Install the released package from its GitHub tag:
+Install from the repository (the `v0.1.6` tag predates the rename and still
+packages the old `salmonpy` name; the next parity release will be the first
+tag installable as `metasalmonpy`):
 
 ```bash
 python -m pip install \
-  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@v0.1.6"
+  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@main"
 ```
 
 For development:
