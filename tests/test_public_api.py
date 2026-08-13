@@ -1,11 +1,11 @@
 from importlib.metadata import version
 
-import salmonpy
-from salmonpy.version_check import check_for_updates
+import metasalmonpy
+from metasalmonpy.version_check import check_for_updates
 
 
 def test_public_version_matches_package_metadata():
-    assert salmonpy.__version__ == version("salmonpy")
+    assert metasalmonpy.__version__ == version("metasalmonpy")
 
 
 def test_current_workflow_exports_are_public():
@@ -20,8 +20,8 @@ def test_current_workflow_exports_are_public():
         "write_edh_xml_from_sdp",
         "write_salmon_datapackage",
     }
-    assert expected <= set(salmonpy.__all__)
-    assert all(callable(getattr(salmonpy, name)) for name in expected)
+    assert expected <= set(metasalmonpy.__all__)
+    assert all(callable(getattr(metasalmonpy, name)) for name in expected)
 
 
 def test_update_check_is_explicit_and_uses_canonical_repository():
@@ -51,5 +51,5 @@ def test_update_check_is_explicit_and_uses_canonical_repository():
     assert result["status"] == "update_available"
     assert result["latest_version"] == "0.1.7"
     assert calls[0][0].endswith(
-        "/repos/salmon-data-mobilization/metaSmnPy/releases/latest"
+        "/repos/salmon-data-mobilization/metasalmonpy/releases/latest"
     )

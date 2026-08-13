@@ -1,6 +1,6 @@
 import pandas as pd
 
-from salmonpy import chat_decomposition
+from metasalmonpy import chat_decomposition
 
 
 def _dictionary():

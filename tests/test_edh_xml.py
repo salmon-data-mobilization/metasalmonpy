@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from salmonpy import edh_build_iso19139_xml
+from metasalmonpy import edh_build_iso19139_xml
 
 
 NS = {

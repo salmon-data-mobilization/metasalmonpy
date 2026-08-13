@@ -1,4 +1,4 @@
-# salmonpy
+# metasalmonpy
 
 Python implementation of the
 [metasalmon](https://github.com/salmon-data-mobilization/metasalmon) workflows
@@ -6,9 +6,9 @@ for Salmon Data Packages (SDPs). It provides the same core package-creation,
 semantic-review, term-governance, validation, and EDH metadata lifecycle for
 Python users.
 
-[Documentation](https://salmon-data-mobilization.github.io/metaSmnPy/) |
-[API reference](https://salmon-data-mobilization.github.io/metaSmnPy/reference/) |
-[Issue tracker](https://github.com/salmon-data-mobilization/metaSmnPy/issues)
+[Documentation](https://salmon-data-mobilization.github.io/metasalmonpy/) |
+[API reference](https://salmon-data-mobilization.github.io/metasalmonpy/reference/) |
+[Issue tracker](https://github.com/salmon-data-mobilization/metasalmonpy/issues)
 
 ## Installation
 
@@ -16,7 +16,7 @@ Install the released package from its GitHub tag:
 
 ```bash
 python -m pip install \
-  "salmonpy @ git+https://github.com/salmon-data-mobilization/metaSmnPy@v0.1.6"
+  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@v0.1.6"
 ```
 
 For development:
@@ -31,7 +31,7 @@ pip install -e ".[test]"
 
 ```python
 import pandas as pd
-from salmonpy import create_sdp, validate_salmon_datapackage
+from metasalmonpy import create_sdp, validate_salmon_datapackage
 
 df = pd.DataFrame({"species": ["Coho", "Chinook"], "count": [100, 200]})
 package_path = create_sdp(
@@ -59,7 +59,7 @@ context files never enable it by themselves, and context inputs must be local
 paths rather than parsed pandas/XML objects.
 
 ```python
-from salmonpy import infer_dictionary, suggest_semantics
+from metasalmonpy import infer_dictionary, suggest_semantics
 
 dictionary = infer_dictionary(
     df,
@@ -101,7 +101,7 @@ pip install -e ".[context,test]"
 ## Access private CSVs from GitHub
 
 ```python
-from salmonpy import github_raw_url, read_github_csv
+from metasalmonpy import github_raw_url, read_github_csv
 
 # Token discovery checks GITHUB_PAT/GH_TOKEN or your git credential store.
 # Run metasalmon::ms_setup_github() once in R to create/store a PAT with repo scope.
@@ -152,16 +152,16 @@ The source site is `_quarto.yml`, `index.qmd`, `getting-started.qmd`,
 
 ## Compatibility
 
-- salmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6.
+- metasalmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6.
 - The R package remains the normative SDP/ontology contract. Python-native
   implementation details and test harnesses intentionally differ where the
   public behavior does not.
 
 ## Extras
-- Validate metadata CSVs: `python -m salmonpy.scripts.validate_sdp --dataset metadata/dataset.csv --tables metadata/tables.csv --dictionary metadata/column_dictionary.csv [--codes metadata/codes.csv] [--require-semantics]`
-- Draft a new term request: `python -m salmonpy.scripts.draft_new_term --label "<label>" --definition "<definition>" --term-type skos_concept --parent-iri <iri>`
+- Validate metadata CSVs: `python -m metasalmonpy.scripts.validate_sdp --dataset metadata/dataset.csv --tables metadata/tables.csv --dictionary metadata/column_dictionary.csv [--codes metadata/codes.csv] [--require-semantics]`
+- Draft a new term request: `python -m metasalmonpy.scripts.draft_new_term --label "<label>" --definition "<definition>" --term-type skos_concept --parent-iri <iri>`
 - Enable term search cache: set `SALMONPY_CACHE=1`
-- Check explicitly for a newer release: `python -c "import salmonpy; print(salmonpy.check_for_updates())"`
+- Check explicitly for a newer release: `python -c "import metasalmonpy; print(metasalmonpy.check_for_updates())"`
 
 ## Releasing
 

@@ -1,12 +1,12 @@
 ---
-title: "salmonpy"
+title: "metasalmonpy"
 subtitle: "Create, review, validate, and publish Salmon Data Packages from Python"
 description: "Python implementation of the metasalmon workflows for portable, ontology-aware salmon data."
 page-layout: full
 toc: false
 ---
 
-`salmonpy` provides the Python implementation of the
+`metasalmonpy` provides the Python implementation of the
 [metasalmon](https://salmon-data-mobilization.github.io/metasalmon/) workflows.
 Version 0.1.6 aligns the core package lifecycle, semantic review, ontology term
 governance, validation, and Enterprise Data Hub (EDH) metadata behavior with
@@ -14,7 +14,7 @@ metasalmon 0.1.6.
 
 ```python
 import pandas as pd
-from salmonpy import create_sdp, validate_salmon_datapackage
+from metasalmonpy import create_sdp, validate_salmon_datapackage
 
 observations = pd.DataFrame(
     {

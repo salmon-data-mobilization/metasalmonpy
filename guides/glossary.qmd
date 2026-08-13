@@ -1,6 +1,6 @@
 ---
 title: "Glossary"
-description: "Terms used across salmonpy and Salmon Data Packages."
+description: "Terms used across metasalmonpy and Salmon Data Packages."
 ---
 
 **Candidate**
@@ -15,7 +15,7 @@ description: "Terms used across salmonpy and Salmon Data Packages."
 
 **EDH**
 
-:   Enterprise Data Hub, the DFO destination supported by salmonpy's HNAP-aware
+:   Enterprise Data Hub, the DFO destination supported by metasalmonpy's HNAP-aware
     ISO 19139 metadata export.
 
 **GCDFO**
@@ -31,7 +31,7 @@ description: "Terms used across salmonpy and Salmon Data Packages."
 **I-ADOPT**
 
 :   A framework for decomposing an observed variable into property, entity,
-    constraint, and related components. salmonpy also records a whole-variable
+    constraint, and related components. metasalmonpy also records a whole-variable
     term, unit, and method.
 
 **LLM assessment**

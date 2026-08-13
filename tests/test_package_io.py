@@ -10,7 +10,7 @@ except ImportError:  # pragma: no cover
 if pd is None:
     raise unittest.SkipTest("pandas not installed")
 
-from salmonpy import (
+from metasalmonpy import (
     create_salmon_datapackage,
     create_salmon_datapackage_from_data,
     infer_salmon_datapackage_artifacts,
@@ -40,7 +40,7 @@ class PackageIOTests(unittest.TestCase):
         )
         dict_df = validate_dictionary(dict_df)
 
-        tmpdir = tempfile.mkdtemp(prefix="salmonpy-io-")
+        tmpdir = tempfile.mkdtemp(prefix="metasalmonpy-io-")
         create_salmon_datapackage({"observations": df}, dataset_meta, table_meta, dict_df, path=tmpdir, overwrite=True)
         pkg = read_salmon_datapackage(tmpdir)
 
@@ -74,7 +74,7 @@ class PackageIOTests(unittest.TestCase):
                 }
             )
         )
-        tmpdir = tempfile.mkdtemp(prefix="salmonpy-csv-")
+        tmpdir = tempfile.mkdtemp(prefix="metasalmonpy-csv-")
         create_salmon_datapackage({"observations": df}, dataset_meta, table_meta, dict_df, path=tmpdir, overwrite=True)
         Path(tmpdir, "datapackage.json").unlink()
         pkg = read_salmon_datapackage(tmpdir)
@@ -98,7 +98,7 @@ class PackageIOTests(unittest.TestCase):
         self.assertIn("keywords", artifacts["dataset_meta"].columns)
         self.assertFalse(artifacts["codes"].empty)
 
-        tmpdir = tempfile.mkdtemp(prefix="salmonpy-from-data-")
+        tmpdir = tempfile.mkdtemp(prefix="metasalmonpy-from-data-")
         legacy_xml = Path(tmpdir, "legacy-iso19139.xml")
         pkg_path = create_salmon_datapackage_from_data(
             resources,

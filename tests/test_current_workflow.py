@@ -3,14 +3,14 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from salmonpy import (
+from metasalmonpy import (
     create_sdp,
     read_salmon_datapackage,
     validate_salmon_datapackage,
     write_edh_xml_from_sdp,
     write_salmon_datapackage,
 )
-from salmonpy.package_io import _is_semantic_code_candidate
+from metasalmonpy.package_io import _is_semantic_code_candidate
 
 
 def _reviewed_artifacts():
@@ -88,7 +88,7 @@ def test_writer_uses_current_sdp_layout_and_reader_round_trips(tmp_path):
     assert (package_path / "metadata" / "column_dictionary.csv").exists()
     assert (package_path / "data" / "observations.csv").exists()
     assert (package_path / "datapackage.json").exists()
-    assert (package_path / ".salmonpy-package").exists()
+    assert (package_path / ".metasalmonpy-package").exists()
 
     package = read_salmon_datapackage(package_path)
     assert package["dataset"]["dataset_id"].iloc[0] == "demo"

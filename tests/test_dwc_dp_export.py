@@ -1,6 +1,6 @@
 import unittest
 
-from salmonpy.dwc_dp_export import build_dwc_dp_descriptor
+from metasalmonpy.dwc_dp_export import build_dwc_dp_descriptor
 
 
 class TestDwcDpExport(unittest.TestCase):

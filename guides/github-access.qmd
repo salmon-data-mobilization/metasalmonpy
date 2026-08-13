@@ -6,7 +6,7 @@ description: "Read CSV resources from public or private GitHub repositories."
 ## Build a raw URL
 
 ```python
-from salmonpy import github_raw_url
+from metasalmonpy import github_raw_url
 
 url = github_raw_url(
     "data/gold/dimension_tables/dim_date.csv",
@@ -21,7 +21,7 @@ Pin `ref` to a tag or commit when reproducibility matters. The default is
 ## Read one CSV
 
 ```python
-from salmonpy import read_github_csv
+from metasalmonpy import read_github_csv
 
 dim_date = read_github_csv(
     "data/gold/dimension_tables/dim_date.csv",
@@ -33,7 +33,7 @@ dim_date = read_github_csv(
 ## Read a directory
 
 ```python
-from salmonpy import read_github_csv_dir
+from metasalmonpy import read_github_csv_dir
 
 tables = read_github_csv_dir(
     "data/gold/dimension_tables",
@@ -48,7 +48,7 @@ Token discovery checks `GITHUB_PAT`, `GH_TOKEN`, and the configured git
 credential store. Verify discovery without printing the token:
 
 ```python
-from salmonpy import ms_setup_github
+from metasalmonpy import ms_setup_github
 
 ms_setup_github(repo="dfo-pacific-science/qualark-data")
 ```

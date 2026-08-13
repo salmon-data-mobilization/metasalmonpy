@@ -13,7 +13,7 @@ from typing import Dict, Iterable, List, Optional, Sequence
 try:
     import pandas as pd
 except ImportError as exc:  # pragma: no cover - import guard
-    raise ImportError("salmonpy requires pandas; install via `pip install pandas`.") from exc
+    raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
 
 try:
     from importlib import resources
@@ -29,12 +29,12 @@ except ImportError:  # pragma: no cover
 _warned_bioportal_missing = False
 _cache_enabled = os.getenv("SALMONPY_CACHE", "").lower() in {"1", "true", "yes"}
 _term_cache: Dict[tuple, pd.DataFrame] = {}
-_USER_AGENT = "salmonpy/unknown"
+_USER_AGENT = "metasalmonpy/unknown"
 if _pkg_version:
     try:
-        _USER_AGENT = f"salmonpy/{_pkg_version('salmonpy')}"
+        _USER_AGENT = f"metasalmonpy/{_pkg_version('metasalmonpy')}"
     except Exception:  # pragma: no cover - fallback
-        _USER_AGENT = "salmonpy/unknown"
+        _USER_AGENT = "metasalmonpy/unknown"
 
 
 def _empty_terms(role=None) -> pd.DataFrame:
@@ -97,7 +97,7 @@ def _safe_json(url: str, headers: Optional[Dict[str, str]] = None, timeout: int 
 
 def _load_iadopt_vocab() -> pd.DataFrame:
     try:
-        vocab_path = resources.files("salmonpy").joinpath("data/iadopt-terminologies.csv")
+        vocab_path = resources.files("metasalmonpy").joinpath("data/iadopt-terminologies.csv")
         with resources.as_file(vocab_path) as path:
             df = pd.read_csv(path)
     except Exception:
@@ -111,7 +111,7 @@ def _load_iadopt_vocab() -> pd.DataFrame:
 
 def _load_role_preferences() -> pd.DataFrame:
     try:
-        pref_path = resources.files("salmonpy").joinpath("data/ontology-preferences.csv")
+        pref_path = resources.files("metasalmonpy").joinpath("data/ontology-preferences.csv")
         with resources.as_file(pref_path) as path:
             df = pd.read_csv(path)
     except Exception:
@@ -854,7 +854,7 @@ def benchmark_term_ranking_fixtures(
         fixtures = fixture_path_override
     else:
         if fixture_path is None:
-            fixture_path = str(resources.files("salmonpy").joinpath("tests/fixtures/semantic-ranking-fixtures.json"))
+            fixture_path = str(resources.files("metasalmonpy").joinpath("tests/fixtures/semantic-ranking-fixtures.json"))
         with open(fixture_path, "r", encoding="utf-8") as fp:
             fixtures = json.load(fp)
     profiles = profiles or {"baseline": None}

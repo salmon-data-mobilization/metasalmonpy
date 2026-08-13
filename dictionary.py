@@ -9,7 +9,7 @@ from typing import Optional, Sequence, Union
 try:
     import pandas as pd
 except ImportError as exc:  # pragma: no cover - import guard
-    raise ImportError("salmonpy requires pandas; install via `pip install pandas`.") from exc
+    raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
 
 from .metadata import (
     ensure_resource_mapping,

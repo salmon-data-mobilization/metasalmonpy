@@ -9,7 +9,7 @@ except ImportError:  # pragma: no cover
 if pd is None:
     raise unittest.SkipTest("pandas not installed")
 
-from salmonpy import apply_salmon_dictionary, infer_dictionary, validate_dictionary
+from metasalmonpy import apply_salmon_dictionary, infer_dictionary, validate_dictionary
 
 
 class DictionaryTests(unittest.TestCase):

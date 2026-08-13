@@ -8,9 +8,9 @@ except ImportError:  # pragma: no cover
 if pd is None:
     raise unittest.SkipTest("pandas not installed")
 
-from salmonpy import apply_semantic_suggestions, infer_dictionary, suggest_semantics
-from salmonpy.dwc_dp import suggest_dwc_mappings
-from salmonpy.semantics import _table_suggestion_is_compatible
+from metasalmonpy import apply_semantic_suggestions, infer_dictionary, suggest_semantics
+from metasalmonpy.dwc_dp import suggest_dwc_mappings
+from metasalmonpy.semantics import _table_suggestion_is_compatible
 
 
 class SemanticsTests(unittest.TestCase):

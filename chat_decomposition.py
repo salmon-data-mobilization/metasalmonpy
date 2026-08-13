@@ -48,7 +48,7 @@ def _json_value(value):
 def _session_root(path=None) -> Path:
     if path is not None:
         return Path(path).expanduser()
-    return Path.home() / ".local" / "state" / "salmonpy" / "chat-decomposition"
+    return Path.home() / ".local" / "state" / "metasalmonpy" / "chat-decomposition"
 
 
 def _session_dir(session_id: str, root=None) -> Path:
@@ -411,7 +411,7 @@ def chat_decomposition(
         chat_request_fn,
     )
     intro = (
-        f"salmonpy decomposition session {state['session_id']} for "
+        f"metasalmonpy decomposition session {state['session_id']} for "
         f"{state['target'].get('column_name')}.\n{_preview(state)}"
     )
     output_fn(intro)

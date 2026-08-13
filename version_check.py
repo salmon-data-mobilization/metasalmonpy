@@ -15,7 +15,7 @@ def _version_parts(value: str) -> tuple[int, ...]:
 
 
 def check_for_updates(
-    repo: str = "salmon-data-mobilization/metaSmnPy",
+    repo: str = "salmon-data-mobilization/metasalmonpy",
     current: Optional[str] = None,
     timeout: float = 2,
     quiet: bool = False,
@@ -37,7 +37,7 @@ def check_for_updates(
     request_fn = request_fn or requests.get
     install_command = (
         "python -m pip install --upgrade "
-        "git+https://github.com/salmon-data-mobilization/metaSmnPy.git"
+        "git+https://github.com/salmon-data-mobilization/metasalmonpy.git"
     )
     result = {
         "status": "unavailable",
@@ -90,14 +90,14 @@ def check_for_updates(
     if not quiet:
         if result["status"] == "update_available":
             warnings.warn(
-                f"A newer metaSmnPy release is available: {current} -> "
+                f"A newer metasalmonpy release is available: {current} -> "
                 f"{result['latest_version']}. Upgrade with: {install_command}",
                 UserWarning,
                 stacklevel=2,
             )
         elif result["status"] == "unavailable":
             warnings.warn(
-                f"Could not check for a newer metaSmnPy release: "
+                f"Could not check for a newer metasalmonpy release: "
                 f"{result['message']}",
                 UserWarning,
                 stacklevel=2,

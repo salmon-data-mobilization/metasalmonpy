@@ -54,7 +54,7 @@ def validate_semantics(
     Examples
     --------
     >>> import pandas as pd
-    >>> from salmonpy import validate_semantics
+    >>> from metasalmonpy import validate_semantics
     >>> dict_df = pd.read_csv("column_dictionary.csv")
     >>> result = validate_semantics(dict_df, require_iris=False)
     >>> print(result['issues'])  # Structural problems
@@ -67,7 +67,7 @@ def validate_semantics(
     try:
         from .dictionary import validate_dictionary, CORE_SEMANTIC_FIELDS, OPTIONAL_SEMANTIC_FIELDS
     except ImportError:  # pragma: no cover - direct module import compatibility
-        from salmonpy.dictionary import validate_dictionary, CORE_SEMANTIC_FIELDS, OPTIONAL_SEMANTIC_FIELDS
+        from metasalmonpy.dictionary import validate_dictionary, CORE_SEMANTIC_FIELDS, OPTIONAL_SEMANTIC_FIELDS
 
     dict_df = dictionary.copy()
 

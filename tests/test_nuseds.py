@@ -1,6 +1,6 @@
 import unittest
 
-from salmonpy import nuseds_enumeration_method_crosswalk, nuseds_estimate_method_crosswalk
+from metasalmonpy import nuseds_enumeration_method_crosswalk, nuseds_estimate_method_crosswalk
 
 
 class NusedsCrosswalkTests(unittest.TestCase):

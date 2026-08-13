@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from salmonpy import detect_semantic_term_gaps, render_ontology_term_request, submit_term_request_issues
+from metasalmonpy import detect_semantic_term_gaps, render_ontology_term_request, submit_term_request_issues
 
 
 class TermRequestTests(unittest.TestCase):

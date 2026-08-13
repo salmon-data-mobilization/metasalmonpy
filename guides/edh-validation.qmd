@@ -9,7 +9,7 @@ Default validation reports structural problems and unresolved semantics without
 requiring every IRI:
 
 ```python
-from salmonpy import validate_salmon_datapackage
+from metasalmonpy import validate_salmon_datapackage
 
 report = validate_salmon_datapackage("survey-sdp")
 ```
@@ -31,7 +31,7 @@ For an in-memory dictionary, `validate_semantics()` returns normalized
 dictionary data plus separate issue and gap tables:
 
 ```python
-from salmonpy import validate_semantics
+from metasalmonpy import validate_semantics
 
 result = validate_semantics(dictionary, require_iris=False)
 print(result["issues"])
@@ -48,7 +48,7 @@ draft.
 After metadata review, rebuild from the package:
 
 ```python
-from salmonpy import write_edh_xml_from_sdp
+from metasalmonpy import write_edh_xml_from_sdp
 
 xml = write_edh_xml_from_sdp(
     "survey-sdp",
@@ -62,7 +62,7 @@ cannot silently remain tied to the original scaffold.
 For direct construction from a single-row dataset metadata DataFrame:
 
 ```python
-from salmonpy import edh_build_hnap_xml
+from metasalmonpy import edh_build_hnap_xml
 
 xml = edh_build_hnap_xml(
     dataset_meta,

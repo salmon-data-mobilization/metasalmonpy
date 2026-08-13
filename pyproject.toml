@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "salmonpy"
+name = "metasalmonpy"
 version = "0.1.6"
 description = "Python mirror of the metasalmon R package for Salmon Data Packages"
 readme = "README.md"
@@ -17,13 +17,13 @@ docs = ["quartodoc==0.11.1", "griffe<2"]
 test = ["build>=1.2", "pytest>=7"]
 
 [project.urls]
-Documentation = "https://salmon-data-mobilization.github.io/metaSmnPy/"
-Issues = "https://github.com/salmon-data-mobilization/metaSmnPy/issues"
-Repository = "https://github.com/salmon-data-mobilization/metaSmnPy"
+Documentation = "https://salmon-data-mobilization.github.io/metasalmonpy/"
+Issues = "https://github.com/salmon-data-mobilization/metasalmonpy/issues"
+Repository = "https://github.com/salmon-data-mobilization/metasalmonpy"
 
 [tool.setuptools]
-packages = ["salmonpy", "salmonpy.data", "salmonpy.scripts"]
-package-dir = { "salmonpy" = ".", "salmonpy.data" = "data", "salmonpy.scripts" = "scripts" }
+packages = ["metasalmonpy", "metasalmonpy.data", "metasalmonpy.scripts"]
+package-dir = { "metasalmonpy" = ".", "metasalmonpy.data" = "data", "metasalmonpy.scripts" = "scripts" }
 
 [tool.setuptools.package-data]
-"salmonpy.data" = ["*.csv", "*.md"]
+"metasalmonpy.data" = ["*.csv", "*.md"]

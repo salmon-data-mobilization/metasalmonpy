@@ -10,7 +10,7 @@ dataset targets. Measurement columns use six ordered semantic roles:
 variable, property, entity, unit, constraint, and method.
 
 ```python
-from salmonpy import infer_dictionary, suggest_semantics
+from metasalmonpy import infer_dictionary, suggest_semantics
 
 dictionary = infer_dictionary(
     observations,
@@ -28,7 +28,7 @@ reviewed = suggest_semantics(
 suggestions = reviewed.attrs["semantic_suggestions"]
 ```
 
-When `sources` is omitted, salmonpy chooses role-aware defaults. An explicitly
+When `sources` is omitted, metasalmonpy chooses role-aware defaults. An explicitly
 supplied source list is a strict allowlist for initial and retry retrieval.
 For example, `sources="smn"` cannot introduce QUDT candidates.
 
@@ -92,7 +92,7 @@ terms.
 ## Apply reviewed choices
 
 ```python
-from salmonpy import apply_semantic_suggestions
+from metasalmonpy import apply_semantic_suggestions
 
 updated = apply_semantic_suggestions(
     reviewed,

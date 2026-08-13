@@ -11,7 +11,7 @@ from typing import Dict, Mapping, Optional, Sequence, Union
 try:
     import pandas as pd
 except ImportError as exc:  # pragma: no cover - import guard
-    raise ImportError("salmonpy requires pandas; install via `pip install pandas`.") from exc
+    raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
 
 from .dictionary import infer_dictionary, validate_dictionary
 from .metadata import (
@@ -33,7 +33,7 @@ SDP_PROFILE_URL = (
 SDP_RULES_URL = (
     "https://dfo-pacific-science.github.io/smn-data-pkg/schema/sdp.rules.yaml"
 )
-PACKAGE_SENTINEL = ".salmonpy-package"
+PACKAGE_SENTINEL = ".metasalmonpy-package"
 
 
 def _clean(value):
@@ -105,7 +105,7 @@ def _prepare_package_dir(target: Path, overwrite: bool) -> None:
         )
     if not _is_owned_package_dir(target):
         raise ValueError(
-            f"Refusing to overwrite non-salmonpy directory {target}. "
+            f"Refusing to overwrite non-metasalmonpy directory {target}. "
             "Use a new or empty directory, or clean it manually."
         )
     for child in entries:
@@ -393,7 +393,7 @@ def write_salmon_datapackage(
     )
     if codes is not None:
         _write_metadata_csv(codes, target / "metadata" / "codes.csv")
-    (target / PACKAGE_SENTINEL).write_text("salmonpy-owned\n", encoding="utf-8")
+    (target / PACKAGE_SENTINEL).write_text("metasalmonpy-owned\n", encoding="utf-8")
 
     return target
 

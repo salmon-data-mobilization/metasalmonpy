@@ -2,7 +2,7 @@ import unittest
 
 import pandas as pd
 
-from salmonpy.dwc_dp import suggest_dwc_mappings
+from metasalmonpy.dwc_dp import suggest_dwc_mappings
 
 
 class TestDwcDpMappings(unittest.TestCase):
