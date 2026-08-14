@@ -48,18 +48,17 @@ def read_github_csv(
     Authorization header, retries transient errors, and returns a pandas DataFrame.
     """
     target = _resolve_github_path(path, ref=ref, repo=repo)
+    # A token is optional, mirroring metasalmon: public repositories work
+    # anonymously, and the Authorization header is sent only when a token
+    # is available.
     token = token or _github_token()
-    if not token:
-        raise ValueError(
-            "No GitHub token found. Set GITHUB_PAT/GH_TOKEN or run "
-            "metasalmon::ms_setup_github() to configure git credentials."
-        )
 
     headers = {
-        "Authorization": f"token {token}",
         "User-Agent": _user_agent(),
         "Accept": "text/csv",
     }
+    if token:
+        headers["Authorization"] = f"token {token}"
 
     resp = _perform_request(target["url"], headers=headers)
 
@@ -74,24 +73,37 @@ def read_github_csv(
         raise PermissionError("Access to the repository was denied. Confirm your PAT has repo scope.")
 
     if resp.status_code == 404:
+        hint = (
+            "" if token else
+            " No token was sent; if this is a private repository, set "
+            "GITHUB_PAT/GH_TOKEN or configure git credentials."
+        )
         raise FileNotFoundError(
-            f"{target['path']} not found at ref {target['ref']} in {target['repo']}."
+            f"{target['path']} not found at ref {target['ref']} in {target['repo']}.{hint}"
         )
 
     resp.raise_for_status()
     return pd.read_csv(io.BytesIO(resp.content), **kwargs)
 
 
-def ms_setup_github(repo: str = "dfo-pacific-science/qualark-data", token: Optional[str] = None) -> str:
+def ms_setup_github(repo: Optional[str] = None, token: Optional[str] = None) -> str:
     """
     Verify GitHub token discovery for private-repository CSV access.
 
     Python cannot safely create or store a PAT for you. Set GITHUB_PAT/GH_TOKEN
     or configure git credentials, then call this to confirm the token works.
+
+    No default repository, mirroring metasalmon's 0.2.3 fix (#72): the old
+    default pointed at a private dataset repo, so a no-argument call reported
+    a perfectly good token as broken for everyone without access to it. The
+    function's job is token discovery; verifying a particular repository is
+    optional and caller-supplied.
     """
     token_val = token or _github_token()
     if not token_val:
         raise ValueError("No GitHub token found. Set GITHUB_PAT/GH_TOKEN or configure git credentials.")
+    if repo is None:
+        return token_val
     repo = repo.strip("/")
     resp = requests.get(
         f"https://api.github.com/repos/{repo}",
@@ -286,13 +298,9 @@ def read_github_csv_dir(
     >>> print(data['column_dictionary'].head())
     """
     target = _resolve_github_path(path if path else "dummy", ref=ref, repo=repo)
+    # Token optional, mirroring metasalmon: public repositories work
+    # anonymously.
     token_val = token or _github_token()
-
-    if not token_val:
-        raise ValueError(
-            "No GitHub token found. Set GITHUB_PAT/GH_TOKEN or run "
-            "metasalmon::ms_setup_github() to configure git credentials."
-        )
 
     # Build API endpoint for directory contents
     api_url = f"https://api.github.com/repos/{target['repo']}/contents"
@@ -305,10 +313,11 @@ def read_github_csv_dir(
         api_url = f"{api_url}/{clean_path}"
 
     headers = {
-        "Authorization": f"token {token_val}",
         "User-Agent": _user_agent(),
         "Accept": "application/vnd.github.v3+json",
     }
+    if token_val:
+        headers["Authorization"] = f"token {token_val}"
 
     # Add ref parameter
     params = {"ref": target["ref"]}

@@ -37,10 +37,23 @@ class GithubIOTests(unittest.TestCase):
         token_clean = github_io._resolve_github_path(token_url, ref="ignored", repo=None)
         self.assertEqual(token_clean["url"], "https://raw.githubusercontent.com/owner/repo/main/path/to/file.csv")
 
-    def test_read_github_csv_requires_token(self):
+    def test_read_github_csv_works_without_token(self):
+        # Mirrors metasalmon: public repositories are readable anonymously —
+        # the Authorization header is sent only when a token is discovered.
+        captured = {}
+
+        def fake_request(url, headers, **kwargs):
+            captured["headers"] = headers
+            resp = mock.Mock()
+            resp.status_code = 200
+            resp.content = b"a,b\n1,2\n"
+            return resp
+
         with mock.patch("metasalmonpy.github_io._github_token", return_value=None):
-            with self.assertRaisesRegex(ValueError, "GitHub token"):
-                read_github_csv("data/gold/dimension_tables/dim_date.csv", repo="owner/repo", token="")
+            with mock.patch("metasalmonpy.github_io._perform_request", side_effect=fake_request):
+                df = read_github_csv("data/file.csv", repo="owner/repo", token="")
+        self.assertEqual(len(df), 1)
+        self.assertNotIn("Authorization", captured["headers"])
 
     def test_read_github_csv_integration(self):
         if not os.getenv("SALMONPY_RUN_QUALARK_TEST", ""):

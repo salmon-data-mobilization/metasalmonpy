@@ -33,6 +33,26 @@ implementations.
 - Provider failures preserve deterministic candidates.
 - Term requests require curator review and explicit submission.
 
+## Not yet in Python
+
+metasalmonpy is at **metasalmon 0.1.6 parity**; metasalmon is at 0.2.6. The
+version number is a parity claim, so the honest list of what this package
+does **not** yet have matters as much as the table above (catch-up is hub
+roadmap stream S10):
+
+- **EML export and KNB/DataONE publication** — `write_eml_from_sdp()`,
+  `publish_sdp_to_knb()`, and the deterministic SDP archive have no Python
+  counterpart yet.
+- **SSSOM mapping sets, measurement decompositions, observation structures**
+  (metasalmon 0.1.7+).
+- **The 0.2.x contracts:** the empty-field missing-value token (0.2.4 —
+  Python's CSV reader still parses nothing as missing), declared
+  primary-key validation and tidy-shape warnings (0.2.6), structural
+  credential redaction (0.2.5), and the cli-safety/byte-reproducibility
+  guard machinery where applicable.
+- `ms_setup_github()` differs by design: Python cannot create or store a
+  PAT for you — it verifies discovery only.
+
 ## Python-native differences
 
 - pandas DataFrame attributes carry semantic suggestion and assessment tables.
