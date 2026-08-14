@@ -51,8 +51,8 @@ def read_github_csv(
     token = token or _github_token()
     if not token:
         raise ValueError(
-            "No GitHub token found. Set GITHUB_PAT/GH_TOKEN or run "
-            "metasalmon::ms_setup_github() to configure git credentials."
+            "No GitHub token found. Set GITHUB_PAT/GH_TOKEN or configure git "
+            "credentials, then run ms_setup_github() to confirm the token works."
         )
 
     headers = {
@@ -82,16 +82,24 @@ def read_github_csv(
     return pd.read_csv(io.BytesIO(resp.content), **kwargs)
 
 
-def ms_setup_github(repo: str = "dfo-pacific-science/qualark-data", token: Optional[str] = None) -> str:
+def ms_setup_github(repo: Optional[str] = None, token: Optional[str] = None) -> str:
     """
     Verify GitHub token discovery for private-repository CSV access.
 
     Python cannot safely create or store a PAT for you. Set GITHUB_PAT/GH_TOKEN
     or configure git credentials, then call this to confirm the token works.
+
+    No default repository, mirroring metasalmon's 0.2.3 fix (#72): the old
+    default pointed at a private dataset repo, so a no-argument call reported
+    a perfectly good token as broken for everyone without access to it. The
+    function's job is token discovery; verifying a particular repository is
+    optional and caller-supplied.
     """
     token_val = token or _github_token()
     if not token_val:
         raise ValueError("No GitHub token found. Set GITHUB_PAT/GH_TOKEN or configure git credentials.")
+    if repo is None:
+        return token_val
     repo = repo.strip("/")
     resp = requests.get(
         f"https://api.github.com/repos/{repo}",
@@ -290,8 +298,8 @@ def read_github_csv_dir(
 
     if not token_val:
         raise ValueError(
-            "No GitHub token found. Set GITHUB_PAT/GH_TOKEN or run "
-            "metasalmon::ms_setup_github() to configure git credentials."
+            "No GitHub token found. Set GITHUB_PAT/GH_TOKEN or configure git "
+            "credentials, then run ms_setup_github() to confirm the token works."
         )
 
     # Build API endpoint for directory contents

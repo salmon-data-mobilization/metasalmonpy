@@ -1,6 +1,6 @@
 ---
 title: "GitHub data access"
-description: "Read CSV resources from public or private GitHub repositories."
+description: "Read CSV resources from public or private GitHub repositories. Examples use the public salmon-data-mobilization/sdp-example-data repo, so every snippet is runnable."
 ---
 
 ## Build a raw URL
@@ -9,9 +9,9 @@ description: "Read CSV resources from public or private GitHub repositories."
 from metasalmonpy import github_raw_url
 
 url = github_raw_url(
-    "data/gold/dimension_tables/dim_date.csv",
-    repo="dfo-pacific-science/qualark-data",
-    ref="v0.3.0",
+    "data/escapement.csv",
+    repo="salmon-data-mobilization/sdp-example-data",
+    ref="v0.1.0",
 )
 ```
 
@@ -23,10 +23,10 @@ Pin `ref` to a tag or commit when reproducibility matters. The default is
 ```python
 from metasalmonpy import read_github_csv
 
-dim_date = read_github_csv(
-    "data/gold/dimension_tables/dim_date.csv",
-    repo="dfo-pacific-science/qualark-data",
-    ref="v0.3.0",
+escapement = read_github_csv(
+    "data/escapement.csv",
+    repo="salmon-data-mobilization/sdp-example-data",
+    ref="v0.1.0",
 )
 ```
 
@@ -36,9 +36,9 @@ dim_date = read_github_csv(
 from metasalmonpy import read_github_csv_dir
 
 tables = read_github_csv_dir(
-    "data/gold/dimension_tables",
-    repo="dfo-pacific-science/qualark-data",
-    ref="v0.3.0",
+    "data",
+    repo="salmon-data-mobilization/sdp-example-data",
+    ref="v0.1.0",
 )
 ```
 
@@ -50,8 +50,13 @@ credential store. Verify discovery without printing the token:
 ```python
 from metasalmonpy import ms_setup_github
 
-ms_setup_github(repo="dfo-pacific-science/qualark-data")
+ms_setup_github()  # token discovery only
+ms_setup_github(repo="your-org/your-private-repo")  # also verify repo access
 ```
+
+There is no default repository: a bare `ms_setup_github()` confirms token
+discovery, and repository verification happens only when you name one
+(mirroring metasalmon's 0.2.3 fix for the same function).
 
 Pass `token=` directly only when your application already manages credentials.
 Do not commit tokens to source, examples, notebooks, or `.env` files that are
