@@ -42,6 +42,10 @@ tables = read_github_csv_dir(
 )
 ```
 
+Public repositories — including the example repo above — need **no token at
+all**: the readers send an Authorization header only when a token is
+discovered, mirroring metasalmon.
+
 ## Private repositories
 
 Token discovery checks `GITHUB_PAT`, `GH_TOKEN`, and the configured git
