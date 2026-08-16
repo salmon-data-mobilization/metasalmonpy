@@ -1,0 +1,394 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://salmon-data-mobilization.github.io/metasalmon/schema/eml-mapping-1.json",
+  "title": "metasalmon reviewed EML mapping",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "status",
+    "dataset_id",
+    "series_key",
+    "system",
+    "language",
+    "publication_date",
+    "semantic_vocabulary",
+    "semantic_review",
+    "publication",
+    "rights_authorization",
+    "source_provenance",
+    "creators",
+    "metadata_providers",
+    "contacts",
+    "publisher",
+    "intellectual_rights",
+    "methods",
+    "tables"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "status": {
+      "enum": ["draft", "review", "final"]
+    },
+    "dataset_id": {
+      "$ref": "#/definitions/nonEmptyString"
+    },
+    "series_key": {
+      "$ref": "#/definitions/nonEmptyString"
+    },
+    "system": {
+      "const": "knb"
+    },
+    "language": {
+      "$ref": "#/definitions/nonEmptyString"
+    },
+    "publication_date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}(-[0-9]{2}-[0-9]{2})?$"
+    },
+    "semantic_vocabulary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "const": "metadata/semantic_vocabulary.csv"
+        },
+        "sha256": {
+          "$ref": "#/definitions/sha256"
+        }
+      }
+    },
+    "semantic_review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "const": "reviewed_semantic_selections.csv"
+        },
+        "sha256": {
+          "$ref": "#/definitions/sha256"
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["public"],
+      "properties": {
+        "public": {
+          "type": "boolean"
+        },
+        "revision_key": {
+          "$ref": "#/definitions/revisionKey"
+        }
+      }
+    },
+    "rights_authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "evidence"],
+      "properties": {
+        "status": {
+          "enum": ["unconfirmed", "confirmed"]
+        },
+        "evidence": {
+          "$ref": "#/definitions/nonEmptyString"
+        }
+      }
+    },
+    "source_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_citation",
+        "provenance_note",
+        "supporting_document"
+      ],
+      "properties": {
+        "source_citation": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "provenance_note": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "supporting_document": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["citation", "url", "sha256"],
+          "properties": {
+            "citation": {
+              "$ref": "#/definitions/nonEmptyString"
+            },
+            "url": {
+              "type": "string",
+              "pattern": "^https?://"
+            },
+            "sha256": {
+              "$ref": "#/definitions/sha256"
+            }
+          }
+        }
+      }
+    },
+    "creators": {
+      "$ref": "#/definitions/partyList"
+    },
+    "metadata_providers": {
+      "$ref": "#/definitions/partyList"
+    },
+    "contacts": {
+      "$ref": "#/definitions/partyList"
+    },
+    "publisher": {
+      "$ref": "#/definitions/party"
+    },
+    "intellectual_rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paragraphs"],
+      "properties": {
+        "paragraphs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/nonEmptyString"
+          }
+        }
+      }
+    },
+    "methods": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["description"],
+        "properties": {
+          "description": {
+            "$ref": "#/definitions/nonEmptyString"
+          }
+        }
+      }
+    },
+    "taxonomic_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scientific_name"],
+      "properties": {
+        "scientific_name": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "common_name": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "rank": {
+          "$ref": "#/definitions/nonEmptyString"
+        }
+      }
+    },
+    "geographic_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "west", "east", "south", "north"],
+      "properties": {
+        "description": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "west": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "east": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "south": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "north": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        }
+      }
+    },
+    "tables": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["attributes"],
+        "properties": {
+          "attributes": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "$ref": "#/definitions/attributeMapping"
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": ".*\\S.*"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revisionKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "email": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/nonEmptyString"
+          }
+        }
+      ]
+    },
+    "party": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "given_name": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "surname": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "organization_name": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "position_name": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "email": {
+          "$ref": "#/definitions/email"
+        },
+        "orcid": {
+          "type": "string",
+          "pattern": "^https://orcid\\.org/[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"
+        }
+      }
+    },
+    "partyList": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/party"
+      }
+    },
+    "missingValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "explanation"],
+      "properties": {
+        "code": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "explanation": {
+          "$ref": "#/definitions/nonEmptyString"
+        }
+      }
+    },
+    "attributeMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measurement_scale"],
+      "properties": {
+        "measurement_scale": {
+          "enum": ["nominal", "ordinal", "interval", "ratio", "dateTime"]
+        },
+        "eml_unit": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "number_type": {
+          "enum": ["natural", "whole", "integer", "real"]
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "minimum_exclusive": {
+          "type": "boolean"
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "maximum_exclusive": {
+          "type": "boolean"
+        },
+        "precision": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "format_string": {
+          "$ref": "#/definitions/nonEmptyString"
+        },
+        "missing_values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/missingValue"
+          }
+        },
+        "code_order": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "integer"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "measurement_scale": {
+                "enum": ["interval", "ratio"]
+              }
+            }
+          },
+          "then": {
+            "required": ["eml_unit", "number_type"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "measurement_scale": {
+                "const": "dateTime"
+              }
+            }
+          },
+          "then": {
+            "required": ["format_string"]
+          }
+        }
+      ]
+    }
+  }
+}

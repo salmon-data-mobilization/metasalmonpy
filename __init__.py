@@ -33,6 +33,7 @@ from .edh_xml import (
     edh_build_iso19139_xml,
     write_edh_xml_from_sdp,
 )
+from .eml import write_eml_from_sdp
 from .measurement_decompositions import (
     read_sdp_measurement_decompositions,
     validate_sdp_measurement_decompositions,
@@ -101,6 +102,7 @@ __all__ = [
     "validate_sdp_sssom",
     "validate_semantics",
     "write_edh_xml_from_sdp",
+    "write_eml_from_sdp",
     "write_salmon_datapackage",
     "write_sdp_measurement_decompositions",
     "write_sdp_sssom",
