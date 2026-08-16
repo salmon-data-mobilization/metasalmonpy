@@ -1,0 +1,63 @@
+version: sdp-0.2.0
+profile: https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json
+rules:
+- id: codes_required_for_categorical_columns
+  severity: error
+  description: metadata/codes.csv is required when any column_dictionary.csv row has
+    column_role equal to categorical.
+- id: code_value_required_without_vocabulary_iri
+  severity: error
+  description: metadata/codes.csv code_value is required unless vocabulary_iri is
+    provided.
+- id: measurement_columns_require_iadopt_fields
+  severity: error
+  description: Measurement columns require unit_iri, term_iri, property_iri, and entity_iri.
+- id: table_file_paths_exist
+  severity: error
+  description: Each metadata/tables.csv file_name value must be a safe relative path
+    to an existing data file.
+- id: column_dictionary_matches_data_headers
+  severity: error
+  description: metadata/column_dictionary.csv rows must match the headers of the data
+    files referenced by metadata/tables.csv.
+- id: datapackage_consistent_with_csv_metadata
+  severity: error
+  description: Published datapackage.json descriptors must agree with the canonical
+    CSV metadata and referenced data files.
+- id: observation_structure_files_are_paired
+  severity: error
+  description: metadata/structure/observation_structures.csv and metadata/structure/observation_components.csv
+    are optional, but either both files are present or neither file is present.
+- id: one_measure_per_observation_structure
+  severity: error
+  description: Every observation structure has exactly one component with component_role
+    equal to measure. When the paired extension is present, every measurement column
+    is the measure of exactly one structure.
+- id: observation_components_reference_columns
+  severity: error
+  description: Every observation component references a column in the same dataset and
+    table. Measure components reference measurement columns; sosa:usedProcedure components
+    are attributes that reference categorical columns.
+- id: observation_component_order
+  severity: error
+  description: component_order is unique within each observation structure and forms a
+    contiguous sequence starting at one. A column is bound at most once per structure.
+- id: dimensions_define_measure_grain
+  severity: error
+  description: Measure and dimension components set required_when_observed to TRUE. When
+    a measure is non-empty, every component marked required_when_observed is non-empty.
+    Every structure has at least one dimension, and repeated rows with the same
+    dictionary-type-normalized dimension tuple have identical normalized measure and
+    bound attribute values.
+- id: methods_are_sosa_procedures
+  severity: error
+  description: metadata/methods.csv records SOSA Procedure resources, not I-ADOPT variable
+    components. When methods.csv is present, a non-empty column_dictionary.method_iri
+    resolves to a method row in the same dataset. The observation-structure extension
+    requires the registry when it uses a static method_iri; legacy packages without
+    either extension remain valid.
+- id: row_varying_procedures_use_codes
+  severity: error
+  description: A component bound with http://www.w3.org/ns/sosa/usedProcedure is a categorical
+    attribute. Every enumerated code, including currently unobserved allowed values,
+    has a codes.csv term_iri that resolves to metadata/methods.csv.

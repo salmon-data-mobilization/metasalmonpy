@@ -163,9 +163,10 @@ class EraInferenceTests(unittest.TestCase):
         self.assertEqual(filled["spec_version"].iloc[0], SDP_PROFILE_VERSION)
 
     def test_licence_descriptors_match_era_r(self):
-        # Era R's .ms_license_descriptor() over these twenty values; the final
-        # branch (a canonical HTTP(S) rights URL stays a URL descriptor) is
-        # the 0.1.7 addition.
+        # Era R's .ms_license_descriptor() over these 21 values -- 13 accepted
+        # and 8 rejected; the final branch (a canonical HTTP(S) rights URL
+        # stays a URL descriptor) is the 0.1.7 addition. Keep the count in
+        # PARITY.md row 26 in step with this list.
         from metasalmonpy.package_io import _license_descriptor
 
         accepted = {
@@ -221,6 +222,38 @@ class EraInferenceTests(unittest.TestCase):
             with self.subTest(license=value):
                 with self.assertRaises(ValueError):
                     _license_descriptor(value)
+
+        self.assertEqual(len(accepted) + len(rejected), 21)
+
+    def test_percent_encoded_rights_urls_are_a_documented_divergence(self):
+        """The one place these conditions do not reproduce curl's verdict.
+
+        Measured against metasalmon v0.1.8 (R 4.5.2), not assumed: curl decodes
+        an encoded separator and uppercases hex digits before comparing, so R
+        rejects two of these four while ``_is_canonical_rights_url`` accepts
+        all four. The register (PARITY.md row 26) confines the residual risk to
+        exactly this; the assertions below are what stop that claim from
+        drifting out of date in either direction.
+
+        **Retirement condition:** delete this test when the conditions gain a
+        percent-encoding normalization step that reproduces curl's, and replace
+        it with equality assertions against freshly measured R verdicts.
+        """
+        from metasalmonpy.package_io import _is_canonical_rights_url
+
+        agrees_with_r = (
+            "https://example.org/licence%20terms",
+            "https://example.org/lic%C3%A9nce",
+        )
+        diverges_from_r = (
+            # R rejects: curl decodes %2F to "/" so the value does not round-trip.
+            "https://example.org/licence%2Fterms",
+            # R rejects: curl uppercases the hex digits.
+            "https://example.org/lic%c3%a9nce",
+        )
+        for value in agrees_with_r + diverges_from_r:
+            with self.subTest(license=value):
+                self.assertTrue(_is_canonical_rights_url(value))
 
     def test_a_custom_rights_url_reaches_datapackage_json(self):
         import json

@@ -867,6 +867,64 @@ def _expand_query(query: str, role) -> List[str]:
     return result
 
 
+# metasalmon's default ``match_type_weights`` (``.ranking_profile_defaults()``).
+# Every value here was read back out of the R v0.1.8 tag rather than copied from
+# source, including the ladder's fall-through.
+MATCH_TYPE_WEIGHTS = {
+    "label_exact": 1.0,
+    "label": 0.45,
+    "label_partial": 0.45,
+    "zooma_high": 0.3,
+    "zooma": 0.3,
+    "definition": 0.15,
+    "concept": 0.15,
+    "other": 0.05,
+}
+
+
+def _match_type_score(match_type: object, weights: Optional[dict] = None) -> float:
+    """Mirror ``.match_type_score_profiled``: how well the provider matched.
+
+    ``match_type`` is an **optional** field: several providers (QUDT units,
+    GBIF/WoRMS taxa, the local term indexes) never populate it, and a caller
+    can hand-build a candidate frame without it. A missing value therefore
+    means *unclassified*, and scores as such — it is not an error, and it must
+    never abort the search.
+
+    metasalmon 0.1.8 fixed exactly that: before the fix a ``None``/``NA``
+    ``match_type`` reached a scalar ``if`` and aborted ``suggest_semantics()``
+    for the whole dictionary, throwing away every legitimate candidate
+    alongside it.
+    """
+    weights = MATCH_TYPE_WEIGHTS if weights is None else weights
+    other = weights.get("other", 0.05)
+    # These two guards are intent-stating, not behaviour-changing today:
+    # ``str(None)``, ``str(pd.NA)``, ``str(nan)`` and ``str([...])`` all fall
+    # through the ladder to ``other`` anyway. They stay because that is a
+    # coincidence of ``str()`` and the ladder's current shape -- add one
+    # substring branch and ``"nan"`` or ``"<NA>"`` could start matching it.
+    # R needs the same two checks for a harder reason: without them a missing
+    # value reaches a scalar ``if`` and aborts the whole search (0.1.8's fix).
+    if match_type is None or isinstance(match_type, (list, tuple, dict, set)):
+        return other
+    if match_type is pd.NA or (
+        isinstance(match_type, float) and match_type != match_type
+    ):
+        return other
+    text = str(match_type).strip().lower()
+    if not text:
+        return other
+    if text == "label_exact":
+        return weights.get("label_exact", 1.0)
+    if text.startswith("label"):
+        return weights.get("label", 0.45)
+    if text.startswith("zooma"):
+        return weights.get("zooma", 0.3)
+    if text in ("definition", "concept"):
+        return weights.get("definition", 0.15)
+    return other
+
+
 def _apply_cross_source_agreement(df: pd.DataFrame, iri_boost: float = 0.5, label_boost: float = 0.2) -> pd.DataFrame:
     if df.empty:
         return df
@@ -968,6 +1026,14 @@ def _score_and_rank_terms(df: pd.DataFrame, role, vocab_tbl: pd.DataFrame, query
             ] += 1
         if label_pattern:
             df.loc[df["ontology"].str.contains(label_pattern, case=False, na=False), "score"] += 0.5
+
+    # How well the provider said it matched. metasalmon adds this term
+    # unconditionally (``match_type_enabled`` defaults to TRUE); a candidate
+    # with no ``match_type`` scores as unclassified rather than aborting.
+    if "match_type" in df.columns:
+        df["score"] += df["match_type"].map(_match_type_score)
+    else:
+        df["score"] += MATCH_TYPE_WEIGHTS["other"]
 
     if query_tokens:
         def _label_overlap(lbl: str) -> float:

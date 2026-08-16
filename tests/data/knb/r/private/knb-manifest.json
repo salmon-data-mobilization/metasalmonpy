@@ -19,7 +19,7 @@
   "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
   "representation": "archive",
   "revision_of": null,
-  "plan_sha256": "48f879c31457a57fbd4f0ccc18ebd25baef007ba67a3abde9d56823a41ed591a",
+  "plan_sha256": "36533a92ea86a06ab45a2eb41599912e5f888ddf93e0cdff978bc318c07952a7",
   "metadata_pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
   "resource_map_pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
   "objects": [
@@ -62,8 +62,8 @@
       "pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
       "format_id": "http://www.openarchives.org/ore/terms",
       "media_type": "application/rdf+xml",
-      "size": 3616,
-      "sha256": "be0b88b0b95bff02513cf58920fb5ddec8edca7b0c7b563aca62f337a5740270",
+      "size": 3859,
+      "sha256": "a897ce98ec172c06ebcfb192550f78cb5214fd4bf209253b7a1c7bcd38c476c2",
       "obsoletes": null,
       "state": "planned"
     }

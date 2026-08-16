@@ -24,6 +24,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
 try:
@@ -535,7 +536,20 @@ class EmlSupplementaryObjectTests(unittest.TestCase):
         self.assertIn(fragment, str(caught.exception))
 
     def test_traversing_object_names_are_refused(self):
-        for name in ("../evil.zip", "/tmp/evil.zip", "sub/dir.zip", "..\\x.zip"):
+        # 0.1.8 admits relative object names so the expanded representation can
+        # reconstruct the SDP hierarchy, but an escaping one is still refused:
+        # a consumer rebuilding from these names must not be able to write
+        # outside the package.
+        for name in ("../evil.zip", "/tmp/evil.zip", "..\\x.zip", "a//b.csv"):
+            with self.subTest(name=name):
+                self._refused(
+                    _fixture_sdp(self, "sdp-default"),
+                    _supplementary(object_name=name),
+                    "must be a safe relative object path",
+                )
+
+    def test_a_zip_object_name_must_still_be_a_basename(self):
+        for name in ("sub/dir.zip", "archive.tar.gz"):
             with self.subTest(name=name):
                 self._refused(
                     _fixture_sdp(self, "sdp-default"),
@@ -543,12 +557,21 @@ class EmlSupplementaryObjectTests(unittest.TestCase):
                     "must be a basename ending in .zip",
                 )
 
-    def test_non_zip_object_names_are_refused(self):
-        self._refused(
-            _fixture_sdp(self, "sdp-default"),
-            _supplementary(object_name="archive.tar.gz"),
-            "must be a basename ending in .zip",
+    def test_a_relative_path_is_accepted_for_a_non_archive_object(self):
+        # The expanded representation names each artifact by its
+        # package-relative path; that is only legal for a non-ZIP format.
+        sdp = _fixture_sdp(self, "sdp-default")
+        result = write_eml_from_sdp(
+            sdp,
+            overwrite=True,
+            supplementary_objects=_supplementary(
+                format_id="text/csv", object_name="metadata/dataset.csv"
+            ),
         )
+        row = result["supplementary_objects"].iloc[0]
+        self.assertEqual(row["object_name"], "metadata/dataset.csv")
+        self.assertIsNone(row["compression_method"])
+        self.assertEqual(row["entity_type"], "Salmon Data Package artifact")
 
     def test_checksum_mismatch_is_refused(self):
         self._refused(
@@ -572,11 +595,31 @@ class EmlSupplementaryObjectTests(unittest.TestCase):
             "must exactly match the file size",
         )
 
-    def test_non_zip_format_id_is_refused(self):
+    def test_a_non_zip_format_id_is_accepted_at_0_1_8(self):
+        # metasalmon 0.1.8 removed the "canonical SDP supplementary objects are
+        # always application/zip" rule: an expanded artifact is a CSV, a JSON
+        # descriptor, or a YAML sidecar. Only a ZIP gets compressionMethod.
+        sdp = _fixture_sdp(self, "sdp-default")
+        result = write_eml_from_sdp(
+            sdp,
+            overwrite=True,
+            supplementary_objects=_supplementary(
+                format_id="application/x-zip", object_name="archive.zip"
+            ),
+        )
+        row = result["supplementary_objects"].iloc[0]
+        self.assertEqual(row["format_id"], "application/x-zip")
+        self.assertIsNone(row["compression_method"])
+
+    def test_declaring_compression_on_a_non_archive_is_refused(self):
         self._refused(
             _fixture_sdp(self, "sdp-default"),
-            _supplementary(format_id="application/x-zip"),
-            '"application/zip" as format_id',
+            _supplementary(
+                format_id="text/csv",
+                object_name="metadata/dataset.csv",
+                compression_method="zip",
+            ),
+            "may declare compression_method",
         )
 
     def test_unreadable_path_is_refused(self):
@@ -771,6 +814,138 @@ class EmlOutputFileTests(unittest.TestCase):
                 self.assertIn("set overwrite=True", str(caught.exception))
                 with open(first["path"], "rb") as handle:
                     self.assertEqual(handle.read(), edited)
+
+
+@_REQUIRES_EXTRA
+class EmlSdpMethodTests(unittest.TestCase):
+    """Registry procedures reach EML only when they were actually used.
+
+    An EML ``methodStep`` asserts that a procedure *was performed* to produce
+    these data. A registry is an inventory of procedures the package knows
+    about, which is a different claim -- so an alternative that no observed
+    measurement references must not appear. Verified against metasalmon
+    v0.1.8: the document this package produces for the used-method fixture is
+    ``ET.canonicalize``-equal to R's, including which methods it omits.
+    """
+
+    def _sdp_with_registry(self, methods_rows, dictionary_method=None):
+        from metasalmonpy.metadata import read_sdp_csv
+
+        sdp = _fixture_sdp(self, "sdp-default")
+        if dictionary_method is not None:
+            path = os.path.join(sdp, "metadata", "column_dictionary.csv")
+            dictionary = read_sdp_csv(path)
+            dictionary.loc[
+                dictionary["column_name"] == "count", "method_iri"
+            ] = dictionary_method
+            dictionary.to_csv(path, index=False, na_rep="")
+        columns = (
+            "dataset_id,method_iri,method_label,method_description,"
+            "method_version,protocol_iri,citation"
+        )
+        lines = [columns] + [",".join(row) for row in methods_rows]
+        os.makedirs(os.path.join(sdp, "metadata"), exist_ok=True)
+        with open(
+            os.path.join(sdp, "metadata", "methods.csv"), "w", encoding="utf-8"
+        ) as handle:
+            handle.write("\n".join(lines) + "\n")
+
+        # A registry always arrives here inside an R-written package, and R's
+        # writer registers the resource in the descriptor as it writes. Doing
+        # the same by hand keeps the fixture a package the reader accepts
+        # rather than one only this test could produce.
+        from metasalmonpy.sdp_methods import _methods_resource
+
+        descriptor_path = os.path.join(sdp, "datapackage.json")
+        with open(descriptor_path, encoding="utf-8") as handle:
+            descriptor = json.load(handle)
+        descriptor["resources"] = list(descriptor.get("resources") or []) + [
+            _methods_resource()
+        ]
+        descriptor.setdefault("sdp", {}).setdefault("metadata", {})[
+            "methods"
+        ] = "metadata/methods.csv"
+        with open(descriptor_path, "w", encoding="utf-8") as handle:
+            json.dump(descriptor, handle, indent=2)
+            handle.write("\n")
+        return sdp
+
+    def _steps(self, path):
+        document = ET.parse(path).getroot()
+
+        def local(tag):
+            return tag.split("}", 1)[1] if tag.startswith("{") else tag
+
+        return [
+            step
+            for node in document.iter()
+            if local(node.tag) == "methods"
+            for step in node
+            if local(step.tag) == "methodStep"
+        ]
+
+    def test_an_unreferenced_registry_method_is_not_asserted_as_performed(self):
+        sdp = self._sdp_with_registry(
+            [
+                (
+                    "demo-salmon-2026",
+                    "https://example.org/methods/unreferenced",
+                    "Unreferenced method",
+                    "Registered but not used to produce this data object.",
+                    "",
+                    "",
+                    "",
+                )
+            ]
+        )
+        result = write_eml_from_sdp(sdp, overwrite=True)
+
+        self.assertEqual(len(result["methods"]), 1)
+        self.assertEqual(len(result["used_methods"]), 0)
+        self.assertEqual(len(self._steps(result["path"])), 1)
+        with open(result["path"], encoding="utf-8") as handle:
+            self.assertNotIn("Unreferenced method", handle.read())
+
+    def test_a_method_on_a_non_measurement_column_is_not_a_procedure(self):
+        # A legacy dictionary annotation on an attribute column is not a
+        # performed measurement procedure.
+        from metasalmonpy.eml import _used_sdp_methods
+        from metasalmonpy.metadata import read_sdp_csv
+        from metasalmonpy.package_io import validate_salmon_datapackage
+
+        sdp = _fixture_sdp(self, "sdp-default")
+        path = os.path.join(sdp, "metadata", "column_dictionary.csv")
+        dictionary = read_sdp_csv(path)
+        dictionary.loc[
+            dictionary["column_name"] == "literal_missing", "method_iri"
+        ] = "https://example.org/methods/attribute-cleanup"
+        dictionary.to_csv(path, index=False, na_rep="")
+
+        package = validate_salmon_datapackage(sdp, require_iris=True)["package"]
+        registry = pd.DataFrame(
+            [
+                {
+                    "dataset_id": "demo-salmon-2026",
+                    "method_iri": "https://example.org/methods/attribute-cleanup",
+                    "method_label": "Attribute cleanup",
+                    "method_description": "A legacy dictionary annotation.",
+                    "method_version": "",
+                    "protocol_iri": "",
+                    "citation": "",
+                }
+            ]
+        )
+
+        self.assertEqual(
+            len(_used_sdp_methods(Path(sdp), package, registry)), 0
+        )
+
+    def test_a_package_with_no_registry_emits_the_mapping_narrative_only(self):
+        sdp = _fixture_sdp(self, "sdp-default")
+        result = write_eml_from_sdp(sdp, overwrite=True)
+        self.assertEqual(len(result["methods"]), 0)
+        self.assertEqual(len(result["used_methods"]), 0)
+        self.assertEqual(len(self._steps(result["path"])), 1)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -56,8 +56,8 @@
       "pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
       "format_id": "http://www.openarchives.org/ore/terms",
       "media_type": "application/rdf+xml",
-      "size": 3616,
-      "sha256": "be0b88b0b95bff02513cf58920fb5ddec8edca7b0c7b563aca62f337a5740270",
+      "size": 3859,
+      "sha256": "a897ce98ec172c06ebcfb192550f78cb5214fd4bf209253b7a1c7bcd38c476c2",
       "obsoletes": null
     }
   ]

@@ -1,0 +1,177 @@
+{
+  "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+  "name": "structure-test",
+  "id": "structure-test",
+  "title": "Observation structure test",
+  "description": "Mixed-grain fixture",
+  "sdp": {
+    "specVersion": "sdp-0.2.0",
+    "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+    "rules": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/sdp.rules.yaml",
+    "metadata": {
+      "dataset": "metadata/dataset.csv",
+      "tables": "metadata/tables.csv",
+      "columnDictionary": "metadata/column_dictionary.csv",
+      "codes": "metadata/codes.csv",
+      "methods": "metadata/methods.csv",
+      "observationStructures": "metadata/structure/observation_structures.csv",
+      "observationComponents": "metadata/structure/observation_components.csv"
+    }
+  },
+  "resources": [
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_dataset",
+      "path": "metadata/dataset.csv",
+      "title": "SDP dataset metadata",
+      "description": "Dataset-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/dataset.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_tables",
+      "path": "metadata/tables.csv",
+      "title": "SDP tables metadata",
+      "description": "Table-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/tables.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_column_dictionary",
+      "path": "metadata/column_dictionary.csv",
+      "title": "SDP column dictionary metadata",
+      "description": "Column-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/column_dictionary.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_codes",
+      "path": "metadata/codes.csv",
+      "title": "SDP codes metadata",
+      "description": "Controlled code list metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/codes.schema.json"
+    },
+    {
+      "name": "stock_recruit",
+      "path": "data/stock_recruit.csv",
+      "profile": "tabular-data-resource",
+      "schema": {
+        "fields": [
+          {
+            "name": "stock_id",
+            "title": "Stock",
+            "type": "string",
+            "description": "Stock identifier",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "brood_year",
+            "title": "Brood year",
+            "type": "integer",
+            "description": "Brood year",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "return_year",
+            "title": "Return year",
+            "type": "integer",
+            "description": "Return year",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "age",
+            "title": "Age",
+            "type": "integer",
+            "description": "Age at return",
+            "constraints": {
+              "required": true
+            },
+            "unit_iri": "http://qudt.org/vocab/unit/YR"
+          },
+          {
+            "name": "total_spawners",
+            "title": "Total spawners",
+            "type": "number",
+            "description": "Estimated total spawners",
+            "constraints": {
+              "required": true
+            },
+            "unit_iri": "http://qudt.org/vocab/unit/INDIV",
+            "term_iri": "https://example.org/variables/spawners",
+            "term_type": "owl_class",
+            "property_iri": "https://w3id.org/smn/Abundance",
+            "entity_iri": "https://w3id.org/smn/Stock",
+            "method_iri": "https://example.org/methods/spawning-ground-survey"
+          },
+          {
+            "name": "recruits",
+            "title": "Recruits",
+            "type": "number",
+            "description": "Estimated recruits",
+            "constraints": {
+              "required": true
+            },
+            "unit_iri": "http://qudt.org/vocab/unit/INDIV",
+            "term_iri": "https://example.org/variables/recruits",
+            "term_type": "owl_class",
+            "property_iri": "https://w3id.org/smn/Abundance",
+            "entity_iri": "https://w3id.org/smn/Stock"
+          },
+          {
+            "name": "estimate_method",
+            "title": "Estimate method",
+            "type": "string",
+            "description": "Row-varying recruit estimation procedure",
+            "constraints": {
+              "required": true
+            },
+            "term_type": "skos_concept"
+          }
+        ]
+      },
+      "title": "Stock recruit",
+      "description": "Mixed-grain stock-recruit estimates"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_methods",
+      "path": "metadata/methods.csv",
+      "title": "SDP methods metadata",
+      "description": "Optional registry of procedures associated with measurements in the package.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/methods.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_observation_structures",
+      "path": "metadata/structure/observation_structures.csv",
+      "title": "SDP observation structures metadata",
+      "description": "Optional logical observation structures that declare the grain of individual measures in wide or mixed-grain tables.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/observation_structures.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_observation_components",
+      "path": "metadata/structure/observation_components.csv",
+      "title": "SDP observation components metadata",
+      "description": "Ordered bindings from table columns to the measure, dimensions, and attributes of a logical observation structure.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/observation_components.schema.json"
+    }
+  ],
+  "contributors": [
+    {
+      "title": "MISSING METADATA: add creator, team, or originating program.",
+      "role": "creator"
+    },
+    {
+      "title": "MISSING METADATA: add primary contact name or team.",
+      "role": "contact",
+      "email": "MISSING METADATA: add primary contact email."
+    }
+  ]
+}

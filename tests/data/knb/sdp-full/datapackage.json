@@ -1,0 +1,156 @@
+{
+  "profile": "https://dfo-pacific-science.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+  "name": "demo-salmon-2026",
+  "id": "demo-salmon-2026",
+  "title": "Demonstration salmon counts",
+  "description": "A compact fixture for deterministic EML export tests.",
+  "sdp": {
+    "specVersion": "sdp-0.2.0",
+    "profile": "https://dfo-pacific-science.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+    "rules": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/sdp.rules.yaml",
+    "metadata": {
+      "dataset": "metadata/dataset.csv",
+      "tables": "metadata/tables.csv",
+      "columnDictionary": "metadata/column_dictionary.csv",
+      "codes": "metadata/codes.csv",
+      "methods": "metadata/methods.csv",
+      "observationStructures": "metadata/structure/observation_structures.csv",
+      "observationComponents": "metadata/structure/observation_components.csv"
+    }
+  },
+  "resources": [
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_dataset",
+      "path": "metadata/dataset.csv",
+      "title": "SDP dataset metadata",
+      "description": "Dataset-level metadata.",
+      "schema": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/frictionless/metadata/dataset.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_tables",
+      "path": "metadata/tables.csv",
+      "title": "SDP tables metadata",
+      "description": "Table-level metadata.",
+      "schema": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/frictionless/metadata/tables.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_column_dictionary",
+      "path": "metadata/column_dictionary.csv",
+      "title": "SDP column dictionary metadata",
+      "description": "Column-level metadata.",
+      "schema": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/frictionless/metadata/column_dictionary.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_codes",
+      "path": "metadata/codes.csv",
+      "title": "SDP codes metadata",
+      "description": "Controlled code list metadata.",
+      "schema": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/frictionless/metadata/codes.schema.json"
+    },
+    {
+      "name": "counts",
+      "path": "data/counts.csv",
+      "profile": "tabular-data-resource",
+      "schema": {
+        "fields": [
+          {
+            "name": "record_id",
+            "title": "Record identifier",
+            "type": "string",
+            "description": "Stable identifier for the annual count record.",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "year",
+            "title": "Observation year",
+            "type": "number",
+            "description": "Calendar year represented by the record.",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "count",
+            "title": "Salmon abundance",
+            "type": "number",
+            "description": "Estimated number of salmon; zero is a valid observed value.",
+            "constraints": {
+              "required": true
+            },
+            "unit_iri": "http://qudt.org/vocab/unit/COUNT",
+            "term_iri": "https://w3id.org/smn/ObservedRateOrAbundance",
+            "term_type": "owl_class",
+            "property_iri": "http://qudt.org/vocab/quantitykind/Count",
+            "entity_iri": "https://w3id.org/smn/Stock"
+          },
+          {
+            "name": "literal_missing",
+            "title": "Literal missing marker",
+            "type": "string",
+            "description": "A text field whose second row uses the literal CSV token NA."
+          },
+          {
+            "name": "blank_only",
+            "title": "Blank implicit absence",
+            "type": "string",
+            "description": "A text field whose second row is an empty CSV field."
+          }
+        ],
+        "primaryKey": "record_id"
+      },
+      "title": "Salmon counts",
+      "description": "One annual abundance record per identifier."
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_methods",
+      "path": "metadata/methods.csv",
+      "title": "SDP methods metadata",
+      "description": "Optional registry of procedures associated with measurements in the package.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/methods.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_observation_structures",
+      "path": "metadata/structure/observation_structures.csv",
+      "title": "SDP observation structures metadata",
+      "description": "Optional logical observation structures that declare the grain of individual measures in wide or mixed-grain tables.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/observation_structures.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_observation_components",
+      "path": "metadata/structure/observation_components.csv",
+      "title": "SDP observation components metadata",
+      "description": "Ordered bindings from table columns to the measure, dimensions, and attributes of a logical observation structure.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/observation_components.schema.json"
+    }
+  ],
+  "contributors": [
+    {
+      "title": "Example Salmon Program",
+      "role": "creator"
+    },
+    {
+      "title": "Example Salmon Program",
+      "role": "contact",
+      "email": "data@example.org",
+      "organization": "Example Salmon Program"
+    }
+  ],
+  "licenses": [
+    {
+      "path": "https://example.org/data-terms/"
+    }
+  ],
+  "temporal": {
+    "start": "2024",
+    "end": "2025"
+  }
+}

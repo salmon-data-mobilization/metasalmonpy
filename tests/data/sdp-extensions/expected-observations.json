@@ -1,0 +1,15 @@
+{
+  "stock_recruit::recruits_by_age": {
+    "stock_id": ["fraser", "fraser", "fraser"],
+    "brood_year": ["2019", "2019", "2020"],
+    "return_year": ["2022", "2023", "2024"],
+    "age": ["3", "4", "4"],
+    "recruits": ["40", "55", "60"],
+    "estimate_method": ["mark_recapture", "expanded_count", "expanded_count"]
+  },
+  "stock_recruit::total_spawners_by_brood": {
+    "stock_id": ["fraser", "fraser"],
+    "brood_year": ["2019", "2020"],
+    "total_spawners": ["100", "120"]
+  }
+}

@@ -1,0 +1,2 @@
+dataset_id,method_iri,method_label,method_description,method_version,protocol_iri,citation
+demo-salmon-2026,https://example.org/methods/count-compilation,Count compilation,Compile annual salmon abundance counts.,2026,https://example.org/protocols/count-compilation,Example Salmon Program. 2026. Count compilation.

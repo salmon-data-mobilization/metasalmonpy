@@ -1,0 +1,77 @@
+{
+  "$schema": "https://specs.frictionlessdata.io/schemas/table-schema.json",
+  "title": "SDP codes metadata schema",
+  "description": "Controlled code list metadata.",
+  "fields": [
+    {
+      "name": "dataset_id",
+      "type": "string",
+      "description": "References dataset_id in metadata/dataset.csv.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "table_id",
+      "type": "string",
+      "description": "References table_id in metadata/tables.csv.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "column_name",
+      "type": "string",
+      "description": "Column name in the data file that uses this code.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "code_value",
+      "type": "string",
+      "description": "Stored value in the data.",
+      "sdp:requirement": "conditional",
+      "sdp:condition": "Required unless vocabulary_iri is provided."
+    },
+    {
+      "name": "code_label",
+      "type": "string",
+      "description": "Human-readable label corresponding to the code."
+    },
+    {
+      "name": "code_description",
+      "type": "string",
+      "description": "Longer description of what the code means."
+    },
+    {
+      "name": "vocabulary_iri",
+      "type": "string",
+      "description": "IRI for the controlled vocabulary system that defines valid values.",
+      "sdp:requirement": "recommended"
+    },
+    {
+      "name": "term_iri",
+      "type": "string",
+      "description": "IRI for the specific term that code_value represents.",
+      "sdp:requirement": "recommended"
+    },
+    {
+      "name": "term_type",
+      "type": "string",
+      "description": "Type of term.",
+      "constraints": {
+        "enum": [
+          "skos_concept",
+          "owl_class",
+          "owl_named_individual"
+        ]
+      }
+    }
+  ],
+  "sdp:table": "codes",
+  "sdp:path": "metadata/codes.csv",
+  "sdp:requirement": "conditional",
+  "sdp:rowRule": "One row per allowed code value in a categorical column.",
+  "sdp:condition": "Required when any column_dictionary.csv row has column_role equal to categorical."
+}

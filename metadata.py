@@ -7,6 +7,8 @@ from typing import Optional, Union
 
 import pandas as pd
 
+from .sdp_schema import sdp_profile_version
+
 
 # readr's ``trim_ws = TRUE`` and R's ``trimws()`` strip exactly these
 # characters. U+00A0 and U+3000 are deliberately absent: neither R function
@@ -91,17 +93,14 @@ def read_sdp_csv(path: Union[str, Path], **kwargs) -> pd.DataFrame:
 
 
 # The SDP profile version this package writes and defaults a blank
-# ``spec_version`` to. metasalmon v0.1.7 stopped hard-coding "sdp-0.1.0" and
-# started reading it from its vendored ``inst/extdata/schema/sdp.rules.yaml``,
-# whose ``version:`` key is ``sdp-0.2.0`` at that tag (confirmed by running
-# ``.ms_sdp_profile_version()`` against the v0.1.7 extraction). This package
-# does not vendor the rules bundle until the 0.1.8 milestone, so the version is
-# a single named constant instead of three scattered literals.
+# ``spec_version`` to. metasalmon reads it from its vendored
+# ``inst/extdata/schema/sdp.rules.yaml`` via ``.ms_sdp_profile_version()``.
 #
-# Retirement condition: replace this constant with a read of the vendored
-# ``sdp.rules.yaml`` when the 0.1.8 milestone lands that bundle. Until then a
-# profile bump must edit exactly this line.
-SDP_PROFILE_VERSION = "sdp-0.2.0"
+# The 0.1.8 milestone landed that bundle here (from the upstream ``sdp-0.2.0``
+# tag), so this is now the same read rather than a standalone constant — the
+# retirement condition recorded against the constant at 0.1.7. A profile bump
+# is a bundle swap; nothing in Python source states the version.
+SDP_PROFILE_VERSION = sdp_profile_version()
 
 DATASET_META_COLUMNS = [
     "dataset_id",

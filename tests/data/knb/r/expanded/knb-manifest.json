@@ -1,0 +1,139 @@
+{
+  "schema_version": 3,
+  "status": "dry_run",
+  "environment": "PROD",
+  "node_id": "urn:node:KNB",
+  "public": true,
+  "replication_policy": {
+    "replication_allowed": true,
+    "number_replicas": 3,
+    "preferred_member_nodes": [],
+    "blocked_member_nodes": []
+  },
+  "expected_subject": "https://orcid.org/0000-0001-9317-0364",
+  "rights_authorization": {
+    "status": "confirmed",
+    "evidence": "Synthetic fixture data are authorized for public testing."
+  },
+  "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+  "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
+  "representation": "expanded",
+  "revision_of": null,
+  "plan_sha256": "d842240f1c6a844185e851f85b6ef30862a1aa340703482ee90e50d4916ba4f8",
+  "metadata_pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+  "resource_map_pid": "urn:uuid:5300659b-b6b0-5753-b443-baaa18b9748b",
+  "objects": [
+    {
+      "role": "data",
+      "path": "data/counts.csv",
+      "pid": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 87,
+      "sha256": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "sdp_artifact",
+      "path": "datapackage.json",
+      "pid": "urn:uuid:73ef3b1d-7728-5122-9d2b-5f42c632e77d",
+      "format_id": "application/json",
+      "media_type": "application/json",
+      "size": 4397,
+      "sha256": "8c08f600cd6bc0aa511c88e7b68657d5d93ce836e2ba8903058231d137422e60",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "sdp_artifact",
+      "path": "metadata/codes.csv",
+      "pid": "urn:uuid:b052a2d5-2896-5aa2-a047-e609aee66013",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 105,
+      "sha256": "c8d6bf4a36afb5da028afa38537eae21baf2962e852c530dba86ead970346a2d",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "sdp_artifact",
+      "path": "metadata/column_dictionary.csv",
+      "pid": "urn:uuid:e4c85619-8faa-580a-ae3e-e638c1c30f3f",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 1023,
+      "sha256": "696de6e6d87c69e42d64f954378341acf94a0863d907540174eee0a43ad4222b",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "sdp_artifact",
+      "path": "metadata/dataset.csv",
+      "pid": "urn:uuid:560f65d7-6b51-546d-9588-4840ede14298",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 724,
+      "sha256": "9343a810a9f866066086c0ac45eead20106a552073c92bb451b1133679194d5b",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "sdp_artifact",
+      "path": "metadata/semantic_vocabulary.csv",
+      "pid": "urn:uuid:b88118ea-02f4-5f50-800b-6c1a040de636",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 1188,
+      "sha256": "fd6c78eab176792dd1a23ed8937d86f565c0a308afd8c52743ed293906f1163f",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "sdp_artifact",
+      "path": "metadata/tables.csv",
+      "pid": "urn:uuid:35666ad4-253c-5cf9-a019-87b8958dfc9f",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 280,
+      "sha256": "201d76152b7a2a64f21a05df8168267de3acac6813de5f838780bd208e2e2d7c",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "sdp_artifact",
+      "path": "reviewed_semantic_selections.csv",
+      "pid": "urn:uuid:4bbb3098-a14f-5988-aba4-964f0a3ba04c",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 853,
+      "sha256": "c38bc55daed99e4250341820ef72aecb0d74ca4f4a3d7ee3d7f718dfc69e8ad3",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "metadata",
+      "path": "metadata/eml.xml",
+      "pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+      "format_id": "https://eml.ecoinformatics.org/eml-2.2.0",
+      "media_type": "application/xml",
+      "size": 18155,
+      "sha256": "5d63ab7eb039854d3a24a87eeb5299601f932c74b806a1360979266bc1a50571",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "resource_map",
+      "path": "publication/resource-map.rdf",
+      "pid": "urn:uuid:5300659b-b6b0-5753-b443-baaa18b9748b",
+      "format_id": "http://www.openarchives.org/ore/terms",
+      "media_type": "application/rdf+xml",
+      "size": 9032,
+      "sha256": "006e10db1822d33b739b5f8a45d3b18f89bc143e7577852707784a2e1b56adf7",
+      "obsoletes": null,
+      "state": "planned"
+    }
+  ],
+  "catalog_verified": false,
+  "catalog_evidence": []
+}

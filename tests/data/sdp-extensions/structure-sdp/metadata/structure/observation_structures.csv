@@ -1,0 +1,3 @@
+dataset_id,table_id,observation_structure_id,structure_label,structure_description
+structure-test,stock_recruit,recruits_by_age,Recruits by age,"One logical recruit observation per stock, brood year, return year, and age."
+structure-test,stock_recruit,total_spawners_by_brood,Total spawners by brood,One logical total-spawner observation per stock and brood year.

@@ -1,0 +1,2 @@
+dataset_id,table_id,file_name,table_label,description,observation_unit,observation_unit_iri,primary_key
+demo-salmon-2026,counts,data/counts.csv,Salmon counts,One annual abundance record per identifier.,An annual salmon count observation,https://w3id.org/smn/Observation,record_id

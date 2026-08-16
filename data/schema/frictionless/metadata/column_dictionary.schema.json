@@ -1,0 +1,142 @@
+{
+  "$schema": "https://specs.frictionlessdata.io/schemas/table-schema.json",
+  "title": "SDP column dictionary metadata schema",
+  "description": "Column-level metadata.",
+  "fields": [
+    {
+      "name": "dataset_id",
+      "type": "string",
+      "description": "References dataset_id in metadata/dataset.csv.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "table_id",
+      "type": "string",
+      "description": "References table_id in metadata/tables.csv.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "column_name",
+      "type": "string",
+      "description": "Exact column name in the data file. Matching is case-sensitive.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "column_label",
+      "type": "string",
+      "description": "Human-readable label.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "column_description",
+      "type": "string",
+      "description": "Clear definition of the column's meaning.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "column_role",
+      "type": "string",
+      "description": "Role of the column in the table.",
+      "constraints": {
+        "required": true,
+        "enum": [
+          "identifier",
+          "attribute",
+          "temporal",
+          "categorical",
+          "measurement"
+        ]
+      }
+    },
+    {
+      "name": "value_type",
+      "type": "string",
+      "description": "Basic value type.",
+      "constraints": {
+        "required": true,
+        "enum": [
+          "integer",
+          "number",
+          "string",
+          "boolean",
+          "date",
+          "datetime"
+        ]
+      }
+    },
+    {
+      "name": "required",
+      "type": "boolean",
+      "description": "TRUE if the column is required for each row, otherwise FALSE or blank."
+    },
+    {
+      "name": "unit_label",
+      "type": "string",
+      "description": "Human-readable unit label."
+    },
+    {
+      "name": "unit_iri",
+      "type": "string",
+      "description": "IRI for the unit.",
+      "sdp:requirement": "conditional",
+      "sdp:condition": "Required when column_role is measurement."
+    },
+    {
+      "name": "term_iri",
+      "type": "string",
+      "description": "IRI for the term that represents what the column measures or represents. Use a SKOS concept for compound variables.",
+      "sdp:requirement": "conditional",
+      "sdp:condition": "Required when column_role is measurement."
+    },
+    {
+      "name": "term_type",
+      "type": "string",
+      "description": "Type of ontology or vocabulary term.",
+      "constraints": {
+        "enum": [
+          "owl_class",
+          "owl_object_property",
+          "skos_concept"
+        ]
+      }
+    },
+    {
+      "name": "property_iri",
+      "type": "string",
+      "description": "I-ADOPT property IRI.",
+      "sdp:requirement": "conditional",
+      "sdp:condition": "Required when column_role is measurement."
+    },
+    {
+      "name": "entity_iri",
+      "type": "string",
+      "description": "I-ADOPT entity IRI, meaning what the measurement is about.",
+      "sdp:requirement": "conditional",
+      "sdp:condition": "Required when column_role is measurement."
+    },
+    {
+      "name": "constraint_iri",
+      "type": "string",
+      "description": "I-ADOPT constraint IRI(s). Separate multiple IRIs with semicolons."
+    },
+    {
+      "name": "method_iri",
+      "type": "string",
+      "description": "Optional static SOSA Procedure IRI applying to every non-empty value in this measurement column. Retained for compatibility; this is not an I-ADOPT variable component."
+    }
+  ],
+  "sdp:table": "column_dictionary",
+  "sdp:path": "metadata/column_dictionary.csv",
+  "sdp:requirement": "required",
+  "sdp:rowRule": "One row per column in each table."
+}

@@ -1,0 +1,2 @@
+dataset_id,table_id,file_name,table_label,description,observation_unit,observation_unit_iri,primary_key
+structure-test,stock_recruit,data/stock_recruit.csv,Stock recruit,Mixed-grain stock-recruit estimates,MISSING METADATA: describe the observation unit for table 'stock_recruit'.,,

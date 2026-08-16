@@ -1,0 +1,4 @@
+stock_id,brood_year,return_year,age,total_spawners,recruits,estimate_method
+fraser,2019,2022,3,100,40,mark_recapture
+fraser,2019,2023,4,100,55,expanded_count
+fraser,2020,2024,4,120,60,expanded_count

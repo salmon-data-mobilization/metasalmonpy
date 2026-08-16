@@ -1,0 +1,68 @@
+{
+  "$schema": "https://specs.frictionlessdata.io/schemas/table-schema.json",
+  "title": "SDP tables metadata schema",
+  "description": "Table-level metadata.",
+  "fields": [
+    {
+      "name": "dataset_id",
+      "type": "string",
+      "description": "References dataset_id in metadata/dataset.csv.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "table_id",
+      "type": "string",
+      "description": "Short ID for the table.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "file_name",
+      "type": "string",
+      "description": "Relative path to the data file. Must not use ../.",
+      "constraints": {
+        "required": true
+      },
+      "example": "data/cu_timeseries.csv"
+    },
+    {
+      "name": "table_label",
+      "type": "string",
+      "description": "Human-readable label for the table.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "description": "Description of what each row represents.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "observation_unit",
+      "type": "string",
+      "description": "Human-readable label for the observation unit, meaning the thing each row is about."
+    },
+    {
+      "name": "observation_unit_iri",
+      "type": "string",
+      "description": "IRI for the observation unit class.",
+      "sdp:requirement": "recommended"
+    },
+    {
+      "name": "primary_key",
+      "type": "string",
+      "description": "Comma-separated list of column names forming a primary key, with no spaces."
+    }
+  ],
+  "sdp:table": "tables",
+  "sdp:path": "metadata/tables.csv",
+  "sdp:requirement": "required",
+  "sdp:rowRule": "One row per table in the package."
+}

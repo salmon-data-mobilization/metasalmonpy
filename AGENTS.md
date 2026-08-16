@@ -28,8 +28,8 @@ violation like a failing test.
    matches the metasalmon version whose functionality it actually delivers.
    When a metasalmon release ships, mirror the work and bump this package to
    the same number.
-3. **Current honest state:** parity is at **metasalmon 0.1.7**. metasalmon is
-   at 0.3.0. The catch-up (0.1.8 → 0.3.0) is roadmap stream **S10** in the
+3. **Current honest state:** parity is at **metasalmon 0.1.8**. metasalmon is
+   at 0.3.0. The catch-up (0.2.0 → 0.3.0) is roadmap stream **S10** in the
    hub; this package's version stays at the last delivered milestone until
    the next one lands — do **not** bump the number ahead of the functionality
    (Brett's decision, 2026-08-13: bump on parity, not on calendar).
