@@ -262,3 +262,56 @@ class GcdfoTermIndexTests(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+class NonTurtleModuleTests(unittest.TestCase):
+    """One corrupted module must not silently drop its terms (PR 6 review)."""
+
+    def test_non_turtle_module_raises_instead_of_silently_dropping(self):
+        # A module body without a single @prefix is not Turtle (an error page
+        # served with 200, or a format change); skipping it would silently
+        # omit every term it carries while the aggregate looks healthy.
+        good = _fixture("smn-module-01-entity-systematics.ttl")
+        with self.assertRaisesRegex(RuntimeError, "non-Turtle content"):
+            parse_smn_ttl_modules(
+                {
+                    "https://w3id.org/smn/modules/01-entity-systematics": good,
+                    "https://w3id.org/smn/modules/02-observation-measurement": (
+                        "<html>Service unavailable</html>"
+                    ),
+                }
+            )
+
+    def test_zero_row_bridge_module_is_legitimate(self):
+        # The RDA profile-bridge modules hold foreign-subject statements only
+        # (smn CONVENTIONS 5b), so real Turtle yielding zero smn-subject rows
+        # must NOT raise -- R indexes those modules to zero rows too.
+        good = _fixture("smn-module-01-entity-systematics.ttl")
+        bridge = (
+            "@prefix smn: <https://w3id.org/smn/> .\n"
+            "@prefix ext: <https://example.org/profile/> .\n\n"
+            "ext:ForeignTerm a ext:Bridge ;\n"
+            "    ext:maps smn:Stock .\n"
+        )
+        index = parse_smn_ttl_modules(
+            {
+                "https://w3id.org/smn/modules/01-entity-systematics": good,
+                "https://w3id.org/smn/modules/08-rda-case-study-profile-bridges": bridge,
+            }
+        )
+        self.assertGreater(len(index), 0)
+
+    def test_bad_module_triggers_rdfxml_fallback(self):
+        # The index builder recovers through the root RDF/XML serialization,
+        # which carries the whole ontology, so search sees no partial index.
+        gcdfo_xml = _fixture("gcdfo-sample.owl")
+
+        def fake_fetch(url, accept=None, fallback_urls=None):
+            if "modules" in url:
+                return "<html>Service unavailable</html>"
+            return gcdfo_xml
+
+        with mock.patch.object(ts, "_fetch_ontology_text", side_effect=fake_fetch), \
+                mock.patch.object(ts, "_SMN_IRI_PATTERN", ts._GCDFO_IRI_PATTERN):
+            index = ts._smn_term_index()
+        self.assertFalse(index.empty)

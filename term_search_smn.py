@@ -302,6 +302,18 @@ def parse_smn_ttl_modules(texts: Mapping[str, str]) -> pd.DataFrame:
             continue
 
         module_name = re.sub(r"/+$", "", str(module_reference)).rsplit("/", 1)[-1]
+        # A module may legitimately contribute zero rows -- the RDA
+        # profile-bridge modules (08, 09) hold foreign-subject statements
+        # only, per smn CONVENTIONS 5b, and R indexes them to zero rows too.
+        # But every real Turtle module declares prefixes, so a non-empty body
+        # without a single @prefix is not Turtle (an error page served with
+        # 200, or a format change) and silently skipping it would drop every
+        # term it carries while the aggregate still looks healthy.
+        if not re.search(r"^\s*@prefix\s", text, flags=re.MULTILINE):
+            raise RuntimeError(
+                f"SMN module '{module_name}' returned non-Turtle content; "
+                "refusing to build a silently partial term index."
+            )
         prefixes = _smn_ttl_prefixes(text)
         stripped = re.sub(r"^\s*#.*$", "", text, flags=re.MULTILINE)
         stripped = re.sub(r"^\s*@prefix\s+.*$", "", stripped, flags=re.MULTILINE)
