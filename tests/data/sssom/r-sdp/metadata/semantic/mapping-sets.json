@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "sssom_version": "1.1",
+  "mapping_sets": [
+    {
+      "path": "metadata/semantic/multi-sort.sssom.tsv",
+      "sha256": "31f361c211757b5c343d954f3509e532d9a281b8fb2af71514ce1599593d0246",
+      "row_count": 4,
+      "mapping_set_id": "https://example.org/mappings/multi-sort",
+      "mapping_set_version": "2026-08-01",
+      "license": "https://creativecommons.org/licenses/by/4.0/",
+      "subject_source": "https://w3id.org/psc/vocab/",
+      "subject_source_version": "v0.2.0",
+      "object_source": "https://w3id.org/gcdfo/salmon",
+      "object_source_version": "0.0.8"
+    },
+    {
+      "path": "metadata/semantic/psc-to-gcdfo.sssom.tsv",
+      "sha256": "ea76e0336dd563ae5203321d012013b13ff3e26adce63da5be370faef122bdde",
+      "row_count": 1,
+      "mapping_set_id": "https://example.org/mappings/psc-to-gcdfo",
+      "mapping_set_version": "2026-07-31",
+      "license": "https://creativecommons.org/licenses/by/4.0/",
+      "subject_source": "https://w3id.org/psc/vocab/",
+      "subject_source_version": "v0.2.0",
+      "object_source": "https://w3id.org/gcdfo/salmon",
+      "object_source_version": "0.0.8"
+    },
+    {
+      "path": "metadata/semantic/gaps.sssom.tsv",
+      "sha256": "d9e4f2c8d88b813199d6d5b85c30507a41244706ea5c42af9bc3e7d6081b3312",
+      "row_count": 2,
+      "mapping_set_id": "https://example.org/mappings/psc-to-sdo-gaps",
+      "mapping_set_version": "2026-07-31",
+      "license": "https://creativecommons.org/licenses/by/4.0/",
+      "subject_source": "https://w3id.org/psc/vocab/",
+      "subject_source_version": "v0.2.0",
+      "object_source": "https://w3id.org/smn/",
+      "object_source_version": "2026-07-31"
+    }
+  ],
+  "provenance": {
+    "generated_by": "metasalmon::write_sdp_sssom",
+    "metasalmon_version": "0.3.0",
+    "specification": "https://mapping-commons.github.io/sssom/1.1/"
+  }
+}

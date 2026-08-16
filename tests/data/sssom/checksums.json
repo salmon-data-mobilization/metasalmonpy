@@ -1,0 +1,18 @@
+{
+  "src": {
+    "psc-to-gcdfo.sssom.tsv": "1a549513e03656797460493704bcaa63bc64a5952499a86686b30bac59e1b64f",
+    "multi-sort.sssom.tsv": "3b700f728c8a7a89de0eab72b2bd975c4caa68de2e9085e571887397ad34a3ca",
+    "gaps.sssom.tsv": "6e4f0263f56c13d20cebde99402e41cb91f34b276f98aa0a7aa44c2113788370"
+  },
+  "canonical": {
+    "psc-to-gcdfo.sssom.tsv": "ea76e0336dd563ae5203321d012013b13ff3e26adce63da5be370faef122bdde",
+    "multi-sort.sssom.tsv": "31f361c211757b5c343d954f3509e532d9a281b8fb2af71514ce1599593d0246",
+    "gaps.sssom.tsv": "d9e4f2c8d88b813199d6d5b85c30507a41244706ea5c42af9bc3e7d6081b3312"
+  },
+  "r_sdp_semantic": {
+    "gaps.sssom.tsv": "d9e4f2c8d88b813199d6d5b85c30507a41244706ea5c42af9bc3e7d6081b3312",
+    "mapping-sets.json": "002dc3a5259948182d2e49f67379049ef31cc36f4b9edd14d493b5d35b46f942",
+    "multi-sort.sssom.tsv": "31f361c211757b5c343d954f3509e532d9a281b8fb2af71514ce1599593d0246",
+    "psc-to-gcdfo.sssom.tsv": "ea76e0336dd563ae5203321d012013b13ff3e26adce63da5be370faef122bdde"
+  }
+}

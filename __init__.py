@@ -34,6 +34,12 @@ from .edh_xml import (
     write_edh_xml_from_sdp,
 )
 from .semantics import apply_semantic_suggestions, suggest_semantics
+from .sssom import (
+    SssomMappingSet,
+    read_sssom_mapping_set,
+    validate_sdp_sssom,
+    write_sdp_sssom,
+)
 from .term_search import benchmark_term_ranking_fixtures, find_terms, sources_for_role
 from .term_deduplication import deduplicate_proposed_terms, suggest_facet_schemes
 from .validation import validate_semantics
@@ -75,7 +81,9 @@ __all__ = [
     "read_salmon_datapackage",
     "read_github_csv",
     "read_github_csv_dir",
+    "read_sssom_mapping_set",
     "render_ontology_term_request",
+    "SssomMappingSet",
     "suggest_dwc_mappings",
     "suggest_facet_schemes",
     "suggest_semantics",
@@ -83,7 +91,9 @@ __all__ = [
     "submit_term_request_issues",
     "validate_dictionary",
     "validate_salmon_datapackage",
+    "validate_sdp_sssom",
     "validate_semantics",
     "write_edh_xml_from_sdp",
     "write_salmon_datapackage",
+    "write_sdp_sssom",
 ]

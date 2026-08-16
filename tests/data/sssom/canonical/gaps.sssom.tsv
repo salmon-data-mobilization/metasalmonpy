@@ -1,0 +1,17 @@
+# sssom_version: "1.1"
+# mapping_set_id: "https://example.org/mappings/psc-to-sdo-gaps"
+# mapping_set_version: "2026-07-31"
+# license: "https://creativecommons.org/licenses/by/4.0/"
+# subject_source: "https://w3id.org/psc/vocab/"
+# subject_source_version: "v0.2.0"
+# object_source: "https://w3id.org/smn/"
+# object_source_version: "2026-07-31"
+# curie_map:
+#   psc: "https://w3id.org/psc/vocab/concept/"
+#   semapv: "https://w3id.org/semapv/vocab/"
+#   skos: "http://www.w3.org/2004/02/skos/core#"
+#   smn: "https://w3id.org/smn/terms#"
+#   sssom: "https://w3id.org/sssom/"
+subject_id	subject_label	predicate_id	object_id	object_label	mapping_justification	mapping_cardinality
+psc:PSC-CV-000042	Escapement	skos:exactMatch	smn:EscapementEstimate	Escapement estimate	semapv:MappingReview	1:1
+psc:PSC-CV-000101	Effective female spawner abundance	skos:relatedMatch	sssom:NoTermFound		semapv:ManualMappingCuration	1:0
