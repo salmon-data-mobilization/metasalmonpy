@@ -1,0 +1,73 @@
+{
+  "schema_version": 3,
+  "status": "dry_run",
+  "environment": "PROD",
+  "node_id": "urn:node:KNB",
+  "public": false,
+  "replication_policy": {
+    "replication_allowed": false,
+    "number_replicas": 0,
+    "preferred_member_nodes": [],
+    "blocked_member_nodes": []
+  },
+  "expected_subject": "https://orcid.org/0000-0001-9317-0364",
+  "rights_authorization": {
+    "status": "confirmed",
+    "evidence": "Synthetic fixture data are authorized for public testing."
+  },
+  "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+  "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
+  "representation": "archive",
+  "revision_of": null,
+  "plan_sha256": "48f879c31457a57fbd4f0ccc18ebd25baef007ba67a3abde9d56823a41ed591a",
+  "metadata_pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+  "resource_map_pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
+  "objects": [
+    {
+      "role": "data",
+      "path": "data/counts.csv",
+      "pid": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 87,
+      "sha256": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "sdp_archive",
+      "path": "publication/demo-salmon-2026-salmon-data-package.zip",
+      "pid": "urn:uuid:695ecedb-d5e7-595c-819a-9c33da4ea9c5",
+      "format_id": "application/zip",
+      "media_type": "application/zip",
+      "size": 4196,
+      "sha256": "04c0fe42e0acb3395de7ddb3b2bdd316e94cabc9f3d9a2d158e21a90846a19a5",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "metadata",
+      "path": "metadata/eml.xml",
+      "pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+      "format_id": "https://eml.ecoinformatics.org/eml-2.2.0",
+      "media_type": "application/xml",
+      "size": 10725,
+      "sha256": "5f89bd610174d63e6003411931a4d1e5e17552c2e6aa3a60f0aee21b87f63352",
+      "obsoletes": null,
+      "state": "planned"
+    },
+    {
+      "role": "resource_map",
+      "path": "publication/resource-map.rdf",
+      "pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
+      "format_id": "http://www.openarchives.org/ore/terms",
+      "media_type": "application/rdf+xml",
+      "size": 3616,
+      "sha256": "be0b88b0b95bff02513cf58920fb5ddec8edca7b0c7b563aca62f337a5740270",
+      "obsoletes": null,
+      "state": "planned"
+    }
+  ],
+  "catalog_verified": false,
+  "catalog_evidence": []
+}

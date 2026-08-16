@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "status": "final",
+  "dataset_id": "demo-salmon-2026",
+  "series_key": "demo-salmon",
+  "system": "knb",
+  "language": "eng",
+  "publication_date": "2026-01-01",
+  "semantic_vocabulary": {
+    "path": "metadata/semantic_vocabulary.csv",
+    "sha256": "0efeae2e507ef881aecb521c118e9c966b0d23c5fb78174043f4f97be3029e97"
+  },
+  "semantic_review": {
+    "path": "reviewed_semantic_selections.csv",
+    "sha256": "81fd0dffcb0469c5fd89e82388778d2a684c2e5d51d5c8d3c53148180f4e5887"
+  },
+  "publication": {
+    "public": true
+  },
+  "rights_authorization": {
+    "status": "confirmed",
+    "evidence": "Synthetic fixture data are authorized for public testing."
+  },
+  "source_provenance": {
+    "source_citation": "Example Salmon Program. 2026. Demonstration counts.",
+    "provenance_note": "Counts were compiled from a documented monitoring program.",
+    "supporting_document": {
+      "citation": "Example Salmon Program. 2026. Demonstration count documentation.",
+      "url": "https://example.org/demonstration-count-documentation.pdf",
+      "sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+    }
+  },
+  "creators": [
+    {
+      "organization_name": "Example Salmon Program"
+    }
+  ],
+  "metadata_providers": [
+    {
+      "given_name": "Alex",
+      "surname": "Steward",
+      "organization_name": "Example Salmon Program",
+      "email": "alex@example.org",
+      "orcid": "https://orcid.org/0000-0001-9317-0364"
+    }
+  ],
+  "contacts": [
+    {
+      "organization_name": "Example Salmon Program",
+      "email": "data@example.org"
+    }
+  ],
+  "publisher": {
+    "organization_name": "Example Salmon Program"
+  },
+  "intellectual_rights": {
+    "paragraphs": [
+      "Copyright Example Salmon Program.",
+      "Use is subject to https://example.org/data-terms/."
+    ]
+  },
+  "methods": [
+    {
+      "description": "Counts were compiled using the documented monitoring workflow."
+    }
+  ],
+  "taxonomic_coverage": {
+    "scientific_name": "Oncorhynchus nerka",
+    "common_name": "Sockeye salmon",
+    "rank": "Species"
+  },
+  "tables": {
+    "counts": {
+      "attributes": {
+        "record_id": {
+          "measurement_scale": "nominal"
+        },
+        "year": {
+          "measurement_scale": "dateTime",
+          "format_string": "YYYY"
+        },
+        "count": {
+          "measurement_scale": "ratio",
+          "eml_unit": "number",
+          "number_type": "whole",
+          "minimum": 0.0,
+          "minimum_exclusive": false
+        },
+        "literal_missing": {
+          "measurement_scale": "nominal",
+          "missing_values": [
+            {
+              "code": "NA",
+              "explanation": "No value was supplied."
+            }
+          ]
+        },
+        "blank_only": {
+          "measurement_scale": "nominal"
+        }
+      }
+    }
+  }
+}

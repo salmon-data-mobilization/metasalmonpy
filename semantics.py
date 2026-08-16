@@ -62,18 +62,78 @@ def _measurement_query(row, role: str, base_query: str) -> tuple[str, str]:
         )
     )
     normalized = f"{column_text} {base_query}".lower()
-    count_like = bool(
-        re.search(r"\b(count|total|number|abundance|spawner)s?\b", normalized)
-    )
+    count_like = _is_count_like_measurement(row, normalized)
     if role == "unit":
         if not _is_missing(row.get("unit_label")):
             return _clean_query(row.get("unit_label")), "unit_label"
         return ("count", "count_like_fallback") if count_like else ("", "missing_unit_context")
-    if role == "property" and re.search(r"\bspawner", normalized):
-        return "spawner abundance", "role_shaping"
-    if role == "property" and count_like:
-        return "count", "role_shaping"
+    if role in ("variable", "property") and count_like:
+        # R evaluates the count-like *test* over name + label + base query, but
+        # shapes the query from `base_lower` -- the base query alone. Feeding
+        # the wider text to the shaper would let a column name ("smolt count")
+        # override a description that never mentions the life stage.
+        return _count_like_role_query(role, base_query.lower()), "role_shaping"
     return base_query, "column_context"
+
+
+# metasalmon v0.1.7 widened the organism vocabulary: smolt, fry and juvenile
+# are biology-bearing tokens, so "total smolts" is a count-like measurement and
+# keeps its life-stage word instead of collapsing to a bare "count".
+_ORGANISM_RE = re.compile(
+    r"\b(spawner|spawners|fish|salmon|organism|organisms|recruit|recruits"
+    r"|smolt|smolts|fry|juvenile|juveniles|population|populations"
+    r"|adult|adults)\b"
+)
+_EXPLICIT_COUNT_RE = re.compile(r"\b(count|counts|number|numbers|num|abundance)\b")
+_INTEGERISH_VALUE_TYPES = ("integer", "int", "number", "numeric", "double")
+
+
+def _is_count_like_measurement(row, text: str) -> bool:
+    """Mirror ``is_count_like_measurement`` (metasalmon v0.1.7)."""
+    if not text.strip():
+        return False
+    value_type = _scalar_text(row.get("value_type")).lower()
+    has_explicit_count = _EXPLICIT_COUNT_RE.search(text) is not None
+    has_total = re.search(r"\btotal\b", text) is not None
+    has_organism = _ORGANISM_RE.search(text) is not None
+    looks_integer = value_type in _INTEGERISH_VALUE_TYPES
+    return (
+        has_explicit_count
+        or (has_total and has_organism)
+        or (re.search(r"\babundance\b", text) is not None
+            and (has_organism or looks_integer))
+        or (looks_integer and has_organism)
+    )
+
+
+def _count_like_role_query(role: str, text: str) -> str:
+    """Mirror the count-like branch of ``measurement_role_query`` (v0.1.7).
+
+    0.1.7 added the effective-female-spawner special case and the recruit /
+    smolt / fry whole-variable queries, so a life stage survives into the
+    search instead of every count-like column asking for "count".
+    """
+    if re.search(r"spawner", text):
+        if role == "variable":
+            if (
+                re.search(r"\beffective\b", text) and re.search(r"\bfemale\b", text)
+            ) or re.search(r"\beggs?\s+not\s+spawned\b", text):
+                return "effective female spawner abundance"
+            if re.search(r"adult", text):
+                return "adult spawner count"
+        return "spawner abundance"
+
+    if role == "variable":
+        if re.search(r"\brecruits?\b", text):
+            return "recruit abundance"
+        if re.search(r"\bsmolts?\b", text):
+            return "smolt abundance"
+        if re.search(r"\bfry\b", text):
+            return "fry abundance"
+
+    if re.search(r"\babundance\b", text):
+        return "abundance"
+    return "count"
 
 
 def _split_role_hints(value) -> list[str]:
@@ -804,6 +864,20 @@ def suggest_semantics(
         if res is None or res.empty:
             continue
         res = res.copy()
+        # metasalmon v0.1.7 made an explicit source list a strict allowlist on
+        # the way *out* as well as the way in: results are filtered to the
+        # allowed sources, so an injected search_fn cannot widen a deliberately
+        # bounded source set.
+        if source_policy["explicit"]:
+            if "source" not in res.columns:
+                continue
+            allowed = {str(name).strip().lower() for name in target_sources}
+            candidate_sources = res["source"].map(
+                lambda value: "" if _is_missing(value) else str(value).strip().lower()
+            )
+            res = res[candidate_sources.isin(allowed) & (candidate_sources != "")]
+            if res.empty:
+                continue
         if "role_hints" not in res.columns:
             res["role_hints"] = pd.NA
         res = res.drop_duplicates(subset=[col for col in ["source", "iri"] if col in res.columns], keep="first")
@@ -915,6 +989,61 @@ def suggest_semantics(
             dictionary
         ).attrs.get("dwc_mappings", pd.DataFrame())
     return dictionary
+
+
+_OWL_OBJECT_PROPERTY_KINDS = ("objectproperty", "owl_object_property")
+_OWL_CLASS_KINDS = ("class", "owlclass", "owl_class")
+_SKOS_CONCEPT_KINDS = ("concept", "skosconcept", "skos_concept")
+
+
+def _infer_term_type(suggestion) -> Optional[str]:
+    """Mirror ``infer_term_type`` inside ``apply_semantic_suggestions`` (v0.1.7).
+
+    0.1.7 stopped stamping every accepted whole-variable term as
+    ``skos_concept`` and started preserving the candidate's native ontology
+    type. An OWL class picked as the variable term keeps ``owl_class``, which
+    is what the EML exporter checks against the term's own type evidence --
+    the flat ``skos_concept`` made an OWL variable term unexportable.
+    """
+    declared = _scalar_text(suggestion.get("term_type"))
+    if declared:
+        return declared
+    if str(suggestion.get("dictionary_role")) != "variable":
+        return None
+
+    type_iris = _scalar_text(suggestion.get("type_iris")).lower()
+    resource_kind = _scalar_text(suggestion.get("resource_kind")).lower()
+    if (
+        re.search(r"owl[#/]objectproperty", type_iris)
+        or resource_kind in _OWL_OBJECT_PROPERTY_KINDS
+    ):
+        return "owl_object_property"
+    if re.search(r"owl[#/]class", type_iris) or resource_kind in _OWL_CLASS_KINDS:
+        return "owl_class"
+    if re.search(r"skos[/#]concept", type_iris) or resource_kind in _SKOS_CONCEPT_KINDS:
+        return "skos_concept"
+    return "skos_concept"
+
+
+def _fill_missing_term_type(out: pd.DataFrame, row_ids, term_type: str) -> None:
+    targets = [
+        row_id for row_id in row_ids if _is_missing(out.at[row_id, "term_type"])
+        or str(out.at[row_id, "term_type"]) == ""
+    ]
+    if targets:
+        out.loc[targets, "term_type"] = term_type
+
+
+def _fill_missing_unit_label(out: pd.DataFrame, row_ids, suggestion) -> None:
+    label = suggestion.get("label")
+    if _is_missing(label):
+        return
+    targets = [
+        row_id for row_id in row_ids if _is_missing(out.at[row_id, "unit_label"])
+        or str(out.at[row_id, "unit_label"]) == ""
+    ]
+    if targets:
+        out.loc[targets, "unit_label"] = label
 
 
 def apply_semantic_suggestions(
@@ -1046,15 +1175,42 @@ def apply_semantic_suggestions(
         if not row_ids:
             unmatched += 1
             continue
+        term_type_guess = (
+            _infer_term_type(suggestion) if field == "term_iri" else None
+        )
+        has_term_type = "term_type" in out.columns
+
         if overwrite:
             out.loc[row_ids, field] = suggestion["iri"]
+            # An overwrite replaces the term, so its type is replaced with it.
+            if term_type_guess and has_term_type:
+                out.loc[row_ids, "term_type"] = term_type_guess
+            if field == "unit_iri" and "unit_label" in out.columns:
+                _fill_missing_unit_label(out, row_ids, suggestion)
             applied += len(row_ids)
             continue
+
         missing_now = out.loc[row_ids, field].apply(_is_missing)
         fill_rows = missing_now[missing_now].index
         if len(fill_rows) > 0:
             out.loc[fill_rows, field] = suggestion["iri"]
+            if term_type_guess and has_term_type:
+                _fill_missing_term_type(out, fill_rows, term_type_guess)
+            if field == "unit_iri" and "unit_label" in out.columns:
+                _fill_missing_unit_label(out, fill_rows, suggestion)
             applied += len(fill_rows)
+
+        # A row that already carried this exact IRI still gets its type filled
+        # in; a row carrying a *different* IRI keeps whatever type describes it.
+        if term_type_guess and has_term_type:
+            existing_rows = [
+                row_id
+                for row_id in missing_now[~missing_now].index
+                if not _is_missing(out.at[row_id, field])
+                and out.at[row_id, field] == suggestion["iri"]
+            ]
+            if existing_rows:
+                _fill_missing_term_type(out, existing_rows, term_type_guess)
         skipped_existing += int((~missing_now).sum())
 
     if verbose:

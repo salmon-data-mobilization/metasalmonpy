@@ -1,0 +1,22 @@
+# sssom_version: "1.1"
+# mapping_set_id: "https://example.org/mappings/multi-sort"
+# mapping_set_version: "2026-08-01"
+# mapping_set_title: "Salmon \"gear\" alignments — Rivière test"
+# license: "https://creativecommons.org/licenses/by/4.0/"
+# subject_source: "https://w3id.org/psc/vocab/"
+# subject_source_version: "v0.2.0"
+# object_source: "https://w3id.org/gcdfo/salmon"
+# object_source_version: "0.0.8"
+# see_also: "https://example.org/docs/mappings|https://example.org/docs/review"
+# curie_map:
+#   SDO: "https://w3id.org/salmon-domain-ontology/"
+#   gcdfo: "https://w3id.org/gcdfo/salmon#"
+#   psc: "https://w3id.org/psc/vocab/concept/"
+#   semapv: "https://w3id.org/semapv/vocab/"
+#   skos: "http://www.w3.org/2004/02/skos/core#"
+#   sssom: "https://w3id.org/sssom/"
+subject_id	subject_label	predicate_id	object_id	object_label	mapping_justification	mapping_cardinality	confidence	comment
+psc:PSC-CV-000002	Net	skos:broadMatch	gcdfo:Census	Census	semapv:MappingReview	n:1	0.80	
+psc:PSC-CV-000002	Net	skos:exactMatch	gcdfo:FixedSiteCensusManual	Fixed Site Census (Manual)	semapv:ManualMappingCuration	1:1	0.95	
+psc:PSC-CV-000011	Sonar	skos:relatedMatch	SDO:HydroacousticSurvey	Hydroacoustic survey	semapv:LexicalMatching	1:1	0.66	
+psc:PSC-CV-000020	Weir	skos:exactMatch	gcdfo:WeirCount	Weir Count	semapv:ManualMappingCuration	1:1	0.98	Rivière weir — reviewed

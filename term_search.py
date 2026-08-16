@@ -330,12 +330,16 @@ def _search_qudt(query: str, role) -> pd.DataFrame:
         return _empty_terms(role)
 
     pattern = ".*".join(tokens)
+    # metasalmon v0.1.7: QUDT is a preferred source for the *property* role
+    # too, where the matching resource class is QuantityKind rather than Unit.
+    resource_class = "QuantityKind" if str(role or "").lower() == "property" else "Unit"
+    match_type = "quantity_kind" if resource_class == "QuantityKind" else "unit"
     sparql = (
         "PREFIX qudt: <http://qudt.org/schema/qudt/>\n"
         "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n"
         "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>\n"
         "SELECT DISTINCT ?uri ?label ?definition WHERE {\n"
-        "  ?uri a qudt:Unit .\n"
+        f"  ?uri a qudt:{resource_class} .\n"
         "  ?uri rdfs:label ?label .\n"
         "  OPTIONAL { ?uri skos:definition ?definition . }\n"
         "  OPTIONAL { ?uri qudt:description ?definition . }\n"
@@ -361,7 +365,7 @@ def _search_qudt(query: str, role) -> pd.DataFrame:
                 "source": "qudt",
                 "ontology": "qudt",
                 "role": role,
-                "match_type": "unit",
+                "match_type": match_type,
                 "definition": definition,
             }
         )
@@ -1004,7 +1008,9 @@ def sources_for_role(role: Optional[str]) -> List[str]:
     if role_key == "unit":
         return ["qudt", "nvs", "ols"]
     if role_key == "property":
-        return ["smn", "gcdfo", "nvs", "ols", "zooma"]
+        # v0.1.7 added qudt: its QuantityKind vocabulary is the canonical
+        # source for the property half of an I-ADOPT decomposition.
+        return ["smn", "gcdfo", "qudt", "nvs", "ols", "zooma"]
     if role_key == "entity":
         return ["smn", "gcdfo", "gbif", "worms", "bioportal", "ols"]
     if role_key == "method":

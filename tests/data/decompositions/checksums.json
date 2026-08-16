@@ -1,0 +1,15 @@
+{
+  "generated_by": "metasalmon 0.1.8 (v0.1.8 tag; file identical at v0.1.7)",
+  "canonical_csv": {
+    "era-sdp": "94bc4bfff24fb47606fda08994fef23e84ea9d9e5ad973b06826cc773c0a2ae7",
+    "full-sdp": "d108fa9293cfde4d9ede720146c346f2c34fe5ac869695d0db4bb15d04965c75"
+  },
+  "manifest": {
+    "era-sdp": "cb3a9941ab06bbcbb9d05efe9b344b8b8a058db5f13a6e7cfa31dc3e200a625d",
+    "full-sdp": "de8c61613b90f2f76ef63012bc7371ef47c3724770a7df0f9be1f5b0f106f7a9"
+  },
+  "src": {
+    "era-rows.csv": "33f37a9b2015ca04fdfdb94bfb63bf9a4f5122763b8b3454567a2eb42bb5a4f5",
+    "full-rows.csv": "d0e3628002aefc717f59c6ae112f48b183f3395912a6ec2810896251ce5b75d2"
+  }
+}

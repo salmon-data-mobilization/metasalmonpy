@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metasalmonpy"
-version = "0.1.6"
+version = "0.1.7"
 description = "Python mirror of the metasalmon R package for Salmon Data Packages"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -14,6 +14,10 @@ dependencies = ["pandas>=1.5", "requests>=2.31"]
 [project.optional-dependencies]
 context = ["openpyxl>=3.1", "pypdf>=4", "xlrd>=2.0"]
 docs = ["quartodoc==0.11.1", "griffe<2"]
+eml = ["lxml>=5,<7", "PyYAML>=6"]
+# Live KNB/DataONE publication always rebuilds reviewed EML, so [knb] is
+# [eml] plus the core requests dependency (already required).
+knb = ["metasalmonpy[eml]"]
 test = ["build>=1.2", "pytest>=7"]
 
 [project.urls]
@@ -26,4 +30,9 @@ packages = ["metasalmonpy", "metasalmonpy.data", "metasalmonpy.scripts"]
 package-dir = { "metasalmonpy" = ".", "metasalmonpy.data" = "data", "metasalmonpy.scripts" = "scripts" }
 
 [tool.setuptools.package-data]
-"metasalmonpy.data" = ["*.csv", "*.md"]
+"metasalmonpy.data" = [
+    "*.csv",
+    "*.md",
+    "schema/*.json",
+    "xsd/eml-2.2.0/*",
+]

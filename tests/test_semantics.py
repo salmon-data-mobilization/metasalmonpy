@@ -273,5 +273,146 @@ class SemanticsTests(unittest.TestCase):
         self.assertFalse(_table_suggestion_is_compatible(incompatible, table_row))
 
 
+class EraSemanticMatchingTests(unittest.TestCase):
+    """metasalmon 0.1.7's semantic-matching corrections, verified against v0.1.7."""
+
+    # Every (column, role) -> query below is what era R's suggest_semantics()
+    # asked a stub search_fn for, driven from the same dictionary rows. 0.1.7
+    # widened the organism vocabulary (smolt/fry/juvenile) and added the
+    # recruit/smolt/fry and effective-female-spawner whole-variable queries.
+    QUERY_CASES = (
+        ("total_smolts", "Total smolts enumerated at the fence.", "integer",
+         {"variable": "smolt abundance", "property": "count"}),
+        ("fry_total", "Total fry counted.", "integer",
+         {"variable": "fry abundance", "property": "count"}),
+        ("recruits", "Recruits returning to the river.", "integer",
+         {"variable": "recruit abundance", "property": "count"}),
+        ("juvenile_total", "Total juveniles captured.", "integer",
+         {"variable": "count", "property": "count"}),
+        ("smolt_abundance", "Smolt abundance estimate.", "number",
+         {"variable": "smolt abundance", "property": "abundance"}),
+        ("spawner_count", "Spawner count for the stream.", "integer",
+         {"variable": "spawner abundance", "property": "spawner abundance"}),
+        ("adult_spawners", "Adult spawner abundance.", "integer",
+         {"variable": "adult spawner count", "property": "spawner abundance"}),
+        ("effective_female_spawners",
+         "Effective female spawners after egg retention.", "number",
+         {"variable": "effective female spawner abundance",
+          "property": "spawner abundance"}),
+        # Not count-like in era R: "eggs"/"females" are not organism tokens
+        # and "spawned" is not "spawner", so the base query survives intact.
+        ("eggs_not_spawned", "Eggs not spawned by females.", "number",
+         {"variable": "Eggs not spawned by females",
+          "property": "Eggs not spawned by females"}),
+        ("gear_code", "Gear code used for the survey.", "string",
+         {"variable": "Gear code used for the survey",
+          "property": "Gear code used for the survey"}),
+        # R runs the count-like *test* over name + label + base query but
+        # shapes from the base query alone, so a life stage that appears only
+        # in the column name does not reach the query.
+        ("smolt_count", "Total fish enumerated at the fence.", "integer",
+         {"variable": "count", "property": "count"}),
+        ("recruit_index", "Total adults returning.", "integer",
+         {"variable": "count", "property": "count"}),
+        ("spawner_metric", "Effective female counts recorded.", "number",
+         {"variable": "count", "property": "count"}),
+        ("abundance_x", "Total salmon observed.", "integer",
+         {"variable": "count", "property": "count"}),
+    )
+
+    def test_measurement_queries_match_era_r(self):
+        from metasalmonpy.semantics import _measurement_query
+
+        for name, description, value_type, expected in self.QUERY_CASES:
+            row = {
+                "column_name": name,
+                "column_label": name,
+                "column_description": description,
+                "value_type": value_type,
+                "unit_label": pd.NA,
+            }
+            base_query = " ".join(description.rstrip(".").split())
+            for role, query in expected.items():
+                with self.subTest(column=name, role=role):
+                    self.assertEqual(
+                        _measurement_query(row, role, base_query)[0], query
+                    )
+
+    def test_whole_variable_terms_keep_their_native_ontology_type(self):
+        # 0.1.7 stopped stamping every accepted variable term "skos_concept".
+        dictionary = infer_dictionary(
+            pd.DataFrame({"count": [1, 2]}), dataset_id="d", table_id="t"
+        )
+        dictionary.loc[0, "column_role"] = "measurement"
+
+        def suggestion(**overrides):
+            base = {
+                "dataset_id": "d",
+                "table_id": "t",
+                "column_name": "count",
+                "dictionary_role": "variable",
+                "iri": "https://example.org/term",
+            }
+            base.update(overrides)
+            return pd.DataFrame([base])
+
+        cases = (
+            ({"type_iris": "http://www.w3.org/2002/07/owl#Class"}, "owl_class"),
+            ({"resource_kind": "Class"}, "owl_class"),
+            (
+                {"type_iris": "http://www.w3.org/2002/07/owl#ObjectProperty"},
+                "owl_object_property",
+            ),
+            ({"resource_kind": "Concept"}, "skos_concept"),
+            ({}, "skos_concept"),
+            ({"term_type": "owl_class"}, "owl_class"),
+        )
+        for overrides, expected in cases:
+            with self.subTest(**overrides):
+                applied = apply_semantic_suggestions(
+                    dictionary, suggestion(**overrides), verbose=False
+                )
+                self.assertEqual(applied.loc[0, "term_iri"], "https://example.org/term")
+                self.assertEqual(applied.loc[0, "term_type"], expected)
+
+    def test_an_explicit_source_list_filters_results_as_well_as_requests(self):
+        # 0.1.7 made an explicit source list a strict allowlist on the way out:
+        # a search that answers from an undeclared source contributes nothing.
+        dictionary = infer_dictionary(
+            pd.DataFrame({"count": [1, 2]}), dataset_id="d", table_id="t"
+        )
+        dictionary.loc[0, "column_role"] = "measurement"
+
+        def rogue_search(query, role=None, sources=None):
+            return pd.DataFrame(
+                {
+                    "label": ["rogue"],
+                    "iri": ["https://example.org/rogue"],
+                    "source": ["wikidata"],
+                    "ontology": ["wikidata"],
+                    "role": [role],
+                    "match_type": ["label"],
+                    "definition": ["A term from a source nobody asked for."],
+                    "score": [9.0],
+                }
+            )
+
+        bounded = suggest_semantics(
+            pd.DataFrame({"count": [1, 2]}),
+            dictionary,
+            sources=["smn"],
+            search_fn=rogue_search,
+        )
+        self.assertTrue(bounded.attrs["semantic_suggestions"].empty)
+
+        # With no explicit list the role defaults apply and nothing is filtered.
+        unbounded = suggest_semantics(
+            pd.DataFrame({"count": [1, 2]}),
+            dictionary,
+            search_fn=rogue_search,
+        )
+        self.assertFalse(unbounded.attrs["semantic_suggestions"].empty)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

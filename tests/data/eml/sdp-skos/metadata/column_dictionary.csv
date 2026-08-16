@@ -1,0 +1,6 @@
+dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,required,unit_label,unit_iri,term_iri,term_type,property_iri,entity_iri,constraint_iri,method_iri
+demo-salmon-2026,counts,record_id,Record identifier,Stable identifier for the annual count record.,identifier,string,TRUE,,,,,,,,
+demo-salmon-2026,counts,year,Observation year,Calendar year represented by the record.,temporal,number,TRUE,,,,,,,,
+demo-salmon-2026,counts,count,Salmon abundance,Estimated number of salmon; zero is a valid observed value.,measurement,number,TRUE,Count,http://qudt.org/vocab/unit/COUNT,https://w3id.org/psc/vocab/concept/PSC-CV-000035,skos_concept,http://qudt.org/vocab/quantitykind/Count,https://w3id.org/smn/Stock,,
+demo-salmon-2026,counts,literal_missing,Literal missing marker,A text field whose second row uses the literal CSV token NA.,attribute,string,FALSE,,,,,,,,
+demo-salmon-2026,counts,blank_only,Blank implicit absence,A text field whose second row is an empty CSV field.,attribute,string,FALSE,,,,,,,,

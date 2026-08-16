@@ -8,6 +8,27 @@ def test_public_version_matches_package_metadata():
     assert metasalmonpy.__version__ == version("metasalmonpy")
 
 
+def test_the_two_declared_version_strings_agree():
+    """``pyproject.toml`` and ``__init__.py`` must not drift apart.
+
+    The version number is a parity claim under the mirror contract, and these
+    two literals have drifted before — which is why bumping both is a
+    checklist item in the S10 execplan. This reads the files directly so it
+    holds without an install step. Retirement condition: delete this test only
+    if the version stops being declared in two places (for example if
+    ``pyproject.toml`` learns to read ``__version__`` dynamically).
+    """
+    import re
+    from pathlib import Path
+
+    pyproject = (Path(__file__).parent.parent / "pyproject.toml").read_text(
+        encoding="utf-8"
+    )
+    declared = re.search(r'(?m)^version = "([^"]+)"', pyproject)
+    assert declared is not None, "pyproject.toml has no static version"
+    assert declared.group(1) == metasalmonpy.__version__
+
+
 def test_current_workflow_exports_are_public():
     expected = {
         "chat_decomposition",

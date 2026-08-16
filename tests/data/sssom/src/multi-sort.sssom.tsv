@@ -1,0 +1,24 @@
+# sssom_version: 1.1
+# mapping_set_id: https://example.org/mappings/multi-sort
+# mapping_set_version: 2026-08-01
+# mapping_set_title: Salmon "gear" alignments — Rivière test
+# license: https://creativecommons.org/licenses/by/4.0/
+# subject_source: https://w3id.org/psc/vocab/
+# subject_source_version: v0.2.0
+# object_source: https://w3id.org/gcdfo/salmon
+# object_source_version: 0.0.8
+# see_also:
+#   - https://example.org/docs/mappings
+#   - https://example.org/docs/review
+# curie_map:
+#   skos: http://www.w3.org/2004/02/skos/core#
+#   gcdfo: https://w3id.org/gcdfo/salmon#
+#   SDO: https://w3id.org/salmon-domain-ontology/
+#   psc: https://w3id.org/psc/vocab/concept/
+#   semapv: https://w3id.org/semapv/vocab/
+#   sssom: https://w3id.org/sssom/
+subject_id	subject_label	object_id	object_label	predicate_id	comment	confidence	mapping_justification	mapping_cardinality
+psc:PSC-CV-000020	Weir	gcdfo:WeirCount	Weir Count	skos:exactMatch	Rivière weir — reviewed	0.98	semapv:ManualMappingCuration	1:1
+psc:PSC-CV-000002	Net	gcdfo:FixedSiteCensusManual	Fixed Site Census (Manual)	skos:exactMatch		0.95	semapv:ManualMappingCuration	1:1
+psc:PSC-CV-000011	Sonar	SDO:HydroacousticSurvey	Hydroacoustic survey	skos:relatedMatch		0.66	semapv:LexicalMatching	1:1
+psc:PSC-CV-000002	Net	gcdfo:Census	Census	skos:broadMatch		0.80	semapv:MappingReview	n:1

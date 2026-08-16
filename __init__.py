@@ -6,7 +6,7 @@ infer dictionaries, validate metadata, search ontology terms, and build/read
 Frictionless-style Salmon Data Packages.
 """
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 from .dictionary import (
     apply_salmon_dictionary,
@@ -33,7 +33,20 @@ from .edh_xml import (
     edh_build_iso19139_xml,
     write_edh_xml_from_sdp,
 )
+from .eml import write_eml_from_sdp
+from .knb_publication import publish_sdp_to_knb
+from .measurement_decompositions import (
+    read_sdp_measurement_decompositions,
+    validate_sdp_measurement_decompositions,
+    write_sdp_measurement_decompositions,
+)
 from .semantics import apply_semantic_suggestions, suggest_semantics
+from .sssom import (
+    SssomMappingSet,
+    read_sssom_mapping_set,
+    validate_sdp_sssom,
+    write_sdp_sssom,
+)
 from .term_search import benchmark_term_ranking_fixtures, find_terms, sources_for_role
 from .term_deduplication import deduplicate_proposed_terms, suggest_facet_schemes
 from .validation import validate_semantics
@@ -70,12 +83,16 @@ __all__ = [
     "ices_find_code_types",
     "ices_find_codes",
     "ms_setup_github",
+    "publish_sdp_to_knb",
     "nuseds_enumeration_method_crosswalk",
     "nuseds_estimate_method_crosswalk",
     "read_salmon_datapackage",
     "read_github_csv",
     "read_github_csv_dir",
+    "read_sdp_measurement_decompositions",
+    "read_sssom_mapping_set",
     "render_ontology_term_request",
+    "SssomMappingSet",
     "suggest_dwc_mappings",
     "suggest_facet_schemes",
     "suggest_semantics",
@@ -83,7 +100,12 @@ __all__ = [
     "submit_term_request_issues",
     "validate_dictionary",
     "validate_salmon_datapackage",
+    "validate_sdp_measurement_decompositions",
+    "validate_sdp_sssom",
     "validate_semantics",
     "write_edh_xml_from_sdp",
+    "write_eml_from_sdp",
     "write_salmon_datapackage",
+    "write_sdp_measurement_decompositions",
+    "write_sdp_sssom",
 ]

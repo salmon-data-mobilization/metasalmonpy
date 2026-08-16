@@ -101,5 +101,79 @@ class DictionaryTests(unittest.TestCase):
             validate_dictionary(bad)
 
 
+class EraColumnRoleTests(unittest.TestCase):
+    """Column-role and required inference, node for node with metasalmon 0.1.7.
+
+    Every expectation below is the answer era R gives. They were produced by
+    calling ``infer_column_role()`` and ``.ms_infer_required_flag()`` on a
+    v0.1.7 extraction (``git archive v0.1.7``) under R 4.5.2 with the same
+    thirty name/value pairs; before this port thirteen of the thirty differed.
+    """
+
+    # (column name, values, R's column_role, R's required)
+    CASES = (
+        # 0.1.7's terminal-ID-qualifier fix: a qualifier token after the last
+        # ID/key token means the column describes an identification's quality.
+        ("stock_ID_quality", ["high", "low", "high"], "attribute", None),
+        ("id_quality", ["a", "b", "c"], "attribute", None),
+        ("key_confidence", ["a", "b", "c"], "attribute", None),
+        ("sample_id_score", ["a", "b", "c"], "attribute", None),
+        ("sampleIdQuality", ["a", "b", "c"], "attribute", None),
+        # 0.1.7's nullable-identifier fix: an identifier carrying a missing or
+        # blank-after-trim value is undecided, not required.
+        ("fish_id", ["a", "b", "c"], "identifier", True),
+        ("sample_id", ["a", None, "c"], "identifier", None),
+        ("sample_id", ["a", " ", "c"], "identifier", None),
+        ("dup_id", ["x", "x", "y"], "identifier", True),
+        ("key", ["a", "b", "c"], "identifier", True),
+        # The rest of the 0.1.7 role heuristic.
+        ("station_number", ["1", "2", "3"], "identifier", True),
+        ("release_no", ["1", "2", "3"], "identifier", True),
+        ("counting_method", ["visual", "weir", "visual"], "attribute", None),
+        ("gear", ["net", "trap", "net"], "attribute", None),
+        ("sample_size", [10, 20, 30], "measurement", None),
+        ("survey_year", ["2001", "2002", "2003"], "temporal", None),
+        ("run_year", [2001, 2002, 2003], "temporal", None),
+        ("spawner_count", [10, 20, 30], "measurement", None),
+        ("escapement", [10, 20, 30], "measurement", None),
+        ("total_length_mm", [10.5, 20.5, 30.5], "measurement", None),
+        ("water_temp", ["8.1", "9.2", "10.3"], "measurement", None),
+        ("discharge (m3/s)", ["1.2", "2.3", "3.4"], "measurement", None),
+        ("comment", ["a", "b", "c"], "attribute", None),
+        ("abundance", ["n/a", "n/a", "n/a"], "attribute", None),
+        ("count", ["5%", "10%", "15%"], "measurement", None),
+        ("survey_date", ["2020-01-01", "2020-02-01", "2020-03-01"], "temporal", None),
+        ("region", ["N", "S", "N"], "attribute", None),
+        ("proportion_female", [0.4, 0.5, 0.6], "measurement", None),
+        ("mortality", ["low", "high", "low"], "attribute", None),
+        ("recruit_abundance", [1, 2, 3], "measurement", None),
+    )
+
+    def test_roles_and_required_flags_match_era_r(self):
+        from metasalmonpy.dictionary import infer_column_role, infer_required_flag
+
+        for name, values, role, required in self.CASES:
+            with self.subTest(column=name, values=values):
+                series = pd.Series(values)
+                got_role = infer_column_role(name, series)
+                self.assertEqual(got_role, role)
+                self.assertEqual(infer_required_flag(name, series, got_role), required)
+
+    def test_a_categorical_qualifier_keeps_its_factor_intent(self):
+        # R returns "categorical" rather than "attribute" when the qualifier
+        # column is a factor.
+        from metasalmonpy.dictionary import infer_column_role
+
+        series = pd.Series(["high", "low"], dtype="category")
+        self.assertEqual(infer_column_role("stock_id_quality", series), "categorical")
+
+    def test_a_nullable_identifier_is_not_declared_required(self):
+        frame = pd.DataFrame({"sample_id": ["a", None, "c"], "note": ["x", "y", "z"]})
+        dictionary = infer_dictionary(frame, dataset_id="d", table_id="t")
+        row = dictionary.loc[dictionary["column_name"] == "sample_id"].iloc[0]
+        self.assertEqual(row["column_role"], "identifier")
+        self.assertTrue(pd.isna(row["required"]))
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

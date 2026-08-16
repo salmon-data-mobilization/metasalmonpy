@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<d1_v2.0:systemMetadata xmlns:d1_v2.0="http://ns.dataone.org/service/types/v2.0" xmlns:d1="http://ns.dataone.org/service/types/v1">
+ <identifier>urn:uuid:524161f4-0a68-538d-a666-bc56f254b981</identifier>
+ <formatId>https://eml.ecoinformatics.org/eml-2.2.0</formatId>
+ <size>10725</size>
+ <checksum algorithm="SHA-256">5f89bd610174d63e6003411931a4d1e5e17552c2e6aa3a60f0aee21b87f63352</checksum>
+ <submitter>https://orcid.org/0000-0001-9317-0364</submitter>
+ <rightsHolder>https://orcid.org/0000-0001-9317-0364</rightsHolder>
+ <replicationPolicy replicationAllowed="false" numberReplicas="0"/>
+ <authoritativeMemberNode>urn:node:KNB</authoritativeMemberNode>
+ <seriesId>urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962</seriesId>
+ <mediaType name="application/xml"/>
+ <fileName>eml.xml</fileName>
+</d1_v2.0:systemMetadata>

@@ -92,29 +92,218 @@ def infer_value_type(series: pd.Series) -> str:
     return "string"
 
 
+def _name_tokens(value) -> list[str]:
+    """Mirror ``.ms_name_tokens``: split camelCase, then ``._-`` and whitespace."""
+    text = "" if value is None else str(value)
+    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"[._-]+", " ", text).lower()
+    return [token for token in text.split() if token]
+
+
+def _is_categorical(series: pd.Series) -> bool:
+    """R's ``inherits(col, "factor")`` — pandas' Categorical is the counterpart."""
+    return isinstance(getattr(series, "dtype", None), pd.CategoricalDtype)
+
+
+def _character_values(series: pd.Series) -> list[str]:
+    """Non-missing cells as trimmed text, the way ``as.character()`` feeds R."""
+    values = pd.Series(series).dropna()
+    return [
+        text
+        for text in (str(value).strip() for value in values)
+        if text
+    ]
+
+
+def _values_look_yearish(series: pd.Series) -> bool:
+    """Mirror ``.ms_values_look_yearish``."""
+    values = _character_values(series)
+    if not values:
+        return False
+    if not all(re.fullmatch(r"[12][0-9]{3}", value) for value in values):
+        return False
+    return all(1800 <= int(value) <= 2500 for value in values)
+
+
+def _values_look_numericish(series: pd.Series, min_fraction: float = 0.8) -> bool:
+    """Mirror ``.ms_values_look_numericish``."""
+    if pd.api.types.is_bool_dtype(series):
+        return False
+    if pd.api.types.is_numeric_dtype(series):
+        return True
+
+    values = _character_values(series)
+    values = [
+        value
+        for value in values
+        if value.lower() not in ("na", "n/a", "nd", "null", "nil", "missing")
+    ]
+    if not values:
+        return False
+
+    parsed = 0
+    for value in values:
+        normalized = value.replace(",", "").replace("%", "")
+        normalized = re.sub(r"^[<>]=?\s*", "", normalized).strip()
+        try:
+            float(normalized)
+        except ValueError:
+            continue
+        parsed += 1
+    return parsed / len(values) >= min_fraction
+
+
+_MEASUREMENT_TOKENS = frozenset(
+    """count counts total totals number numbers amount quantity measure
+    measurement measurements abundance abundances spawner spawners recruit
+    recruits escapement escapements biomass density densities rate rates ratio
+    ratios proportion proportions percent percentage length lengths weight
+    weights temperature temperatures temp depth depths width widths height
+    heights level levels discharge flow flows mortality""".split()
+)
+
+_TEMPORAL_TOKENS = frozenset(
+    "date dates time times timestamp timestamps datetime dtt year yr month day".split()
+)
+
+_METHOD_TOKENS = frozenset(
+    """method methods protocol protocols procedure procedures technique
+    techniques gear enumeration""".split()
+)
+
+_NUMBER_TOKENS = frozenset("number numbers no num".split())
+
+_IDENTIFIER_CONTEXT_TOKENS = frozenset(
+    """reference facility station site sample licence license permit record
+    report release tag""".split()
+)
+
+_SAMPLE_SIZE_TOKENS = frozenset("size sizes".split())
+_SAMPLE_CONTEXT_TOKENS = frozenset("sample samples partition partitions".split())
+
+# metasalmon 0.1.7: an embedded ID token can describe what a qualifier is
+# *about* rather than making the qualifier itself an identifier.
+_IDENTIFIER_QUALIFIER_TOKENS = frozenset(
+    "quality confidence accuracy grade score".split()
+)
+
+_MEASUREMENT_NAME_RE = re.compile(
+    r"count|total|number|amount|quantity|measure|temp|temperature|depth|width"
+    r"|height|level|discharge|flow|mortality"
+)
+_MEASUREMENT_UNIT_RE = re.compile(
+    r"\([^)]*(%|‰|°c|deg\s*c|cms|m3/s|mm|cm|\bm\b|kg|g|mg/l|ug/l)[^)]*\)"
+)
+
+
+def _name_has_measurement_hint(name_lower: str, name_tokens: Sequence[str]) -> bool:
+    """Mirror ``.ms_name_has_measurement_hint``."""
+    return (
+        any(token in _MEASUREMENT_TOKENS for token in name_tokens)
+        or _MEASUREMENT_NAME_RE.search(name_lower) is not None
+        or _MEASUREMENT_UNIT_RE.search(name_lower) is not None
+    )
+
+
+def _name_looks_identifierish(name_tokens: Sequence[str]) -> bool:
+    """Mirror ``.ms_name_looks_identifierish``."""
+    return any(token in _NUMBER_TOKENS for token in name_tokens) and any(
+        token in _IDENTIFIER_CONTEXT_TOKENS for token in name_tokens
+    )
+
+
+def _name_has_sample_size_hint(name_tokens: Sequence[str]) -> bool:
+    """Mirror ``.ms_name_has_sample_size_hint``."""
+    return any(token in _SAMPLE_SIZE_TOKENS for token in name_tokens) and any(
+        token in _SAMPLE_CONTEXT_TOKENS for token in name_tokens
+    )
+
+
 def infer_column_role(col_name: str, series: pd.Series) -> str:
+    """Infer ``column_role`` from a column's name and contents.
+
+    A node-for-node port of metasalmon v0.1.7's ``infer_column_role()``,
+    including that release's terminal-ID-qualifier fix: a name whose last
+    ID/key token is followed by a qualifier token (``quality``, ``confidence``,
+    ``accuracy``, ``grade``, ``score``) describes the *quality of an
+    identification*, not an identifier, so ``id_quality`` is an attribute.
     """
-    Infer column_role from name and contents.
-    """
-    name_lower = col_name.lower()
+    name_lower = str(col_name).lower()
+    name_tokens = _name_tokens(col_name)
+
+    identifier_positions = [
+        index for index, token in enumerate(name_tokens) if token in ("id", "key")
+    ]
+    qualifier_positions = [
+        index
+        for index, token in enumerate(name_tokens)
+        if token in _IDENTIFIER_QUALIFIER_TOKENS
+    ]
+    if (
+        identifier_positions
+        and qualifier_positions
+        and max(qualifier_positions) > max(identifier_positions)
+    ):
+        return "categorical" if _is_categorical(series) else "attribute"
 
     if re.search(r"^id$|_id$|^id_", name_lower):
         return "identifier"
     if re.search(r"^key$|_key$|^key_", name_lower):
         return "identifier"
+    if any(token in ("id", "key") for token in name_tokens) or _name_looks_identifierish(
+        name_tokens
+    ):
+        return "identifier"
 
-    if re.search(r"date|time|dtt|timestamp|(^|_)year($|_)", name_lower):
-        return "temporal"
-    if pd.api.types.is_datetime64_any_dtype(series):
+    if (
+        re.search(r"date|time|dtt|timestamp", name_lower)
+        or pd.api.types.is_datetime64_any_dtype(series)
+        or any(token in _TEMPORAL_TOKENS for token in name_tokens)
+        or _values_look_yearish(series)
+    ):
         return "temporal"
 
-    if re.search(
-        r"count|total|number|amount|quantity|measure|spawner|abundance|weight|length",
-        name_lower,
+    # Preserve explicit factor/categorical intent from the source data.
+    if _is_categorical(series):
+        return "categorical"
+
+    # Method/protocol-like fields are metadata, not measurements, even when
+    # their names contain count/measure substrings (for example counting_method).
+    if any(token in _METHOD_TOKENS for token in name_tokens):
+        return "attribute"
+
+    if _name_has_sample_size_hint(name_tokens) and _values_look_numericish(series):
+        return "measurement"
+
+    if _name_has_measurement_hint(name_lower, name_tokens) and _values_look_numericish(
+        series
     ):
         return "measurement"
 
     return "attribute"
+
+
+def infer_required_flag(col_name: str, series: pd.Series, column_role) -> Optional[bool]:
+    """Mirror ``.ms_infer_required_flag`` (metasalmon v0.1.7).
+
+    Only a resolved ``identifier`` is asserted required, and 0.1.7 added the
+    nullability check: an identifier column that carries a missing or
+    blank-after-trim value is left undecided rather than declared required,
+    because declaring it required makes the package fail its own validation.
+    The pre-0.1.7 name-based fallback is gone on purpose — an ID token can
+    occur inside the name of a non-identifier qualifier.
+    """
+    if column_role is None or pd.isna(column_role) or not str(column_role).strip():
+        return None
+    if str(column_role) != "identifier":
+        return None
+
+    values = pd.Series(series)
+    if values.isna().any():
+        return None
+    if any(not str(value).strip() for value in values.dropna()):
+        return None
+    return True
 
 
 def infer_dictionary(
@@ -251,9 +440,11 @@ def infer_dictionary(
         for idx, col_name in enumerate(col_names):
             col = data[col_name]
             dict_df.at[idx, "value_type"] = infer_value_type(col)
-            dict_df.at[idx, "column_role"] = infer_column_role(col_name, col)
-            if dict_df.at[idx, "column_role"] == "identifier":
-                dict_df.at[idx, "required"] = True
+            role = infer_column_role(col_name, col)
+            dict_df.at[idx, "column_role"] = role
+            required = infer_required_flag(col_name, col, role)
+            if required is not None:
+                dict_df.at[idx, "required"] = required
 
     if seed_semantics:
         if seed_verbose:
