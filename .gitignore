@@ -78,7 +78,6 @@ dist/
 *.egg-info/
 __pycache__/
 
-AGENTS.md
 
 agent-config/
 .cursor/
@@ -92,4 +91,3 @@ docs/todo-list.md
 scripts/manual_score_adjustments.py
 scripts/score_results_alignment.py
 scripts/transform_results_network.py
-CLAUDE.md
