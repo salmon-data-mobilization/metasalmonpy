@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<d1_v2.0:systemMetadata xmlns:d1_v2.0="http://ns.dataone.org/service/types/v2.0" xmlns:d1="http://ns.dataone.org/service/types/v1">
+ <identifier>urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f</identifier>
+ <formatId>text/csv</formatId>
+ <size>87</size>
+ <checksum algorithm="SHA-256">ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb</checksum>
+ <submitter>https://orcid.org/0000-0001-9317-0364</submitter>
+ <rightsHolder>https://orcid.org/0000-0001-9317-0364</rightsHolder>
+ <accessPolicy>
+  <allow>
+   <subject>public</subject>
+   <permission>read</permission>
+  </allow>
+ </accessPolicy>
+ <replicationPolicy replicationAllowed="true" numberReplicas="3"/>
+ <authoritativeMemberNode>urn:node:KNB</authoritativeMemberNode>
+ <mediaType name="text/csv"/>
+ <fileName>counts.csv</fileName>
+</d1_v2.0:systemMetadata>

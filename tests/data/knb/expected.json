@@ -1,0 +1,204 @@
+{
+  "generated_by": {
+    "metasalmon_ref": "v0.1.7",
+    "r_version": "R version 4.5.2 (2025-10-31)",
+    "zip_version": "3.0.1",
+    "digest_version": "0.6.39"
+  },
+  "public": {
+    "status": "dry_run",
+    "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+    "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
+    "resource_map_pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
+    "plan_sha256": "5b16c8f4e6335bb2714ab52d3e83cf1026a5a62dfca4a50972edc84380353d63"
+  },
+  "private": {
+    "status": "dry_run",
+    "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+    "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
+    "resource_map_pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
+    "plan_sha256": "48f879c31457a57fbd4f0ccc18ebd25baef007ba67a3abde9d56823a41ed591a"
+  },
+  "objects": [
+    {
+      "role": "data",
+      "path": "data/counts.csv",
+      "pid": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+      "format_id": "text/csv",
+      "media_type": "text/csv",
+      "size": 87,
+      "sha256": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb",
+      "series_id": null
+    },
+    {
+      "role": "sdp_archive",
+      "path": "publication/demo-salmon-2026-salmon-data-package.zip",
+      "pid": "urn:uuid:695ecedb-d5e7-595c-819a-9c33da4ea9c5",
+      "format_id": "application/zip",
+      "media_type": "application/zip",
+      "size": 4196,
+      "sha256": "04c0fe42e0acb3395de7ddb3b2bdd316e94cabc9f3d9a2d158e21a90846a19a5",
+      "series_id": null
+    },
+    {
+      "role": "metadata",
+      "path": "metadata/eml.xml",
+      "pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
+      "format_id": "https://eml.ecoinformatics.org/eml-2.2.0",
+      "media_type": "application/xml",
+      "size": 10725,
+      "sha256": "5f89bd610174d63e6003411931a4d1e5e17552c2e6aa3a60f0aee21b87f63352",
+      "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962"
+    },
+    {
+      "role": "resource_map",
+      "path": "publication/resource-map.rdf",
+      "pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
+      "format_id": "http://www.openarchives.org/ore/terms",
+      "media_type": "application/rdf+xml",
+      "size": 3616,
+      "sha256": "be0b88b0b95bff02513cf58920fb5ddec8edca7b0c7b563aca62f337a5740270",
+      "series_id": null
+    }
+  ],
+  "archive": {
+    "file_name": "demo-salmon-2026-salmon-data-package.zip",
+    "dataset_id": "demo-salmon-2026",
+    "format_id": "application/zip",
+    "media_type": "application/zip",
+    "size": 4196,
+    "sha256": "04c0fe42e0acb3395de7ddb3b2bdd316e94cabc9f3d9a2d158e21a90846a19a5",
+    "members": [
+      "data/counts.csv",
+      "datapackage.json",
+      "metadata/codes.csv",
+      "metadata/column_dictionary.csv",
+      "metadata/dataset.csv",
+      "metadata/semantic_vocabulary.csv",
+      "metadata/tables.csv",
+      "reviewed_semantic_selections.csv"
+    ],
+    "zip_list_filenames": [
+      "data/counts.csv",
+      "datapackage.json",
+      "metadata/codes.csv",
+      "metadata/column_dictionary.csv",
+      "metadata/dataset.csv",
+      "metadata/semantic_vocabulary.csv",
+      "metadata/tables.csv",
+      "reviewed_semantic_selections.csv"
+    ],
+    "zip_list_sizes": [
+      87,
+      4397,
+      105,
+      1023,
+      724,
+      1188,
+      280,
+      853
+    ]
+  },
+  "helpers": {
+    "resource_map_pid_demo": "urn:uuid:78b7bbcd-1e5e-55de-b817-d278e652cc97",
+    "sha256_text_demo": "2a97516c354b68848cdbd8f54a226a0a55b21ed138e207ad6c5cbb9c00aa5aea",
+    "resolve_url_demo": "https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Aabc",
+    "redact_bearer": "Authorization: Bearer [REDACTED]",
+    "redact_jwt": "token [REDACTED JWT] here",
+    "redact_option": "dataone_token=[REDACTED] trailing",
+    "orcid_key": "0000-0001-9317-0364",
+    "replication_public": {
+      "replication_allowed": true,
+      "number_replicas": 3,
+      "preferred_member_nodes": [],
+      "blocked_member_nodes": []
+    },
+    "replication_private": {
+      "replication_allowed": false,
+      "number_replicas": 0,
+      "preferred_member_nodes": [],
+      "blocked_member_nodes": []
+    },
+    "solr_quote": "a\\\"b\\\\c",
+    "catalog_url": "https://cn.dataone.org/cn/v2/query/solr/?q=id%3A%22urn%3Auuid%3A0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f%22%20OR%20id%3A%22urn%3Auuid%3A695ecedb-d5e7-595c-819a-9c33da4ea9c5%22%20OR%20id%3A%22urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981%22%20OR%20id%3A%22urn%3Auuid%3A9a90bb5b-fe13-505c-9537-4131e2ac1fab%22&fl=id%2CresourceMap%2Cdocuments%2CisDocumentedBy&rows=4&wt=json",
+    "status_ranks": {
+      "dry_run": 1,
+      "pending": 2,
+      "published_pending_catalog": 3,
+      "complete": 4,
+      "unknown": 0
+    },
+    "valid_timestamps": {
+      "z": true,
+      "offset": true,
+      "naive": false,
+      "empty": false
+    },
+    "archive_filename": "demo-salmon-2026-salmon-data-package.zip",
+    "ore_profile": "metasalmon-dataone-ore-v2",
+    "mn_endpoint": "https://knb.ecoinformatics.org/knb/d1/mn/v2",
+    "resolver": "https://cn.dataone.org/cn/v2/resolve/"
+  },
+  "extra": {
+    "sdp_artifact_objects": [
+      {
+        "role": "sdp_artifact",
+        "path": "metadata/tables.csv",
+        "pid": "urn:uuid:35666ad4-253c-5cf9-a019-87b8958dfc9f",
+        "format_id": "text/csv",
+        "media_type": "text/csv",
+        "size": 280,
+        "sha256": "201d76152b7a2a64f21a05df8168267de3acac6813de5f838780bd208e2e2d7c",
+        "series_id": null
+      },
+      {
+        "role": "sdp_artifact",
+        "path": "datapackage.json",
+        "pid": "urn:uuid:73ef3b1d-7728-5122-9d2b-5f42c632e77d",
+        "format_id": "application/json",
+        "media_type": "application/json",
+        "size": 4397,
+        "sha256": "8c08f600cd6bc0aa511c88e7b68657d5d93ce836e2ba8903058231d137422e60",
+        "series_id": null
+      }
+    ],
+    "manifest_v2_plan_sha256": "88c4372e4dee17ae1997e98782032ca8e1e3e98d0d3658d79a5476a97dcc078f",
+    "normalized_access": [
+      {
+        "subject": "https://orcid.org/0000-0001-9317-0364",
+        "permission": "write"
+      },
+      {
+        "subject": "public",
+        "permission": "read"
+      }
+    ],
+    "archive_filename_slug": "demo-salmon-2026-salmon-data-package.zip",
+    "same_subject": {
+      "exact": true,
+      "orcid_case": true,
+      "different": false,
+      "empty": false
+    },
+    "echo_subjects": [
+      "https://orcid.org/0000-0001-9317-0364",
+      "CN=alex,DC=dataone,DC=org",
+      "CN=anon,DC=dataone,DC=org"
+    ]
+  },
+  "python_archive": {
+    "determinism_reference": "metasalmonpy-zipfile-1",
+    "sha256": "97bd2026e728886b264a4c354665c53699ecf9270b80dfa406ceaf7f6332adf3",
+    "size": 4193,
+    "members": [
+      "data/counts.csv",
+      "datapackage.json",
+      "metadata/codes.csv",
+      "metadata/column_dictionary.csv",
+      "metadata/dataset.csv",
+      "metadata/semantic_vocabulary.csv",
+      "metadata/tables.csv",
+      "reviewed_semantic_selections.csv"
+    ]
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "serial_version": 1,
+  "identifier": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+  "format_id": "text/csv",
+  "size": 87,
+  "checksum": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb",
+  "checksum_algorithm": "SHA-256",
+  "submitter": "https://orcid.org/0000-0001-9317-0364",
+  "rights_holder": "https://orcid.org/0000-0001-9317-0364",
+  "access": [
+    {
+      "subject": "public",
+      "permission": "read"
+    }
+  ],
+  "replication_allowed": true,
+  "number_replicas": 3,
+  "preferred_member_nodes": [],
+  "blocked_member_nodes": [],
+  "series_id": null,
+  "media_type": "text/csv",
+  "file_name": "counts.csv",
+  "archived": null,
+  "obsoletes": null,
+  "obsoleted_by": null,
+  "date_uploaded": "2026-01-01T00:00:00.000+00:00",
+  "date_sys_metadata_modified": "2026-01-01T00:00:00.000+00:00",
+  "origin_member_node": "urn:node:KNB",
+  "authoritative_member_node": "urn:node:KNB"
+}

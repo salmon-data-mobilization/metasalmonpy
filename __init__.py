@@ -34,6 +34,7 @@ from .edh_xml import (
     write_edh_xml_from_sdp,
 )
 from .eml import write_eml_from_sdp
+from .knb_publication import publish_sdp_to_knb
 from .measurement_decompositions import (
     read_sdp_measurement_decompositions,
     validate_sdp_measurement_decompositions,
@@ -82,6 +83,7 @@ __all__ = [
     "ices_find_code_types",
     "ices_find_codes",
     "ms_setup_github",
+    "publish_sdp_to_knb",
     "nuseds_enumeration_method_crosswalk",
     "nuseds_estimate_method_crosswalk",
     "read_salmon_datapackage",
