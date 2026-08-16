@@ -22,6 +22,7 @@ skipped when the extra is absent, so the core suite stays green without it.
 import json
 import os
 import shutil
+import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -65,8 +66,6 @@ def _canonical(path: str) -> str:
 
 def _fixture_sdp(test_case: unittest.TestCase, name: str) -> str:
     """Copy a fixture SDP into a temp dir so the export can write into it."""
-    import tempfile
-
     root = tempfile.mkdtemp()
     test_case.addCleanup(shutil.rmtree, root, True)
     target = os.path.join(root, "sdp")
@@ -716,6 +715,44 @@ class EmlOutputFileTests(unittest.TestCase):
             os.stat(result["path"]).st_mode & 0o777,
             os.stat(reference).st_mode & 0o777,
         )
+
+    def test_a_bare_basename_output_path_writes_to_the_working_directory(self):
+        # R's dirname("eml.xml") is "." and dir.exists(".") is TRUE, so R
+        # writes into the working directory. os.path.dirname() returns ""
+        # instead, and makedirs("") raised ENOENT, which the function reported
+        # as "Could not create EML output directory" -- a mirror break for an
+        # output path R accepts.
+        sdp = _fixture_sdp(self, "sdp-default")
+        workdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, workdir, True)
+        origin = os.getcwd()
+        os.chdir(workdir)
+        self.addCleanup(os.chdir, origin)
+
+        result = write_eml_from_sdp(sdp, output_path="eml.xml", overwrite=True)
+
+        expected = os.path.realpath(os.path.join(workdir, "eml.xml"))
+        self.assertEqual(result["path"], expected)
+        self.assertTrue(os.path.isfile(expected))
+        self.assertTrue(result["validation"])
+
+    def test_a_relative_output_path_with_a_directory_is_still_created(self):
+        # The "" -> "." normalization must not stop makedirs() from building a
+        # missing relative subdirectory, which R's recursive dir.create() does.
+        sdp = _fixture_sdp(self, "sdp-default")
+        workdir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, workdir, True)
+        origin = os.getcwd()
+        os.chdir(workdir)
+        self.addCleanup(os.chdir, origin)
+
+        result = write_eml_from_sdp(
+            sdp, output_path=os.path.join("out", "nested", "eml.xml"), overwrite=True
+        )
+
+        expected = os.path.realpath(os.path.join(workdir, "out", "nested", "eml.xml"))
+        self.assertEqual(result["path"], expected)
+        self.assertTrue(os.path.isfile(expected))
 
     def test_a_truthy_non_true_overwrite_does_not_replace(self):
         # R gates on isTRUE(overwrite), so overwrite="no" must NOT authorize

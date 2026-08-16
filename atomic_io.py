@@ -20,19 +20,56 @@ from __future__ import annotations
 
 import os
 import tempfile
+import uuid
 from pathlib import Path
-from typing import Union
+from typing import Optional, Union
+
+# What a plain write yields when the probe below cannot run at all (a
+# read-only or missing temp directory). 0644 is the conventional 022 umask
+# result, which is what R's writeBin produces on every machine this package
+# has been exercised on. This constant retires the day a supported platform
+# offers a read-only umask query the probe can use instead; POSIX defines
+# ``umask`` as get-and-set, so as of Python 3.13 there is none in the stdlib.
+_FALLBACK_FILE_MODE = 0o644
+
+
+def _probe_default_file_mode() -> Optional[int]:
+    """Measure the umask default by creating one throwaway file.
+
+    ``os.open`` asks the kernel for 0666 and the kernel subtracts the umask
+    itself, so the mode ``fstat`` reports back IS ``0666 & ~umask`` -- the
+    same number, obtained without ever mutating process-wide state.
+
+    The mutating alternative (``os.umask(0)`` then restore) is wrong here
+    because the umask is per-*process*, not per-thread: two concurrent
+    artifact writes can interleave the set/restore pair so that one restores
+    the temporary zero after the other restored the real value, leaving the
+    process at 000 permanently and publishing world-writable files. A lock
+    would only serialize *this* module's calls, not the rest of the process,
+    so the non-mutating probe is preferred over serializing the dance.
+    """
+    name = f".metasalmon-umask-probe-{os.getpid()}-{uuid.uuid4().hex}"
+    probe = os.path.join(tempfile.gettempdir(), name)
+    try:
+        handle = os.open(probe, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o666)
+    except OSError:  # pragma: no cover - unwritable temp directory
+        return None
+    try:
+        # Mask to 0o777: a setgid temp directory can add 0o2000 to the new
+        # file, and that bit is not part of "what a plain write produces".
+        return os.fstat(handle).st_mode & 0o777
+    finally:
+        os.close(handle)
+        try:
+            os.unlink(probe)
+        except OSError:  # pragma: no cover - probe already gone
+            pass
 
 
 def default_file_mode() -> int:
-    """The permission bits a normal (umask-respecting) file write produces.
-
-    ``os.umask`` is a get-and-set call, so the current value has to be read by
-    setting it and immediately putting it back.
-    """
-    current = os.umask(0)
-    os.umask(current)
-    return 0o666 & ~current
+    """The permission bits a normal (umask-respecting) file write produces."""
+    mode = _probe_default_file_mode()
+    return _FALLBACK_FILE_MODE if mode is None else mode
 
 
 def apply_default_file_mode(path: Union[str, Path]) -> None:

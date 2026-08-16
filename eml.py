@@ -3447,7 +3447,12 @@ def write_eml_from_sdp(
     if output_path is None:
         output_path = root / "metadata" / "eml.xml"
     output_path = os.path.expanduser(str(output_path))
-    output_dir = os.path.dirname(output_path)
+    # R's dirname("eml.xml") is ".", so a bare basename writes to the working
+    # directory; os.path.dirname() returns "" instead, and makedirs("") then
+    # fails with ENOENT -- which surfaced as "Could not create EML output
+    # directory" for an output path R accepts. Normalize "" to "." to keep
+    # the mirror honest.
+    output_dir = os.path.dirname(output_path) or "."
     if not os.path.isdir(output_dir):
         try:
             os.makedirs(output_dir, exist_ok=True)
