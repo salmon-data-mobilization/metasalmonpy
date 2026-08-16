@@ -1,0 +1,24 @@
+@prefix smn: <https://w3id.org/smn/> .
+@prefix iadopt: <https://w3id.org/iadopt/ont/> .
+@prefix sosa: <http://www.w3.org/ns/sosa/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix iao: <http://purl.obolibrary.org/obo/IAO_> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<https://w3id.org/smn/modules/02-observation-measurement> a owl:Ontology ;
+  rdfs:label "Salmon Domain Ontology Module 02: Observation and measurement"@en .
+
+smn:Abundance a owl:Class ;
+  rdfs:label "Abundance"@en ;
+  iao:0000115 "A characteristic representing the quantity of salmon or other organisms associated with a defined entity, place, and time."@en ;
+  rdfs:comment "Use units, statistical modifiers, measurement context, and procedures to distinguish absolute counts, relative indices, estimates, expansions, and other representations."@en ;
+  rdfs:subClassOf smn:Characteristic ;
+  rdfs:isDefinedBy <https://w3id.org/smn> ;
+  dcterms:source <http://qudt.org/vocab/quantitykind/Population> .
+
+smn:totalLength a owl:Class ;
+  rdfs:label "Total length"@en ;
+  rdfs:subClassOf smn:FishLength ;
+  rdfs:isDefinedBy <https://w3id.org/smn> .
