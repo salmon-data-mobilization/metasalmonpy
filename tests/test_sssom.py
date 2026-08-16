@@ -230,8 +230,22 @@ def test_writer_is_deterministic_across_input_order(tmp_path):
             encoding="utf-8"
         )
     )
-    ids = [entry["mapping_set_id"] for entry in manifest["mapping_sets"]]
-    assert ids == sorted(ids)
+    # Asserting `ids == sorted(ids)` would only prove Python agrees with
+    # Python. The expectation is the order R wrote into the fixture SDP.
+    r_manifest = json.loads(
+        (DATA / "r-sdp" / "metadata" / "semantic" / "mapping-sets.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    expected_ids = [entry["mapping_set_id"] for entry in r_manifest["mapping_sets"]]
+    assert expected_ids == [
+        "https://example.org/mappings/multi-sort",
+        "https://example.org/mappings/psc-to-gcdfo",
+        "https://example.org/mappings/psc-to-sdo-gaps",
+    ]
+    assert [
+        entry["mapping_set_id"] for entry in manifest["mapping_sets"]
+    ] == expected_ids
 
 
 # --- gap (sssom:NoTermFound) semantics ----------------------------------------
@@ -768,6 +782,80 @@ def test_validate_detects_missing_referenced_file(written_sdp):
     (written_sdp / "metadata" / "semantic" / "approved.sssom.tsv").unlink()
     with pytest.raises(FileNotFoundError, match="missing file"):
         validate_sdp_sssom(written_sdp)
+
+
+# --- multi-valued reference columns ------------------------------------------------
+
+
+def with_author_id(value, **kwargs):
+    """``sssom_text`` plus a multi-valued ``author_id`` column on every row."""
+    lines = sssom_text(**kwargs).rstrip("\n").split("\n")
+    header = next(i for i, line in enumerate(lines) if not line.startswith("#"))
+    lines[header] += "\tauthor_id"
+    for index in range(header + 1, len(lines)):
+        lines[index] += "\t" + value
+    return "\n".join(lines) + "\n"
+
+
+def test_a_single_trailing_pipe_is_accepted_the_way_r_accepts_it(tmp_path):
+    # base::strsplit() drops exactly one trailing empty field, so metasalmon
+    # v0.1.7 reads "psc:PSC-CV-000900|" as one well-formed reference -- and
+    # then writes an SDP this validator used to refuse to read back.
+    path = write_raw(
+        tmp_path / "trailing.sssom.tsv", with_author_id("psc:PSC-CV-000900|")
+    )
+    result = read_sssom_mapping_set(path)
+    assert result.mappings["author_id"].tolist() == ["psc:PSC-CV-000900|"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "|psc:PSC-CV-000900",
+        "psc:PSC-CV-000900||psc:PSC-CV-000901",
+        "psc:PSC-CV-000900||",
+    ],
+)
+def test_leading_and_interior_empty_pieces_are_still_refused(tmp_path, value):
+    # Only ONE trailing empty is dropped; every other empty piece survives
+    # strsplit() and is rejected by R, so it must be rejected here too.
+    path = write_raw(tmp_path / "bad.sssom.tsv", with_author_id(value))
+    with pytest.raises(ValueError, match="author_id"):
+        read_sssom_mapping_set(path)
+
+
+def test_split_helper_matches_base_strsplit():
+    # The exact vectors base::strsplit(x, "|", fixed = TRUE)[[1]] returns.
+    assert sssom._split_multivalued("") == []
+    assert sssom._split_multivalued("a|") == ["a"]
+    assert sssom._split_multivalued("a||") == ["a", ""]
+    assert sssom._split_multivalued("|") == [""]
+    assert sssom._split_multivalued("|a") == ["", "a"]
+    assert sssom._split_multivalued("a||b") == ["a", "", "b"]
+
+
+# --- written artifacts are ordinary files ------------------------------------------
+
+
+def test_written_artifacts_use_the_umask_default_mode(tmp_path):
+    # R's writeBin + file.rename leaves the umask default (0644 typically);
+    # tempfile.mkstemp hard-codes 0600 and os.replace preserves it, so every
+    # mapping set this package published was private to its owner.
+    sdp = tmp_path / "sdp"
+    sdp.mkdir()
+    manifest_path = write_sdp_sssom(
+        sdp, mapping_sets=[DATA / "src" / name for name in FIXTURES]
+    )
+    semantic = Path(manifest_path).parent
+
+    reference = semantic / "reference.txt"
+    reference.write_text("x", encoding="utf-8")
+    expected = reference.stat().st_mode & 0o777
+
+    written = sorted(p for p in semantic.iterdir() if p != reference)
+    assert written  # guard against an empty glob silently passing
+    for path in written:
+        assert path.stat().st_mode & 0o777 == expected, path.name
 
 
 # --- public API -------------------------------------------------------------------

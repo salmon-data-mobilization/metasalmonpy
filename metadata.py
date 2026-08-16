@@ -2,9 +2,58 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Union
 
 import pandas as pd
+
+
+# readr's ``trim_ws = TRUE`` and R's ``trimws()`` strip exactly these
+# characters. U+00A0 and U+3000 are deliberately absent: neither R function
+# treats them as whitespace, so neither may this package.
+READR_TRIM_CHARS = " \t\r\n"
+
+
+def _trim_cell(value):
+    return value.strip(READR_TRIM_CHARS) if isinstance(value, str) else value
+
+
+def read_sdp_csv(path: Union[str, Path], **kwargs) -> pd.DataFrame:
+    """Read an SDP CSV exactly the way metasalmon's ``readr::read_csv`` does.
+
+    Every metadata, dictionary, and vocabulary reader in this package goes
+    through this one function, because the three behaviours it encodes are
+    individually easy to get wrong and were previously inconsistent between
+    modules:
+
+    * **All-character columns**, mirroring R's
+      ``col_types = cols(.default = col_character())``.
+    * **``trim_ws = TRUE``** — ``READR_TRIM_CHARS`` are stripped from every
+      header and every field, inside quotes as well as outside, *before* the
+      missing-value token is matched. ``pandas`` does none of this, so
+      ``a, b`` (a space after the comma) parsed as ``" b"`` here while R read
+      ``"b"``.
+    * **The empty field is the only missing token.** metasalmon 0.2.4
+      established that ``"NA"`` is a real fisheries gear code, so a literal
+      ``NA`` round-trips as the string it is rather than being destroyed at
+      read time.
+
+    ``skipinitialspace`` is what lets pandas see ``  "quoted, value"  `` as
+    one quoted field the way readr's tokenizer does; the explicit strip
+    afterwards finishes the job for tabs and trailing whitespace.
+    """
+    frame = pd.read_csv(
+        path,
+        dtype=str,
+        keep_default_na=False,
+        na_values=[],
+        skipinitialspace=True,
+        **kwargs,
+    )
+    frame.columns = [_trim_cell(column) for column in frame.columns]
+    if not frame.empty:
+        frame = frame.apply(lambda column: column.map(_trim_cell))
+    return frame
 
 
 DATASET_META_COLUMNS = [
@@ -279,6 +328,7 @@ __all__ = [
     "CODES_COLUMNS",
     "DATASET_META_COLUMNS",
     "DICTIONARY_COLUMNS",
+    "READR_TRIM_CHARS",
     "TABLE_META_COLUMNS",
     "align_columns",
     "ensure_resource_mapping",
@@ -290,4 +340,5 @@ __all__ = [
     "normalize_dictionary",
     "normalize_table_meta",
     "parse_logical",
+    "read_sdp_csv",
 ]

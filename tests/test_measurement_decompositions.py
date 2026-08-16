@@ -652,6 +652,28 @@ def test_validate_flag_must_be_boolean():
     assert len(result) == 6
 
 
+# --- written artifacts are ordinary files -------------------------------------------------
+
+
+def test_written_artifacts_use_the_umask_default_mode(tmp_path):
+    # R's writeBin + file.rename leaves the umask default (0644 typically);
+    # tempfile.mkstemp hard-codes 0600 and os.replace preserves it, so the
+    # decomposition CSV and manifest shipped private to their owner.
+    sdp = make_sdp(tmp_path, "era-sdp")
+    manifest_path = write_sdp_measurement_decompositions(sdp, era_rows())
+    semantic = Path(manifest_path).parent
+
+    reference = semantic / "reference.txt"
+    reference.write_text("x", encoding="utf-8")
+    expected = reference.stat().st_mode & 0o777
+
+    for name in (
+        "measurement-decompositions.csv",
+        "measurement-decompositions.json",
+    ):
+        assert (semantic / name).stat().st_mode & 0o777 == expected, name
+
+
 # --- public API --------------------------------------------------------------------------
 
 

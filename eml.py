@@ -45,6 +45,9 @@ from typing import Dict, List, Optional, Union
 
 import pandas as pd
 
+from .atomic_io import apply_default_file_mode
+from .metadata import read_sdp_csv
+
 EML_VERSION = "2.2.0"
 _EML_NAMESPACE = "https://eml.ecoinformatics.org/eml-2.2.0"
 _EML_FORMAT_ID = _EML_NAMESPACE
@@ -68,20 +71,52 @@ _ORCID_RE = re.compile(
     r"^https://orcid\.org/[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"
 )
 _PUBLICATION_DATE_RE = re.compile(r"^[0-9]{4}(-[0-9]{2}-[0-9]{2})?$")
-# R: ^[A-Za-z][A-Za-z0-9+.-]*:[^[:space:]]+$ ([[:space:]] is ASCII-only in a
-# non-UCP PCRE).
-_ABSOLUTE_URI_RE = re.compile(
-    r"^[A-Za-z][A-Za-z0-9+.\-]*:[^ \t\n\v\f\r]+$"
+# metasalmon calls grepl() WITHOUT perl = TRUE, so these POSIX classes are
+# resolved by TRE, which is Unicode-aware in a UTF-8 locale. The exact
+# membership below was enumerated by running grepl() over every codepoint up to
+# U+2FFFF under metasalmon v0.1.7's R 4.5.2; approximating either class with
+# Python's `\s` or an ASCII-only range is what let U+0085 in an entity name and
+# U+3000 in a PID through here while R rejected both.
+#
+# R [[:space:]] -- note the deliberate gaps: U+2007, U+00A0, U+0085 and U+202F
+# are NOT whitespace to TRE.
+_R_SPACE_CLASS = (
+    "\t-\r\x20\u1680\u2000-\u2006\u2008-\u200a"
+    "\u2028\u2029\u205f\u3000"
 )
-_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+# R [[:cntrl:]] -- C0 and C1 controls plus the Unicode line/paragraph separators.
+_R_CNTRL_CLASS = "\x00-\x1f\x7f-\x9f\u2028\u2029"
+
+# R: ^[A-Za-z][A-Za-z0-9+.-]*:[^[:space:]]+$
+_ABSOLUTE_URI_RE = re.compile(
+    r"^[A-Za-z][A-Za-z0-9+.\-]*:[^" + _R_SPACE_CLASS + r"]+$"
+)
+_CONTROL_CHAR_RE = re.compile("[" + _R_CNTRL_CLASS + "]")
 
 _TRIM_CHARS = " \t\r\n"  # R trimws() default character class
 
-# readr's era missing-token set. metasalmon 0.1.7 reads package resources
-# with readr defaults (na = c("", "NA")); the missing-value contract below
-# reproduces that exactly instead of inheriting pandas' larger default NA
-# vocabulary (which would treat tokens like "null" as missing where R does
-# not).
+# R's as.numeric() is C strtod(): ASCII decimal, C hexadecimal (with an
+# optional binary exponent), or an inf/nan spelling, over the whole string
+# after C-whitespace trimming. `[0-9]` is deliberate -- Python's `\d` would
+# admit the non-ASCII digits R refuses.
+_STRTOD_TRIM_CHARS = " \t\n\x0b\f\r"
+_STRTOD_HEX_RE = re.compile(r"[+-]?0[xX]")
+_STRTOD_RE = re.compile(
+    r"""[+-]?(?:
+          (?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?
+        | 0[xX](?:[0-9A-Fa-f]+\.?[0-9A-Fa-f]*|\.[0-9A-Fa-f]+)(?:[pP][+-]?[0-9]+)?
+        | [iI][nN][fF](?:[iI][nN][iI][tT][yY])?
+        | [nN][aA][nN]
+    )""",
+    re.VERBOSE,
+)
+
+# readr's era missing-token set, used ONLY to reproduce how metasalmon 0.1.7
+# parsed a data *resource* (readr defaults, na = c("", "NA")) when auditing raw
+# CSV tokens against declared EML missing-value codes. Reviewed sidecars go
+# through read_sdp_csv instead, where a literal "NA" is data (metasalmon
+# 0.2.4). Both are narrower than pandas' default NA vocabulary, which would
+# treat tokens like "null" as missing where R does not.
 _ERA_NA_TOKENS = ("", "NA")
 
 _VALID_SCALES = ("nominal", "ordinal", "interval", "ratio", "dateTime")
@@ -165,16 +200,31 @@ def _scalar(mapping: object, field: str, required: bool = True) -> Optional[str]
 
 
 def _as_numeric(value: object) -> Optional[float]:
-    """Mirror ``suppressWarnings(as.numeric(...))`` for one value."""
+    """Mirror ``suppressWarnings(as.numeric(...))`` for one value.
+
+    R's coercion is C ``strtod`` over the whole whitespace-trimmed string.
+    Python's ``float()`` implements a *different* grammar, and the two
+    disagree in both directions: ``float()`` accepts PEP 515 underscores
+    (``"1_000"`` -> 1000.0) and non-ASCII digits (``"１２３"``),
+    both of which R rejects, and rejects C hexadecimal (``"0x1A"``), which R
+    reads as 26. The underscore direction is the dangerous one -- it turns a
+    thousands-separated typo into a silently validated observation -- so the
+    strtod grammar is screened first and only then handed to Python.
+    """
     if _is_missing(value):
         return None
     if isinstance(value, bool):
         return 1.0 if value else 0.0
     if isinstance(value, (int, float)):
         return float(value)
+    text = str(value).strip(_STRTOD_TRIM_CHARS)
+    if _STRTOD_RE.fullmatch(text) is None:
+        return None
     try:
-        return float(str(value).strip())
-    except ValueError:
+        if _STRTOD_HEX_RE.match(text) is not None:
+            return float.fromhex(text)
+        return float(text)
+    except (ValueError, OverflowError):
         return None
 
 
@@ -896,10 +946,14 @@ def _validate_mapping_schema(mapping: dict) -> None:
 
 
 def _read_character_csv(path: Union[str, Path]) -> pd.DataFrame:
-    """Read a CSV with readr's all-character defaults (na = c("", "NA"))."""
-    return pd.read_csv(
-        path, dtype=str, keep_default_na=False, na_values=list(_ERA_NA_TOKENS)
-    )
+    """Read a reviewed sidecar CSV through the shared SDP reader.
+
+    Previously this reader treated a literal ``NA`` as missing while
+    ``package_io`` preserved it, which made a dictionary cell of ``NA`` name a
+    canonical semantic target that no ``semantic_vocabulary.csv`` row could
+    ever satisfy. All SDP readers now share ``read_sdp_csv``.
+    """
+    return read_sdp_csv(path)
 
 
 def _unit_crosswalk() -> pd.DataFrame:
@@ -2323,11 +2377,16 @@ def _era_parsed_missing(raw_values: List[str]) -> List[bool]:
 
     metasalmon 0.1.7 reads package resources with ``readr::read_csv``
     defaults, so a parsed cell is missing exactly when its raw token is ""
-    or "NA". Deriving this from the raw tokens keeps the missing-value
-    contract identical to R 0.1.7 instead of inheriting pandas' larger
-    default NA vocabulary.
+    or "NA" **after readr's ``trim_ws = TRUE`` has run**. Deriving this from
+    the raw tokens keeps the missing-value contract identical to R 0.1.7
+    instead of inheriting pandas' larger default NA vocabulary.
+
+    R computes missingness from the parsed frame, so it is the *trimmed*
+    token that decides: a cell of three spaces and a cell of ``" NA "`` both
+    parse to ``NA`` in R and are therefore undeclared missing tokens. Matching
+    the untrimmed token let those cells through here while R rejected them.
     """
-    return [value in _ERA_NA_TOKENS for value in raw_values]
+    return [_trim(value) in _ERA_NA_TOKENS for value in raw_values]
 
 
 def _add_missing_values(
@@ -3254,13 +3313,64 @@ def _export_from_mapping(
     )
 
 
+def _strict_yaml_loader():
+    """A SafeLoader that refuses duplicate keys and never invents dates.
+
+    Two PyYAML defaults are wrong for a *reviewed* sidecar, and both are
+    silent:
+
+    * **Duplicate mapping keys.** R's ``yaml::read_yaml`` aborts with
+      "Duplicate map key"; PyYAML keeps the last one. A reviewer who edits
+      ``status: draft`` to ``status: final`` by pasting a second line gets a
+      different document out of each implementation, with no warning from
+      either the parser or the schema.
+    * **Implicit timestamps.** R's yaml returns ``publication_date:
+      2026-01-01`` as the *character* string R's validator expects. PyYAML
+      resolves it to ``datetime.date``, which then fails the sidecar's
+      JSON-Schema string check — so an unquoted date that R accepts was a hard
+      error here. Timestamps are un-resolved rather than post-coerced so the
+      value never becomes a date in the first place.
+
+    This mirrors the duplicate-key rejection the SSSOM subset parser already
+    performs on its own metadata block.
+    """
+    import yaml
+
+    class _StrictSafeLoader(yaml.SafeLoader):
+        def construct_mapping(self, node, deep=False):
+            # flatten_mapping resolves YAML merge keys, which R's yaml also
+            # supports; run it first so `<<` is not counted as a real key.
+            self.flatten_mapping(node)
+            seen: List[object] = []
+            for key_node, _ in node.value:
+                key = self.construct_object(key_node, deep=deep)
+                if key in seen:
+                    raise yaml.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        node.start_mark,
+                        f"Duplicate map key: '{key}'",
+                        key_node.start_mark,
+                    )
+                seen.append(key)
+            return super().construct_mapping(node, deep=deep)
+
+    # R's yaml returns every timestamp -- implicit `2026-01-01` or explicitly
+    # tagged -- as the verbatim character string, so do the same rather than
+    # constructing a datetime.date and coercing it back later.
+    _StrictSafeLoader.add_constructor(
+        "tag:yaml.org,2002:timestamp",
+        lambda loader, node: loader.construct_scalar(node),
+    )
+    return _StrictSafeLoader
+
+
 def _read_mapping_yaml(mapping_path: Union[str, Path]) -> object:
     """Parse the reviewed sidecar with full YAML (R: ``yaml::read_yaml``)."""
     import yaml
 
     text = Path(mapping_path).read_text(encoding="utf-8")
     try:
-        return yaml.safe_load(text)
+        return yaml.load(text, Loader=_strict_yaml_loader())
     except yaml.YAMLError as error:
         raise ValueError(
             f"EML mapping sidecar {mapping_path} is not valid YAML: {error}"
@@ -3388,12 +3498,18 @@ def write_eml_from_sdp(
             identical_bytes = _read_bytes(output_path) == _read_bytes(temporary)
             if identical_bytes:
                 os.unlink(temporary)
-            elif not overwrite:
+            elif overwrite is not True:
+                # R gates this on isTRUE(overwrite), so only the literal TRUE
+                # authorizes replacing a differing document. A truthiness test
+                # let overwrite="no" destroy the existing file.
                 raise ValueError(
                     f"EML output {output_path} already exists with different "
                     "bytes; set overwrite=True to replace it."
                 )
         if os.path.exists(temporary):
+            # mkstemp() creates 0600 and os.replace preserves it; R's
+            # writeBin + file.rename leaves the umask default.
+            apply_default_file_mode(temporary)
             os.replace(temporary, output_path)
     finally:
         if os.path.exists(temporary):

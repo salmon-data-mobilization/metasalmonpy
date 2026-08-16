@@ -34,14 +34,14 @@ import json
 import math
 import os
 import re
-import tempfile
 import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
-from .metadata import normalize_dictionary
+from .atomic_io import atomic_write
+from .metadata import normalize_dictionary, read_sdp_csv
 
 SDP_DECOMPOSITION_SCHEMA_VERSION = "1.0"
 SDP_DECOMPOSITION_CSV_PATH = "metadata/semantic/measurement-decompositions.csv"
@@ -520,20 +520,13 @@ def _json_bytes(manifest: Dict[str, object]) -> bytes:
 
 
 def _atomic_write(data: bytes, path: Path) -> None:
-    """Mirror ``.ms_sdp_decomposition_atomic_write``: write-then-rename."""
-    handle, temporary = tempfile.mkstemp(
-        prefix=f".{path.name}-", dir=str(path.parent)
-    )
-    try:
-        with os.fdopen(handle, "wb") as stream:
-            stream.write(data)
-        os.replace(temporary, str(path))
-    except BaseException:
-        try:
-            os.unlink(temporary)
-        except OSError:
-            pass
-        raise
+    """Mirror ``.ms_sdp_decomposition_atomic_write``: write-then-rename.
+
+    The shared helper restores the umask-default mode that R's ``writeBin``
+    would have produced; ``tempfile.mkstemp`` would otherwise publish the
+    decomposition CSV and manifest as 0600.
+    """
+    atomic_write(data, path)
 
 
 def _assert_output_directory(root: Path, directory: Path) -> None:
@@ -744,10 +737,7 @@ def _read_dictionary(root: Path) -> pd.DataFrame:
         raise FileNotFoundError(
             "The SDP does not contain metadata/column_dictionary.csv."
         )
-    dictionary = pd.read_csv(
-        dictionary_path, dtype=str, keep_default_na=False, na_values=["", "NA"]
-    )
-    return normalize_dictionary(dictionary)
+    return normalize_dictionary(read_sdp_csv(dictionary_path))
 
 
 def _dictionary_values(value: object, field: str) -> List[str]:

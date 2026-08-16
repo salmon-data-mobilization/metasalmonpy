@@ -26,12 +26,13 @@ import hashlib
 import json
 import os
 import re
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
 
 import pandas as pd
+
+from .atomic_io import atomic_write
 
 SSSOM_VERSION = "1.1"
 SSSOM_MANIFEST_VERSION = "1.0"
@@ -263,6 +264,22 @@ def _cell(value: object) -> Optional[str]:
         # Mirror R's as.character(TRUE) -> "TRUE" for in-memory frames.
         return "TRUE" if value else "FALSE"
     return str(value)
+
+
+def _split_multivalued(value: str) -> List[str]:
+    """Mirror ``strsplit(value, "|", fixed = TRUE)[[1]]``.
+
+    ``base::strsplit`` drops **exactly one** trailing empty field, so R reads
+    ``"psc:PSC-CV-000900|"`` as a single well-formed reference. Python's
+    ``str.split`` keeps that empty piece, which made this validator reject
+    SDPs that R had written and accepted. Leading and interior empties survive
+    in both implementations and must still be rejected, and ``""`` yields no
+    pieces at all rather than one empty piece.
+    """
+    pieces = value.split("|")
+    if pieces and pieces[-1] == "":
+        pieces.pop()
+    return pieces
 
 
 def _scalar_metadata(value: object, name: str) -> str:
@@ -641,7 +658,7 @@ def _validate_mappings(
         for row, value in enumerate(columns[field_name], start=1):
             if value is None or not value:
                 continue
-            for piece in value.split("|"):
+            for piece in _split_multivalued(value):
                 _validate_reference(piece, curie_map, field_name, row)
 
     for field_name, values in columns.items():
@@ -650,7 +667,7 @@ def _validate_mappings(
         if any(
             value is not None
             and value
-            and _NO_TERM_FOUND in value.split("|")
+            and _NO_TERM_FOUND in _split_multivalued(value)
             for value in values
         ):
             raise ValueError(
@@ -976,20 +993,13 @@ def _safe_filename(mapping_set: SssomMappingSet) -> str:
 
 
 def _atomic_write(data: bytes, path: Path) -> None:
-    """Mirror ``.ms_sssom_atomic_write``: write-then-rename in place."""
-    handle, temporary = tempfile.mkstemp(
-        prefix=f".{path.name}-", dir=str(path.parent)
-    )
-    try:
-        with os.fdopen(handle, "wb") as stream:
-            stream.write(data)
-        os.replace(temporary, str(path))
-    except BaseException:
-        try:
-            os.unlink(temporary)
-        except OSError:
-            pass
-        raise
+    """Mirror ``.ms_sssom_atomic_write``: write-then-rename in place.
+
+    The shared helper restores the umask-default mode that R's ``writeBin``
+    would have produced; ``tempfile.mkstemp`` would otherwise publish the
+    mapping set as 0600.
+    """
+    atomic_write(data, path)
 
 
 def _package_version() -> str:

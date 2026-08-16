@@ -1,6 +1,53 @@
 # Changelog
 
 ## Unreleased
+- Fixed a batch of parity defects found by adversarial review of the 0.1.7
+  chunks, each reproduced against metasalmon at the v0.1.7 tag.
+  - **One CSV reader for the whole package.** `metadata.read_sdp_csv()` now
+    backs every metadata, dictionary, vocabulary and reviewed-sidecar read.
+    It mirrors readr's `trim_ws = TRUE` (headers and fields, inside quotes as
+    well as outside, applied *before* the missing token is matched), which
+    pandas does not do at all — a dictionary written as
+    `demo-salmon-2026, counts, count, ...` validated in R and failed here. It
+    also preserves a literal `"NA"` everywhere, where the EML and
+    decomposition readers used to destroy it while `package_io` kept it; that
+    asymmetry let a dictionary `constraint_iri` of `NA` demand a
+    `semantic_vocabulary.csv` row that the vocabulary reader made impossible
+    to write. Preserving `"NA"` follows metasalmon 0.2.4 ("NA" is a real
+    fisheries gear code) rather than the 0.1.7-era `na = c("", "NA")`.
+  - **Undeclared EML missing tokens are decided on the parsed value.** R
+    derives missingness from the frame readr parsed with `trim_ws = TRUE`, so
+    a cell of three spaces, or of `" NA "`, is an undeclared non-empty missing
+    token. Matching the raw untrimmed token accepted data R refuses.
+  - **SSSOM multi-valued references drop one trailing empty piece**, matching
+    `strsplit(value, "|", fixed = TRUE)`. `author_id = "psc:PSC-CV-000900|"`
+    read fine in R and its written SDP then failed validation here. Leading
+    and interior empty pieces are still refused, as in R.
+  - **Written artifacts use the umask default** (0644 typically) instead of
+    the 0600 `tempfile.mkstemp()` hard-codes and `os.replace` preserves. This
+    affected every SSSOM mapping set and manifest, the measurement-
+    decomposition CSV and manifest, and reviewed EML — all published as
+    private-to-owner files. Shared in the new `atomic_io` module.
+  - **`overwrite` is a strict boolean**, mirroring R's `isTRUE()`;
+    `overwrite="no"` replaced a differing EML document.
+  - **`_as_numeric` screens C `strtod`'s grammar** before delegating to
+    Python. `float()` accepted `"1_000"` as 1000 (PEP 515) and non-ASCII
+    digits, both of which R rejects, and rejected `"0x1A"`, which R reads as
+    26. The underscore direction turned a thousands-separated typo into a
+    validated observation.
+  - **The EML mapping sidecar parses like `yaml::read_yaml`.** Duplicate map
+    keys are refused (PyYAML silently kept the last), and timestamps stay
+    verbatim strings, so an unquoted `publication_date: 2026-01-01` — which R
+    accepts — no longer fails the sidecar's JSON-Schema string check. Merge
+    keys still resolve.
+  - **`[[:cntrl:]]` and `[[:space:]]` mirror TRE, not ASCII.** metasalmon
+    calls `grepl()` without `perl = TRUE`, so both classes are Unicode-aware:
+    U+0085 in an entity name and U+3000 in a PID are rejected by R and were
+    accepted here, while U+00A0 is whitespace to neither. The exact
+    memberships were enumerated by running `grepl()` over every codepoint.
+  - New coverage for the supplementary-object (`otherEntity`) path, which had
+    none, using the previously unused R-generated `eml-supplementary.xml` and
+    `expected.json["supplementary"]` fixtures.
 - Ported metasalmon 0.1.7's KNB/DataONE publication (S10 milestone 0.1.7,
   chunk 4): `publish_sdp_to_knb()` in `knb_publication.py` plus the
   deterministic SDP archive in `knb_archive.py`, mirroring

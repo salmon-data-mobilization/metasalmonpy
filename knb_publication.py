@@ -382,9 +382,9 @@ def _locate_metadata_file(path: Union[str, Path], file_name: str) -> Optional[st
 
 
 def _read_metadata_csv(path: str):
-    import pandas as pd
+    from .metadata import read_sdp_csv
 
-    return pd.read_csv(path, dtype=str, keep_default_na=False, na_values=[])
+    return read_sdp_csv(path)
 
 
 def _declared_data_paths(path: str) -> "Dict[str, str]":

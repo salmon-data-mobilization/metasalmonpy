@@ -24,6 +24,7 @@ from .metadata import (
     normalize_dictionary,
     normalize_table_meta,
     parse_logical,
+    read_sdp_csv,
 )
 
 SDP_PROFILE_URL = (
@@ -66,7 +67,7 @@ def _write_metadata_csv(df: pd.DataFrame, path: Path) -> None:
 
 
 def _read_metadata_csv(path: Path) -> pd.DataFrame:
-    return pd.read_csv(path, dtype=str, keep_default_na=False, na_values=[])
+    return read_sdp_csv(path)
 
 
 def _is_review_value(value) -> bool:

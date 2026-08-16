@@ -215,18 +215,25 @@ class EmlMappingSidecarTests(unittest.TestCase):
             yaml.safe_dump(mapping, handle, sort_keys=False)
 
     def test_missing_sidecar_raises(self):
+        # A bare assertRaises(Exception) here would also pass if the export
+        # blew up for an unrelated reason, so name the cause.
         sdp = _fixture_sdp(self, "sdp-default")
-        os.remove(os.path.join(sdp, "metadata", "eml-mapping.yml"))
-        with self.assertRaises(Exception):
+        mapping_path = os.path.join(sdp, "metadata", "eml-mapping.yml")
+        os.remove(mapping_path)
+        with self.assertRaises(FileNotFoundError) as caught:
             write_eml_from_sdp(sdp, overwrite=True)
+        self.assertIn("eml-mapping.yml", str(caught.exception))
 
     def test_missing_required_field_raises(self):
         sdp = _fixture_sdp(self, "sdp-default")
         mapping = self._mapping(sdp)
         del mapping["contacts"]
         self._write_mapping(sdp, mapping)
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError) as caught:
             write_eml_from_sdp(sdp, overwrite=True)
+        message = str(caught.exception)
+        self.assertIn("JSON Schema", message)
+        self.assertIn("contacts", message)
 
     def test_malformed_yaml_raises(self):
         sdp = _fixture_sdp(self, "sdp-default")
@@ -234,8 +241,9 @@ class EmlMappingSidecarTests(unittest.TestCase):
             os.path.join(sdp, "metadata", "eml-mapping.yml"), "w", encoding="utf-8"
         ) as handle:
             handle.write("version: 1\n  bad indent: [unclosed\n")
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError) as caught:
             write_eml_from_sdp(sdp, overwrite=True)
+        self.assertIn("not valid YAML", str(caught.exception))
 
     def test_overwrite_is_required_only_for_different_bytes(self):
         # R's contract: re-writing an identical document is allowed; only a
@@ -265,6 +273,467 @@ class EmlIdentifierTests(unittest.TestCase):
         # difference would drift every identifier at once.
         expected = _expected()["uuid5_demo"]
         self.assertEqual(eml_module._uuid5("demo"), expected)
+
+
+@_REQUIRES_EXTRA
+class EmlMissingTokenTests(unittest.TestCase):
+    """Undeclared missing tokens: R decides on the *parsed* value.
+
+    R derives missingness from the frame ``readr`` parsed with
+    ``trim_ws = TRUE`` and then audits the *raw* token, so a cell of three
+    spaces is a parsed-missing cell whose raw token is non-empty and
+    undeclared. Matching the raw token against the missing vocabulary instead
+    accepted data R rejects. Both refusals below were confirmed by running
+    metasalmon v0.1.7 over this same fixture.
+    """
+
+    def _with_cell(self, value: str) -> str:
+        sdp = _fixture_sdp(self, "sdp-default")
+        path = os.path.join(sdp, "data", "counts.csv")
+        with open(path, encoding="utf-8", newline="") as handle:
+            text = handle.read()
+        # blank_only declares no missing-value codes, so any non-empty token
+        # that parses as missing is undeclared.
+        replaced = text.replace("B,2025,12,NA,", "B,2025,12,NA," + value)
+        self.assertNotEqual(replaced, text)
+        with open(path, "w", encoding="utf-8", newline="") as handle:
+            handle.write(replaced)
+        return sdp
+
+    def test_whitespace_only_cell_is_an_undeclared_missing_token(self):
+        sdp = self._with_cell("   ")
+        with self.assertRaises(ValueError) as caught:
+            write_eml_from_sdp(sdp, overwrite=True)
+        self.assertIn("undeclared non-empty missing", str(caught.exception))
+
+    def test_padded_na_cell_is_an_undeclared_missing_token(self):
+        sdp = self._with_cell(" NA ")
+        with self.assertRaises(ValueError) as caught:
+            write_eml_from_sdp(sdp, overwrite=True)
+        self.assertIn("undeclared non-empty missing", str(caught.exception))
+
+    def test_a_genuinely_empty_cell_stays_implicit_absence(self):
+        # The fixture's own blank_only column is empty on row 2 and must keep
+        # exporting cleanly -- the refusal above must not become a blanket ban.
+        sdp = _fixture_sdp(self, "sdp-default")
+        self.assertTrue(write_eml_from_sdp(sdp, overwrite=True)["validation"])
+
+
+class EmlNumericCoercionTests(unittest.TestCase):
+    """``_as_numeric`` must be C ``strtod``, which is not Python ``float()``.
+
+    Every expectation is ``suppressWarnings(as.numeric(x))`` under R 4.5.2.
+    The dangerous direction is ``"1_000"``: Python's float() reads it as 1000
+    under PEP 515, so a thousands-separated typo became a validated
+    observation that R would have refused outright.
+    """
+
+    R_AS_NUMERIC = {
+        "1_000": None,
+        "1_0": None,
+        "0x_10": None,
+        "１２３": None,
+        "٣": None,
+        "　5": None,
+        "1,000": None,
+        ".": None,
+        "+.": None,
+        "1.2.3": None,
+        "--5": None,
+        "5-": None,
+        "1e1e1": None,
+        "1p4": None,
+        "0x1p": None,
+        "0b101": None,
+        "0x": None,
+        "0xg": None,
+        "1d5": None,
+        "1e": None,
+        "1e+": None,
+        "e5": None,
+        "1e5x": None,
+        "12abc": None,
+        "1 2": None,
+        "TRUE": None,
+        "NA": None,
+        "": None,
+        "   ": None,
+        "0x1A": 26.0,
+        "-0x10": -16.0,
+        "+0x10": 16.0,
+        "0X10": 16.0,
+        " 0x1A ": 26.0,
+        "0x1A\t": 26.0,
+        "0X1p4": 16.0,
+        "0x1.8p1": 3.0,
+        "00012": 12.0,
+        "-.5": -0.5,
+        "1e-0": 1.0,
+        " 12 ": 12.0,
+        "1e3": 1000.0,
+        "1.5e-3": 0.0015,
+        "+.5": 0.5,
+        ".5": 0.5,
+        "5.": 5.0,
+        "1.": 1.0,
+        "+5": 5.0,
+        " +5 ": 5.0,
+    }
+
+    def test_coercion_matches_r(self):
+        for text, expected in self.R_AS_NUMERIC.items():
+            with self.subTest(text=text):
+                self.assertEqual(eml_module._as_numeric(text), expected)
+
+    def test_infinite_and_nan_spellings_match_r(self):
+        import math
+
+        for text in ("Inf", "inf", "INF", "Infinity", "infinity"):
+            self.assertEqual(eml_module._as_numeric(text), math.inf, msg=text)
+        self.assertEqual(eml_module._as_numeric("-Inf"), -math.inf)
+        self.assertEqual(eml_module._as_numeric("1e400"), math.inf)
+        for text in ("NaN", "nan", "NAN"):
+            self.assertTrue(math.isnan(eml_module._as_numeric(text)), msg=text)
+
+
+class EmlUnicodeClassTests(unittest.TestCase):
+    """POSIX classes in R are Unicode-aware; ASCII-only mirrors leak.
+
+    metasalmon calls ``grepl()`` without ``perl = TRUE``, so ``[[:cntrl:]]``
+    and ``[[:space:]]`` are resolved by TRE against the UTF-8 locale. The
+    memberships asserted here were enumerated by running ``grepl()`` over
+    every codepoint under R 4.5.2, and the accept/reject pairs were confirmed
+    end to end through metasalmon v0.1.7's supplementary-object validator.
+    """
+
+    CONTROL = {
+        "\x00": True,
+        "\x07": True,
+        "\x1f": True,
+        "\x7f": True,
+        "\x85": True,  # U+0085 NEL -- a C1 control to R, invisible to ASCII
+        "\x9f": True,
+        " ": True,
+        " ": True,
+        " ": False,
+        "­": False,
+        "​": False,
+        " ": False,
+        "⁠": False,
+        "　": False,
+        "﻿": False,
+    }
+    SPACE = {
+        " ": True,
+        "\t": True,
+        "\x0b": True,
+        " ": True,
+        " ": True,
+        " ": True,
+        " ": True,
+        "　": True,  # U+3000 IDEOGRAPHIC SPACE -- whitespace to R
+        "": False,
+        " ": False,
+        " ": False,
+        " ": False,
+        "​": False,
+        "᠎": False,
+    }
+
+    def test_control_class_matches_r(self):
+        for char, expected in self.CONTROL.items():
+            with self.subTest(char=hex(ord(char))):
+                matched = eml_module._CONTROL_CHAR_RE.search(char) is not None
+                self.assertEqual(matched, expected)
+
+    def test_absolute_uri_rejects_exactly_r_whitespace(self):
+        for char, is_space in self.SPACE.items():
+            with self.subTest(char=hex(ord(char))):
+                candidate = "urn:x:a" + char + "b"
+                accepted = (
+                    eml_module._ABSOLUTE_URI_RE.fullmatch(candidate) is not None
+                )
+                self.assertEqual(accepted, not is_space)
+
+
+def _supplementary(**overrides):
+    """The supplementary-object row R was given when it wrote the fixture."""
+    row = {
+        "path": os.path.join(_DATA_DIR, "demo-salmon-data-package.zip"),
+        "pid": _expected()["supplementary"]["archive_pid"],
+        "format_id": "application/zip",
+        "checksum": _expected()["supplementary"]["archive_checksum"],
+        "object_name": "demo-salmon-data-package.zip",
+        "entity_name": "Canonical Salmon Data Package",
+        "description": (
+            "A canonical Salmon Data Package archive containing the data, "
+            "metadata tables, reviewed semantics, and reproducibility records."
+        ),
+    }
+    row.update(overrides)
+    return pd.DataFrame([row])
+
+
+@_REQUIRES_EXTRA
+class EmlSupplementaryObjectTests(unittest.TestCase):
+    """``otherEntity`` export, which had zero test coverage before this.
+
+    ``tests/data/eml/eml-supplementary.xml`` and
+    ``expected.json["supplementary"]`` are genuine metasalmon v0.1.7 output
+    and were sitting unused. Note that the fixture archive is deliberately not
+    a real zip -- neither implementation opens it, both only hash it, name it,
+    and size it -- so the 37 literal bytes are a faithful stand-in.
+    """
+
+    def test_supplementary_document_matches_r(self):
+        expected = _expected()["supplementary"]
+        sdp = _fixture_sdp(self, "sdp-default")
+
+        result = write_eml_from_sdp(
+            sdp, overwrite=True, supplementary_objects=_supplementary()
+        )
+
+        self.assertEqual(result["package_id"], expected["package_id"])
+        self.assertEqual(result["series_id"], expected["series_id"])
+        self.assertEqual(
+            _canonical(result["path"]),
+            _canonical(os.path.join(_DATA_DIR, "eml-supplementary.xml")),
+        )
+
+    def test_supplementary_plan_matches_r(self):
+        expected = _expected()["supplementary"]
+        sdp = _fixture_sdp(self, "sdp-default")
+
+        result = write_eml_from_sdp(
+            sdp, overwrite=True, supplementary_objects=_supplementary()
+        )
+
+        objects = result["supplementary_objects"]
+        self.assertEqual(len(objects), 1)
+        row = objects.iloc[0]
+        self.assertEqual(row["pid"], expected["archive_pid"])
+        self.assertEqual(row["checksum"], expected["archive_checksum"])
+        self.assertEqual(int(row["size"]), expected["archive_size"])
+        self.assertEqual(row["checksum_algorithm"], "SHA-256")
+        self.assertEqual(
+            row["online_url"],
+            "https://knb.ecoinformatics.org/knb/d1/mn/v2/object/"
+            + expected["archive_pid"],
+        )
+
+    def test_a_correct_declared_size_is_accepted(self):
+        sdp = _fixture_sdp(self, "sdp-default")
+        result = write_eml_from_sdp(
+            sdp, overwrite=True, supplementary_objects=_supplementary(size=37)
+        )
+        self.assertTrue(result["validation"])
+
+    def _refused(self, sdp, objects, fragment):
+        with self.assertRaises(ValueError) as caught:
+            write_eml_from_sdp(
+                sdp, overwrite=True, supplementary_objects=objects
+            )
+        self.assertIn(fragment, str(caught.exception))
+
+    def test_traversing_object_names_are_refused(self):
+        for name in ("../evil.zip", "/tmp/evil.zip", "sub/dir.zip", "..\\x.zip"):
+            with self.subTest(name=name):
+                self._refused(
+                    _fixture_sdp(self, "sdp-default"),
+                    _supplementary(object_name=name),
+                    "must be a basename ending in .zip",
+                )
+
+    def test_non_zip_object_names_are_refused(self):
+        self._refused(
+            _fixture_sdp(self, "sdp-default"),
+            _supplementary(object_name="archive.tar.gz"),
+            "must be a basename ending in .zip",
+        )
+
+    def test_checksum_mismatch_is_refused(self):
+        self._refused(
+            _fixture_sdp(self, "sdp-default"),
+            _supplementary(checksum="a" * 64),
+            "does not match file bytes",
+        )
+
+    def test_uppercase_checksum_is_refused(self):
+        expected = _expected()["supplementary"]["archive_checksum"].upper()
+        self._refused(
+            _fixture_sdp(self, "sdp-default"),
+            _supplementary(checksum=expected),
+            "lowercase SHA-256 digest",
+        )
+
+    def test_size_mismatch_is_refused(self):
+        self._refused(
+            _fixture_sdp(self, "sdp-default"),
+            _supplementary(size=36),
+            "must exactly match the file size",
+        )
+
+    def test_non_zip_format_id_is_refused(self):
+        self._refused(
+            _fixture_sdp(self, "sdp-default"),
+            _supplementary(format_id="application/x-zip"),
+            '"application/zip" as format_id',
+        )
+
+    def test_unreadable_path_is_refused(self):
+        self._refused(
+            _fixture_sdp(self, "sdp-default"),
+            _supplementary(path=os.path.join(_DATA_DIR, "no-such-archive.zip")),
+            "is not a readable file",
+        )
+
+    def test_duplicate_pid_is_refused(self):
+        objects = pd.concat(
+            [_supplementary(), _supplementary(object_name="other.zip")],
+            ignore_index=True,
+        )
+        self._refused(
+            _fixture_sdp(self, "sdp-default"), objects, "must each be unique"
+        )
+
+    def test_control_character_in_entity_name_is_refused(self):
+        # U+0085 is [[:cntrl:]] to R and invisible to an ASCII-only guard.
+        self._refused(
+            _fixture_sdp(self, "sdp-default"),
+            _supplementary(entity_name="Canonical\x85Package"),
+            "without control characters",
+        )
+
+    def test_unicode_whitespace_in_pid_is_refused(self):
+        # U+3000 is [[:space:]] to R, so R's pid pattern rejects it.
+        self._refused(
+            _fixture_sdp(self, "sdp-default"),
+            _supplementary(pid="urn:uuid:a　b"),
+            "absolute URI without whitespace",
+        )
+
+    def test_non_breaking_space_is_not_whitespace_to_r(self):
+        # The mirror must not over-correct: U+00A0 is neither [[:cntrl:]] nor
+        # [[:space:]] to R, and v0.1.7 accepts it in both fields.
+        sdp = _fixture_sdp(self, "sdp-default")
+        result = write_eml_from_sdp(
+            sdp,
+            overwrite=True,
+            supplementary_objects=_supplementary(
+                entity_name="Canonical Package"
+            ),
+        )
+        self.assertTrue(result["validation"])
+
+
+@_REQUIRES_EXTRA
+class EmlSidecarStrictnessTests(unittest.TestCase):
+    """The reviewed sidecar must parse the way ``yaml::read_yaml`` parses it."""
+
+    def _mapping_path(self, sdp: str) -> str:
+        return os.path.join(sdp, "metadata", "eml-mapping.yml")
+
+    def test_duplicate_map_key_is_refused(self):
+        # R aborts with "Duplicate map key"; PyYAML silently keeps the last
+        # one, so a reviewer's stray paste changed the document in only one
+        # implementation, past both the parser and the schema.
+        sdp = _fixture_sdp(self, "sdp-default")
+        path = self._mapping_path(sdp)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write("status: draft\n")
+
+        with self.assertRaises(ValueError) as caught:
+            write_eml_from_sdp(sdp, overwrite=True)
+        message = str(caught.exception)
+        self.assertIn("Duplicate map key", message)
+        self.assertIn("status", message)
+
+    def test_nested_duplicate_map_key_is_refused(self):
+        sdp = _fixture_sdp(self, "sdp-default")
+        path = self._mapping_path(sdp)
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write("publication:\n  public: yes\n  public: no\n")
+
+        with self.assertRaises(ValueError) as caught:
+            write_eml_from_sdp(sdp, overwrite=True)
+        self.assertIn("Duplicate map key", str(caught.exception))
+
+    def test_unquoted_publication_date_is_accepted(self):
+        # R's yaml returns 2026-01-01 as the character string its validator
+        # expects. PyYAML resolved it to a datetime.date, which then failed
+        # the sidecar's string check -- an error R never raises.
+        sdp = _fixture_sdp(self, "sdp-default")
+        path = self._mapping_path(sdp)
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("publication_date: '2026-01-01'", text)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(
+                text.replace(
+                    "publication_date: '2026-01-01'",
+                    "publication_date: 2026-01-01",
+                )
+            )
+
+        result = write_eml_from_sdp(sdp, overwrite=True)
+
+        self.assertEqual(result["package_id"], _expected()["default"]["package_id"])
+        self.assertEqual(
+            _canonical(result["path"]),
+            _canonical(os.path.join(_DATA_DIR, "eml-default.xml")),
+        )
+
+    def test_yaml_merge_keys_still_resolve(self):
+        # R's yaml supports merge keys; the duplicate-key guard must not
+        # mistake `<<` for a real key.
+        import yaml
+
+        loader = eml_module._strict_yaml_loader()
+        merged = yaml.load(
+            "base: &b\n  a: 1\nmerged:\n  <<: *b\n  c: 2\n", Loader=loader
+        )
+        self.assertEqual(merged["merged"], {"a": 1, "c": 2})
+
+
+@_REQUIRES_EXTRA
+class EmlOutputFileTests(unittest.TestCase):
+    """The written document must be an ordinary file, replaced only on TRUE."""
+
+    def test_written_eml_uses_the_umask_default_mode(self):
+        # R's writeBin + file.rename leaves 0644 under a normal umask;
+        # tempfile.mkstemp hard-codes 0600 and os.replace preserves it, so the
+        # published metadata was unreadable to anyone but its owner. The
+        # expectation is a plain write in the same directory, so the test is
+        # umask-agnostic.
+        sdp = _fixture_sdp(self, "sdp-default")
+        result = write_eml_from_sdp(sdp, overwrite=True)
+
+        reference = os.path.join(os.path.dirname(result["path"]), "reference.txt")
+        with open(reference, "w", encoding="utf-8") as handle:
+            handle.write("x")
+
+        self.assertEqual(
+            os.stat(result["path"]).st_mode & 0o777,
+            os.stat(reference).st_mode & 0o777,
+        )
+
+    def test_a_truthy_non_true_overwrite_does_not_replace(self):
+        # R gates on isTRUE(overwrite), so overwrite="no" must NOT authorize
+        # destroying a differing document -- a truthiness test did.
+        sdp = _fixture_sdp(self, "sdp-default")
+        first = write_eml_from_sdp(sdp, overwrite=True)
+        with open(first["path"], "a", encoding="utf-8") as handle:
+            handle.write("<!-- edited -->\n")
+        with open(first["path"], "rb") as handle:
+            edited = handle.read()
+
+        for value in ("no", 1, "yes", ["TRUE"]):
+            with self.subTest(overwrite=value):
+                with self.assertRaises(ValueError) as caught:
+                    write_eml_from_sdp(sdp, overwrite=value)
+                self.assertIn("set overwrite=True", str(caught.exception))
+                with open(first["path"], "rb") as handle:
+                    self.assertEqual(handle.read(), edited)
 
 
 if __name__ == "__main__":  # pragma: no cover
