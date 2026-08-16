@@ -1,0 +1,43 @@
+@prefix smn: <https://w3id.org/smn/> .
+@prefix sosa: <http://www.w3.org/ns/sosa/> .
+@prefix iadopt: <https://w3id.org/iadopt/ont/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix iao: <http://purl.obolibrary.org/obo/IAO_> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<https://w3id.org/smn/modules/07-controlled-vocabularies> a owl:Ontology ;
+  rdfs:label "Salmon Domain Ontology Module 07: Controlled vocabularies"@en ;
+  rdfs:comment "Curated shared SKOS layer for reusable year basis, age, context, life-phase, and origin concepts."@en .
+
+smn:OceanPhase a skos:Concept ;
+  skos:prefLabel "Ocean phase"@en ;
+  skos:altLabel "Marine phase"@en ;
+  skos:broader smn:LifePhase ;
+  skos:inScheme smn:LifePhaseScheme ;
+  skos:definition "Phase of the salmon life cycle or assessment period occurring in the marine environment."@en ;
+  rdfs:isDefinedBy <https://w3id.org/smn> ;
+  iao:0000119 "GC DFO Salmon Ontology release 0.0.8, term smn:OceanPhase."@en ;
+  dcterms:source <https://github.com/dfo-pacific-science/dfo-salmon-ontology/blob/c7a54251eb8f673052fed61f9ca2624e557249c7/docs/releases/0.0.8/gcdfo.ttl> .
+
+#################################################################
+# Statistical modifier scheme: the reusable SKOS layer behind
+# iadopt:StatisticalModifier (I-ADOPT 1.1.0), and the SDP column
+# statistical_modifier_iri resolves here.
+#################################################################
+
+smn:StatisticalModifierScheme a skos:ConceptScheme ;
+  skos:prefLabel "Statistical modifier scheme"@en ;
+  skos:hasTopConcept smn:MeanStatisticalModifier, smn:MedianStatisticalModifier ;
+  skos:definition "Controlled vocabulary of statistical modifiers stating what a reported value represents across the observations it summarizes (mean, median, minimum, maximum, total, count, peak)."@en ;
+  rdfs:isDefinedBy <https://w3id.org/smn> .
+
+smn:MeanStatisticalModifier a skos:Concept, iadopt:StatisticalModifier ;
+  skos:prefLabel "Mean"@en ;
+  skos:inScheme smn:StatisticalModifierScheme ;
+  skos:topConceptOf smn:StatisticalModifierScheme ;
+  skos:definition "The reported value is the arithmetic mean of the summarized observations."@en ;
+  skos:closeMatch <http://vocabulary.odm2.org/aggregationstatistic/average> ;
+  rdfs:isDefinedBy <https://w3id.org/smn> .

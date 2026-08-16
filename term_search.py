@@ -8,12 +8,25 @@ import subprocess
 import urllib.parse
 import urllib.request
 import warnings
+import xml.etree.ElementTree as ET
 from typing import Dict, Iterable, List, Optional, Sequence
 
 try:
     import pandas as pd
 except ImportError as exc:  # pragma: no cover - import guard
     raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
+
+try:
+    import requests
+except ImportError as exc:  # pragma: no cover - import guard
+    raise ImportError("metasalmonpy requires requests; install via `pip install requests`.") from exc
+
+from .term_search_smn import (
+    SMN_INDEX_COLUMNS,
+    _smn_module_urls,
+    _smn_role_hints,
+    parse_smn_ttl_modules,
+)
 
 try:
     from importlib import resources
@@ -481,33 +494,304 @@ def _search_worms(query: str, role) -> pd.DataFrame:
 
 
 def _ontology_index_empty() -> pd.DataFrame:
-    return pd.DataFrame(
-        columns=[
-            "iri",
-            "label",
-            "alt_labels",
-            "definition",
-            "resource_kind",
-            "in_scheme",
-            "parent_iris",
-            "type_iris",
-            "search_text",
-            "is_variable",
-            "is_property",
-            "is_entity",
-            "is_constraint",
-            "is_method",
-            "role_hints",
-        ]
+    return pd.DataFrame(columns=list(SMN_INDEX_COLUMNS))
+
+
+# Ontology sources for the two local term indexes. The W3ID IRIs are the
+# canonical entrypoints; they currently redirect to the
+# salmon-data-mobilization GitHub organization. No ref is pinned because the
+# R implementation follows the unpinned W3ID redirects.
+_SMN_TTL_ACCEPT = "text/turtle, text/plain;q=0.9"
+_RDFXML_ACCEPT = "application/rdf+xml"
+_SMN_ROOT_URL = "https://w3id.org/smn/"
+_SMN_ROOT_FALLBACK_URLS = ("https://w3id.org/smn",)
+_GCDFO_URL = "https://w3id.org/gcdfo/salmon"
+_GCDFO_FALLBACK_URLS = ("https://w3id.org/gcdfo/salmon/",)
+_SMN_IRI_PATTERN = r"^https?://w3id\.org/smn(#|/|$)"
+_GCDFO_IRI_PATTERN = r"^https?://w3id\.org/gcdfo/salmon(#|$)"
+
+_RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+_RDFS_NS = "http://www.w3.org/2000/01/rdf-schema#"
+_OWL_NS = "http://www.w3.org/2002/07/owl#"
+_SKOS_NS = "http://www.w3.org/2004/02/skos/core#"
+_DCTERMS_NS = "http://purl.org/dc/terms/"
+
+
+def _fetch_ontology_text(
+    url: str,
+    accept: str,
+    fallback_urls: Sequence[str] = (),
+    timeout: int = 30,
+) -> str:
+    """
+    Fetch one ontology document and return its text.
+
+    A pure function of the source URL(s): no caching happens here, so a
+    session cache can wrap it later (metasalmon 0.2.2 parity) without a
+    behaviour change. Raises ``RuntimeError`` when every URL fails or the
+    body is empty — a failed lookup must never masquerade as an empty index.
+    """
+    urls = [url, *fallback_urls]
+    last_error: Optional[str] = None
+    for attempt_url in urls:
+        try:
+            response = requests.get(
+                attempt_url,
+                headers={"Accept": accept, "User-Agent": _USER_AGENT},
+                timeout=timeout,
+            )
+        except requests.RequestException as exc:
+            last_error = str(exc)
+            continue
+        if response.status_code == 200:
+            if response.text.strip():
+                return response.text
+            last_error = "empty response body"
+        else:
+            last_error = f"HTTP {response.status_code}"
+    raise RuntimeError(
+        f"Failed to fetch ontology from {', '.join(urls)}; last error: {last_error}"
     )
 
 
+def _iri_local_name(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return re.sub(r"^.*[#/]", "", value)
+
+
+def _camel_words(value: str) -> str:
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", value)
+    return re.sub(r"[_-]+", " ", value).strip()
+
+
+def _xml_local_tag(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _xml_text_values(node: "ET.Element", namespace: str, local: str) -> List[str]:
+    values = []
+    qualified = f"{{{namespace}}}{local}"
+    for child in node:
+        if child.tag == qualified:
+            value = (child.text or "").strip()
+            if value:
+                values.append(value)
+    return values
+
+
+def _xml_text_values_local(node: "ET.Element", local: str) -> List[str]:
+    values = []
+    for child in node:
+        if _xml_local_tag(child.tag) == local:
+            value = (child.text or "").strip()
+            if value:
+                values.append(value)
+    return values
+
+
+def _xml_resource_values(node: "ET.Element", namespace: str, local: str) -> List[str]:
+    resource_attr = f"{{{_RDF_NS}}}resource"
+    qualified = f"{{{namespace}}}{local}"
+    values = []
+    for child in node:
+        if child.tag == qualified:
+            value = child.attrib.get(resource_attr)
+            if value:
+                values.append(value)
+    return values
+
+
+def _xml_resource_values_local(node: "ET.Element", local: str) -> List[str]:
+    resource_attr = f"{{{_RDF_NS}}}resource"
+    values = []
+    for child in node:
+        if _xml_local_tag(child.tag) == local:
+            value = child.attrib.get(resource_attr)
+            if value:
+                values.append(value)
+    return values
+
+
+def _first_non_empty(values: Iterable[str]) -> str:
+    for value in values:
+        if value and value.strip():
+            return value.strip()
+    return ""
+
+
+def _parse_salmon_rdfxml(xml_text: str, iri_pattern: str) -> pd.DataFrame:
+    """
+    Parse an RDF/XML salmon ontology document into the shared term-index frame.
+
+    Mirrors R's `.parse_salmon_rdfxml`: direct children of the root that carry
+    ``rdf:about`` (excluding ``owl:Ontology``) become rows; I-ADOPT
+    decomposition targets drive the role flags.
+    """
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as exc:
+        raise RuntimeError(f"Failed to parse ontology RDF/XML: {exc}") from exc
+
+    about_attr = f"{{{_RDF_NS}}}about"
+    ontology_tag = f"{{{_OWL_NS}}}Ontology"
+
+    records: List[dict] = []
+    for node in list(root):
+        iri = node.attrib.get(about_attr)
+        if not iri or node.tag == ontology_tag:
+            continue
+
+        label = _first_non_empty(
+            _xml_text_values(node, _SKOS_NS, "prefLabel")
+            + _xml_text_values(node, _RDFS_NS, "label")
+        )
+        definition = _first_non_empty(
+            _xml_text_values(node, _SKOS_NS, "definition")
+            + _xml_text_values_local(node, "IAO_0000115")
+            + _xml_text_values(node, _RDFS_NS, "comment")
+            + _xml_text_values(node, _DCTERMS_NS, "description")
+        )
+        alt_labels = _xml_text_values(node, _SKOS_NS, "altLabel")
+        in_scheme = _xml_resource_values(node, _SKOS_NS, "inScheme")
+        rdf_types = _xml_resource_values(node, _RDF_NS, "type")
+        parents = list(
+            dict.fromkeys(
+                _xml_resource_values(node, _SKOS_NS, "broader")
+                + _xml_resource_values(node, _RDFS_NS, "subClassOf")
+            )
+        )
+        iadopt_property = _xml_resource_values_local(node, "iadoptProperty")
+        iadopt_entity = _xml_resource_values_local(node, "iadoptEntity")
+        iadopt_constraint = _xml_resource_values_local(node, "iadoptConstraint")
+        used_procedure = _xml_resource_values_local(node, "usedProcedure")
+
+        iri_local = _iri_local_name(iri)
+        label_fallback = label if label else _camel_words(iri_local)
+        search_text = " ".join(
+            [label_fallback]
+            + alt_labels
+            + [_camel_words(iri_local)]
+            + [_camel_words(_iri_local_name(value)) for value in in_scheme]
+            + [_camel_words(_iri_local_name(value)) for value in rdf_types]
+            + [definition]
+        ).lower()
+
+        records.append(
+            {
+                "iri": iri,
+                "label": label_fallback,
+                "alt_labels": " | ".join(alt_labels),
+                "definition": definition,
+                "resource_kind": _xml_local_tag(node.tag),
+                "in_scheme": " | ".join(in_scheme),
+                "parent_iris": " | ".join(parents),
+                "type_iris": " | ".join(rdf_types),
+                "search_text": search_text,
+                "is_variable": len(iadopt_property + iadopt_entity + iadopt_constraint) > 0,
+                "_iadopt_property_targets": iadopt_property,
+                "_iadopt_entity_targets": iadopt_entity,
+                "_iadopt_constraint_targets": iadopt_constraint,
+                "_used_procedure_targets": used_procedure,
+            }
+        )
+
+    records = [record for record in records if re.search(iri_pattern, record["iri"])]
+    if not records:
+        return _ontology_index_empty()
+
+    property_targets = {t for record in records for t in record["_iadopt_property_targets"]}
+    entity_targets = {t for record in records for t in record["_iadopt_entity_targets"]}
+    constraint_targets = {t for record in records for t in record["_iadopt_constraint_targets"]}
+    method_targets = {t for record in records for t in record["_used_procedure_targets"]}
+
+    rows: List[dict] = []
+    for record in records:
+        flags = {
+            "is_variable": bool(record["is_variable"]),
+            "is_property": record["iri"] in property_targets,
+            "is_entity": record["iri"] in entity_targets,
+            "is_constraint": record["iri"] in constraint_targets,
+            "is_method": record["iri"] in method_targets
+            or bool(re.search(r"method|procedure|enumeration", record["in_scheme"].lower())),
+            "is_statistical_modifier": bool(
+                re.search(
+                    r"statistical modifier|statisticalmodifier",
+                    f"{record['in_scheme']} {record['type_iris']} {record['label']}".lower(),
+                )
+            ),
+        }
+        rows.append(
+            {
+                "iri": record["iri"],
+                "label": record["label"],
+                "alt_labels": record["alt_labels"],
+                "definition": record["definition"],
+                "resource_kind": record["resource_kind"],
+                "in_scheme": record["in_scheme"],
+                "parent_iris": record["parent_iris"],
+                "type_iris": record["type_iris"],
+                "search_text": record["search_text"],
+                **flags,
+                "role_hints": _smn_role_hints(flags),
+            }
+        )
+
+    return pd.DataFrame(rows, columns=list(SMN_INDEX_COLUMNS))
+
+
 def _smn_term_index(refresh: bool = False) -> pd.DataFrame:
-    return _ontology_index_empty()
+    """
+    Build the Salmon Domain Ontology (smn) term index.
+
+    ``refresh`` is accepted for forward-compatibility with the planned
+    session cache (metasalmon 0.2.2 parity); no caching exists yet, so every
+    call resolves the index anew.
+    """
+    del refresh  # no session cache yet; see docstring
+    try:
+        texts = {
+            url: _fetch_ontology_text(url, _SMN_TTL_ACCEPT) for url in _smn_module_urls()
+        }
+        index: Optional[pd.DataFrame] = parse_smn_ttl_modules(texts)
+    except Exception:
+        index = None
+    if index is not None and not index.empty:
+        return index
+
+    # The modules are Turtle-first on W3ID; the root is the RDF/XML fallback
+    # for when they are unavailable or parse to nothing.
+    xml_text = _fetch_ontology_text(
+        _SMN_ROOT_URL, _RDFXML_ACCEPT, fallback_urls=_SMN_ROOT_FALLBACK_URLS
+    )
+    index = _parse_salmon_rdfxml(xml_text, iri_pattern=_SMN_IRI_PATTERN)
+    if index.empty:
+        raise RuntimeError(
+            "Salmon Domain Ontology (smn) fetch succeeded but parsed to an empty "
+            "term index; refusing to return a silently empty index."
+        )
+    return index
 
 
 def _gcdfo_term_index(refresh: bool = False) -> pd.DataFrame:
-    return _ontology_index_empty()
+    """
+    Build the DFO Salmon Ontology (gcdfo) term index.
+
+    ``refresh`` is accepted for forward-compatibility with the planned
+    session cache (metasalmon 0.2.2 parity); no caching exists yet, so every
+    call resolves the index anew.
+    """
+    del refresh  # no session cache yet; see docstring
+    xml_text = _fetch_ontology_text(
+        _GCDFO_URL, _RDFXML_ACCEPT, fallback_urls=_GCDFO_FALLBACK_URLS
+    )
+    index = _parse_salmon_rdfxml(xml_text, iri_pattern=_GCDFO_IRI_PATTERN)
+    if index.empty:
+        raise RuntimeError(
+            "DFO Salmon Ontology (gcdfo) fetch succeeded but parsed to an empty "
+            "term index; refusing to return a silently empty index."
+        )
+    return index
 
 
 def _filter_local_index(index: pd.DataFrame, query: str, role, source: str, ontology: str) -> pd.DataFrame:
@@ -516,7 +800,11 @@ def _filter_local_index(index: pd.DataFrame, query: str, role, source: str, onto
     q_tokens = {tok for tok in re.sub(r"[^a-z0-9]+", " ", str(query).lower()).split() if tok}
     if not q_tokens:
         return _empty_terms(role)
-    role_col = f"is_{role}" if role in {"variable", "property", "entity", "constraint", "method"} else None
+    role_col = (
+        f"is_{role}"
+        if role in {"variable", "property", "entity", "constraint", "method", "statistical_modifier"}
+        else None
+    )
     df = index.copy()
     if role_col and role_col in df.columns:
         df = df[df[role_col].fillna(False).astype(bool)]
@@ -536,7 +824,7 @@ def _filter_local_index(index: pd.DataFrame, query: str, role, source: str, onto
             "definition": df.get("definition", pd.Series("", index=df.index)).fillna(""),
             "role_hints": df.get("role_hints", pd.Series(pd.NA, index=df.index)),
         }
-    )
+    ).drop_duplicates(subset=["iri"], keep="first").reset_index(drop=True)
 
 
 def _search_smn(query: str, role) -> pd.DataFrame:

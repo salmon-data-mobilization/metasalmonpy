@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+- Replaced the stub `smn` and `gcdfo` term indexes with real implementations
+  ported from metasalmon: Turtle parsing of the eleven SMN modules
+  (`term_search_smn.py`), RDF/XML parsing of the gcdfo ontology, I-ADOPT role
+  flags and pipe-joined `role_hints` (including the `statistical_modifier`
+  hint, carried forward from metasalmon 0.3.0 so the flag never has to be
+  retrofitted), and the shared 16-column index contract. `find_terms()` now
+  returns real candidates for the `smn` and `gcdfo` sources instead of
+  silently finding nothing.
+- A failed or empty ontology fetch now raises instead of returning a silently
+  empty index — a failed lookup is not an empty lookup.
+- No version bump: this restores the existing 0.1.6 parity claim rather than
+  making a new one (roadmap stream S10, PR 0).
+
 ## 0.1.6
 - Aligned core user-facing behavior with metasalmon 0.1.6.
 - Added the canonical `create_sdp()` workflow, safe package ownership and

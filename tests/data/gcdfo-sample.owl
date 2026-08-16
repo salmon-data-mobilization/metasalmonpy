@@ -1,0 +1,83 @@
+<?xml version="1.0"?>
+<rdf:RDF xmlns="https://w3id.org/gcdfo/salmon#"
+     xml:base="https://w3id.org/gcdfo/salmon"
+     xmlns:iao="http://purl.obolibrary.org/obo/IAO_"
+     xmlns:obo="http://purl.obolibrary.org/obo/"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:smn="https://w3id.org/smn/"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     xmlns:skos="http://www.w3.org/2004/02/skos/core#"
+     xmlns:gcdfo="https://w3id.org/gcdfo/salmon#"
+     xmlns:dcterms="http://purl.org/dc/terms/">
+    <owl:Ontology rdf:about="https://w3id.org/gcdfo/salmon">
+        <owl:versionIRI rdf:resource="https://w3id.org/gcdfo/salmon/0.0.8"/>
+        <owl:imports rdf:resource="https://w3id.org/smn"/>
+        <dcterms:title xml:lang="en">DFO Salmon Ontology</dcterms:title>
+    </owl:Ontology>
+
+    <!-- https://w3id.org/gcdfo/salmon#AbundancePercentileMetric -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/gcdfo/salmon#AbundancePercentileMetric">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <usedProcedure rdf:resource="https://w3id.org/gcdfo/salmon#WSPRapidStatusAssessmentMethod"/>
+        <obo:IAO_0000115 xml:lang="en">An abundance percentile metric giving the percentile rank of the current generational average spawner abundance relative to a historical reference distribution.</obo:IAO_0000115>
+        <rdfs:isDefinedBy rdf:resource="https://w3id.org/gcdfo/salmon"/>
+        <rdfs:label xml:lang="en">Abundance percentile metric</rdfs:label>
+        <skos:broader rdf:resource="https://w3id.org/gcdfo/salmon#RapidStatusMetric"/>
+        <skos:definition xml:lang="en">An abundance percentile metric giving the percentile rank of the current generational average spawner abundance relative to a historical reference distribution.</skos:definition>
+        <skos:inScheme rdf:resource="https://w3id.org/gcdfo/salmon#RapidStatusMetricScheme"/>
+        <skos:prefLabel xml:lang="en">Abundance percentile metric</skos:prefLabel>
+        <iadoptConstraint rdf:resource="https://w3id.org/gcdfo/salmon#WildSalmonPolicy"/>
+        <iadoptEntity rdf:resource="https://w3id.org/gcdfo/salmon#ConservationUnit"/>
+        <iadoptProperty rdf:resource="https://w3id.org/gcdfo/salmon#SpawnerAbundancePercentile"/>
+    </owl:NamedIndividual>
+
+    <!-- https://w3id.org/gcdfo/salmon#ConservationUnit -->
+
+    <owl:Class rdf:about="https://w3id.org/gcdfo/salmon#ConservationUnit">
+        <rdfs:label xml:lang="en">Conservation Unit</rdfs:label>
+        <skos:definition xml:lang="en">A group of wild salmon sufficiently isolated from other groups that, if extirpated, is very unlikely to recolonize naturally within an acceptable timeframe.</skos:definition>
+        <rdfs:isDefinedBy rdf:resource="https://w3id.org/gcdfo/salmon"/>
+    </owl:Class>
+
+    <!-- https://w3id.org/gcdfo/salmon#SpawnerAbundancePercentile -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/gcdfo/salmon#SpawnerAbundancePercentile">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <rdfs:label xml:lang="en">Spawner abundance percentile</rdfs:label>
+        <skos:definition xml:lang="en">The percentile rank of current spawner abundance relative to a historical reference distribution.</skos:definition>
+    </owl:NamedIndividual>
+
+    <!-- https://w3id.org/gcdfo/salmon#WildSalmonPolicy -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/gcdfo/salmon#WildSalmonPolicy">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <skos:definition xml:lang="en">Canada's Policy for Conservation of Wild Pacific Salmon.</skos:definition>
+    </owl:NamedIndividual>
+
+    <!-- https://w3id.org/gcdfo/salmon#WSPRapidStatusAssessmentMethod -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/gcdfo/salmon#WSPRapidStatusAssessmentMethod">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <rdfs:label xml:lang="en">WSP rapid status assessment method</rdfs:label>
+        <skos:definition xml:lang="en">A decision-tree method approximating integrated Wild Salmon Policy status from standardized metrics.</skos:definition>
+        <skos:inScheme rdf:resource="https://w3id.org/gcdfo/salmon#AssessmentMethodScheme"/>
+    </owl:NamedIndividual>
+
+    <!-- https://w3id.org/gcdfo/salmon#GenerationalMean -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/gcdfo/salmon#GenerationalMean">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <rdfs:label xml:lang="en">Generational mean</rdfs:label>
+        <skos:definition xml:lang="en">The reported value is the mean across the most recent generation of observations.</skos:definition>
+        <skos:inScheme rdf:resource="https://w3id.org/smn/StatisticalModifierScheme"/>
+    </owl:NamedIndividual>
+
+    <!-- Foreign namespace: must be excluded by the gcdfo IRI pattern -->
+
+    <rdf:Description rdf:about="https://w3id.org/smn/MeasurementContext">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <rdfs:label xml:lang="en">Measurement context</rdfs:label>
+    </rdf:Description>
+</rdf:RDF>
