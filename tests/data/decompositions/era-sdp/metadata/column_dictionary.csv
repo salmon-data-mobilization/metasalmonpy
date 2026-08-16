@@ -1,0 +1,3 @@
+dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,required,unit_label,unit_iri,term_iri,term_type,property_iri,entity_iri,constraint_iri,method_iri
+demo-salmon-2026,counts,count,Count,,measurement,integer,,,,https://w3id.org/psc/vocab/PSC-CV-000035,skos_concept,,,https://w3id.org/smn/SpawnerStageContext,
+demo-salmon-2026,counts,site_id,Site identifier,,identifier,string,,,,,,,,,

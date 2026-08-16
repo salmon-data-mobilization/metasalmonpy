@@ -33,6 +33,11 @@ from .edh_xml import (
     edh_build_iso19139_xml,
     write_edh_xml_from_sdp,
 )
+from .measurement_decompositions import (
+    read_sdp_measurement_decompositions,
+    validate_sdp_measurement_decompositions,
+    write_sdp_measurement_decompositions,
+)
 from .semantics import apply_semantic_suggestions, suggest_semantics
 from .sssom import (
     SssomMappingSet,
@@ -81,6 +86,7 @@ __all__ = [
     "read_salmon_datapackage",
     "read_github_csv",
     "read_github_csv_dir",
+    "read_sdp_measurement_decompositions",
     "read_sssom_mapping_set",
     "render_ontology_term_request",
     "SssomMappingSet",
@@ -91,9 +97,11 @@ __all__ = [
     "submit_term_request_issues",
     "validate_dictionary",
     "validate_salmon_datapackage",
+    "validate_sdp_measurement_decompositions",
     "validate_sdp_sssom",
     "validate_semantics",
     "write_edh_xml_from_sdp",
     "write_salmon_datapackage",
+    "write_sdp_measurement_decompositions",
     "write_sdp_sssom",
 ]
