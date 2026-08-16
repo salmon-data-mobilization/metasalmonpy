@@ -33,6 +33,7 @@ from typing import Dict, List, Optional, Sequence, Union
 import pandas as pd
 
 from .atomic_io import atomic_write
+from .metadata import R_SPACE_CLASS
 
 SSSOM_VERSION = "1.1"
 SSSOM_MANIFEST_VERSION = "1.0"
@@ -222,10 +223,21 @@ _REFERENCE_COLUMNS = (
 _NO_TERM_FOUND = "sssom:NoTermFound"
 
 _PREFIX_RE = re.compile(r"[A-Za-z_][A-Za-z0-9._-]*\Z")
-_ABSOLUTE_URI_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*:\S+\Z")
-_SCHEME_URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://\S+\Z")
-_NON_HIERARCHICAL_URI_RE = re.compile(r"(urn|mailto|doi|tag|data):\S+\Z")
-_CURIE_RE = re.compile(r"[A-Za-z_][A-Za-z0-9._-]*:\S+\Z")
+
+# ``sssom.R`` writes ``[^[:space:]]`` and ``[[:space:]]`` in five validators
+# (lines 374, 381, 382, 387 and 395 at v0.1.7) and calls ``grepl()`` WITHOUT
+# ``perl = TRUE``, so TRE resolves those classes -- see ``metadata`` for the
+# enumerated membership and the retirement condition. Python's ``\S`` was
+# rejecting five codepoints era R accepts (U+00A0, U+0085, U+2007, U+202F,
+# U+001C), which made an ``author_id`` R validated unreadable here.
+_NOT_R_SPACE = "[^" + R_SPACE_CLASS + "]"
+_ABSOLUTE_URI_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*:" + _NOT_R_SPACE + r"+\Z")
+_SCHEME_URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://" + _NOT_R_SPACE + r"+\Z")
+_NON_HIERARCHICAL_URI_RE = re.compile(
+    r"(urn|mailto|doi|tag|data):" + _NOT_R_SPACE + r"+\Z"
+)
+_CURIE_RE = re.compile(r"[A-Za-z_][A-Za-z0-9._-]*:" + _NOT_R_SPACE + r"+\Z")
+_R_SPACE_RE = re.compile("[" + R_SPACE_CLASS + "]")
 _SAFE_FILENAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\.sssom\.tsv\Z")
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 _MANIFEST_PATH_RE = re.compile(
@@ -566,7 +578,7 @@ def _validate_reference(
     row: Optional[int] = None,
 ) -> None:
     where = "" if row is None else f" in row {row}"
-    if not value or re.search(r"\s", value):
+    if not value or _R_SPACE_RE.search(value):
         raise ValueError(
             f"SSSOM {field_name}{where} must be an absolute URI or compact CURIE."
         )

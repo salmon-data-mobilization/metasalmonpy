@@ -81,8 +81,25 @@ def test_bundle_review_returns_stable_thirty_column_assessments():
     suggestions = result.attrs["semantic_suggestions"]
     assert list(assessments.columns) == LLM_ASSESSMENT_COLUMNS
     assert len(assessments) == 6
-    assert set(assessments["llm_decision"]) == {"accept"}
-    assert suggestions["llm_selected"].sum() == 6
+
+    # metasalmon v0.1.7 treats this fixture as a count-like measurement: the
+    # description carries the organism token "fish" and the column is numeric,
+    # so `is_count_like_measurement()` fires and both the variable and property
+    # queries become "count". Driving era R's suggest_semantics() with the same
+    # dictionary and a stub search_fn returns exactly that pair of queries. The
+    # deterministic dimension validator then does its job -- a "count" property
+    # against a "millimetre" unit is a mismatch -- and downgrades those two
+    # slots to review. Both facts are parity, not a defect here.
+    decisions = dict(zip(assessments["dictionary_role"], assessments["llm_decision"]))
+    assert decisions == {
+        "variable": "accept",
+        "property": "review",
+        "entity": "accept",
+        "unit": "review",
+        "constraint": "accept",
+        "method": "accept",
+    }
+    assert suggestions["llm_selected"].sum() == 4
 
 
 def test_no_review_targets_returns_empty_schema_without_provider_call():

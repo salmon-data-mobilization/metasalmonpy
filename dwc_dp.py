@@ -10,12 +10,17 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 from importlib import resources
 
+from .metadata import read_sdp_csv
+
 
 def _load_dwc_dp_fields() -> pd.DataFrame:
     try:
         fields_path = resources.files("metasalmonpy").joinpath("data/dwc-dp-fields.csv")
         with resources.as_file(fields_path) as path:
-            return pd.read_csv(path)
+            # Same shared reader as every other SDP CSV: a bare pd.read_csv()
+            # here matched pandas' default NA vocabulary against Darwin Core
+            # field names and descriptions and skipped readr's trim_ws.
+            return read_sdp_csv(path)
     except Exception:
         return pd.DataFrame(
             columns=[

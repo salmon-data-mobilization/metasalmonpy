@@ -13,6 +13,40 @@ import pandas as pd
 # treats them as whitespace, so neither may this package.
 READR_TRIM_CHARS = " \t\r\n"
 
+# metasalmon calls ``grepl()`` WITHOUT ``perl = TRUE`` in every validator that
+# uses a POSIX character class, so those classes are resolved by TRE, which is
+# Unicode-aware in a UTF-8 locale. The exact membership below was enumerated by
+# running ``grepl()`` over every codepoint up to U+2FFFF under metasalmon
+# v0.1.7's R 4.5.2. Approximating either class with Python's ``\s``/``\S`` is
+# wrong in BOTH directions and must never be done:
+#
+# * Python's ``\s`` is *wider* — it treats U+0085, U+00A0, U+2007, U+202F and
+#   U+001C-001F as whitespace where TRE does not, so ``[^\s]+`` rejects values
+#   R accepts.
+# * Python's ``\s`` is also *narrower* — it does not include U+1680, U+205F or
+#   U+3000 in the ASCII-only ``re.ASCII`` mode some call sites reach for.
+#
+# Where metasalmon *does* pass ``perl = TRUE`` (``measurement-decompositions.R``
+# line 57) PCRE resolves ``[[:space:]]`` as plain ASCII ``\t-\r`` plus space —
+# verified by the same enumeration — so an ASCII class is correct there and
+# these constants must NOT be applied to it.
+#
+# Retirement condition: these constants stay for as long as metasalmon resolves
+# POSIX classes through TRE. They are only removable if metasalmon itself
+# switches those validators to ``perl = TRUE`` (or to explicit ranges), at which
+# point the replacement must be re-enumerated against that release, not guessed.
+#
+# R ``[[:space:]]`` -- note the deliberate gaps: U+2007, U+00A0, U+0085 and
+# U+202F are NOT whitespace to TRE.
+R_SPACE_CLASS = (
+    "\t-\r\x20\u1680\u2000-\u2006\u2008-\u200a"
+    "\u2028\u2029\u205f\u3000"
+)
+
+# R ``[[:cntrl:]]`` -- C0 and C1 controls plus the Unicode line/paragraph
+# separators.
+R_CNTRL_CLASS = "\x00-\x1f\x7f-\x9f\u2028\u2029"
+
 
 def _trim_cell(value):
     return value.strip(READR_TRIM_CHARS) if isinstance(value, str) else value
@@ -55,6 +89,19 @@ def read_sdp_csv(path: Union[str, Path], **kwargs) -> pd.DataFrame:
         frame = frame.apply(lambda column: column.map(_trim_cell))
     return frame
 
+
+# The SDP profile version this package writes and defaults a blank
+# ``spec_version`` to. metasalmon v0.1.7 stopped hard-coding "sdp-0.1.0" and
+# started reading it from its vendored ``inst/extdata/schema/sdp.rules.yaml``,
+# whose ``version:`` key is ``sdp-0.2.0`` at that tag (confirmed by running
+# ``.ms_sdp_profile_version()`` against the v0.1.7 extraction). This package
+# does not vendor the rules bundle until the 0.1.8 milestone, so the version is
+# a single named constant instead of three scattered literals.
+#
+# Retirement condition: replace this constant with a read of the vendored
+# ``sdp.rules.yaml`` when the 0.1.8 milestone lands that bundle. Until then a
+# profile bump must edit exactly this line.
+SDP_PROFILE_VERSION = "sdp-0.2.0"
 
 DATASET_META_COLUMNS = [
     "dataset_id",
@@ -199,6 +246,23 @@ def ensure_resource_mapping(resources, table_id: str = "table-1") -> dict[str, p
     return out
 
 
+def _is_usable_primary_key(series: pd.Series) -> bool:
+    """Mirror metasalmon v0.1.7's primary-key candidate filter.
+
+    0.1.7 stopped naming the first ID-shaped column as the primary key and
+    started requiring the column to be able to *be* one: no missing value, no
+    blank-after-trim value, and no duplicate. A declared primary key that the
+    data contradicts fails the package's own validation on the next read.
+    """
+    values = pd.Series(series)
+    if values.isna().any():
+        return False
+    text_values = [str(value) for value in values]
+    if any(not value.strip() for value in text_values):
+        return False
+    return len(set(text_values)) == len(text_values)
+
+
 def infer_table_metadata_from_resources(resources: Mapping[str, pd.DataFrame], dataset_id: str = "dataset-1") -> pd.DataFrame:
     rows = []
     for table_id, df in resources.items():
@@ -206,6 +270,7 @@ def infer_table_metadata_from_resources(resources: Mapping[str, pd.DataFrame], d
             col
             for col in df.columns
             if re.search(r"(^|_)id$|_id$|^id_", str(col).lower())
+            and _is_usable_primary_key(df[col])
         ]
         rows.append(
             {
@@ -318,7 +383,7 @@ def infer_dataset_metadata_from_resources(resources: Mapping[str, pd.DataFrame],
                 "provenance_note": [pd.NA],
                 "created": [pd.NA],
                 "modified": [pd.NA],
-                "spec_version": [pd.NA],
+                "spec_version": [SDP_PROFILE_VERSION],
             }
         )
     )
@@ -329,6 +394,9 @@ __all__ = [
     "DATASET_META_COLUMNS",
     "DICTIONARY_COLUMNS",
     "READR_TRIM_CHARS",
+    "R_CNTRL_CLASS",
+    "R_SPACE_CLASS",
+    "SDP_PROFILE_VERSION",
     "TABLE_META_COLUMNS",
     "align_columns",
     "ensure_resource_mapping",

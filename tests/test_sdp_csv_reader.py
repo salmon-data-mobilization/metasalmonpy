@@ -109,6 +109,108 @@ def test_every_sdp_reader_preserves_a_literal_na(tmp_path):
         assert frame.iloc[0]["other"] == "", reader
 
 
+def test_data_resources_go_through_the_shared_reader(tmp_path):
+    # package_io read data resources with a bare pd.read_csv(), which applied
+    # pandas' whole default NA vocabulary and skipped readr's trim_ws. R reads
+    # resources with readr (na = c("", "NA"), trim_ws = TRUE), so every token
+    # below except the empty field survives; the literal "NA" survives here too
+    # by PARITY.md row 21.
+    from metasalmonpy.package_io import read_salmon_datapackage, write_salmon_datapackage
+
+    frame = pd.DataFrame(
+        {
+            "gear_code": ["null", "N/A", "nan", "NA", "None", ""],
+            "note": ["  padded  ", "x", "y", "z", "w", "v"],
+        }
+    )
+    dataset_meta = pd.DataFrame([{"dataset_id": "demo", "title": "Demo"}])
+    table_meta = pd.DataFrame(
+        [
+            {
+                "dataset_id": "demo",
+                "table_id": "obs",
+                "file_name": "obs.csv",
+                "table_label": "Observations",
+            }
+        ]
+    )
+    dictionary = pd.DataFrame(
+        [
+            {
+                "dataset_id": "demo",
+                "table_id": "obs",
+                "column_name": name,
+                "column_label": name,
+                "column_description": f"The {name}.",
+                "column_role": "attribute",
+                "value_type": "string",
+                "required": False,
+            }
+            for name in ("gear_code", "note")
+        ]
+    )
+    target = write_salmon_datapackage(
+        {"obs": frame},
+        dataset_meta,
+        table_meta,
+        dictionary,
+        path=str(tmp_path / "sdp"),
+        overwrite=True,
+    )
+
+    resource = read_salmon_datapackage(str(target))["resources"]["obs"]
+    assert resource["gear_code"].tolist() == [
+        "null",
+        "N/A",
+        "nan",
+        "NA",
+        "None",
+        "",
+    ]
+    assert resource["note"].iloc[0] == "padded"
+
+
+def test_a_padded_resource_header_reaches_the_eml_raw_audit_the_way_r_does(tmp_path):
+    # Era R reads the raw tokens with trim_ws = FALSE and the resource with
+    # trim_ws = TRUE, so a space-padded header makes the two disagree and
+    # .ms_eml_validate_raw_table() aborts (reproduced against v0.1.7). While
+    # package_io skipped trimming, the two agreed here and the padded header
+    # sailed through a check R fails.
+    path = write_csv(tmp_path / "padded.csv", "site_id, count \na,1\nb,2\n")
+    raw = eml_module._read_raw_csv_tokens(str(path), "t1")
+    parsed = read_sdp_csv(path)
+
+    assert list(raw.columns) == ["site_id", " count "]
+    assert list(parsed.columns) == ["site_id", "count"]
+    with pytest.raises(ValueError, match="different columns"):
+        eml_module._validate_raw_table(raw, parsed, "t1")
+
+
+def test_the_bundled_dwc_dp_field_table_goes_through_the_shared_reader(tmp_path):
+    # dwc_dp used a bare pd.read_csv() on bundled reference data, so a Darwin
+    # Core field named "NA" or a description of "N/A" would have been deleted
+    # on load. Retirement condition: this test goes away only if the loader
+    # stops being a CSV read.
+    from metasalmonpy import dwc_dp
+
+    crafted = write_csv(
+        tmp_path / "dwc-dp-fields.csv",
+        "table_id,table_label,table_iri,field_name,field_label,"
+        "field_description,term_iri,term_namespace\n"
+        "event,Event,http://example.org/event,NA,N/A, null ,"
+        "http://example.org/NA,dwc\n",
+    )
+    loaded = read_sdp_csv(crafted)
+    assert loaded.iloc[0]["field_name"] == "NA"
+    assert loaded.iloc[0]["field_label"] == "N/A"
+    assert loaded.iloc[0]["field_description"] == "null"
+
+    fields = dwc_dp._load_dwc_dp_fields()
+    assert not fields.empty
+    assert all(fields[column].map(lambda value: isinstance(value, str)).all()
+               for column in fields.columns)
+
+
 def test_a_literal_na_vocabulary_row_can_exist(tmp_path):
     # The ledger error the old asymmetry produced was unfixable by the user: a
     # dictionary constraint_iri of "NA" demanded a vocabulary row with

@@ -46,7 +46,7 @@ from typing import Dict, List, Optional, Union
 import pandas as pd
 
 from .atomic_io import apply_default_file_mode
-from .metadata import read_sdp_csv
+from .metadata import R_CNTRL_CLASS, R_SPACE_CLASS, read_sdp_csv
 
 EML_VERSION = "2.2.0"
 _EML_NAMESPACE = "https://eml.ecoinformatics.org/eml-2.2.0"
@@ -71,21 +71,13 @@ _ORCID_RE = re.compile(
     r"^https://orcid\.org/[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$"
 )
 _PUBLICATION_DATE_RE = re.compile(r"^[0-9]{4}(-[0-9]{2}-[0-9]{2})?$")
-# metasalmon calls grepl() WITHOUT perl = TRUE, so these POSIX classes are
-# resolved by TRE, which is Unicode-aware in a UTF-8 locale. The exact
-# membership below was enumerated by running grepl() over every codepoint up to
-# U+2FFFF under metasalmon v0.1.7's R 4.5.2; approximating either class with
-# Python's `\s` or an ASCII-only range is what let U+0085 in an entity name and
-# U+3000 in a PID through here while R rejected both.
-#
-# R [[:space:]] -- note the deliberate gaps: U+2007, U+00A0, U+0085 and U+202F
-# are NOT whitespace to TRE.
-_R_SPACE_CLASS = (
-    "\t-\r\x20\u1680\u2000-\u2006\u2008-\u200a"
-    "\u2028\u2029\u205f\u3000"
-)
-# R [[:cntrl:]] -- C0 and C1 controls plus the Unicode line/paragraph separators.
-_R_CNTRL_CLASS = "\x00-\x1f\x7f-\x9f\u2028\u2029"
+# R's POSIX character classes as TRE (not Python's ``\s``) resolves them.
+# The enumeration and the retirement condition live with the constants in
+# ``metadata`` so that every validator mirroring an unescaped ``grepl()``
+# shares one definition; approximating either class here is what let U+0085
+# in an entity name and U+3000 in a PID through while R rejected both.
+_R_SPACE_CLASS = R_SPACE_CLASS
+_R_CNTRL_CLASS = R_CNTRL_CLASS
 
 # R: ^[A-Za-z][A-Za-z0-9+.-]*:[^[:space:]]+$
 _ABSOLUTE_URI_RE = re.compile(

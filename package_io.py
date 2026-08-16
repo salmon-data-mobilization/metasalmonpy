@@ -4,6 +4,7 @@ import json
 import shutil
 import datetime as _dt
 import re
+import urllib.parse
 import warnings
 from pathlib import Path
 from typing import Dict, Mapping, Optional, Sequence, Union
@@ -25,6 +26,8 @@ from .metadata import (
     normalize_table_meta,
     parse_logical,
     read_sdp_csv,
+    READR_TRIM_CHARS,
+    SDP_PROFILE_VERSION,
 )
 
 SDP_PROFILE_URL = (
@@ -187,6 +190,74 @@ def _metadata_resource_entries(include_codes: bool) -> list[dict]:
     ]
 
 
+_NAMED_LICENSES = {
+    "Open Government Licence - Canada": {
+        "name": "OGL-Canada-2.0",
+        "title": "Open Government Licence - Canada",
+        "path": "https://open.canada.ca/en/open-government-licence-canada",
+    },
+    "CC-BY-4.0": {
+        "name": "CC-BY-4.0",
+        "title": "Creative Commons Attribution 4.0 International",
+        "path": "https://creativecommons.org/licenses/by/4.0/",
+    },
+    "MIT": {
+        "name": "MIT",
+        "title": "MIT License",
+        "path": "https://opensource.org/license/mit",
+    },
+}
+
+_DOT_SEGMENT_RE = re.compile(r"(^|/)\.\.?(/|$)")
+
+
+def _is_canonical_rights_url(value: str) -> bool:
+    """Mirror metasalmon v0.1.7's ``httr2`` round-trip test for a rights URL.
+
+    R accepts a custom licence only when ``url_parse()`` yields an ``http``/
+    ``https`` scheme with a hostname *and* ``url_build()`` reproduces the input
+    byte for byte — that is, the value is already in canonical form. This is a
+    behavioural mirror, not a transliteration: Python has no curl URL parser,
+    so the same rule is expressed as the conditions curl's normalization would
+    otherwise change. Verified to give R's verdict on all twenty probe values
+    in the v0.1.7 reproduction (uppercase scheme, missing path, dot segments,
+    embedded space, empty host, and non-http schemes all rejected; userinfo,
+    port, query, fragment, percent-encoding and mixed-case hosts accepted).
+    """
+    if not value or any(character.isspace() for character in value):
+        return False
+    parts = urllib.parse.urlsplit(value)
+    if parts.scheme not in ("http", "https"):
+        return False
+    # curl lowercases the scheme, so an uppercase one never round-trips.
+    if not value.startswith(parts.scheme + "://"):
+        return False
+    if not parts.netloc or not parts.hostname:
+        return False
+    # curl always emits a path, and resolves "." / ".." away.
+    if not parts.path or _DOT_SEGMENT_RE.search(parts.path):
+        return False
+    return urllib.parse.urlunsplit(parts) == value
+
+
+def _license_descriptor(license_value) -> dict:
+    """Mirror ``.ms_license_descriptor`` (metasalmon v0.1.7).
+
+    0.1.7 added the final branch: a custom HTTP(S) rights URL stays a URL
+    licence descriptor instead of being rejected as an unknown licence.
+    """
+    # R: trimws(as.character(license[[1]])) -- the named lookup is exact, so it
+    # runs on the raw text, and only the URL branch sees the trimmed value.
+    raw = "" if license_value is None or pd.isna(license_value) else str(license_value)
+    named = _NAMED_LICENSES.get(raw)
+    if named is not None:
+        return dict(named)
+    text = raw.strip(READR_TRIM_CHARS)
+    if _is_canonical_rights_url(text):
+        return {"path": text}
+    raise ValueError(f"Unknown SDP publication license: {raw!r}.")
+
+
 def _fill_review_placeholders(
     dataset_meta: pd.DataFrame,
     table_meta: pd.DataFrame,
@@ -215,6 +286,15 @@ def _fill_review_placeholders(
                 table_meta[column].astype(str).str.strip() == ""
             )
             table_meta.loc[missing, column] = f"MISSING METADATA: {label}"
+
+    # metasalmon v0.1.7 stopped defaulting a blank spec_version to the frozen
+    # literal "sdp-0.1.0" and started taking it from the vendored profile rules,
+    # so a package never claims an older profile than the one it was written to.
+    if "spec_version" in dataset_meta:
+        missing = dataset_meta["spec_version"].isna() | (
+            dataset_meta["spec_version"].astype(str).str.strip() == ""
+        )
+        dataset_meta.loc[missing, "spec_version"] = SDP_PROFILE_VERSION
 
     if "column_description" in dictionary:
         missing = dictionary["column_description"].isna() | (
@@ -355,7 +435,7 @@ def write_salmon_datapackage(
         "title": _clean(dataset_meta.get("title", pd.Series([None])).iloc[0]),
         "description": _clean(dataset_meta.get("description", pd.Series([None])).iloc[0]),
         "sdp": {
-            "specVersion": "sdp-0.2.0",
+            "specVersion": SDP_PROFILE_VERSION,
             "profile": SDP_PROFILE_URL,
             "rules": SDP_RULES_URL,
             "metadata": {
@@ -376,7 +456,7 @@ def write_salmon_datapackage(
     if "license" in dataset_meta and _has_value(dataset_meta["license"].iloc[0]):
         license_value = dataset_meta["license"].iloc[0]
         if not _is_review_value(license_value):
-            datapackage["licenses"] = [{"name": _clean(license_value)}]
+            datapackage["licenses"] = [_license_descriptor(license_value)]
     if "temporal_start" in dataset_meta and pd.notna(dataset_meta["temporal_start"].iloc[0]):
         datapackage["temporal"] = {"start": _clean(dataset_meta["temporal_start"].iloc[0])}
         if "temporal_end" in dataset_meta and pd.notna(dataset_meta["temporal_end"].iloc[0]):
@@ -536,7 +616,14 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
         if not file_path.exists() and not str(file_name).startswith("data/"):
             file_path = target / "data" / str(file_name)
         if file_path.exists():
-            resources[str(resource_name)] = pd.read_csv(file_path)
+            # Data resources go through the same reader as every other SDP CSV.
+            # A bare pd.read_csv() applied pandas' full default NA vocabulary
+            # ("null", "N/A", "nan", "<NA>", "None", "-1.#IND", …) and skipped
+            # readr's trim_ws, so a gear code of "null" was destroyed on read
+            # and a padded header survived into the parsed frame. metasalmon
+            # reads resources with readr's na = c("", "NA") + trim_ws = TRUE;
+            # the literal "NA" stays data here by PARITY.md row 21.
+            resources[str(resource_name)] = read_sdp_csv(file_path)
 
     return {
         "dataset": dataset_meta,

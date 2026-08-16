@@ -1,6 +1,109 @@
 # Changelog
 
-## Unreleased
+## 0.1.7
+
+**This release is a parity claim against metasalmon 0.1.7.** Under the mirror
+contract a version number here asserts that this package delivers the
+behaviour of the metasalmon release with the same number — not a calendar
+date and not a partial port. Everything below was built against metasalmon at
+the **v0.1.7 tag**, extracted read-only and loaded with `pkgload::load_all()`,
+and every behavioural claim was checked by running both implementations over
+the same inputs rather than by reading the R source. Deliberate differences
+are registered in [PARITY.md](PARITY.md) rows 10-28.
+
+The milestone landed as five chunks: SSSOM 1.1, measurement decompositions,
+reviewed EML 2.2.0 export, KNB/DataONE publication with the deterministic SDP
+archive, and this final chunk of era inference corrections. Their notes follow
+below.
+
+### Final chunk — era SDP-inference corrections
+
+Mirrors metasalmon 0.1.7's "Corrected SDP inference and semantic matching
+defects found while exercising the package on the PSC Fraser Sockeye detailed
+release" entry, item by item.
+
+- **Terminal ID qualifiers no longer misclassify quality fields.** A name whose
+  last `id`/`key` token is followed by a qualifier token (`quality`,
+  `confidence`, `accuracy`, `grade`, `score`) describes the quality of an
+  identification, so `id_quality` is an attribute — or a categorical, when the
+  column is a factor. `infer_column_role()` is now a node-for-node port of the
+  0.1.7 function, including the name tokenizer, the identifier-ish
+  (`station_number`) and sample-size heuristics, the method/protocol lane, the
+  unit-bearing-header hint and the year-like value check that Python never had.
+  Over thirty name/value pairs Python answered thirteen differently from R
+  before this change and none after.
+- **Nullable identifiers are not made required.** An identifier column carrying
+  a missing or blank-after-trim value is left undecided rather than declared
+  required — declaring it required makes the package fail its own validation.
+  The old name-based fallback that marked anything ID-shaped required is gone,
+  as it is in R.
+- **A primary key must be able to be one.** `infer_table_metadata_from_resources()`
+  now names the first ID-shaped column that is complete *and* unique, instead
+  of the first ID-shaped column outright.
+- **Profile versions follow the vendored rules.** A blank `spec_version` is
+  filled from `metadata.SDP_PROFILE_VERSION` rather than the frozen
+  `sdp-0.1.0` literal, and `datapackage.json`'s `sdp.specVersion` reads the
+  same constant (PARITY.md row 27).
+- **Custom HTTP(S) rights URLs remain URL licence descriptors.** The licence
+  field now produces R's descriptor — the named OGL/CC-BY/MIT entries, a
+  `{path: …}` descriptor for a canonical HTTP(S) URL, and an error for
+  anything else — instead of wrapping any string as `{name: …}` (PARITY.md
+  row 26).
+- **Biology-bearing query tokens are retained.** `smolt`, `fry` and `juvenile`
+  join the organism vocabulary, the count-like test matches R's four-way rule,
+  and the whole-variable query keeps the life stage: `recruit abundance`,
+  `smolt abundance`, `fry abundance`, and `effective female spawner abundance`
+  for the effective-female and eggs-not-spawned shapes. Over eighty role
+  queries driven from era R, Python now matches on every count-like case.
+- **OWL-class metadata is preserved.** `apply_semantic_suggestions()` writes
+  `term_type` alongside `term_iri`, taking the candidate's native ontology type
+  (`owl_class`, `owl_object_property`, `skos_concept`) instead of stamping
+  every whole-variable term `skos_concept`. Nothing wrote `term_type` here
+  before, which made a Python-produced dictionary unexportable by the EML
+  writer's `term_type` check. `unit_label` is filled from the accepted unit
+  candidate in the same pass, as in R.
+- **QUDT serves the property role**, searching `qudt:QuantityKind` rather than
+  `qudt:Unit` and reporting `match_type = "quantity_kind"`;
+  `sources_for_role("property")` gains `qudt` in R's exact position.
+- **An explicit source list is an allowlist on the way out as well as in.**
+  Results are filtered to the declared sources, so an injected `search_fn`
+  cannot widen a deliberately bounded source set.
+
+### Two reader/validator defects closed
+
+- **SSSOM reference validation uses TRE's character classes, not Python's
+  `\s`.** `sssom.R` writes `[[:space:]]` in five validators and calls `grepl()`
+  without `perl = TRUE`, so TRE resolves them: U+00A0, U+0085, U+2007, U+202F
+  and U+001C are *not* whitespace to R, and Python's `\S` was rejecting
+  `author_id` values R accepts. The enumerated memberships now live once in
+  `metadata` and are shared with `eml`, which had already been fixed
+  (PARITY.md row 28). `measurement_decompositions` is deliberately untouched:
+  R passes `perl = TRUE` there, and PCRE's `[[:space:]]` really is ASCII-only.
+- **Data resources go through the shared SDP reader.** `read_salmon_datapackage()`
+  and the bundled Darwin Core field table were the last bare `pd.read_csv()`
+  calls, applying pandas' whole default NA vocabulary (`null`, `N/A`, `nan`,
+  `<NA>`, `None`, …) and skipping readr's `trim_ws`. A gear code of `null` was
+  destroyed on read, and a whitespace-padded header survived into the parsed
+  frame — where it then passed the EML raw-token audit that R aborts on.
+  Resources are now text-typed, which is where R goes at 0.2.0 (PARITY.md
+  rows 21 and 25).
+
+### Deterministic SDP archive
+
+Contract parity with `R/knb-sdp-archive.R` at v0.1.7, re-verified for this
+release: identical closed inventory and radix member order, identical
+`file_name`/`dataset_id`/`format_id`/`media_type`, identical fail-closed
+behaviour (reserved publication paths, absolute paths and dot segments
+refused; symlinked members refused; a missing required artifact refused;
+output confined to `publication/` with a `.zip` extension; an existing archive
+with different bytes needs `overwrite`), and a stable idempotent rewrite.
+Bytes are **not** comparable to R's — miniz and zlib emit different deflate
+streams — so this module defines its own determinism reference
+(`metasalmonpy-zipfile-1`) whose sha256 is pinned in `tests/data/knb/expected.json`
+(PARITY.md rows 4, 17, 18).
+
+### Earlier 0.1.7 chunks
+
 - Fixed a batch of parity defects found by adversarial review of the 0.1.7
   chunks, each reproduced against metasalmon at the v0.1.7 tag.
   - **One CSV reader for the whole package.** `metadata.read_sdp_csv()` now

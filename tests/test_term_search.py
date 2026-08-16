@@ -61,7 +61,12 @@ class TermSearchTests(unittest.TestCase):
     def test_sources_for_role_returns_expected_sources(self):
         self.assertEqual(ts.sources_for_role("unit"), ["qudt", "nvs", "ols"])
         self.assertEqual(ts.sources_for_role("entity"), ["smn", "gcdfo", "gbif", "worms", "bioportal", "ols"])
-        self.assertEqual(ts.sources_for_role("property"), ["smn", "gcdfo", "nvs", "ols", "zooma"])
+        # metasalmon v0.1.7 added qudt to the property role for its
+        # QuantityKind vocabulary (verified against the v0.1.7 extraction).
+        self.assertEqual(
+            ts.sources_for_role("property"),
+            ["smn", "gcdfo", "qudt", "nvs", "ols", "zooma"],
+        )
         self.assertEqual(ts.sources_for_role("method"), ["smn", "gcdfo", "bioportal", "ols", "zooma"])
         self.assertEqual(ts.sources_for_role("variable"), ["smn", "gcdfo", "nvs", "ols", "zooma"])
         self.assertEqual(ts.sources_for_role("constraint"), ["smn", "gcdfo", "ols"])

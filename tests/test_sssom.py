@@ -865,3 +865,49 @@ def test_sssom_entry_points_are_public():
     expected = {"read_sssom_mapping_set", "write_sdp_sssom", "validate_sdp_sssom"}
     assert expected <= set(metasalmonpy.__all__)
     assert all(callable(getattr(metasalmonpy, name)) for name in expected)
+
+
+# --- TRE character classes, not Python's \s -----------------------------------------
+
+
+# metasalmon's SSSOM validators call grepl() WITHOUT perl = TRUE, so TRE
+# resolves [[:space:]]. These are the verdicts era R (v0.1.7 under R 4.5.2)
+# gives an author_id carrying one exotic codepoint, reproduced by running
+# read_sssom_mapping_set() over the same nine documents. Python's \S disagreed
+# on the first five: it rejected every value R accepted.
+_ERA_R_AUTHOR_ID_VERDICTS = {
+    "\x1c": True,  # file separator: a control, not TRE whitespace
+    "\x85": True,  # NEL: a C1 control, not TRE whitespace
+    "\u00a0": True,  # no-break space: NOT whitespace to TRE
+    "\u2007": True,  # figure space: NOT whitespace to TRE
+    "\u202f": True,  # narrow no-break space: NOT whitespace to TRE
+    " ": False,  # plain space
+    "\u1680": False,  # ogham space mark
+    "\u2000": False,  # en quad
+    "\u3000": False,  # ideographic space
+}
+
+
+@pytest.mark.parametrize(
+    ("codepoint", "accepted"), sorted(_ERA_R_AUTHOR_ID_VERDICTS.items())
+)
+def test_reference_columns_use_r_tre_whitespace(tmp_path, codepoint, accepted):
+    lines = (
+        sssom_text(extra_prefixes=("#   orcid: https://orcid.org/",))
+        .rstrip("\n")
+        .split("\n")
+    )
+    header_index = next(
+        index for index, line in enumerate(lines) if line.startswith("subject_id\t")
+    )
+    lines[header_index] += "\tauthor_id"
+    for index in range(header_index + 1, len(lines)):
+        lines[index] += f"\torcid:0000-0002{codepoint}1825-0097"
+    path = write_raw(tmp_path / "probe.sssom.tsv", "\n".join(lines) + "\n")
+
+    if accepted:
+        mapping_set = read_sssom_mapping_set(path)
+        assert mapping_set.mappings["author_id"].iloc[0].endswith("1825-0097")
+    else:
+        with pytest.raises(ValueError, match="absolute URI or compact CURIE"):
+            read_sssom_mapping_set(path)
