@@ -126,6 +126,19 @@ Measured, not asserted. For the same inputs:
   for the ecological property being measured. This demo is copied by users and
   fed to LLMs as context, so a wrong IRI here propagates.
 
+### Dependency boundary
+
+- **The deterministic SDP archive builds on core dependencies again.** The
+  reviewed-ledger *binding* assertions moved from the artifact-inventory helper
+  into the publication preflight (PARITY.md row 34). Keeping them in the helper
+  — where R keeps them, because `yaml` is a hard Import for metasalmon — made
+  `_write_sdp_archive`, a pure pandas + `zipfile` path, require the `[eml]`
+  extra through a three-call chain with no import statement recording it.
+  Behaviour is unchanged for every reachable caller and the assertions now fire
+  earlier, before any archive is written. `KnbCoreDependencyTests` blocks
+  `yaml` from `sys.meta_path` so the property is enforced in developer
+  environments too, not only in the core-deps CI job.
+
 ### Register corrections
 
 Re-verifying PARITY.md rows 16–28 against metasalmon 0.3.0 found seven claims

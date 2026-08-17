@@ -469,6 +469,46 @@ def _declared_data_paths(path: str) -> "Dict[str, str]":
     return paths
 
 
+def _require_review_ledger_binding(path: str, mapping: object) -> None:
+    """Assert the EML mapping binds the reviewed ledger this package uses.
+
+    Split out of ``_sdp_artifact_paths`` deliberately (PARITY.md row 34). R
+    keeps this check inside ``.ms_knb_sdp_artifact_paths()``, which it can
+    because ``yaml`` is a hard Import for metasalmon -- R has no core/optional
+    dependency split to respect. Python does: PyYAML lives in the ``[eml]``
+    extra. Leaving the mapping read inside the inventory helper made the
+    deterministic SDP archive, which needs nothing beyond pandas, require that
+    extra to build, and took its core-deps test coverage with it.
+
+    Nothing about the inventory needed the mapping: which ledger is published
+    is decided by what is on disk. Only these two coherence assertions need
+    it, and ``publish_sdp_to_knb()`` has already required the extra long
+    before they run. Running them here fires them ahead of both representation
+    branches and before any archive is written -- strictly earlier than they
+    fired when they lived in the helper.
+
+    A package with neither ledger is deliberately left alone here so the
+    inventory helper still reports R's "requires a reviewed semantic-selection
+    ledger" message rather than a binding complaint about a file that does not
+    exist.
+    """
+    mapped_review = str(
+        ((mapping or {}).get("semantic_review") or {}).get("path") or ""
+    )
+    if os.path.exists(os.path.join(path, _REPRODUCIBILITY_MANIFEST)):
+        if mapped_review != _CANONICAL_REVIEW_LEDGER:
+            raise ValueError(
+                "EML mapping semantic_review.path must bind the reviewed "
+                "ledger declared by the reproducibility manifest."
+            )
+    elif os.path.exists(os.path.join(path, _LEGACY_REVIEW_LEDGER)):
+        if mapped_review != _LEGACY_REVIEW_LEDGER:
+            raise ValueError(
+                "Legacy KNB packages must bind the root-level reviewed ledger "
+                "in EML mapping semantic_review.path."
+            )
+
+
 def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
     """Mirror ``.ms_knb_sdp_artifact_paths``: a closed, manifest-bound inventory."""
     missing = [
@@ -488,11 +528,13 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
     # only as a compatibility path for already reviewed packages. A canonical
     # reproducibility tree is valid only when its exact contents are declared
     # by the checksum-bound manifest; publication never discovers extra files.
-    mapping_path = os.path.join(path, "metadata", "eml-mapping.yml")
-    mapping = _eml._read_mapping_yaml(mapping_path)
-    mapped_review = str(
-        ((mapping or {}).get("semantic_review") or {}).get("path") or ""
-    )
+    #
+    # Which ledger gets published is decided entirely by what is on disk. The
+    # paired assertion -- that the EML mapping *binds* the ledger this package
+    # actually uses -- needs the mapping sidecar, and therefore PyYAML, so it
+    # lives in ``_require_review_ledger_binding`` and runs in the publication
+    # preflight instead. See PARITY.md row 34: keeping it here made the
+    # deterministic SDP archive require the ``[eml]`` extra to build.
     if os.path.exists(os.path.join(path, _REPRODUCIBILITY_MANIFEST)):
         from .reproducibility import (
             read_sdp_reproducibility_manifest,
@@ -509,11 +551,6 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
                 "KNB publication requires the canonical reviewed-selection "
                 "ledger to be declared by reproducibility/manifest.json."
             )
-        if mapped_review != _CANONICAL_REVIEW_LEDGER:
-            raise ValueError(
-                "EML mapping semantic_review.path must bind the reviewed "
-                "ledger declared by the reproducibility manifest."
-            )
         reproducibility_relative = [_REPRODUCIBILITY_MANIFEST] + declared_paths
     else:
         if not os.path.exists(os.path.join(path, _LEGACY_REVIEW_LEDGER)):
@@ -521,11 +558,6 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
                 "KNB publication requires a reviewed semantic-selection "
                 "ledger. Use the extended reproducibility/manifest.json layout "
                 "or the legacy root-level ledger."
-            )
-        if mapped_review != _LEGACY_REVIEW_LEDGER:
-            raise ValueError(
-                "Legacy KNB packages must bind the root-level reviewed ledger "
-                "in EML mapping semantic_review.path."
             )
         reproducibility_relative = [_LEGACY_REVIEW_LEDGER]
 
@@ -1622,6 +1654,10 @@ def _build_plan(
     mapping = _eml._read_mapping_yaml(
         os.path.join(path, "metadata", "eml-mapping.yml")
     )
+    # Preflight: reuse the mapping already parsed here rather than re-reading
+    # it, and assert the reviewed-ledger binding before either representation
+    # branch touches the package.
+    _require_review_ledger_binding(path, mapping)
     archive: Optional[Dict[str, object]] = None
     if representation == "archive":
         archive = knb_archive._write_sdp_archive(path)

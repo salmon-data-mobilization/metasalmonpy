@@ -33,6 +33,7 @@ import json
 import os
 import shutil
 import stat
+import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -1626,6 +1627,104 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
         result = publish_sdp_to_knb(sdp, public=True, dry_run=True)
         self.assertEqual(result["manifest"]["representation"], "archive")
         self.assertIsNotNone(result["sdp_archive_path"])
+
+
+class _BlockedModule:
+    """A meta-path finder that makes one module unimportable."""
+
+    def __init__(self, name):
+        self.name = name
+
+    def find_module(self, fullname, path=None):  # pragma: no cover - legacy API
+        return self if fullname == self.name else None
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == self.name or fullname.startswith(self.name + "."):
+            raise ImportError(f"No module named {fullname!r}")
+        return None
+
+
+class KnbCoreDependencyTests(unittest.TestCase):
+    """The archive path must build with nothing but pandas installed.
+
+    This is the guard for the regression that shipped in the first draft of
+    the 0.1.8 milestone. ``_sdp_artifact_paths`` grew a read of the EML
+    mapping sidecar, which parses YAML, so ``_write_sdp_archive`` -- a pure
+    pandas + zipfile path -- silently began requiring the ``[eml]`` extra.
+    Every ``import yaml`` in the package is deferred inside a function, which
+    is the correct optional-extra pattern and is exactly why the regression
+    was invisible by inspection: **a deferred import is still a hard
+    requirement for whoever calls the function containing it.** The only proof
+    is running the path with the module genuinely absent.
+
+    The core-deps CI job would also have caught it, and does. This test exists
+    so the property is enforced in *both* dependency configurations rather
+    than only in the job most contributors never run locally -- the failure
+    mode being that a developer with PyYAML installed sees green and pushes.
+
+    Retirement condition: delete this class if PyYAML ever becomes a core
+    dependency of metasalmonpy. Until then, any new yaml reader reachable from
+    the archive inventory is a regression this test is meant to fail on.
+    """
+
+    def setUp(self):
+        self.blocker = _BlockedModule("yaml")
+        sys.meta_path.insert(0, self.blocker)
+        self.addCleanup(sys.meta_path.remove, self.blocker)
+        # A cached module would defeat the blocker entirely.
+        self.saved = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "yaml" or name.startswith("yaml.")
+        }
+        for name in self.saved:
+            del sys.modules[name]
+        self.addCleanup(sys.modules.update, self.saved)
+
+    def test_the_blocker_actually_blocks(self):
+        # Guard the guard: a blocker that quietly stopped working would make
+        # every assertion below vacuous.
+        with self.assertRaises(ImportError):
+            import yaml  # noqa: F401
+
+    def test_the_deterministic_archive_builds_without_the_eml_extra(self):
+        sdp = _fixture_sdp(self, "sdp-public")
+        archive = knb_archive._write_sdp_archive(sdp)
+        self.assertEqual(
+            archive["file_name"], "demo-salmon-2026-salmon-data-package.zip"
+        )
+        self.assertEqual(
+            archive["sha256"], _expected()["python_archive"]["sha256"]
+        )
+
+    def test_the_artifact_inventory_resolves_without_the_eml_extra(self):
+        sdp = _fixture_sdp(self, "sdp-public")
+        paths = knb._sdp_artifact_paths(sdp)
+        self.assertIn("sdp_artifact:metadata/dataset.csv", paths)
+        self.assertIn("sdp_artifact:reviewed_semantic_selections.csv", paths)
+
+    def test_the_full_v0_2_inventory_resolves_without_the_eml_extra(self):
+        # The reproducibility manifest, methods registry and observation
+        # structures are all read on this path too; none of them may reach
+        # PyYAML either.
+        sdp = _fixture_sdp(self, "sdp-full")
+        paths = knb._sdp_artifact_paths(sdp)
+        for name in (
+            "sdp_artifact:metadata/methods.csv",
+            "sdp_artifact:reproducibility/manifest.json",
+            "sdp_artifact:metadata/structure/observation_structures.csv",
+        ):
+            self.assertIn(name, paths)
+
+    def test_a_missing_ledger_still_reports_the_file_error_not_a_binding_one(self):
+        # The message for "no ledger at all" stays a file-existence error, as
+        # it is in R, rather than becoming a complaint about a binding to a
+        # file that does not exist.
+        sdp = _fixture_sdp(self, "sdp-public")
+        os.unlink(os.path.join(sdp, "reviewed_semantic_selections.csv"))
+        with self.assertRaises(FileNotFoundError) as caught:
+            knb._sdp_artifact_paths(sdp)
+        self.assertIn("reviewed semantic-selection ledger", str(caught.exception))
 
 
 @_REQUIRES_EXTRA

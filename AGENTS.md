@@ -53,6 +53,37 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green
 (93 passed / 3 skipped as of the 2026-08-13 rename).
 
+## Dependency boundaries
+
+Core dependencies are **pandas + requests**. lxml and PyYAML live in the
+`[eml]` extra; `[knb]` is `[eml]` plus core. A path that a user can reach
+without an extra must keep working without it.
+
+**A deferred import is a hard dependency for every caller of the function that
+contains it.** `import yaml` inside a function body is the correct pattern for
+an optional extra, but it does not make anything that *calls* that function
+core-deps-safe — the requirement simply moves to the call site, where no
+import statement records it. Reading the import statements therefore cannot
+tell you whether a path is core-deps-safe; two people reached the wrong
+conclusion that way in one exchange while landing 0.1.8, and a pure
+pandas + `zipfile` archive builder had silently begun requiring PyYAML through
+a three-call chain.
+
+The only proof is running the path with the extra genuinely absent:
+
+```sh
+uv venv /tmp/coreenv && uv pip install --python /tmp/coreenv/bin/python pandas requests pytest
+uv pip install --python /tmp/coreenv/bin/python -e .
+/tmp/coreenv/bin/python -m pytest tests/ -q      # must be green
+```
+
+The core-deps CI job runs exactly this. Because most local environments have
+the extras installed, `tests/test_knb_publication.py::KnbCoreDependencyTests`
+also blocks `yaml` from `sys.meta_path`, so the property fails locally too
+rather than only in CI. When you add a reader to a shared helper, check what
+calls it before assuming the helper is where it belongs (PARITY.md rows 30
+and 34).
+
 ## Layout notes
 
 - Modules live at the repo root and are packaged as `metasalmonpy` via
