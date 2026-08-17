@@ -287,5 +287,37 @@ def test_eml_export_still_matches_r_after_the_reader_change(tmp_path):
     ) == ET.canonicalize(from_file=str(EML_DATA / "eml-default.xml"), strip_text=True)
 
 
+def test_a_tab_before_an_opening_quote_is_the_one_known_trim_mismatch(tmp_path):
+    """The single probed field shape where this reader disagrees with readr.
+
+    PARITY.md row 23 records ``trim_ws`` as an *approximation* of readr rather
+    than a transliteration, and names this shape as its boundary. The claim sat
+    in the register unpinned, so nothing would have caught the boundary moving
+    -- in either direction. Measured against R 4.5.2 (metasalmon v0.1.8):
+
+        printf 'a,b\n\t"z"\t,2\n'
+        readr::read_csv(..., trim_ws = TRUE)  # a == 'z'   (unquoted)
+        read_sdp_csv(...)                     # a == '"z"' (quotes kept)
+
+    readr trims the leading tab *before* its tokenizer looks for an opening
+    quote; pandas' ``skipinitialspace`` only skips spaces, so by the time the
+    tab is stripped the field is no longer recognized as quoted. The impact is
+    bounded: a leading tab before a quote does not appear in any canonical SDP
+    artifact, and every other probed shape in ``READR_ROW`` agrees.
+
+    **Retirement condition:** delete this test if pandas' C parser learns to
+    skip tabs before a quote, or if this reader stops delegating quote handling
+    to pandas -- at which point re-measure against R rather than assuming the
+    verdict flipped to agreement.
+    """
+    path = tmp_path / "tab-before-quote.csv"
+    path.write_bytes(b'a,b\n\t"z"\t,2\n')
+
+    frame = read_sdp_csv(path)
+
+    assert frame["a"].iloc[0] == '"z"'  # readr gives "z" here
+    assert frame["b"].iloc[0] == "2"
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

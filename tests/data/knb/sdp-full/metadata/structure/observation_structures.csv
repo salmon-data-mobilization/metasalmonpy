@@ -1,0 +1,2 @@
+dataset_id,table_id,observation_structure_id,structure_label,structure_description
+demo-salmon-2026,counts,count_by_record_and_year,Count by record and year,One abundance count for each stable record and observation year.

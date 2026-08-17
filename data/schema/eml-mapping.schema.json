@@ -67,7 +67,10 @@
       "required": ["path", "sha256"],
       "properties": {
         "path": {
-          "const": "reviewed_semantic_selections.csv"
+          "enum": [
+            "reproducibility/reviewed_semantic_selections.csv",
+            "reviewed_semantic_selections.csv"
+          ]
         },
         "sha256": {
           "$ref": "#/definitions/sha256"

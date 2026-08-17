@@ -1,0 +1,52 @@
+{
+  "$schema": "https://specs.frictionlessdata.io/schemas/table-schema.json",
+  "title": "SDP observation structures metadata schema",
+  "description": "Optional logical observation structures that declare the grain of individual measures in wide or mixed-grain tables.",
+  "fields": [
+    {
+      "name": "dataset_id",
+      "type": "string",
+      "description": "References dataset_id in metadata/dataset.csv.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "table_id",
+      "type": "string",
+      "description": "References table_id in metadata/tables.csv.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "observation_structure_id",
+      "type": "string",
+      "description": "Package-local identifier for one measure-specific logical observation structure.",
+      "constraints": {
+        "required": true,
+        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      }
+    },
+    {
+      "name": "structure_label",
+      "type": "string",
+      "description": "Human-readable name for the logical observation structure.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "structure_description",
+      "type": "string",
+      "description": "Description of what one logical observation represents and why the selected dimensions define its grain.",
+      "constraints": {
+        "required": true
+      }
+    }
+  ],
+  "sdp:table": "observation_structures",
+  "sdp:path": "metadata/structure/observation_structures.csv",
+  "sdp:requirement": "optional",
+  "sdp:rowRule": "One row per measure-specific logical observation structure. Each structure has exactly one measure component and at least one dimension component in observation_components.csv."
+}

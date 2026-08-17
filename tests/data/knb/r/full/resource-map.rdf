@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:ore="http://www.openarchives.org/ore/terms/" xmlns:cito="http://purl.org/spar/cito/" xmlns:prov="http://www.w3.org/ns/prov#" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353">
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:925f56a0-02fa-5e04-bad4-69d82f725353</dcterms:identifier>
+    <rdf:type rdf:resource="http://www.openarchives.org/ore/terms/ResourceMap"/>
+    <ore:describes rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <dcterms:creator rdf:resource="https://github.com/salmon-data-mobilization/metasalmon"/>
+    <dcterms:modified>2026-01-01</dcterms:modified>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation">
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:925f56a0-02fa-5e04-bad4-69d82f725353#aggregation</dcterms:identifier>
+    <rdf:type rdf:resource="http://www.openarchives.org/ore/terms/Aggregation"/>
+    <ore:isDescribedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A2de6adf9-fcbe-5e47-aabd-b68312b4e573"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ab052a2d5-2896-5aa2-a047-e609aee66013"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ae4c85619-8faa-580a-ae3e-e638c1c30f3f"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A560f65d7-6b51-546d-9588-4840ede14298"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A62d9266c-0334-54fd-9d04-f8aa9c512208"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ab88118ea-02f4-5f50-800b-6c1a040de636"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Af38b6d9e-a487-50d5-8fc8-b42a6d1b9e00"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A58eac1f6-4627-5cc7-b9dd-7ad9148900e4"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A35666ad4-253c-5cf9-a019-87b8958dfc9f"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ade6b3eaa-012e-5d06-ba8d-e09053f47596"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ad54605cd-5d4d-5647-8771-fdb9e0ab5a47"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Acd774f36-4df2-56f5-aca8-b6b72eb5c209"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A6617e91e-2f69-5532-a7a6-707c3cef29f0"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A24d15fae-d275-5d05-bced-f5bb802bca30"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A572a892c-3012-586f-a74f-7f967e76bb9b"/>
+    <ore:aggregates rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A47d9f979-3e55-59fd-bc2f-88cf403b6929"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981">
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:524161f4-0a68-538d-a666-bc56f254b981</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/eml.xml</prov:atLocation>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A2de6adf9-fcbe-5e47-aabd-b68312b4e573"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ab052a2d5-2896-5aa2-a047-e609aee66013"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ae4c85619-8faa-580a-ae3e-e638c1c30f3f"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A560f65d7-6b51-546d-9588-4840ede14298"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A62d9266c-0334-54fd-9d04-f8aa9c512208"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ab88118ea-02f4-5f50-800b-6c1a040de636"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Af38b6d9e-a487-50d5-8fc8-b42a6d1b9e00"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A58eac1f6-4627-5cc7-b9dd-7ad9148900e4"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A35666ad4-253c-5cf9-a019-87b8958dfc9f"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ade6b3eaa-012e-5d06-ba8d-e09053f47596"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ad54605cd-5d4d-5647-8771-fdb9e0ab5a47"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Acd774f36-4df2-56f5-aca8-b6b72eb5c209"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A6617e91e-2f69-5532-a7a6-707c3cef29f0"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A24d15fae-d275-5d05-bced-f5bb802bca30"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A572a892c-3012-586f-a74f-7f967e76bb9b"/>
+    <cito:documents rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A47d9f979-3e55-59fd-bc2f-88cf403b6929"/>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>data/counts.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A2de6adf9-fcbe-5e47-aabd-b68312b4e573">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:2de6adf9-fcbe-5e47-aabd-b68312b4e573</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>datapackage.json</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ab052a2d5-2896-5aa2-a047-e609aee66013">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:b052a2d5-2896-5aa2-a047-e609aee66013</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/codes.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ae4c85619-8faa-580a-ae3e-e638c1c30f3f">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:e4c85619-8faa-580a-ae3e-e638c1c30f3f</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/column_dictionary.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A560f65d7-6b51-546d-9588-4840ede14298">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:560f65d7-6b51-546d-9588-4840ede14298</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/dataset.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A62d9266c-0334-54fd-9d04-f8aa9c512208">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:62d9266c-0334-54fd-9d04-f8aa9c512208</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/methods.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ab88118ea-02f4-5f50-800b-6c1a040de636">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:b88118ea-02f4-5f50-800b-6c1a040de636</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/semantic_vocabulary.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Af38b6d9e-a487-50d5-8fc8-b42a6d1b9e00">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:f38b6d9e-a487-50d5-8fc8-b42a6d1b9e00</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/structure/observation_components.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A58eac1f6-4627-5cc7-b9dd-7ad9148900e4">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:58eac1f6-4627-5cc7-b9dd-7ad9148900e4</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/structure/observation_structures.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A35666ad4-253c-5cf9-a019-87b8958dfc9f">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:35666ad4-253c-5cf9-a019-87b8958dfc9f</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>metadata/tables.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ade6b3eaa-012e-5d06-ba8d-e09053f47596">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:de6b3eaa-012e-5d06-ba8d-e09053f47596</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>reproducibility/manifest.json</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Ad54605cd-5d4d-5647-8771-fdb9e0ab5a47">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:d54605cd-5d4d-5647-8771-fdb9e0ab5a47</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>reproducibility/provenance/activities.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Acd774f36-4df2-56f5-aca8-b6b72eb5c209">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:cd774f36-4df2-56f5-aca8-b6b72eb5c209</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>reproducibility/reviewed_semantic_selections.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A6617e91e-2f69-5532-a7a6-707c3cef29f0">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:6617e91e-2f69-5532-a7a6-707c3cef29f0</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>reproducibility/source/source-manifest.csv</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A24d15fae-d275-5d05-bced-f5bb802bca30">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:24d15fae-d275-5d05-bced-f5bb802bca30</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>reproducibility/workflow/build-sdp.R</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A572a892c-3012-586f-a74f-7f967e76bb9b">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:572a892c-3012-586f-a74f-7f967e76bb9b</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>reproducibility/workflow/semantic-release.R</prov:atLocation>
+  </rdf:Description>
+  <rdf:Description rdf:about="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A47d9f979-3e55-59fd-bc2f-88cf403b6929">
+    <cito:isDocumentedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981"/>
+    <dcterms:identifier rdf:datatype="http://www.w3.org/2001/XMLSchema#string">urn:uuid:47d9f979-3e55-59fd-bc2f-88cf403b6929</dcterms:identifier>
+    <ore:isAggregatedBy rdf:resource="https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3A925f56a0-02fa-5e04-bad4-69d82f725353#aggregation"/>
+    <prov:atLocation>reproducibility/workflow/semantic_suggestions.csv</prov:atLocation>
+  </rdf:Description>
+</rdf:RDF>

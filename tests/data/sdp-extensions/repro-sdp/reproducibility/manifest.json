@@ -1,0 +1,51 @@
+{
+  "profile": "metasalmon-reproducibility-manifest/1.0",
+  "artifacts": [
+    {
+      "path": "reproducibility/provenance/activities.csv",
+      "role": "provenance",
+      "media_type": "text/csv",
+      "sha256": "61912848471d16564292a5ba481afb603403dcb4cae90213092934f635ed549d",
+      "size_bytes": 44
+    },
+    {
+      "path": "reproducibility/reviewed_semantic_selections.csv",
+      "role": "reviewed_semantic_selections",
+      "media_type": "text/csv",
+      "sha256": "5e19abd2d3dc6ab345e2f5ac0558d3018e2c3f4360879a2882b1461d44ece377",
+      "size_bytes": 39
+    },
+    {
+      "path": "reproducibility/source/source-manifest.csv",
+      "role": "source",
+      "media_type": "text/csv",
+      "sha256": "11ca33f8d1d3c0243c9e2cc76979752719980f1a4bd6231111c94095ad858b39",
+      "size_bytes": 27
+    },
+    {
+      "path": "reproducibility/workflow/semantic-release.R",
+      "role": "workflow",
+      "media_type": "text/x-r-source",
+      "sha256": "b5535d0bdb9d826858c860225e6c46abbc8ae1fd9702de9c9e72a4c4d02dc2ae",
+      "size_bytes": 28
+    },
+    {
+      "path": "reproducibility/workflow/semantic_suggestions.csv",
+      "role": "workflow",
+      "media_type": "text/csv",
+      "sha256": "15ff5820dc296767abb7334e6c51a29704fccce125ffd5150d42f2d63c18db71",
+      "size_bytes": 61
+    },
+    {
+      "path": "reproducibility/workflow/transform.R",
+      "role": "workflow",
+      "media_type": "text/x-r-source",
+      "sha256": "a98ffeaf5d2997e35fb80b8c54940112ed2dc8d0a03611f6fd7c54a80d47a617",
+      "size_bytes": 21
+    }
+  ],
+  "provenance": {
+    "generated_by": "metasalmon::write_sdp_reproducibility_manifest",
+    "metasalmon_version": "0.1.8"
+  }
+}

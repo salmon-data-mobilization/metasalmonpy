@@ -1,0 +1,8 @@
+dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,required,unit_label,unit_iri,term_iri,term_type,property_iri,entity_iri,constraint_iri,method_iri
+structure-test,stock_recruit,stock_id,Stock,Stock identifier,identifier,string,TRUE,,,,,,,,
+structure-test,stock_recruit,brood_year,Brood year,Brood year,temporal,integer,TRUE,,,,,,,,
+structure-test,stock_recruit,return_year,Return year,Return year,temporal,integer,TRUE,,,,,,,,
+structure-test,stock_recruit,age,Age,Age at return,attribute,integer,TRUE,year,http://qudt.org/vocab/unit/YR,,,,,,
+structure-test,stock_recruit,total_spawners,Total spawners,Estimated total spawners,measurement,number,TRUE,individual,http://qudt.org/vocab/unit/INDIV,https://example.org/variables/spawners,owl_class,https://w3id.org/smn/Abundance,https://w3id.org/smn/Stock,,https://example.org/methods/spawning-ground-survey
+structure-test,stock_recruit,recruits,Recruits,Estimated recruits,measurement,number,TRUE,individual,http://qudt.org/vocab/unit/INDIV,https://example.org/variables/recruits,owl_class,https://w3id.org/smn/Abundance,https://w3id.org/smn/Stock,,
+structure-test,stock_recruit,estimate_method,Estimate method,Row-varying recruit estimation procedure,categorical,string,TRUE,,,,skos_concept,,,,

@@ -65,6 +65,15 @@ _MEASUREMENT_PREDICATES = {
 
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 
+# The reviewed semantic-selection ledger. The v0.2 extended layout keeps the
+# ledger with the workflow, provenance, and source records it qualifies; the
+# root-level path stays as a compatibility route for packages reviewed before
+# that layout existed. Order matters only for the error message.
+SUPPORTED_REVIEW_PATHS = (
+    "reproducibility/reviewed_semantic_selections.csv",
+    "reviewed_semantic_selections.csv",
+)
+
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _REVISION_KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 _ORCID_RE = re.compile(
@@ -514,16 +523,19 @@ def _schema_party(errors: List[str], where: str, party: object) -> None:
 
 
 def _schema_hash_sidecar(
-    errors: List[str], where: str, value: object, expected_path: str
+    errors: List[str], where: str, value: object, expected_path: object
 ) -> None:
+    expected = (
+        (expected_path,) if isinstance(expected_path, str) else tuple(expected_path)
+    )
     if not isinstance(value, dict):
         errors.append(f"{where}: must be a path/sha256 mapping")
         return
     for key in value:
         if key not in ("path", "sha256"):
             errors.append(f"{where}.{key}: is not an allowed field")
-    if value.get("path") != expected_path:
-        errors.append(f"{where}.path: must be {expected_path}")
+    if value.get("path") not in expected:
+        errors.append(f"{where}.path: must be {' or '.join(expected)}")
     sha256 = value.get("sha256")
     if not isinstance(sha256, str) or _SHA256_RE.fullmatch(sha256) is None:
         errors.append(f"{where}.sha256: must be a lowercase SHA-256 digest")
@@ -690,7 +702,7 @@ def _validate_mapping_schema(mapping: dict) -> None:
             errors,
             "semantic_review",
             mapping["semantic_review"],
-            "reviewed_semantic_selections.csv",
+            SUPPORTED_REVIEW_PATHS,
         )
 
     if "publication" in mapping:
@@ -1080,10 +1092,11 @@ def _validate_mapping(
             "EML mapping semantic_review must be a path/hash mapping."
         )
     review_path = _scalar(semantic_review, "path")
-    if review_path != "reviewed_semantic_selections.csv":
+    if review_path not in SUPPORTED_REVIEW_PATHS:
         raise ValueError(
-            "EML mapping semantic_review.path must be "
-            "reviewed_semantic_selections.csv."
+            "EML mapping semantic_review.path must use the canonical "
+            "reproducibility ledger or its legacy root-level compatibility "
+            "path."
         )
     review_sha256 = _scalar(semantic_review, "sha256")
     if _SHA256_RE.fullmatch(review_sha256) is None:
@@ -1902,6 +1915,8 @@ _SUPPLEMENTARY_COLUMNS = (
     "object_name",
     "entity_name",
     "description",
+    "compression_method",
+    "entity_type",
     "online_url",
 )
 
@@ -1937,7 +1952,7 @@ def _supplementary_objects(objects: object) -> pd.DataFrame:
         "entity_name",
         "description",
     )
-    allowed = required + ("size",)
+    allowed = required + ("size", "compression_method", "entity_type")
     missing = [column for column in required if column not in objects.columns]
     unexpected = [column for column in objects.columns if column not in allowed]
     if missing:
@@ -1981,11 +1996,6 @@ def _supplementary_objects(objects: object) -> pd.DataFrame:
             "Every supplementary-object pid must be an absolute URI without "
             "whitespace."
         )
-    if any(value != "application/zip" for value in values["format_id"]):
-        raise ValueError(
-            "Canonical SDP supplementary objects must use "
-            '"application/zip" as format_id.'
-        )
     if any(
         _SHA256_RE.fullmatch(value) is None for value in values["checksum"]
     ):
@@ -1993,17 +2003,38 @@ def _supplementary_objects(objects: object) -> pd.DataFrame:
             "Every supplementary-object checksum must be a lowercase "
             "SHA-256 digest."
         )
+
+    # The expanded representation names each artifact by its package-relative
+    # path, so ``object_name`` is no longer a basename. It must still be a
+    # *safe* relative path: absolute, drive-rooted, doubled-separator, empty,
+    # ``.`` and ``..`` segments are all refused, because a consumer
+    # reconstructing the SDP from these names must not be able to write
+    # outside it.
+    slash_names = [name.replace("\\", "/") for name in values["object_name"]]
     unsafe_names = [
         name
-        for name in values["object_name"]
-        if re.search(r"[/\\]", name)
-        or name in (".", "..")
-        or not re.search(r"\.zip$", name, flags=re.IGNORECASE)
+        for name in slash_names
+        if name.startswith("/")
+        or re.match(r"^[A-Za-z]:/", name)
+        or "//" in name
+        or any(part in ("", ".", "..") for part in name.split("/"))
     ]
     if unsafe_names:
         raise ValueError(
-            "Every supplementary-object object_name must be a basename "
-            "ending in .zip."
+            "Every supplementary-object object_name must be a safe relative "
+            "object path."
+        )
+    archive = [value == "application/zip" for value in values["format_id"]]
+    invalid_archive_names = [
+        name
+        for name, is_archive in zip(slash_names, archive)
+        if is_archive
+        and ("/" in name or not re.search(r"\.zip$", name, flags=re.IGNORECASE))
+    ]
+    if invalid_archive_names:
+        raise ValueError(
+            'An "application/zip" supplementary-object object_name must be a '
+            "basename ending in .zip."
         )
     if len(set(values["pid"])) != len(values["pid"]) or len(
         set(values["object_name"])
@@ -2061,6 +2092,45 @@ def _supplementary_objects(objects: object) -> pd.DataFrame:
             + "."
         )
 
+    # ``compressionMethod`` describes a container, so only a ZIP may declare
+    # one. An expanded artifact that claimed ``zip`` would tell a consumer to
+    # unpack a plain CSV.
+    if "compression_method" in objects.columns:
+        compression_method: List[Optional[str]] = []
+        for value in objects["compression_method"]:
+            text = None if _is_missing(value) else _trim(_as_character(value))
+            compression_method.append(text or None)
+    else:
+        compression_method = [
+            "zip" if is_archive else None for is_archive in archive
+        ]
+    if any(
+        (is_archive and method != "zip") or (not is_archive and method is not None)
+        for is_archive, method in zip(archive, compression_method)
+    ):
+        raise ValueError(
+            'Only "application/zip" supplementary objects may declare '
+            "compression_method = zip."
+        )
+
+    if "entity_type" in objects.columns:
+        entity_type: List[str] = []
+        for value in objects["entity_type"]:
+            text = None if _is_missing(value) else _trim(_as_character(value))
+            if not text or _CONTROL_CHAR_RE.search(text):
+                raise ValueError(
+                    "Every supplementary-object entity_type must be non-empty "
+                    "and contain no control characters."
+                )
+            entity_type.append(text)
+    else:
+        entity_type = [
+            "Salmon Data Package archive"
+            if is_archive
+            else "Salmon Data Package artifact"
+            for is_archive in archive
+        ]
+
     result = pd.DataFrame(
         {
             "path": paths,
@@ -2069,9 +2139,11 @@ def _supplementary_objects(objects: object) -> pd.DataFrame:
             "checksum_algorithm": "SHA-256",
             "checksum": values["checksum"],
             "size": actual_sizes,
-            "object_name": values["object_name"],
+            "object_name": slash_names,
             "entity_name": values["entity_name"],
             "description": values["description"],
+            "compression_method": compression_method,
+            "entity_type": entity_type,
             "online_url": [_knb_object_url(pid) for pid in values["pid"]],
         },
         columns=list(_SUPPLEMENTARY_COLUMNS),
@@ -2814,7 +2886,12 @@ def _add_supplementary_objects(
             item["checksum"],
             attrs={"method": str(item["checksum_algorithm"])},
         )
-        _add_text(physical, "compressionMethod", "zip")
+        if item["compression_method"] is not None and not _is_missing(
+            item["compression_method"]
+        ):
+            _add_text(
+                physical, "compressionMethod", item["compression_method"]
+            )
         data_format = ET.SubElement(physical, "dataFormat")
         external_format = ET.SubElement(data_format, "externallyDefinedFormat")
         _add_text(external_format, "formatName", item["format_id"])
@@ -2827,7 +2904,7 @@ def _add_supplementary_objects(
         )
         _add_text(online, "url", item["online_url"])
 
-        _add_text(other_entity, "entityType", "Salmon Data Package archive")
+        _add_text(other_entity, "entityType", item["entity_type"])
 
 
 # --- document build ---------------------------------------------------------------
@@ -2850,6 +2927,145 @@ def _record_delimiter(path: str) -> str:
     return "\\n"
 
 
+def _present_values(values) -> List[bool]:
+    """Mirror ``.ms_eml_present_values``: non-NA and non-blank after trimming."""
+    return [
+        not _is_missing(value) and bool(_trim(_as_character(value)))
+        for value in values
+    ]
+
+
+def _used_sdp_methods(
+    path: Path, pkg: Dict[str, object], registry: pd.DataFrame
+) -> pd.DataFrame:
+    """Mirror ``.ms_eml_used_sdp_methods``.
+
+    EML ``methodStep`` asserts that a procedure *was performed* to produce
+    these data. A registry is an inventory of procedures the package knows
+    about, which is not the same claim: an alternative that no observed
+    measurement references must not be asserted as performed. This narrows the
+    registry to procedures actually bound to an observed value, through either
+    route the specification allows:
+
+    * a static ``column_dictionary.method_iri`` on a **measurement** column
+      that has at least one non-empty value (a method annotated on an
+      attribute or identifier column is a legacy dictionary annotation, not a
+      measurement procedure, and is excluded);
+    * a row-varying ``sosa:usedProcedure`` component, resolved through the
+      code values observed where that structure's measure is present.
+    """
+    if not isinstance(registry, pd.DataFrame) or len(registry) == 0:
+        return registry
+
+    used: List[str] = []
+    dictionary = pkg["dictionary"]
+    if "column_role" in dictionary.columns and "method_iri" in dictionary.columns:
+        present_methods = _present_values(dictionary["method_iri"])
+        for index in range(len(dictionary)):
+            role = dictionary["column_role"].iloc[index]
+            if _is_missing(role) or _as_character(role) != "measurement":
+                continue
+            if not present_methods[index]:
+                continue
+            table_id = _as_character(dictionary["table_id"].iloc[index])
+            column = _as_character(dictionary["column_name"].iloc[index])
+            data = pkg["resources"].get(table_id)
+            if data is None or column not in data.columns:
+                continue
+            if any(_present_values(data[column])):
+                used.append(_as_character(dictionary["method_iri"].iloc[index]))
+
+    from .observation_structures import (
+        SDP_OBSERVATION_COMPONENTS_PATH,
+        SDP_OBSERVATION_STRUCTURES_PATH,
+        SOSA_USED_PROCEDURE,
+        read_sdp_observation_structures,
+    )
+
+    structure_paths = (
+        Path(path) / SDP_OBSERVATION_STRUCTURES_PATH,
+        Path(path) / SDP_OBSERVATION_COMPONENTS_PATH,
+    )
+    if all(candidate.exists() for candidate in structure_paths):
+        structure = read_sdp_observation_structures(path, validate=True)
+        components = structure["components"]
+        codes = pkg.get("codes")
+        present_relations = _present_values(components["component_relation_iri"])
+        for index in range(len(components)):
+            if not present_relations[index]:
+                continue
+            if (
+                _as_character(components["component_relation_iri"].iloc[index])
+                != SOSA_USED_PROCEDURE
+            ):
+                continue
+            procedure = components.iloc[index]
+            bound = components[
+                (components["dataset_id"] == procedure["dataset_id"])
+                & (components["table_id"] == procedure["table_id"])
+                & (
+                    components["observation_structure_id"]
+                    == procedure["observation_structure_id"]
+                )
+            ]
+            measure = list(
+                bound.loc[bound["component_role"] == "measure", "column_name"]
+            )[0]
+            table_id = procedure["table_id"]
+            column = procedure["column_name"]
+            data = pkg["resources"][table_id]
+            observed = _present_values(data[measure])
+            code_values: List[str] = []
+            for row, is_observed in enumerate(observed):
+                if not is_observed:
+                    continue
+                value = data[column].iloc[row]
+                if _is_missing(value) or not _trim(_as_character(value)):
+                    continue
+                text = _as_character(value)
+                if text not in code_values:
+                    code_values.append(text)
+            if not code_values or codes is None or len(codes) == 0:
+                continue
+            matched = codes[
+                (codes["dataset_id"] == procedure["dataset_id"])
+                & (codes["table_id"] == table_id)
+                & (codes["column_name"] == column)
+                & codes["code_value"].astype(str).isin(code_values)
+            ]
+            for value in matched["term_iri"]:
+                if not _is_missing(value) and _trim(_as_character(value)):
+                    used.append(_as_character(value))
+
+    return registry[registry["method_iri"].isin(set(used))]
+
+
+def _add_sdp_method_steps(methods: ET.Element, sdp_methods: pd.DataFrame) -> None:
+    """Emit one ``methodStep`` per procedure actually used by these data."""
+    if not isinstance(sdp_methods, pd.DataFrame) or len(sdp_methods) == 0:
+        return
+    optional = (
+        ("method_version", "Method version"),
+        ("protocol_iri", "Protocol IRI"),
+        ("citation", "Citation"),
+    )
+    for index in range(len(sdp_methods)):
+        method = sdp_methods.iloc[index]
+        method_step = ET.SubElement(methods, "methodStep")
+        description = ET.SubElement(method_step, "description")
+        paragraphs = [
+            "Method: " + _as_character(method["method_label"]),
+            _as_character(method["method_description"]),
+            "Method IRI: " + _as_character(method["method_iri"]),
+        ]
+        for field, label in optional:
+            value = method[field]
+            if not _is_missing(value) and _trim(_as_character(value)):
+                paragraphs.append(label + ": " + _as_character(value))
+        for paragraph in paragraphs:
+            _add_text(description, "para", paragraph)
+
+
 def _build_document(
     path: Path,
     pkg: Dict[str, object],
@@ -2858,6 +3074,7 @@ def _build_document(
     vocabulary: pd.DataFrame,
     data_objects: pd.DataFrame,
     supplementary_objects: pd.DataFrame,
+    sdp_methods: pd.DataFrame,
 ) -> Dict[str, object]:
     """Mirror ``.ms_eml_build_document``."""
     root = ET.Element("{" + _EML_NAMESPACE + "}eml")
@@ -2964,6 +3181,8 @@ def _build_document(
         method_step = ET.SubElement(methods, "methodStep")
         description = ET.SubElement(method_step, "description")
         _add_text(description, "para", method.get("description"))
+
+    _add_sdp_method_steps(methods, sdp_methods)
 
     for table_index in range(len(tables)):
         table_row = {
@@ -3263,8 +3482,24 @@ def _export_reviewed(
     vocabulary = _read_vocabulary(root, pkg["dictionary"], mapping)
     data_objects = _data_objects(root, pkg, mapping)
     supplementary = _supplementary_objects(supplementary_objects)
+
+    from .sdp_methods import SDP_METHODS_PATH, read_sdp_methods
+
+    if (root / SDP_METHODS_PATH).exists():
+        sdp_methods = read_sdp_methods(root, validate=True)
+    else:
+        sdp_methods = pd.DataFrame()
+    used_methods = _used_sdp_methods(root, pkg, sdp_methods)
+
     built = _build_document(
-        root, pkg, mapping, configs, vocabulary, data_objects, supplementary
+        root,
+        pkg,
+        mapping,
+        configs,
+        vocabulary,
+        data_objects,
+        supplementary,
+        used_methods,
     )
     _validate_document_links(
         built["document"], pkg["dictionary"], _as_character(mapping["dataset_id"])
@@ -3279,6 +3514,10 @@ def _export_reviewed(
         "public": mapping["publication"]["public"],
         "data_objects": data_objects,
         "supplementary_objects": supplementary,
+        # The complete registry stays available to callers; only the subset
+        # actually bound to observed measurements is asserted in the document.
+        "methods": sdp_methods,
+        "used_methods": used_methods,
     }
 
 
@@ -3412,11 +3651,15 @@ def write_eml_from_sdp(
         identical existing file is treated as an idempotent success.
     supplementary_objects:
         Optional DataFrame (or dict of columns) describing canonical SDP
-        archives to expose as EML ``otherEntity`` elements. Required columns
-        are ``path``, ``pid``, ``format_id``, ``checksum``, ``object_name``,
-        ``entity_name``, and ``description``; optional ``size``, when
-        supplied, must match the file. The initial profile accepts
-        ``application/zip`` objects with lowercase SHA-256 checksums.
+        archives or expanded artifacts to expose as EML ``otherEntity``
+        elements. Required columns are ``path``, ``pid``, ``format_id``,
+        ``checksum``, ``object_name``, ``entity_name``, and ``description``;
+        optional ``size``, when supplied, must match the file.
+        ``entity_type`` may distinguish an expanded artifact from an archive.
+        Objects use lowercase SHA-256 checksums and safe relative
+        ``object_name`` paths; only ``application/zip`` objects receive
+        ``compressionMethod = zip``. ``publish_sdp_to_knb()`` supplies this
+        plan automatically; ordinary standalone EML export leaves it ``None``.
     require_revision_key:
         When ``True``, require a reviewed ``publication.revision_key`` in
         the EML mapping sidecar. The key creates a new deterministic
@@ -3426,8 +3669,10 @@ def write_eml_from_sdp(
     -------
     dict
         The XML text, normalized output path, EML version, metadata package
-        ID, stable series ID, validation result, revision key, and
-        deterministic data and supplementary-object plans.
+        ID, stable series ID, validation result, revision key, the
+        deterministic data and supplementary-object plans, the complete
+        method registry (``methods``), and the subset asserted in EML
+        (``used_methods``).
     """
     if not isinstance(require_revision_key, bool):
         raise ValueError("require_revision_key must be one logical value.")
@@ -3530,7 +3775,9 @@ def write_eml_from_sdp(
         "validation": eml_validation,
         "data_objects": exported["data_objects"],
         "supplementary_objects": exported["supplementary_objects"],
+        "methods": exported["methods"],
+        "used_methods": exported["used_methods"],
     }
 
 
-__all__ = ["write_eml_from_sdp", "EML_VERSION"]
+__all__ = ["write_eml_from_sdp", "EML_VERSION", "SUPPORTED_REVIEW_PATHS"]

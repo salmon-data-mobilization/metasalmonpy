@@ -1,0 +1,3 @@
+dataset_id,method_iri,method_label,method_description,method_version,protocol_iri,citation
+methods-test,https://example.org/methods/expanded-count,Expanded count,Expands an observed count.,,,Example Program. 2026.
+methods-test,https://example.org/methods/mark-recapture,Mark-recapture estimate,Estimates abundance from marked and recaptured fish.,2026,https://example.org/protocols/mark-recapture,

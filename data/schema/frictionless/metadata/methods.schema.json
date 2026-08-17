@@ -1,0 +1,58 @@
+{
+  "$schema": "https://specs.frictionlessdata.io/schemas/table-schema.json",
+  "title": "SDP methods metadata schema",
+  "description": "Optional registry of procedures associated with measurements in the package.",
+  "fields": [
+    {
+      "name": "dataset_id",
+      "type": "string",
+      "description": "References dataset_id in metadata/dataset.csv.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "method_iri",
+      "type": "string",
+      "description": "Absolute IRI identifying a procedure resource, interpreted as a sosa:Procedure.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "method_label",
+      "type": "string",
+      "description": "Human-readable procedure label.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "method_description",
+      "type": "string",
+      "description": "Description sufficient to distinguish the procedure and understand its role.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "method_version",
+      "type": "string",
+      "description": "Version, edition, or date label for the procedure when applicable."
+    },
+    {
+      "name": "protocol_iri",
+      "type": "string",
+      "description": "Absolute IRI for a protocol, standard operating procedure, or other normative method document."
+    },
+    {
+      "name": "citation",
+      "type": "string",
+      "description": "Bibliographic citation or concise source attribution for the procedure."
+    }
+  ],
+  "sdp:table": "methods",
+  "sdp:path": "metadata/methods.csv",
+  "sdp:requirement": "optional",
+  "sdp:rowRule": "One row per procedure described by this package. A method is a SOSA procedure association, not an I-ADOPT variable component."
+}

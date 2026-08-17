@@ -1,0 +1,175 @@
+{
+  "$schema": "https://specs.frictionlessdata.io/schemas/table-schema.json",
+  "title": "SDP dataset metadata schema",
+  "description": "Dataset-level metadata.",
+  "fields": [
+    {
+      "name": "dataset_id",
+      "type": "string",
+      "description": "Stable identifier used to join to other metadata files. Prefer a DOI when available; otherwise use a stable local identifier.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Human-readable dataset title.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "description": "Short description of the dataset contents and purpose.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "creator",
+      "type": "string",
+      "description": "Name(s) of dataset creator(s), team, or originating project/program.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "contact_name",
+      "type": "string",
+      "description": "Primary inquiry contact, such as a person, team, or office.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "contact_email",
+      "type": "string",
+      "description": "Contact email address for the inquiry contact.",
+      "constraints": {
+        "required": true
+      }
+    },
+    {
+      "name": "license",
+      "type": "string",
+      "description": "License name or URL.",
+      "constraints": {
+        "required": true
+      },
+      "example": "CC-BY-4.0",
+      "sdp:examples": [
+        "CC-BY-4.0",
+        "Open Government Licence - Canada"
+      ]
+    },
+    {
+      "name": "contact_org",
+      "type": "string",
+      "description": "Organization for contact_name. Leave blank if already clear from contact_name or creator."
+    },
+    {
+      "name": "contact_position",
+      "type": "string",
+      "description": "Role or title for contact_name, mainly useful when contact_name is an individual."
+    },
+    {
+      "name": "temporal_start",
+      "type": "string",
+      "description": "Start date or year covered by the dataset.",
+      "constraints": {
+        "pattern": "^(\\d{4}|\\d{4}-\\d{2}-\\d{2})$"
+      },
+      "sdp:examples": [
+        "1996",
+        "1996-01-01"
+      ]
+    },
+    {
+      "name": "temporal_end",
+      "type": "string",
+      "description": "End date or year covered by the dataset.",
+      "constraints": {
+        "pattern": "^(\\d{4}|\\d{4}-\\d{2}-\\d{2})$"
+      },
+      "sdp:examples": [
+        "2024",
+        "2024-12-31"
+      ]
+    },
+    {
+      "name": "spatial_extent",
+      "type": "string",
+      "description": "Textual description of spatial coverage."
+    },
+    {
+      "name": "dataset_type",
+      "type": "string",
+      "description": "High-level dataset type."
+    },
+    {
+      "name": "source_citation",
+      "type": "string",
+      "description": "Citation for reports, publications, source databases, or internal documentation."
+    },
+    {
+      "name": "update_frequency",
+      "type": "string",
+      "description": "Planned update cadence.",
+      "constraints": {
+        "enum": [
+          "daily",
+          "weekly",
+          "monthly",
+          "annually",
+          "asNeeded",
+          "unknown"
+        ]
+      }
+    },
+    {
+      "name": "topic_categories",
+      "type": "string",
+      "description": "Semicolon-separated ISO 19115 topic categories for discovery classification.",
+      "example": "biota;oceans"
+    },
+    {
+      "name": "keywords",
+      "type": "string",
+      "description": "Semicolon-separated free-text discovery keywords; avoid repeating topic_categories verbatim.",
+      "example": "coho;escapement;Fraser River"
+    },
+    {
+      "name": "security_classification",
+      "type": "string",
+      "description": "Dataset security classification.",
+      "example": "unclassified"
+    },
+    {
+      "name": "provenance_note",
+      "type": "string",
+      "description": "Narrative about data lineage."
+    },
+    {
+      "name": "created",
+      "type": "datetime",
+      "description": "Timestamp when the dataset was created."
+    },
+    {
+      "name": "modified",
+      "type": "datetime",
+      "description": "Timestamp when the dataset was last modified."
+    },
+    {
+      "name": "spec_version",
+      "type": "string",
+      "description": "SDP specification version.",
+      "example": "sdp-0.2.0"
+    }
+  ],
+  "sdp:table": "dataset",
+  "sdp:path": "metadata/dataset.csv",
+  "sdp:requirement": "required",
+  "sdp:rowRule": "One row per dataset."
+}

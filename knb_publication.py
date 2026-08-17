@@ -50,6 +50,7 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import quote
 
 from . import eml as _eml
+from .atomic_io import atomic_write
 
 # --- constants ----------------------------------------------------------------------
 
@@ -71,6 +72,7 @@ _ORE_NAMESPACES = (
     ("xmlns:rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#"),
     ("xmlns:ore", "http://www.openarchives.org/ore/terms/"),
     ("xmlns:cito", "http://purl.org/spar/cito/"),
+    ("xmlns:prov", "http://www.w3.org/ns/prov#"),
     ("xmlns:dcterms", "http://purl.org/dc/terms/"),
     ("xmlns:xsd", "http://www.w3.org/2001/XMLSchema#"),
 )
@@ -84,7 +86,14 @@ _REQUIRED_SDP_ARTIFACTS = (
     "metadata/column_dictionary.csv",
     "metadata/codes.csv",
     "metadata/semantic_vocabulary.csv",
-    "reviewed_semantic_selections.csv",
+)
+
+_CANONICAL_REVIEW_LEDGER = "reproducibility/reviewed_semantic_selections.csv"
+_LEGACY_REVIEW_LEDGER = "reviewed_semantic_selections.csv"
+_REPRODUCIBILITY_MANIFEST = "reproducibility/manifest.json"
+_OBSERVATION_STRUCTURE_FILES = (
+    "metadata/structure/observation_structures.csv",
+    "metadata/structure/observation_components.csv",
 )
 
 _ARTIFACT_FORMAT_IDS = {
@@ -336,28 +345,82 @@ def _resolve_target_path(path: object, must_work: bool = True) -> str:
     return resolved
 
 
+def _package_root(path: object) -> str:
+    """Mirror ``.ms_knb_package_root``: an existing, non-symlinked SDP root."""
+    lexical = _lexical_absolute_path(path)
+    if not os.path.isdir(lexical):
+        raise FileNotFoundError(f"SDP directory {path} does not exist.")
+    if Path(lexical).is_symlink():
+        raise ValueError("The SDP directory itself must not be a symbolic link.")
+    return os.path.realpath(lexical)
+
+
 def _inside_path(root: object, target: object, must_work: bool = True) -> str:
-    """Mirror ``.ms_knb_inside_path``."""
+    """Mirror ``.ms_knb_inside_path``.
+
+    Returns the artifact's **lexical** in-package path, not its realpath.
+
+    The expanded representation publishes each artifact under its
+    package-relative name, so the name must survive harmless platform aliases
+    (macOS spells a temporary directory through ``/var -> /private/var``)
+    without an in-package symlink being silently renamed to whatever it points
+    at. Recovering the caller's spelling of the root and refusing every
+    symlink on the way down gives both: aliases are transparent, in-package
+    symlinks are refused.
+    """
     root_path = os.path.realpath(str(root))
-    resolved = _resolve_target_path(target, must_work=must_work)
+    lexical = _lexical_absolute_path(target)
+
+    ancestor = lexical
+    lexical_root: Optional[str] = None
+    while True:
+        if os.path.exists(ancestor) and os.path.realpath(ancestor) == root_path:
+            lexical_root = ancestor
+            break
+        parent = os.path.dirname(ancestor)
+        if parent == ancestor:
+            break
+        ancestor = parent
+    prefix = (lexical_root or "") + os.sep
+    if lexical_root is None or not lexical.startswith(prefix):
+        raise ValueError(
+            f"Publication artifact {target} must remain inside the SDP "
+            "directory."
+        )
+
+    relative = lexical[len(prefix):]
+    candidate = os.path.join(root_path, relative)
+    parts = relative.replace("\\", "/").split("/")
+    symlinks = [
+        os.path.join(root_path, *parts[: index + 1])
+        for index in range(len(parts))
+        if Path(os.path.join(root_path, *parts[: index + 1])).is_symlink()
+    ]
+    if symlinks:
+        raise ValueError(
+            "Publication artifacts cannot be reached through a symlink: "
+            + ", ".join(symlinks)
+            + "."
+        )
+    resolved = _resolve_target_path(candidate, must_work=must_work)
     if not resolved.startswith(root_path + os.sep):
         raise ValueError(
             f"Publication artifact {target} must remain inside the SDP "
             "directory."
         )
-    return resolved
+    return candidate
 
 
 def _relative_path(root: object, target: object, must_work: bool = True) -> str:
     """Mirror ``.ms_knb_relative_path``."""
     root_path = os.path.realpath(str(root))
-    resolved = _resolve_target_path(target, must_work=must_work)
+    target = _inside_path(root, target, must_work=must_work)
     prefix = root_path + os.sep
-    if not resolved.startswith(prefix):
+    if not target.startswith(prefix):
         raise ValueError(
             f"Publication object {target} resolves outside the SDP directory."
         )
-    return resolved[len(prefix):].replace("\\", "/")
+    return target[len(prefix):].replace("\\", "/")
 
 
 def _reject_dot_segments(path: object, field: str) -> None:
@@ -406,6 +469,46 @@ def _declared_data_paths(path: str) -> "Dict[str, str]":
     return paths
 
 
+def _require_review_ledger_binding(path: str, mapping: object) -> None:
+    """Assert the EML mapping binds the reviewed ledger this package uses.
+
+    Split out of ``_sdp_artifact_paths`` deliberately (PARITY.md row 34). R
+    keeps this check inside ``.ms_knb_sdp_artifact_paths()``, which it can
+    because ``yaml`` is a hard Import for metasalmon -- R has no core/optional
+    dependency split to respect. Python does: PyYAML lives in the ``[eml]``
+    extra. Leaving the mapping read inside the inventory helper made the
+    deterministic SDP archive, which needs nothing beyond pandas, require that
+    extra to build, and took its core-deps test coverage with it.
+
+    Nothing about the inventory needed the mapping: which ledger is published
+    is decided by what is on disk. Only these two coherence assertions need
+    it, and ``publish_sdp_to_knb()`` has already required the extra long
+    before they run. Running them here fires them ahead of both representation
+    branches and before any archive is written -- strictly earlier than they
+    fired when they lived in the helper.
+
+    A package with neither ledger is deliberately left alone here so the
+    inventory helper still reports R's "requires a reviewed semantic-selection
+    ledger" message rather than a binding complaint about a file that does not
+    exist.
+    """
+    mapped_review = str(
+        ((mapping or {}).get("semantic_review") or {}).get("path") or ""
+    )
+    if os.path.exists(os.path.join(path, _REPRODUCIBILITY_MANIFEST)):
+        if mapped_review != _CANONICAL_REVIEW_LEDGER:
+            raise ValueError(
+                "EML mapping semantic_review.path must bind the reviewed "
+                "ledger declared by the reproducibility manifest."
+            )
+    elif os.path.exists(os.path.join(path, _LEGACY_REVIEW_LEDGER)):
+        if mapped_review != _LEGACY_REVIEW_LEDGER:
+            raise ValueError(
+                "Legacy KNB packages must bind the root-level reviewed ledger "
+                "in EML mapping semantic_review.path."
+            )
+
+
 def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
     """Mirror ``.ms_knb_sdp_artifact_paths``: a closed, manifest-bound inventory."""
     missing = [
@@ -419,6 +522,44 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
             + ", ".join(missing)
             + "."
         )
+
+    # The v0.2 extended layout keeps reviewed selections with the workflow,
+    # provenance, and source records they qualify. Retain the root-level ledger
+    # only as a compatibility path for already reviewed packages. A canonical
+    # reproducibility tree is valid only when its exact contents are declared
+    # by the checksum-bound manifest; publication never discovers extra files.
+    #
+    # Which ledger gets published is decided entirely by what is on disk. The
+    # paired assertion -- that the EML mapping *binds* the ledger this package
+    # actually uses -- needs the mapping sidecar, and therefore PyYAML, so it
+    # lives in ``_require_review_ledger_binding`` and runs in the publication
+    # preflight instead. See PARITY.md row 34: keeping it here made the
+    # deterministic SDP archive require the ``[eml]`` extra to build.
+    if os.path.exists(os.path.join(path, _REPRODUCIBILITY_MANIFEST)):
+        from .reproducibility import (
+            read_sdp_reproducibility_manifest,
+            validate_sdp_reproducibility_manifest,
+        )
+
+        validate_sdp_reproducibility_manifest(path)
+        manifest = read_sdp_reproducibility_manifest(path, validate=False)
+        declared_paths = [
+            str(artifact["path"]) for artifact in manifest["artifacts"]
+        ]
+        if _CANONICAL_REVIEW_LEDGER not in declared_paths:
+            raise ValueError(
+                "KNB publication requires the canonical reviewed-selection "
+                "ledger to be declared by reproducibility/manifest.json."
+            )
+        reproducibility_relative = [_REPRODUCIBILITY_MANIFEST] + declared_paths
+    else:
+        if not os.path.exists(os.path.join(path, _LEGACY_REVIEW_LEDGER)):
+            raise FileNotFoundError(
+                "KNB publication requires a reviewed semantic-selection "
+                "ledger. Use the extended reproducibility/manifest.json layout "
+                "or the legacy root-level ledger."
+            )
+        reproducibility_relative = [_LEGACY_REVIEW_LEDGER]
 
     # SSSOM supplements are optional, but when present they are closed by the
     # metasalmon-generated manifest. Validate that manifest and include only
@@ -458,10 +599,39 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
             str(manifest["artifact"]["path"]),
         ]
 
+    # Methods and mixed-grain observation structures are optional SDP v0.2
+    # metadata. When present they are validated as one complete contract and
+    # become named objects in the expanded representation.
+    methods_relative: List[str] = []
+    if os.path.exists(os.path.join(path, "metadata", "methods.csv")):
+        from .sdp_methods import validate_sdp_methods
+
+        validate_sdp_methods(path)
+        methods_relative = ["metadata/methods.csv"]
+
+    structure_present = [
+        os.path.exists(os.path.join(path, name))
+        for name in _OBSERVATION_STRUCTURE_FILES
+    ]
+    structure_relative: List[str] = []
+    if any(structure_present):
+        if not all(structure_present):
+            raise ValueError(
+                "KNB publication requires both canonical observation-structure "
+                "files when either is present."
+            )
+        from .observation_structures import validate_sdp_observation_structures
+
+        validate_sdp_observation_structures(path)
+        structure_relative = list(_OBSERVATION_STRUCTURE_FILES)
+
     relative = sorted(
         list(_REQUIRED_SDP_ARTIFACTS)
+        + reproducibility_relative
         + semantic_relative
         + decomposition_relative
+        + methods_relative
+        + structure_relative
     )
     return {
         "sdp_artifact:"
@@ -655,8 +825,6 @@ def _build_ore(
         "metadata",
         "data",
         "sdp_archive",
-        # Retain the legacy expanded representation as a readable plan shape.
-        # New plans use one named archive; old manifests can still be audited.
         "sdp_artifact",
     )
 
@@ -673,11 +841,22 @@ def _build_ore(
     metadata.set("rdf:about", metadata_url)
     _add_identifier(metadata, package_id)
     _add_resource(metadata, "ore:isAggregatedBy", aggregation_url)
+    # Every aggregated member records where it sits inside the package. That
+    # is what lets a consumer of the expanded representation rebuild the SDP
+    # hierarchy from flat DataONE objects; the archive representation carries
+    # the same statement for its single ZIP.
+    metadata_member = [
+        member
+        for member in member_objects
+        if str(member["role"]) == "metadata"
+    ][0]
+    location = ET.SubElement(metadata, "prov:atLocation")
+    location.text = str(metadata_member["path"])
 
     documented = [
         member
         for member in member_objects
-        if str(member["role"]) in ("data", "sdp_archive")
+        if str(member["role"]) in ("data", "sdp_archive", "sdp_artifact")
     ]
     for member in documented:
         object_url = _resolve_url(str(member["pid"]))
@@ -687,17 +866,8 @@ def _build_ore(
         _add_resource(description, "cito:isDocumentedBy", metadata_url)
         _add_identifier(description, str(member["pid"]))
         _add_resource(description, "ore:isAggregatedBy", aggregation_url)
-
-    supplemental = [
-        member
-        for member in member_objects
-        if str(member["role"]) == "sdp_artifact"
-    ]
-    for member in supplemental:
-        description = ET.SubElement(root, "rdf:Description")
-        description.set("rdf:about", _resolve_url(str(member["pid"])))
-        _add_identifier(description, str(member["pid"]))
-        _add_resource(description, "ore:isAggregatedBy", aggregation_url)
+        member_location = ET.SubElement(description, "prov:atLocation")
+        member_location.text = str(member["path"])
 
     return root
 
@@ -805,7 +975,7 @@ def _validate_ore(
     documented_urls = [
         _resolve_url(str(member["pid"]))
         for member in member_objects
-        if str(member["role"]) in ("data", "sdp_archive")
+        if str(member["role"]) in ("data", "sdp_archive", "sdp_artifact")
     ]
     metadata_object = [
         member
@@ -825,6 +995,11 @@ def _validate_ore(
         _rdf_attr(node, "resource")
         for node in _find_all_local(document, "isAggregatedBy")
     ]
+    locations = [
+        (node.text or "")
+        for node in _find_all_local(document, "atLocation")
+    ]
+    expected_locations = [str(member["path"]) for member in member_objects]
     if (
         set(documents) != set(documented_urls)
         or len(documents) != len(documented_urls)
@@ -832,6 +1007,9 @@ def _validate_ore(
         or any(value != metadata_url for value in documented_by)
         or len(aggregated_by) != len(expected)
         or any(value != aggregation_url for value in aggregated_by)
+        or set(locations) != set(expected_locations)
+        or len(locations) != len(expected_locations)
+        or len(set(locations)) != len(locations)
     ):
         raise ValueError(
             "Generated OAI-ORE package relationships do not match the "
@@ -866,22 +1044,17 @@ def _atomic_write_raw(payload: bytes, path: str) -> str:
         raise ValueError(
             f"Could not create publication artifact directory {directory}."
         )
-    handle, temporary = tempfile.mkstemp(
-        prefix=".metasalmon-write-", dir=directory
-    )
-    try:
-        with os.fdopen(handle, "wb") as stream:
-            stream.write(payload)
-        if os.path.exists(path) and _object_bytes(path) == payload:
-            os.unlink(temporary)
-            return path
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            try:
-                os.unlink(temporary)
-            except OSError:
-                pass
+    # R writes the staging file first and only then compares, but its
+    # comparison is against ``bytes``, not against the staged file -- so the
+    # staged write contributes nothing to the identical-bytes decision. Making
+    # the check first is the same behaviour with one fewer temporary file.
+    if os.path.exists(path) and _object_bytes(path) == payload:
+        return path
+    # Goes through the shared writer so publication artifacts land at the
+    # umask default, exactly as R's writeBin + file.rename does. Writing
+    # ``mkstemp`` + ``os.replace`` inline here is what published the manifest,
+    # the resource map and the SDP archive as 0600 (PARITY.md row 24).
+    atomic_write(payload, path)
     return path
 
 
@@ -1380,15 +1553,95 @@ def _sdp_archive_object(
     }
 
 
+def _sdp_artifact_objects(path: str, dataset_id: str) -> List[Dict[str, object]]:
+    """Mirror ``.ms_knb_sdp_artifact_objects``: the closed expanded inventory."""
+    objects = []
+    for local_path in _sdp_artifact_paths(path).values():
+        artifact = _sdp_artifact_object(local_path, path, dataset_id)
+        artifact["obsoletes"] = None
+        artifact["obsoleted_by"] = None
+        objects.append(artifact)
+    return objects
+
+
+def _supplementary_object_plan(
+    objects: Sequence[Dict[str, object]]
+) -> Optional[Dict[str, List[object]]]:
+    """Mirror ``.ms_knb_supplementary_object_plan``.
+
+    An archive is named by its basename and described as the whole package; an
+    expanded artifact is named by its package-relative path, which is what
+    lets a consumer rebuild the SDP hierarchy from the deposited objects.
+    """
+    if not objects:
+        return None
+
+    def is_archive(item: Dict[str, object]) -> bool:
+        return str(item["role"]) == "sdp_archive"
+
+    return {
+        "path": [str(item["local_path"]) for item in objects],
+        "pid": [str(item["pid"]) for item in objects],
+        "format_id": [str(item["format_id"]) for item in objects],
+        "checksum": [str(item["sha256"]) for item in objects],
+        "object_name": [
+            os.path.basename(str(item["path"]))
+            if is_archive(item)
+            else str(item["path"])
+            for item in objects
+        ],
+        "entity_name": [
+            "Canonical Salmon Data Package"
+            if is_archive(item)
+            else "Salmon Data Package artifact: " + str(item["path"])
+            for item in objects
+        ],
+        "description": [
+            (
+                "A complete, validated Salmon Data Package containing the "
+                "source data, canonical SDP metadata, reviewed semantic "
+                "selections, SSSOM mapping sets, and measurement-decomposition "
+                "artifacts."
+            )
+            if is_archive(item)
+            else (
+                "Canonical file from the expanded Salmon Data Package at "
+                "'" + str(item["path"]) + "'."
+            )
+            for item in objects
+        ],
+        "size": [_numeric(item["size"]) for item in objects],
+        "entity_type": [
+            "Salmon Data Package archive"
+            if is_archive(item)
+            else "Salmon Data Package artifact"
+            for item in objects
+        ],
+    }
+
+
+def _result_archive_path(plan: Dict[str, object]) -> Optional[str]:
+    """Mirror ``.ms_knb_result_archive_path``: no ZIP means no archive path."""
+    archive_path = plan.get("sdp_archive_path")
+    if archive_path is None:
+        return None
+    return os.path.realpath(str(archive_path))
+
+
 def _build_plan(
     path: str,
     eml_path: str,
     manifest_path: str,
     public: bool,
+    representation: str = "archive",
     prior_manifest: Optional[Dict[str, object]] = None,
     resource_map_path: Optional[str] = None,
 ) -> Dict[str, object]:
     """Mirror ``.ms_knb_build_plan``: the whole pure, offline planner."""
+    if representation not in ("archive", "expanded"):
+        raise ValueError(
+            "representation must be one of \"archive\" or \"expanded\"."
+        )
     from . import knb_archive
     from .eml import write_eml_from_sdp
 
@@ -1401,24 +1654,21 @@ def _build_plan(
     mapping = _eml._read_mapping_yaml(
         os.path.join(path, "metadata", "eml-mapping.yml")
     )
-    archive = knb_archive._write_sdp_archive(path)
-    archive_object = _sdp_archive_object(
-        archive, path, str(mapping["dataset_id"])
-    )
-    supplementary_objects = {
-        "path": [archive_object["local_path"]],
-        "pid": [archive_object["pid"]],
-        "format_id": [archive_object["format_id"]],
-        "checksum": [archive_object["sha256"]],
-        "object_name": [os.path.basename(str(archive_object["path"]))],
-        "entity_name": ["Canonical Salmon Data Package"],
-        "description": [
-            "A complete, validated Salmon Data Package containing the source "
-            "data, canonical SDP metadata, reviewed semantic selections, "
-            "SSSOM mapping sets, and measurement-decomposition artifacts."
-        ],
-        "size": [archive_object["size"]],
-    }
+    # Preflight: reuse the mapping already parsed here rather than re-reading
+    # it, and assert the reviewed-ledger binding before either representation
+    # branch touches the package.
+    _require_review_ledger_binding(path, mapping)
+    archive: Optional[Dict[str, object]] = None
+    if representation == "archive":
+        archive = knb_archive._write_sdp_archive(path)
+        package_objects = [
+            _sdp_archive_object(archive, path, str(mapping["dataset_id"]))
+        ]
+    else:
+        package_objects = _sdp_artifact_objects(
+            path, str(mapping["dataset_id"])
+        )
+    supplementary_objects = _supplementary_object_plan(package_objects)
     # R calls the writer with its default ``overwrite = FALSE``: an identical
     # document re-writes idempotently, a different one must be reviewed.
     eml = write_eml_from_sdp(
@@ -1494,7 +1744,7 @@ def _build_plan(
         ),
         "obsoleted_by": None,
     }
-    members = data_objects + [archive_object, metadata_object]
+    members = data_objects + package_objects + [metadata_object]
 
     resource_map_pid = _resource_map_pid(
         eml["package_id"], mapping["publication_date"], members
@@ -1548,17 +1798,18 @@ def _build_plan(
         or {"status": "unconfirmed", "evidence": []},
         "package_id": eml["package_id"],
         "series_id": eml["series_id"],
-        "representation": "archive",
+        "representation": representation,
         "revision_of": revision_context,
         "prior_manifest": prior_manifest,
         "metadata_pid": eml["package_id"],
         "resource_map_pid": resource_map_pid,
         "objects": data_objects
-        + [archive_object, metadata_object, resource_map_object],
+        + package_objects
+        + [metadata_object, resource_map_object],
         "resource_map_document": ore,
         "resource_map_bytes": ore_bytes,
         "resource_map_path": resource_map_path,
-        "sdp_archive_path": archive["path"],
+        "sdp_archive_path": None if archive is None else archive["path"],
         "eml": eml,
     }
     plan["plan_sha256"] = _plan_fingerprint(plan)
@@ -2207,10 +2458,14 @@ def _catalog_evidence(
     metadata_documents = _catalog_values(
         record_for(str(plan["metadata_pid"])), "documents"
     )
+    # Expanded artifacts are now EML-documented objects like data resources,
+    # so the old "supplemental objects carry no cito relations" check would
+    # contradict the document it is verifying. It is retired here rather than
+    # inverted; the field stays in the evidence for manifest compatibility.
     documented_pids = [
         str(obj["pid"])
         for obj in plan["objects"]
-        if str(obj["role"]) in ("data", "sdp_archive")
+        if str(obj["role"]) in ("data", "sdp_archive", "sdp_artifact")
     ]
     documented_objects = [
         pid
@@ -2218,16 +2473,6 @@ def _catalog_evidence(
         if plan["metadata_pid"]
         in _catalog_values(record_for(pid), "isDocumentedBy")
     ]
-    supplemental_pids = [
-        str(obj["pid"])
-        for obj in plan["objects"]
-        if str(obj["role"]) == "sdp_artifact"
-    ]
-    supplemental_relations_clean = all(
-        not _catalog_values(record_for(pid), "documents")
-        and not _catalog_values(record_for(pid), "isDocumentedBy")
-        for pid in supplemental_pids
-    )
     verified = (
         set(indexed_ids) == set(expected_pids)
         and len(indexed_ids) == len(expected_pids)
@@ -2237,7 +2482,6 @@ def _catalog_evidence(
         and sorted(metadata_documents) == sorted(documented_pids)
         and set(documented_objects) == set(documented_pids)
         and len(documented_objects) == len(documented_pids)
-        and supplemental_relations_clean
     )
     return {
         "verified": bool(verified),
@@ -2247,7 +2491,7 @@ def _catalog_evidence(
         "metadata_pid": plan["metadata_pid"],
         "metadata_documents": sorted(metadata_documents),
         "documented_data_pids": sorted(documented_objects),
-        "supplemental_relations_clean": bool(supplemental_relations_clean),
+        "supplemental_relations_clean": True,
     }
 
 
@@ -2625,7 +2869,8 @@ def _publication_result(
         "resource_map_pid": plan["resource_map_pid"],
         "manifest_path": os.path.realpath(manifest_path),
         "resource_map_path": os.path.realpath(str(plan["resource_map_path"])),
-        "sdp_archive_path": os.path.realpath(str(plan["sdp_archive_path"])),
+        "sdp_archive_path": _result_archive_path(plan),
+        "representation": plan["representation"],
         "manifest": manifest,
     }
 
@@ -3320,18 +3565,22 @@ def publish_sdp_to_knb(
     dry_run: bool = True,
     confirm: Optional[bool] = None,
     revision_manifest: Optional[Union[str, Path]] = None,
+    representation: str = "archive",
 ) -> Dict[str, object]:
     """Publish a reviewed Salmon Data Package to production KNB.
 
     Plans an immutable DataONE package containing the original data resources
-    named by ``tables.csv``, one friendly deterministic ZIP of the complete
-    canonical SDP, one validated EML 2.2.0 metadata object, and a
-    deterministic OAI-ORE resource map. Internal SDP sidecars stay inside the
-    ZIP instead of becoming unnamed catalog objects. The default is a
-    credential-free, network-free dry run. Live publication requires a
-    pre-existing exact dry-run manifest and an explicitly supplied
-    ``confirm=True`` approving that plan. Redistribution authority is recorded
-    separately in the reviewed EML sidecar.
+    named by ``tables.csv``, one validated EML 2.2.0 metadata object, and a
+    deterministic OAI-ORE resource map. The ``expanded`` representation
+    publishes each allowlisted canonical SDP artifact as a named,
+    EML-documented DataONE object and records its package-relative path with
+    PROV-O ``atLocation``; it does not create a ZIP or duplicate the source
+    table. The compatibility ``archive`` representation publishes one
+    deterministic SDP ZIP instead. Neither mode scans arbitrary package files.
+    The default operation is a credential-free, network-free dry run. Live
+    publication requires a pre-existing exact dry-run manifest and an
+    explicitly supplied ``confirm=True`` approving that plan. Redistribution
+    authority is recorded separately in the reviewed EML sidecar.
 
     DataONE credentials are read only inside the live adapter. Supply a
     short-lived DataONE JWT through
@@ -3384,13 +3633,23 @@ def publish_sdp_to_knb(
         must contain a new ``publication.revision_key``, the metadata series
         stays stable, and the new EML/resource-map objects obsolete their
         predecessors. Access cannot change in the same operation.
+    representation:
+        ``"expanded"`` publishes the closed SDP artifact inventory as
+        individually named objects whose relative paths can reconstruct the
+        package. ``"archive"`` (the compatibility default) publishes one
+        deterministic ZIP in addition to each source data object.
 
     Returns
     -------
     dict
-        Publication status, identifiers, normalized manifest, resource-map and
-        SDP-archive paths, and the manifest itself.
+        Publication status, identifiers, normalized manifest and resource-map
+        paths, the optional SDP-archive path, the representation, and the
+        manifest itself.
     """
+    if representation not in ("archive", "expanded"):
+        raise ValueError(
+            'representation must be one of "archive" or "expanded".'
+        )
     _validate_flag(public, "public")
     _validate_flag(dry_run, "dry_run")
     if not dry_run and confirm is not True:
@@ -3400,9 +3659,7 @@ def publish_sdp_to_knb(
             "authority is recorded separately."
         )
     _require_knb_extra()
-    if not os.path.isdir(str(path)):
-        raise FileNotFoundError(f"SDP directory {path} does not exist.")
-    root = os.path.realpath(str(path))
+    root = _package_root(path)
     prior_manifest = _revision_manifest(
         None if revision_manifest is None else str(revision_manifest)
     )
@@ -3450,6 +3707,7 @@ def publish_sdp_to_knb(
         eml_path,
         manifest_path,
         public,
+        representation=representation,
         prior_manifest=prior_manifest,
         resource_map_path=resource_map_path,
     )

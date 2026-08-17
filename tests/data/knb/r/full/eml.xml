@@ -1,0 +1,560 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<eml:eml xmlns:eml="https://eml.ecoinformatics.org/eml-2.2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://eml.ecoinformatics.org/eml-2.2.0 https://eml.ecoinformatics.org/eml-2.2.0/eml.xsd" packageId="urn:uuid:524161f4-0a68-538d-a666-bc56f254b981" system="knb">
+  <dataset id="dataset-1f8d5b96a57e5153aec1184099d8eeac">
+    <alternateIdentifier>demo-salmon-2026</alternateIdentifier>
+    <title>Demonstration salmon counts</title>
+    <creator id="party-f002dc895e6d5e248dede433320ac5d2">
+      <organizationName>Example Salmon Program</organizationName>
+    </creator>
+    <metadataProvider id="party-9dbc1e9cd8f458bca13ce892734f88ca">
+      <individualName>
+        <givenName>Alex</givenName>
+        <surName>Steward</surName>
+      </individualName>
+      <organizationName>Example Salmon Program</organizationName>
+      <electronicMailAddress>alex@example.org</electronicMailAddress>
+      <userId directory="https://orcid.org">https://orcid.org/0000-0001-9317-0364</userId>
+    </metadataProvider>
+    <pubDate>2026-01-01</pubDate>
+    <language>eng</language>
+    <abstract>
+      <para>A compact fixture for deterministic EML export tests.</para>
+    </abstract>
+    <keywordSet>
+      <keyword>salmon</keyword>
+      <keyword>abundance</keyword>
+      <keywordThesaurus>None</keywordThesaurus>
+    </keywordSet>
+    <additionalInfo>
+      <para>Source citation: Example Salmon Program. 2026. Demonstration counts.</para>
+      <para>Provenance note: Counts were compiled from a documented monitoring program.</para>
+      <para>Supporting document citation: Example Salmon Program. 2026. Demonstration count documentation.</para>
+      <para>Supporting document URL: https://example.org/demonstration-count-documentation.pdf</para>
+      <para>Supporting document SHA-256: 4444444444444444444444444444444444444444444444444444444444444444</para>
+    </additionalInfo>
+    <intellectualRights>
+      <para>Copyright Example Salmon Program.</para>
+      <para>Use is subject to https://example.org/data-terms/.</para>
+    </intellectualRights>
+    <coverage>
+      <temporalCoverage>
+        <rangeOfDates>
+          <beginDate>
+            <calendarDate>2024</calendarDate>
+          </beginDate>
+          <endDate>
+            <calendarDate>2025</calendarDate>
+          </endDate>
+        </rangeOfDates>
+      </temporalCoverage>
+      <taxonomicCoverage>
+        <taxonomicClassification>
+          <taxonRankName>Species</taxonRankName>
+          <taxonRankValue>Oncorhynchus nerka</taxonRankValue>
+          <commonName>Sockeye salmon</commonName>
+        </taxonomicClassification>
+      </taxonomicCoverage>
+    </coverage>
+    <contact id="party-e53ecde483a35f95a5fb6da68c3b7b41">
+      <organizationName>Example Salmon Program</organizationName>
+      <electronicMailAddress>data@example.org</electronicMailAddress>
+    </contact>
+    <publisher id="party-b5228a85ff315293b2856e8b4fc89396">
+      <organizationName>Example Salmon Program</organizationName>
+    </publisher>
+    <methods>
+      <methodStep>
+        <description>
+          <para>Counts were compiled using the documented monitoring workflow.</para>
+        </description>
+      </methodStep>
+    </methods>
+    <dataTable id="table-791bcd176867565f942ac0a1dc3ae5c8">
+      <alternateIdentifier>counts</alternateIdentifier>
+      <entityName>Salmon counts</entityName>
+      <entityDescription>One annual abundance record per identifier.</entityDescription>
+      <physical id="physical-791bcd176867565f942ac0a1dc3ae5c8">
+        <objectName>counts.csv</objectName>
+        <size unit="byte">87</size>
+        <authentication method="SHA-256">ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb</authentication>
+        <characterEncoding>UTF-8</characterEncoding>
+        <dataFormat>
+          <textFormat>
+            <numHeaderLines>1</numHeaderLines>
+            <recordDelimiter>\n</recordDelimiter>
+            <attributeOrientation>column</attributeOrientation>
+            <simpleDelimited>
+              <fieldDelimiter>,</fieldDelimiter>
+              <quoteCharacter>"</quoteCharacter>
+            </simpleDelimited>
+          </textFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f</url>
+          </online>
+        </distribution>
+      </physical>
+      <attributeList id="attributes-791bcd176867565f942ac0a1dc3ae5c8">
+        <attribute id="attribute-681c8dbd8b4556d89b3c4bb47385fa80">
+          <attributeName>record_id</attributeName>
+          <attributeLabel>Record identifier</attributeLabel>
+          <attributeDefinition>Stable identifier for the annual count record.</attributeDefinition>
+          <storageType>string</storageType>
+          <measurementScale>
+            <nominal>
+              <nonNumericDomain>
+                <textDomain>
+                  <definition>Values documented by the record_id attribute definition.</definition>
+                </textDomain>
+              </nonNumericDomain>
+            </nominal>
+          </measurementScale>
+        </attribute>
+        <attribute id="attribute-66f0f5985d335567a2a2cdd847f834cf">
+          <attributeName>year</attributeName>
+          <attributeLabel>Observation year</attributeLabel>
+          <attributeDefinition>Calendar year represented by the record.</attributeDefinition>
+          <storageType>double</storageType>
+          <measurementScale>
+            <dateTime>
+              <formatString>YYYY</formatString>
+            </dateTime>
+          </measurementScale>
+        </attribute>
+        <attribute id="attribute-d6a76435820c598f899770feed9e3470">
+          <attributeName>count</attributeName>
+          <attributeLabel>Salmon abundance</attributeLabel>
+          <attributeDefinition>Estimated number of salmon; zero is a valid observed value.</attributeDefinition>
+          <storageType>double</storageType>
+          <measurementScale>
+            <ratio>
+              <unit>
+                <standardUnit>number</standardUnit>
+              </unit>
+              <numericDomain>
+                <numberType>whole</numberType>
+                <bounds>
+                  <minimum exclusive="false">0</minimum>
+                </bounds>
+              </numericDomain>
+            </ratio>
+          </measurementScale>
+          <annotation>
+            <propertyURI label="Subject">http://purl.org/dc/terms/subject</propertyURI>
+            <valueURI label="Observed rate or abundance">https://w3id.org/smn/ObservedRateOrAbundance</valueURI>
+          </annotation>
+          <annotation>
+            <propertyURI label="has unit">http://qudt.org/schema/qudt/hasUnit</propertyURI>
+            <valueURI label="Count">http://qudt.org/vocab/unit/COUNT</valueURI>
+          </annotation>
+        </attribute>
+        <attribute id="attribute-a2b68677805b5343bbf30a2f4b551371">
+          <attributeName>literal_missing</attributeName>
+          <attributeLabel>Literal missing marker</attributeLabel>
+          <attributeDefinition>A text field whose second row uses the literal CSV token NA.</attributeDefinition>
+          <storageType>string</storageType>
+          <measurementScale>
+            <nominal>
+              <nonNumericDomain>
+                <textDomain>
+                  <definition>Values documented by the literal_missing attribute definition.</definition>
+                </textDomain>
+              </nonNumericDomain>
+            </nominal>
+          </measurementScale>
+          <missingValueCode>
+            <code>NA</code>
+            <codeExplanation>No value was supplied.</codeExplanation>
+          </missingValueCode>
+        </attribute>
+        <attribute id="attribute-dcbae7746af05d1fad52c1bc1fff4815">
+          <attributeName>blank_only</attributeName>
+          <attributeLabel>Blank implicit absence</attributeLabel>
+          <attributeDefinition>A text field whose second row is an empty CSV field.</attributeDefinition>
+          <storageType>string</storageType>
+          <measurementScale>
+            <nominal>
+              <nonNumericDomain>
+                <textDomain>
+                  <definition>Values documented by the blank_only attribute definition.</definition>
+                </textDomain>
+              </nonNumericDomain>
+            </nominal>
+          </measurementScale>
+        </attribute>
+      </attributeList>
+      <constraint>
+        <primaryKey>
+          <constraintName>PrimaryKey_counts</constraintName>
+          <key>
+            <attributeReference>attribute-681c8dbd8b4556d89b3c4bb47385fa80</attributeReference>
+          </key>
+        </primaryKey>
+      </constraint>
+      <constraint>
+        <notNullConstraint>
+          <constraintName>NotNull_counts</constraintName>
+          <key>
+            <attributeReference>attribute-681c8dbd8b4556d89b3c4bb47385fa80</attributeReference>
+            <attributeReference>attribute-66f0f5985d335567a2a2cdd847f834cf</attributeReference>
+            <attributeReference>attribute-d6a76435820c598f899770feed9e3470</attributeReference>
+          </key>
+        </notNullConstraint>
+      </constraint>
+      <numberOfRecords>2</numberOfRecords>
+    </dataTable>
+    <otherEntity id="other-entity-437f2574c7595d23b5ea397129ccadc8">
+      <alternateIdentifier system="DataONE">urn:uuid:2de6adf9-fcbe-5e47-aabd-b68312b4e573</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: datapackage.json</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'datapackage.json'.</entityDescription>
+      <physical id="physical-faac14af48d359a2bb620a3218a5b0ad">
+        <objectName>datapackage.json</objectName>
+        <size unit="byte">5971</size>
+        <authentication method="SHA-256">62ac29147234cf2c53e2f4085da9708119950e0c00b87df1317f1ece171198c9</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>application/json</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: datapackage.json</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:2de6adf9-fcbe-5e47-aabd-b68312b4e573</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-f6eeba821d6456b89feb6e87260c0854">
+      <alternateIdentifier system="DataONE">urn:uuid:b052a2d5-2896-5aa2-a047-e609aee66013</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: metadata/codes.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'metadata/codes.csv'.</entityDescription>
+      <physical id="physical-e6531b9bebdc548e90b719d7b57ba501">
+        <objectName>metadata/codes.csv</objectName>
+        <size unit="byte">105</size>
+        <authentication method="SHA-256">c8d6bf4a36afb5da028afa38537eae21baf2962e852c530dba86ead970346a2d</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: metadata/codes.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:b052a2d5-2896-5aa2-a047-e609aee66013</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-48e3f9edd0d8516297bb8315b0b5839b">
+      <alternateIdentifier system="DataONE">urn:uuid:e4c85619-8faa-580a-ae3e-e638c1c30f3f</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: metadata/column_dictionary.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'metadata/column_dictionary.csv'.</entityDescription>
+      <physical id="physical-ac9612c922dc5d2d8784399d01620187">
+        <objectName>metadata/column_dictionary.csv</objectName>
+        <size unit="byte">1023</size>
+        <authentication method="SHA-256">696de6e6d87c69e42d64f954378341acf94a0863d907540174eee0a43ad4222b</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: metadata/column_dictionary.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:e4c85619-8faa-580a-ae3e-e638c1c30f3f</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-184e83e10aad55ac913ad9274d51dcdc">
+      <alternateIdentifier system="DataONE">urn:uuid:560f65d7-6b51-546d-9588-4840ede14298</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: metadata/dataset.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'metadata/dataset.csv'.</entityDescription>
+      <physical id="physical-d6e65ea48a8d565c9bee36b5f1309669">
+        <objectName>metadata/dataset.csv</objectName>
+        <size unit="byte">724</size>
+        <authentication method="SHA-256">9343a810a9f866066086c0ac45eead20106a552073c92bb451b1133679194d5b</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: metadata/dataset.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:560f65d7-6b51-546d-9588-4840ede14298</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-c0225e8281765741aaa88d8f3e019537">
+      <alternateIdentifier system="DataONE">urn:uuid:62d9266c-0334-54fd-9d04-f8aa9c512208</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: metadata/methods.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'metadata/methods.csv'.</entityDescription>
+      <physical id="physical-1a2eb0d610fd5cec835f659d7b933b39">
+        <objectName>metadata/methods.csv</objectName>
+        <size unit="byte">314</size>
+        <authentication method="SHA-256">a1b148fda3a31f95c51cd58c328890686171a2acbac4e7bccac54b5e65651808</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: metadata/methods.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:62d9266c-0334-54fd-9d04-f8aa9c512208</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-dc872cca5a8f512592ac26f7306039f8">
+      <alternateIdentifier system="DataONE">urn:uuid:b88118ea-02f4-5f50-800b-6c1a040de636</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: metadata/semantic_vocabulary.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'metadata/semantic_vocabulary.csv'.</entityDescription>
+      <physical id="physical-4ae74de585ff5fa68355d0fe8793c14c">
+        <objectName>metadata/semantic_vocabulary.csv</objectName>
+        <size unit="byte">1188</size>
+        <authentication method="SHA-256">fd6c78eab176792dd1a23ed8937d86f565c0a308afd8c52743ed293906f1163f</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: metadata/semantic_vocabulary.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:b88118ea-02f4-5f50-800b-6c1a040de636</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-872184f395ee5273a41c3a6c7c172165">
+      <alternateIdentifier system="DataONE">urn:uuid:f38b6d9e-a487-50d5-8fc8-b42a6d1b9e00</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: metadata/structure/observation_components.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'metadata/structure/observation_components.csv'.</entityDescription>
+      <physical id="physical-2af59415fd985f6db2aa2057e1dc0b9a">
+        <objectName>metadata/structure/observation_components.csv</objectName>
+        <size unit="byte">354</size>
+        <authentication method="SHA-256">9e94088e486c13e7cb21b3cec14f71c4f528e999e1dc59bd1576dabfbe3f2b50</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: metadata/structure/observation_components.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:f38b6d9e-a487-50d5-8fc8-b42a6d1b9e00</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-665906d4195856d2814095002cacc9de">
+      <alternateIdentifier system="DataONE">urn:uuid:58eac1f6-4627-5cc7-b9dd-7ad9148900e4</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: metadata/structure/observation_structures.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'metadata/structure/observation_structures.csv'.</entityDescription>
+      <physical id="physical-43a9768c3b2b565db265096b2e3751dd">
+        <objectName>metadata/structure/observation_structures.csv</objectName>
+        <size unit="byte">222</size>
+        <authentication method="SHA-256">6b8170dc534c9e2c9b608ef4ca4e948d3418cc4c84698980517b5298e7622a67</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: metadata/structure/observation_structures.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:58eac1f6-4627-5cc7-b9dd-7ad9148900e4</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-8a47c268f91a590e8f890ee2090d24cc">
+      <alternateIdentifier system="DataONE">urn:uuid:35666ad4-253c-5cf9-a019-87b8958dfc9f</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: metadata/tables.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'metadata/tables.csv'.</entityDescription>
+      <physical id="physical-acf62a83f25153b1afb66a9320da8440">
+        <objectName>metadata/tables.csv</objectName>
+        <size unit="byte">280</size>
+        <authentication method="SHA-256">201d76152b7a2a64f21a05df8168267de3acac6813de5f838780bd208e2e2d7c</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: metadata/tables.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:35666ad4-253c-5cf9-a019-87b8958dfc9f</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-ee69edd3bc83595cafa26763b3c84e29">
+      <alternateIdentifier system="DataONE">urn:uuid:de6b3eaa-012e-5d06-ba8d-e09053f47596</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: reproducibility/manifest.json</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'reproducibility/manifest.json'.</entityDescription>
+      <physical id="physical-29498c7f73fa5904b4b8ba464be80834">
+        <objectName>reproducibility/manifest.json</objectName>
+        <size unit="byte">1677</size>
+        <authentication method="SHA-256">5cf0853d3d192a0b57edc78c3f81375716496664bf474609577b7a353191cfa8</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>application/json</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: reproducibility/manifest.json</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:de6b3eaa-012e-5d06-ba8d-e09053f47596</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-7ea4164c6296528b867b855a4d976037">
+      <alternateIdentifier system="DataONE">urn:uuid:d54605cd-5d4d-5647-8771-fdb9e0ab5a47</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: reproducibility/provenance/activities.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'reproducibility/provenance/activities.csv'.</entityDescription>
+      <physical id="physical-60bdb75bd1a85c79bb1c2e114ae12c94">
+        <objectName>reproducibility/provenance/activities.csv</objectName>
+        <size unit="byte">39</size>
+        <authentication method="SHA-256">08650f3b95d5488015ccf6542e15804946f2b99532c5081ab157d7a90bfd449b</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: reproducibility/provenance/activities.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:d54605cd-5d4d-5647-8771-fdb9e0ab5a47</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-6d43b9e1fe3e5389ad0e819af74f728b">
+      <alternateIdentifier system="DataONE">urn:uuid:cd774f36-4df2-56f5-aca8-b6b72eb5c209</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: reproducibility/reviewed_semantic_selections.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'reproducibility/reviewed_semantic_selections.csv'.</entityDescription>
+      <physical id="physical-57a70b0710495400973c300ddfc90bd7">
+        <objectName>reproducibility/reviewed_semantic_selections.csv</objectName>
+        <size unit="byte">853</size>
+        <authentication method="SHA-256">c38bc55daed99e4250341820ef72aecb0d74ca4f4a3d7ee3d7f718dfc69e8ad3</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: reproducibility/reviewed_semantic_selections.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:cd774f36-4df2-56f5-aca8-b6b72eb5c209</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-bf1089aa58b45946a07ff568487f9794">
+      <alternateIdentifier system="DataONE">urn:uuid:6617e91e-2f69-5532-a7a6-707c3cef29f0</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: reproducibility/source/source-manifest.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'reproducibility/source/source-manifest.csv'.</entityDescription>
+      <physical id="physical-374c52fe250d5350a35e01e4754eb750">
+        <objectName>reproducibility/source/source-manifest.csv</objectName>
+        <size unit="byte">31</size>
+        <authentication method="SHA-256">9072500c74637703bc05de226debbe316ba8130ac9915ad06b7ab162e0a7c5c4</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: reproducibility/source/source-manifest.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:6617e91e-2f69-5532-a7a6-707c3cef29f0</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-cff7ea8a80ee52558db25c1fab3d1e7e">
+      <alternateIdentifier system="DataONE">urn:uuid:24d15fae-d275-5d05-bced-f5bb802bca30</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: reproducibility/workflow/build-sdp.R</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'reproducibility/workflow/build-sdp.R'.</entityDescription>
+      <physical id="physical-a4b4190ce7985fcea6e86a7db6584f66">
+        <objectName>reproducibility/workflow/build-sdp.R</objectName>
+        <size unit="byte">27</size>
+        <authentication method="SHA-256">84a07477358f29fc9bbbb435d4359a5991b9e6ddc1d73ab68c15c1df69c643e5</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>application/octet-stream</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: reproducibility/workflow/build-sdp.R</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:24d15fae-d275-5d05-bced-f5bb802bca30</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-8f78875fa23850ddbb95dd94d9a69d07">
+      <alternateIdentifier system="DataONE">urn:uuid:572a892c-3012-586f-a74f-7f967e76bb9b</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: reproducibility/workflow/semantic-release.R</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'reproducibility/workflow/semantic-release.R'.</entityDescription>
+      <physical id="physical-3b184ce67022554da0f9c523dfdfcd18">
+        <objectName>reproducibility/workflow/semantic-release.R</objectName>
+        <size unit="byte">28</size>
+        <authentication method="SHA-256">b5535d0bdb9d826858c860225e6c46abbc8ae1fd9702de9c9e72a4c4d02dc2ae</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>application/octet-stream</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: reproducibility/workflow/semantic-release.R</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:572a892c-3012-586f-a74f-7f967e76bb9b</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+    <otherEntity id="other-entity-288b678aefe458368ada0647029442b5">
+      <alternateIdentifier system="DataONE">urn:uuid:47d9f979-3e55-59fd-bc2f-88cf403b6929</alternateIdentifier>
+      <entityName>Salmon Data Package artifact: reproducibility/workflow/semantic_suggestions.csv</entityName>
+      <entityDescription>Canonical file from the expanded Salmon Data Package at 'reproducibility/workflow/semantic_suggestions.csv'.</entityDescription>
+      <physical id="physical-a94aff64f8515218813e8757504977b8">
+        <objectName>reproducibility/workflow/semantic_suggestions.csv</objectName>
+        <size unit="byte">58</size>
+        <authentication method="SHA-256">f22dcf094c6e069e397bec475af74c9462b6f6f480241344c84181158189fc00</authentication>
+        <dataFormat>
+          <externallyDefinedFormat>
+            <formatName>text/csv</formatName>
+          </externallyDefinedFormat>
+        </dataFormat>
+        <distribution>
+          <online>
+            <onlineDescription>Download Salmon Data Package artifact: reproducibility/workflow/semantic_suggestions.csv</onlineDescription>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:47d9f979-3e55-59fd-bc2f-88cf403b6929</url>
+          </online>
+        </distribution>
+      </physical>
+      <entityType>Salmon Data Package artifact</entityType>
+    </otherEntity>
+  </dataset>
+</eml:eml>

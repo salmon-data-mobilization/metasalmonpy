@@ -1,5 +1,168 @@
 # Changelog
 
+## 0.1.8
+
+**This release is a parity claim against metasalmon 0.1.8.** Under the mirror
+contract a version number here asserts that this package delivers the
+behaviour of the metasalmon release with the same number — not a calendar date
+and not a partial port. Everything below was built against metasalmon at the
+**v0.1.8 tag**, extracted read-only and loaded with `pkgload::load_all()`, and
+every behavioural claim was checked by **running both implementations over the
+same inputs** rather than by reading the R source. The committed fixtures under
+`tests/data/sdp-extensions/` and `tests/data/knb/r/` are unmodified R v0.1.8
+output, generated under `LC_COLLATE=C`. Deliberate differences are registered
+in [PARITY.md](PARITY.md); rows 29–32 are new here, and rows 17, 18, 20, 22,
+23, 25, 26 and 27 carry corrections found while re-verifying the register
+against metasalmon 0.3.0.
+
+### What the differential runs showed
+
+Measured, not asserted. For the same inputs:
+
+- `metadata/methods.csv`, `observation_structures.csv`,
+  `observation_components.csv` and the updated `datapackage.json` written here
+  are **byte-identical** to R's, including canonical ordering — Python rewrote
+  R's own files from reversed row order and reproduced the bytes exactly.
+- `reproducibility/manifest.json` is **byte-identical apart from the two
+  provenance values** that name the writer (PARITY.md row 29).
+- `extract_sdp_observations()` returns the same structures, in the same order,
+  with the same columns, rows and dictionary-derived types as R.
+- An **expanded** KNB dry run over an SDP carrying a reproducibility manifest,
+  a methods registry and observation structures plans the same 20 objects in
+  the same order, with **every PID and every object checksum identical to R's**
+  except the resource map, whose bytes differ only in XML formatting and which
+  is `ET.canonicalize`-equal (PARITY.md rows 4 and 18). The EML document is
+  `ET.canonicalize`-equal to R's, including which registry methods it asserts
+  and which it omits.
+- `apply_semantic_suggestions()` returns R's exact value for all three
+  strategies, including the semicolon-joined multiple constraints.
+
+### Added
+
+- **SDP procedure registry, read and validate.** `read_sdp_methods()` and
+  `validate_sdp_methods()` read the optional `metadata/methods.csv` with its
+  exact closed schema, canonical `(dataset_id, method_iri)` ordering, absolute
+  IRIs, per-dataset uniqueness, static `column_dictionary.method_iri` coverage
+  and `datapackage.json` inventory. **`write_sdp_methods()` is deliberately
+  not implemented** and raises with the reason: SDP 0.3.0 removes the registry
+  from the specification, so a writer would exist only to be deleted in the
+  same replay (PARITY.md row 9).
+- **Measure-specific observation structures.**
+  `read_sdp_observation_structures()`, `write_sdp_observation_structures()` and
+  `validate_sdp_observation_structures()` handle the paired
+  `metadata/structure/observation_*.csv` resources. Validation enforces
+  complete one-structure-per-measure coverage, required dimension grain, typed
+  repeated-value invariance, static and row-varying procedure resolution
+  (including enumerated codes that no current row uses), and the canonical
+  descriptor inventory — and is unchanged when the extension is absent. The two
+  CSVs and the descriptor are staged and installed as **one rollback-capable
+  transaction**, then re-validated from the bytes on disk.
+- **`extract_sdp_observations()`** produces one deterministic normalized table
+  per declared measure-specific structure, cast through the dictionary's
+  `value_type`, without claiming RDF Data Cube conformance.
+- **Reproducibility manifests.** `read_sdp_reproducibility_manifest()`,
+  `write_sdp_reproducibility_manifest()` and
+  `validate_sdp_reproducibility_manifest()` bind an explicit inventory of
+  reviewed selections, workflow, provenance and source records to exact paths,
+  media types, sizes and SHA-256 digests in `reproducibility/manifest.json`.
+  The writer never discovers files, and validation is **closed over the exact
+  directory contents**, so an editor backup or a private note cannot reach a
+  public repository.
+- **`apply_semantic_suggestions(strategy="reviewed")`** applies explicit
+  accepted review decisions. Reviewed and LLM-reviewed selections now preserve
+  **multiple constraints for one measurement** as a deduplicated,
+  first-occurrence-ordered, semicolon-separated `constraint_iri`; lexical
+  `"top"` and all non-constraint roles stay single-winner.
+- **Expanded KNB publication.** `publish_sdp_to_knb(representation="expanded")`
+  deposits the closed SDP inventory as individually named, EML-documented
+  DataONE objects with package-relative PROV-O `atLocation` statements, instead
+  of a ZIP. It includes validated SSSOM, decomposition, methods,
+  observation-structure and reproducibility artifacts, and can reconstruct the
+  exact SDP hierarchy without publishing unrelated files. `"archive"` remains
+  the default.
+- **EML method steps.** `write_eml_from_sdp()` documents the procedures
+  actually used by observed measurements — with method and protocol IRIs,
+  versions, descriptions and citations — and returns both the complete registry
+  (`methods`) and the asserted subset (`used_methods`). Unused registry
+  alternatives are **not** asserted as performed, and a method annotated on a
+  non-measurement column is not a measurement procedure.
+- **The vendored SDP schema bundle**, taken verbatim from the upstream
+  `sdp-0.2.0` **tag** (not `main`, which is 0.3.0-shaped and no longer carries
+  `methods.schema.json`). `metadata.SDP_PROFILE_VERSION` is now read from it,
+  discharging the retirement condition the 0.1.7 constant recorded.
+
+### Changed
+
+- The reviewed semantic-selection ledger defaults to the extended
+  `reproducibility/` layout, with the legacy root-level path retained as a
+  compatibility route for already-reviewed packages.
+- Supplementary EML objects may be non-ZIP artifacts named by a safe relative
+  path; only `application/zip` objects declare `compressionMethod`, and
+  `entity_type` distinguishes an expanded artifact from an archive.
+- Generated SDP descriptors and the vendored bundle use the canonical
+  `salmon-data-mobilization.github.io/smn-data-pkg` publication URLs. These are
+  values stamped into output; nothing fetches them.
+- The reviewed QUDT-to-EML unit crosswalk covers both HTTP and HTTPS forms of
+  QUDT `Individual` (`INDIV`) and `Count`.
+
+### Fixed
+
+- **KNB publication artifacts were published as `0600`.**
+  `_atomic_write_raw()` inlined `tempfile.mkstemp` + `os.replace`, both of
+  which preserve mkstemp's owner-only mode, so the recovery manifest, the
+  resource map and the SDP archive were unreadable to collaborators and to a
+  web server. It now routes through `atomic_io`, the module written to prevent
+  exactly this (PARITY.md row 24). Every publication write goes through that
+  one function; a regression test asserts the resulting mode matches a plain
+  write under two umasks, and fails on a reverted build.
+- **A missing `match_type` no longer discards every candidate.** The optional
+  provider field now contributes to ranking and an absent one scores as
+  unclassified, matching `.match_type_score_profiled()` on every probed value.
+  Several providers never populate it.
+- **The bundled demo dictionary no longer asserts a nonexistent IRI.** Organism
+  counts use QUDT `Individual` as their unit and the released Salmon Domain
+  Ontology `smn:Abundance` as their property. The former `property_iri`, QUDT
+  `NumberOfOrganisms`, does not exist — and a counting unit is not a substitute
+  for the ecological property being measured. This demo is copied by users and
+  fed to LLMs as context, so a wrong IRI here propagates.
+
+### Dependency boundary
+
+- **The deterministic SDP archive builds on core dependencies again.** The
+  reviewed-ledger *binding* assertions moved from the artifact-inventory helper
+  into the publication preflight (PARITY.md row 34). Keeping them in the helper
+  — where R keeps them, because `yaml` is a hard Import for metasalmon — made
+  `_write_sdp_archive`, a pure pandas + `zipfile` path, require the `[eml]`
+  extra through a three-call chain with no import statement recording it.
+  Behaviour is unchanged for every reachable caller and the assertions now fire
+  earlier, before any archive is written. `KnbCoreDependencyTests` blocks
+  `yaml` from `sys.meta_path` so the property is enforced in developer
+  environments too, not only in the core-deps CI job.
+
+### Register corrections
+
+Re-verifying PARITY.md rows 16–28 against metasalmon 0.3.0 found seven claims
+that were wrong or stale. They are corrected in place, and one is a live
+interop hazard rather than a documentation nit:
+
+- **Row 22 was reassuring about a divergence that is now real.** The era-NA
+  split does change EML audit verdicts against metasalmon ≥ 0.2.4: R accepts a
+  literal `NA` cell that this package's audit rejects. Now stated as live, with
+  the milestone that closes it.
+- Row 17: R allowlists two reviewed `zip` versions, it does not pin 3.0.1. The
+  same stale claim was repeated in `knb_archive.py` and a test comment.
+- Row 18: the ORE and SystemMetadata documents are `ET.canonicalize`-equal, not
+  byte-equal; the manifest and fingerprint payload genuinely are bytes.
+- Row 20: metasalmon adopted C collation at **0.2.0**, not 0.3.0.
+- Row 23: the `\t"z"\t` trim boundary was asserted but unverified. Measured and
+  pinned by a regression test.
+- Row 25: reclassified from Idiom to **Gap** — the text read converged at R
+  0.2.0, the typing did not.
+- Row 26: 21 probe values, not twenty; and percent-encoding is a measured
+  divergence rather than an agreeing case, now pinned.
+- Row 27: the two implementations stamp different spec versions (R 0.3.0
+  declares `sdp-0.3.0`).
+
 ## 0.1.7
 
 **This release is a parity claim against metasalmon 0.1.7.** Under the mirror

@@ -8,9 +8,13 @@ inventory. It reuses the KNB publication allowlists instead of scanning the
 package directory, so EML, publication receipts, editor backups, and other
 local material cannot be swept into the archive by accident.
 
-Determinism reference: R pins ``zip`` 3.0.1 because that package's exact
-bytes are baked into DataONE PIDs and resumable manifests. Python has no
-third-party ZIP writer to pin, so this module *defines* its own reference —
+Determinism reference: R guards the compressor with
+``.ms_knb_reviewed_zip_versions`` -- an allowlist of reviewed ``zip`` package
+versions (``"3.0.1"``, ``"3.0.2"``) plus a runtime abort -- because that
+package's exact bytes are baked into DataONE PIDs and resumable manifests. It
+is an allowlist, not a single-version pin: a new version is byte-compared
+against a reviewed one and then added. Python has no third-party ZIP writer to
+guard, so this module *defines* its own reference —
 stdlib :mod:`zipfile` with fixed member order (radix), fixed timestamps
 (2000-01-01T00:00:00), fixed permissions (0644), Unix ``create_system``, no
 directory entries, and deflate level 9. The bytes are reproducible here and
@@ -51,7 +55,8 @@ from .knb_publication import (
 
 #: The Python determinism reference this module implements. Bump it only as a
 #: reviewed package change: the archive checksum is an immutable DataONE PID
-#: input, exactly as R's ``zip`` 3.0.1 pin is.
+#: input, which is the same reason R keeps a reviewed-``zip``-version
+#: allowlist rather than accepting whatever compressor is installed.
 ARCHIVE_DETERMINISM_REFERENCE = "metasalmonpy-zipfile-1"
 
 _ARCHIVE_DATE_TIME = (2000, 1, 1, 0, 0, 0)
@@ -267,6 +272,12 @@ def _archive_bytes(inventory: Dict[str, str], staging: str) -> bytes:
     roots cannot affect the resulting archive bytes. ZIP's DOS timestamp range
     starts in 1980; 2000 is deliberately unambiguous and portable.
     """
+    # A scratch file in the system temp directory: :mod:`zipfile` needs a seekable
+    # target, and the bytes are read back and the file deleted before returning.
+    # It is never installed anywhere, so unlike every *published* artifact it
+    # does not need ``atomic_io``'s umask-default mode -- 0600 is right for a
+    # throwaway. The published write is ``_atomic_write_raw`` at the end of
+    # ``_write_sdp_archive``, and that one does go through the shared writer.
     handle, temporary = tempfile.mkstemp(
         prefix=".metasalmon-sdp-archive-", suffix=".zip"
     )

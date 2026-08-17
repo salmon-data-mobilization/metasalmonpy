@@ -1068,8 +1068,16 @@ def apply_semantic_suggestions(
         Candidate table. When omitted, uses
         ``dict_df.attrs["semantic_suggestions"]``.
     strategy
-        ``"top"`` chooses the first filtered candidate; ``"llm"`` requires a
+        ``"top"`` keeps the original lexical ranking and chooses the first
+        filtered candidate. ``"reviewed"`` applies only rows whose ``decision``
+        is ``accepted`` (or the equivalent ``accept``). ``"llm"`` requires a
         reviewed candidate with decision ``accept``.
+
+        When reviewed or LLM-reviewed selections contain multiple constraints
+        for one measurement, their IRIs are deduplicated in first-occurrence
+        order and written to ``constraint_iri`` as the SDP-compatible
+        semicolon-separated value. Other roles continue to select one value
+        per column-role pair, and ``"top"`` stays single-winner for every role.
     roles
         Optional semantic-role filter. Package auto-prefill should remain
         limited to variable, property, entity, and unit roles.
@@ -1082,8 +1090,10 @@ def apply_semantic_suggestions(
     pandas.DataFrame
         Updated normalized dictionary.
     """
-    if strategy not in {"top", "llm"}:
-        raise ValueError("Unsupported strategy: use 'top' or 'llm'.")
+    if strategy not in {"top", "reviewed", "llm"}:
+        raise ValueError(
+            "Unsupported strategy: use 'top', 'reviewed' or 'llm'."
+        )
     out = normalize_dictionary(dict_df)
     if suggestions is None:
         suggestions = dict_df.attrs.get("semantic_suggestions")
@@ -1108,6 +1118,11 @@ def apply_semantic_suggestions(
                 "strategy='llm' requires reviewed suggestions with columns: "
                 f"{sorted(missing_llm)}"
             )
+    if strategy == "reviewed" and "decision" not in suggestions_df.columns:
+        raise ValueError(
+            "strategy='reviewed' requires explicit review decisions. Supply a "
+            "decision column whose accepted rows use 'accepted' or 'accept'."
+        )
 
     role_to_field = {
         "variable": "term_iri",
@@ -1136,6 +1151,12 @@ def apply_semantic_suggestions(
         suggestions_df = suggestions_df[suggestions_df["dictionary_role"].isin(roles)]
     if min_score is not None:
         suggestions_df = suggestions_df[pd.to_numeric(suggestions_df["score"], errors="coerce") >= min_score]
+    if strategy == "reviewed":
+        decisions = (
+            suggestions_df["decision"]
+            .map(lambda value: "" if _is_missing(value) else str(value).strip().lower())
+        )
+        suggestions_df = suggestions_df[decisions.isin(["accepted", "accept"])]
     if strategy == "llm":
         suggestions_df = suggestions_df[
             suggestions_df["llm_selected"].fillna(False).astype(bool)
@@ -1157,10 +1178,32 @@ def apply_semantic_suggestions(
         return out
 
     match_keys = [key for key in ["dataset_id", "table_id", "column_name", "dictionary_role"] if key in suggestions_df.columns]
-    selected = suggestions_df.sort_values("_row_id").drop_duplicates(
-        subset=match_keys,
-        keep="first",
-    )
+    selected = suggestions_df.sort_values("_row_id")
+
+    # The lexical "top" strategy still chooses one winner per role. Explicitly
+    # reviewed and LLM-reviewed bundles can instead accept more than one
+    # constraint for the same measurement: an effective-female-spawner count is
+    # qualified by BOTH a spawner-stage and a sex constraint, and dropping
+    # either one silently changes what the column means. Preserve reviewed
+    # order, remove exact duplicates, and use the SDP column_dictionary.csv
+    # semicolon representation.
+    if strategy in {"reviewed", "llm"}:
+        selected = selected.copy()
+        constraint_rows = selected["dictionary_role"] == "constraint"
+        if constraint_rows.any():
+            groups = selected.loc[constraint_rows].groupby(
+                match_keys, sort=False, dropna=False
+            )
+            for _, group in groups:
+                unique_iris: list = []
+                for value in group["iri"]:
+                    if value not in unique_iris:
+                        unique_iris.append(value)
+                selected.at[group.index[0], "iri"] = "; ".join(
+                    str(value) for value in unique_iris
+                )
+
+    selected = selected.drop_duplicates(subset=match_keys, keep="first")
     applied = 0
     skipped_existing = 0
     unmatched = 0

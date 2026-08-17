@@ -1,0 +1,10 @@
+dataset_id,table_id,observation_structure_id,component_order,column_name,component_role,component_relation_iri,required_when_observed
+structure-test,stock_recruit,recruits_by_age,1,stock_id,dimension,,TRUE
+structure-test,stock_recruit,recruits_by_age,2,brood_year,dimension,,TRUE
+structure-test,stock_recruit,recruits_by_age,3,return_year,dimension,,TRUE
+structure-test,stock_recruit,recruits_by_age,4,age,dimension,,TRUE
+structure-test,stock_recruit,recruits_by_age,5,recruits,measure,,TRUE
+structure-test,stock_recruit,recruits_by_age,6,estimate_method,attribute,http://www.w3.org/ns/sosa/usedProcedure,TRUE
+structure-test,stock_recruit,total_spawners_by_brood,1,stock_id,dimension,,TRUE
+structure-test,stock_recruit,total_spawners_by_brood,2,brood_year,dimension,,TRUE
+structure-test,stock_recruit,total_spawners_by_brood,3,total_spawners,measure,,TRUE

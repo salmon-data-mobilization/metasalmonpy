@@ -185,5 +185,136 @@ class TermSearchTests(unittest.TestCase):
         self.assertEqual(res.iloc[0]["match_type"], "zooma_medium")
 
 
+class MatchTypeScoreTests(unittest.TestCase):
+    """The provider's ``match_type`` contributes to ranking (0.1.8).
+
+    ``match_type`` is optional -- QUDT units, GBIF/WoRMS taxa and the local
+    term indexes never populate it -- so a missing value means *unclassified*
+    and must score as such. metasalmon 0.1.8 fixed the case where a missing
+    one reached a scalar ``if`` and aborted ``suggest_semantics()`` for the
+    whole dictionary, discarding every legitimate candidate with it.
+
+    Every expected value here was read out of metasalmon v0.1.8's
+    ``.match_type_score_profiled()`` under its default weights, not copied
+    from R source.
+    """
+
+    LADDER = {
+        "label_exact": 1.0,
+        "label_partial": 0.45,
+        "label": 0.45,
+        "zooma_high": 0.3,
+        "zooma": 0.3,
+        "definition": 0.15,
+        "concept": 0.15,
+        "taxon": 0.05,
+        "unit": 0.05,
+        "quantity_kind": 0.05,
+        "": 0.05,
+        "LABEL_EXACT": 1.0,
+        " label_exact ": 1.0,
+    }
+
+    def test_the_ladder_matches_r(self):
+        for match_type, expected in self.LADDER.items():
+            with self.subTest(match_type=match_type):
+                self.assertAlmostEqual(ts._match_type_score(match_type), expected)
+
+    def test_a_missing_match_type_scores_as_unclassified(self):
+        # Contract, not regression: the explicit guards in _match_type_score
+        # state the intent, but str(None)/str(pd.NA)/str(nan) all happen to
+        # fall through to `other` anyway, so removing them would not change
+        # this answer. The observable behaviour is what is pinned here; the
+        # contribution to ranking is pinned by the next test.
+        for missing in (None, float("nan"), pd.NA, ["label_exact"]):
+            with self.subTest(missing=repr(missing)):
+                self.assertAlmostEqual(
+                    ts._match_type_score(missing),
+                    ts.MATCH_TYPE_WEIGHTS["other"],
+                )
+
+    def test_match_type_actually_contributes_to_the_score(self):
+        """The ladder must reach the ranked score, not just the helper.
+
+        Without this, deleting the whole ``match_type`` term from
+        ``_score_and_rank_terms`` leaves every ordering test green: the
+        label-overlap term alone already puts the exact match first. The
+        assertion is on the score *difference*, which is exactly the ladder
+        value R adds.
+        """
+        def frame(match_type):
+            return pd.DataFrame(
+                {
+                    "label": ["Spawner count"],
+                    "iri": ["http://example.org/term"],
+                    "source": ["ols"],
+                    "ontology": ["example"],
+                    "role": ["property"],
+                    "match_type": [match_type],
+                    "definition": ["A spawner count."],
+                }
+            )
+
+        vocab = ts._load_iadopt_vocab()
+        scores = {
+            match_type: ts._score_and_rank_terms(
+                frame(match_type), "property", vocab, "spawner count"
+            ).iloc[0]["score"]
+            for match_type in ("label_exact", "definition", None)
+        }
+
+        self.assertAlmostEqual(
+            scores["label_exact"] - scores[None],
+            ts.MATCH_TYPE_WEIGHTS["label_exact"] - ts.MATCH_TYPE_WEIGHTS["other"],
+        )
+        self.assertAlmostEqual(
+            scores["definition"] - scores[None],
+            ts.MATCH_TYPE_WEIGHTS["definition"] - ts.MATCH_TYPE_WEIGHTS["other"],
+        )
+
+    def test_ranking_does_not_abort_on_a_missing_match_type(self):
+        # This is the 0.1.8 regression: the whole frame used to be lost.
+        df = pd.DataFrame(
+            {
+                "label": ["Unclassified count", "Spawner count"],
+                "iri": [
+                    "http://example.org/unclassified",
+                    "http://example.org/exact",
+                ],
+                "source": ["ols", "ols"],
+                "ontology": ["example", "example"],
+                "role": ["property", "property"],
+                "match_type": [None, "label_exact"],
+                "definition": [
+                    "A candidate without match metadata.",
+                    "A spawner count.",
+                ],
+            }
+        )
+
+        ranked = ts._score_and_rank_terms(
+            df, "property", ts._load_iadopt_vocab(), "spawner count"
+        )
+
+        self.assertEqual(len(ranked), 2)
+        self.assertEqual(ranked.iloc[0]["iri"], "http://example.org/exact")
+
+    def test_a_frame_without_the_column_still_ranks(self):
+        df = pd.DataFrame(
+            {
+                "label": ["Spawner count"],
+                "iri": ["http://example.org/exact"],
+                "source": ["ols"],
+                "ontology": ["example"],
+                "role": ["property"],
+                "definition": ["A spawner count."],
+            }
+        )
+        ranked = ts._score_and_rank_terms(
+            df, "property", ts._load_iadopt_vocab(), "spawner count"
+        )
+        self.assertEqual(len(ranked), 1)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

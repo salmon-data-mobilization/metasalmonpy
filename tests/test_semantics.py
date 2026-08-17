@@ -414,5 +414,146 @@ class EraSemanticMatchingTests(unittest.TestCase):
         self.assertFalse(unbounded.attrs["semantic_suggestions"].empty)
 
 
+class ReviewedStrategyTests(unittest.TestCase):
+    """``strategy="reviewed"`` and multiple accepted constraints (0.1.8).
+
+    Expectations in ``tests/data/sdp-extensions/expected-apply-strategies.json``
+    are metasalmon **v0.1.8**'s ``apply_semantic_suggestions()`` output for the
+    identical dictionary and suggestion frame, for all three strategies.
+    """
+
+    SPAWNER_STAGE = "https://w3id.org/smn/SpawnerStageContext"
+    FEMALE_SEX = "https://example.org/constraint/FemaleSex"
+
+    def setUp(self):
+        import json
+        import os
+
+        data = os.path.join(
+            os.path.dirname(__file__),
+            "data",
+            "sdp-extensions",
+            "expected-apply-strategies.json",
+        )
+        with open(data, encoding="utf-8") as handle:
+            self.expected = json.load(handle)
+
+        self.dictionary = pd.DataFrame(
+            [
+                {
+                    "dataset_id": "d1",
+                    "table_id": "t1",
+                    "column_name": "effective_female_spawners",
+                    "column_label": "Effective female spawners",
+                    "column_description": (
+                        "Spawner abundance qualified by spawner stage and "
+                        "female sex"
+                    ),
+                    "column_role": "measurement",
+                    "value_type": "number",
+                    "required": False,
+                }
+            ]
+        )
+        self.suggestions = pd.DataFrame(
+            {
+                "dataset_id": "d1",
+                "table_id": "t1",
+                "column_name": "effective_female_spawners",
+                "dictionary_role": "constraint",
+                "target_scope": "column",
+                "target_sdp_file": "column_dictionary.csv",
+                "target_sdp_field": "constraint_iri",
+                "search_query": [
+                    "spawner stage",
+                    "female sex",
+                    "spawner stage",
+                    "brood year",
+                ],
+                "iri": [
+                    self.SPAWNER_STAGE,
+                    self.FEMALE_SEX,
+                    self.SPAWNER_STAGE,
+                    "https://example.org/constraint/BroodYear",
+                ],
+                "decision": ["accepted", "accepted", "accepted", "rejected"],
+                "llm_selected": [True, True, True, False],
+                "llm_decision": ["accept", "accept", "accept", "reject"],
+                "llm_confidence": [0.98, 0.97, 0.98, 0.94],
+            }
+        )
+
+    def _apply(self, strategy):
+        applied = apply_semantic_suggestions(
+            self.dictionary,
+            suggestions=self.suggestions,
+            strategy=strategy,
+            verbose=False,
+        )
+        return applied["constraint_iri"].iloc[0]
+
+    def test_all_three_strategies_match_r(self):
+        for strategy in ("top", "reviewed", "llm"):
+            with self.subTest(strategy=strategy):
+                self.assertEqual(self._apply(strategy), self.expected[strategy])
+
+    def test_reviewed_keeps_every_accepted_constraint(self):
+        # An effective-female-spawner count is qualified by BOTH constraints;
+        # dropping either silently changes what the column means.
+        self.assertEqual(
+            self._apply("reviewed"),
+            "; ".join([self.SPAWNER_STAGE, self.FEMALE_SEX]),
+        )
+
+    def test_reviewed_deduplicates_in_first_occurrence_order(self):
+        # The spawner-stage IRI appears twice among the accepted rows.
+        self.assertEqual(self._apply("reviewed").count(self.SPAWNER_STAGE), 1)
+
+    def test_reviewed_ignores_rows_that_were_not_accepted(self):
+        self.assertNotIn("BroodYear", self._apply("reviewed"))
+
+    def test_top_stays_single_winner(self):
+        self.assertEqual(self._apply("top"), self.SPAWNER_STAGE)
+
+    def test_accept_is_accepted_case_insensitively(self):
+        self.suggestions["decision"] = ["  ACCEPT ", "Accepted", "accept", "no"]
+        self.assertEqual(
+            self._apply("reviewed"),
+            "; ".join([self.SPAWNER_STAGE, self.FEMALE_SEX]),
+        )
+
+    def test_reviewed_requires_a_decision_column(self):
+        suggestions = self.suggestions.drop(columns=["decision"])
+        with self.assertRaises(ValueError) as caught:
+            apply_semantic_suggestions(
+                self.dictionary,
+                suggestions=suggestions,
+                strategy="reviewed",
+                verbose=False,
+            )
+        self.assertIn("explicit review decisions", str(caught.exception))
+
+    def test_a_non_constraint_role_stays_single_valued(self):
+        suggestions = self.suggestions.copy()
+        suggestions["dictionary_role"] = "property"
+        suggestions["target_sdp_field"] = "property_iri"
+        applied = apply_semantic_suggestions(
+            self.dictionary,
+            suggestions=suggestions,
+            strategy="reviewed",
+            verbose=False,
+        )
+        self.assertEqual(applied["property_iri"].iloc[0], self.SPAWNER_STAGE)
+
+    def test_an_unknown_strategy_is_refused(self):
+        with self.assertRaises(ValueError):
+            apply_semantic_suggestions(
+                self.dictionary,
+                suggestions=self.suggestions,
+                strategy="whatever",
+                verbose=False,
+            )
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

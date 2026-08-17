@@ -29,14 +29,18 @@ from .metadata import (
     READR_TRIM_CHARS,
     SDP_PROFILE_VERSION,
 )
+from .sdp_schema import (
+    SDP_PROFILE_URL as _SDP_PROFILE_URL,
+    SDP_RULES_URL as _SDP_RULES_URL,
+)
 
-SDP_PROFILE_URL = (
-    "https://dfo-pacific-science.github.io/smn-data-pkg/"
-    "profiles/salmon-data-package/v0.2/profile.json"
-)
-SDP_RULES_URL = (
-    "https://dfo-pacific-science.github.io/smn-data-pkg/schema/sdp.rules.yaml"
-)
+# Canonical, publicly resolvable SDP 0.2 contract identifiers. These are
+# values stamped into ``datapackage.json``; nothing here ever fetches them.
+# metasalmon corrected the same constants from the retired
+# ``dfo-pacific-science`` organization at v0.1.8, and the vendored bundle under
+# ``data/`` now carries the matching ``$id``/``profile`` fields.
+SDP_PROFILE_URL = _SDP_PROFILE_URL
+SDP_RULES_URL = _SDP_RULES_URL
 PACKAGE_SENTINEL = ".metasalmonpy-package"
 
 
@@ -219,10 +223,22 @@ def _is_canonical_rights_url(value: str) -> bool:
     byte for byte — that is, the value is already in canonical form. This is a
     behavioural mirror, not a transliteration: Python has no curl URL parser,
     so the same rule is expressed as the conditions curl's normalization would
-    otherwise change. Verified to give R's verdict on all twenty probe values
-    in the v0.1.7 reproduction (uppercase scheme, missing path, dot segments,
-    embedded space, empty host, and non-http schemes all rejected; userinfo,
-    port, query, fragment, percent-encoding and mixed-case hosts accepted).
+    otherwise change. Verified to give R's verdict on all 21 probe values in
+    ``tests/test_package_io.py::test_licence_descriptors_match_era_r`` --
+    13 accepted (userinfo, port, query, fragment, mixed-case host, padded
+    input, trailing slash, the three named licences) and 8 rejected
+    (uppercase scheme, missing path, dot segments, embedded space, empty
+    host, non-http scheme, free text, empty).
+
+    **Known boundary, measured not assumed:** percent-encoding is *not* among
+    the agreeing cases. curl decodes an encoded separator and uppercases hex
+    digits, so R rejects ``%2F`` and lowercase ``%c3%a9`` while these
+    conditions accept both; ``%20`` and uppercase ``%C3%A9`` agree. The four
+    probes are pinned in
+    ``test_percent_encoded_rights_urls_are_a_documented_divergence`` so the
+    boundary cannot move silently. No SDP licence field has carried a
+    percent-encoded path, which is why the divergence is documented rather
+    than closed by vendoring curl's normalizer (PARITY.md row 26).
     """
     if not value or any(character.isspace() for character in value):
         return False
@@ -1189,6 +1205,14 @@ def validate_salmon_datapackage(
                 f"the dictionary: expected {sorted(expected)}, got "
                 f"{sorted(actual)}."
             )
+
+    # SDP procedure and observation-structure resources are optional. Their
+    # absence preserves the historic validation path exactly; when present,
+    # validate the canonical files and their data-level bindings before the
+    # semantic checks, as metasalmon does.
+    from .observation_structures import validate_optional_sdp_observation_metadata
+
+    validate_optional_sdp_observation_metadata(target)
 
     normalized = validate_dictionary(
         dictionary,
