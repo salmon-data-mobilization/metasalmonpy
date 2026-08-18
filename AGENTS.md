@@ -90,6 +90,22 @@ auxiliary worktree at a path whose last component is `metasalmonpy`
 note if the package ever moves into its own `src/metasalmonpy/` directory,
 which is what would make the checkout name irrelevant.
 
+**And check which tree you are actually testing.** `package-dir` makes an
+editable install register a `sys.meta_path` finder pinned to the *absolute
+path it was installed from*, and `sys.meta_path` is consulted before
+`sys.path`. A virtualenv built in the primary checkout therefore keeps
+importing the primary checkout's modules while you run pytest inside a
+worktree — a green suite that says nothing about the branch you are on, and
+nothing in the output hints at it. Install the package from the worktree, and
+confirm it took:
+
+```sh
+python -c "import metasalmonpy; print(metasalmonpy.__file__)"
+```
+
+This is the dependency rule again: the only proof is running it. Retire the
+check when editable installs stop pinning an absolute path.
+
 ## Dependency boundaries
 
 Core dependencies are **pandas + requests**. lxml and PyYAML live in the
