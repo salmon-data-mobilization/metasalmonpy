@@ -31,7 +31,10 @@ from typing import Dict, List, Optional, Sequence, Union
 
 import pandas as pd
 
-from .resource_types import format_number_token
+# ``_iso_seconds`` is imported rather than re-spelled here because a
+# ``strftime`` year is not portable below year 1000; see the comment on
+# its definition. Both modules must render calendars the same way.
+from .resource_types import _iso_seconds, format_number_token
 from .sdp_methods import (
     SDP_METHODS_PATH,
     SdpExtensionError,
@@ -468,7 +471,7 @@ def _normalize_typed_values(
             if parsed_datetime is None:
                 fail()
                 return normalized  # pragma: no cover - fail() always raises
-            normalized[index] = parsed_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+            normalized[index] = _iso_seconds(parsed_datetime) + "Z"
     elif declared != "string":
         fail()
     return normalized
@@ -555,7 +558,7 @@ def _typed_character(value: object) -> str:
     if isinstance(value, pd.Timestamp) or isinstance(value, _dt.datetime):
         if value.tzinfo is not None:
             value = value.astimezone(_dt.timezone.utc).replace(tzinfo=None)
-        return value.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return _iso_seconds(value) + "Z"
     return str(value)
 
 

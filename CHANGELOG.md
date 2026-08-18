@@ -52,9 +52,36 @@ read-only with `git archive` and loaded with `pkgload::load_all()`, and
 verified by **running both implementations over the same inputs**. Paired with
 0.2.0 in one pull request because 0.2.1's per-resource schema URLs are read
 through the loader 0.2.0 introduced, and building an interim shape only to
-rewrite it would have been the more error-prone route. PARITY.md row 39 is new.
+rewrite it would have been the more error-prone route. PARITY.md rows 39 and 40 are new.
 
 ### Fixes
+
+- **Canonical calendar strings no longer depend on the C library that built
+  the interpreter.** `strftime` hands `%Y` to libc, and glibc does not
+  zero-pad a year below 1000 where the macOS/BSD implementation does, so a
+  date declared `0001-01-01` keyed as `0001-01-01` on macOS and `1-01-01` on
+  Linux. Canonical value keys are what decide whether a data column matches
+  its own `codes.csv`, and `render_resource_frame` writes the same strings
+  into package bytes, so the determinism this rung claims did not actually
+  hold across machines.
+
+  Every calendar rendering now builds its text by explicit padding
+  (`resource_types._iso_date`, `._iso_seconds`) or by `date.isoformat()`,
+  both pure Python. Three call sites outside the new typed reader carried the
+  same defect and are fixed with it: the datetime branch of
+  `observation_structures._normalize_typed_values` — whose *date* branch was
+  already safe, which is what makes it an oversight rather than a choice —
+  `_as_r_character`, and the EML calendar-value round-trip check, which would
+  have rejected a valid pre-1000 date on Linux only.
+
+  `tests/test_platform_determinism_guard.py` now fails on any `strftime` call
+  in a package module, with an allowlist that must name what retires each
+  entry. The guard exists because this failure is **invisible to a macOS
+  developer** — the suite was green locally on every run while
+  `test_canonical_keys_match_era_r[date]` failed in CI — which is the same
+  class of decay `KnbCoreDependencyTests` was written for. PARITY.md row 40
+  registers the open question of whether metasalmon's own date key is
+  portable; the hub owns that side.
 
 - **Per-resource schema URLs in `datapackage.json` are derived from the loaded
   SDP bundle** rather than composed from a hardcoded constant. 0.2.0 did this

@@ -2697,7 +2697,10 @@ def _validate_observed_domain(
                 except ValueError:
                     invalid.append(token)
                     continue
-                if parsed_date.strftime("%Y-%m-%d") != token:
+                # ``date.isoformat()`` rather than ``strftime`` because the
+                # latter's year is not zero-padded by every C library, which
+                # would reject a valid pre-1000 calendar value on Linux only.
+                if parsed_date.date().isoformat() != token:
                     invalid.append(token)
         if invalid:
             offending = list(dict.fromkeys(invalid))
