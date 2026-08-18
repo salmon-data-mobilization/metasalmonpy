@@ -44,6 +44,32 @@ dfo-salmon-ontology, psc-salmon-vocabularies). Sequencing, execplans, and the
 cross-repo release index live in metasalmon's `knowledge/` OKF bundle — start
 at its `ROADMAP` card. Do not maintain a competing roadmap here.
 
+## Salmon knowledge goes to the commons, not into a PR body
+
+The hub carries sequencing. Knowledge about **salmon itself** — biology,
+ecology, management, what a term means, why a modelling choice went the way it
+did — goes to
+[`salmon-knowledge-commons`](https://github.com/salmon-data-mobilization/salmon-knowledge-commons).
+
+This matters more here than in most repos, because of the mirror contract. When
+mirroring work turns up a domain fact — that a life-history label is a proxy
+rather than a trait, that two vocabularies share a word and not a meaning — that
+fact is not a parity deviation and does not belong in `PARITY.md`. It belongs in
+the commons, where the R side can find it too. Left in a PR body it evaporates,
+and both packages re-derive it separately, which is how the two sides drift on
+something neither of them recorded.
+
+If you can push there, open a PR. If you cannot, put the finding **in your
+report with its sources** so a maintainer can. Source-backed claims only — the
+commons rejects a claim with no citation — and **never assert your own
+verification**: `generated` says who wrote a card, `verified` says who checked
+it, and those are not the same actor.
+
+The commons is also the register for an **ontology gap**: a concept with no term
+in `smn`, `gcdfo` or the PSC CV, with a note saying what a term would have to
+say and where it should be minted. That register feeds this ecosystem's
+term-request pipeline.
+
 ## Build / test
 
 ```sh
