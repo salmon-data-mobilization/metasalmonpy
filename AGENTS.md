@@ -76,8 +76,8 @@ term-request pipeline.
 uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
-or `pip install -e ".[test]" && pytest -q`. The suite must stay green: 591
-passed / 3 skipped with the extras installed, 497 / 97 with core dependencies
+or `pip install -e ".[test]" && pytest -q`. The suite must stay green: 593
+passed / 3 skipped with the extras installed, 499 / 97 with core dependencies
 only (0.2.1, 2026-08-18).
 
 **Run it from a directory named `metasalmonpy`.** The root `__init__.py` and
