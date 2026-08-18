@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+Not a version bump: the parity claim stays at **metasalmon 0.2.1** because the
+metasalmon change mirrored here is in that package's development version, not
+in a release. Bump on parity, not on calendar.
+
+### Fixes
+
+- **A `datetime` observation dimension is accepted.** `_as_r_character()`
+  rendered a typed instant as `"2024-01-31 10:00:00"` — a space, no `T`, no
+  zone — which `_DATETIME_RE` can never match, so every datetime-typed
+  observation dimension was rejected. That was **deliberate**: metasalmon had
+  the same defect, from taking `as.character()` of the POSIXct its typed
+  reader produces, and this package mirrored the rejection rather than
+  diverging silently, reporting it to the hub instead. The hub adjudicated it
+  as a metasalmon defect and fixed it there
+  (`.ms_sdp_observation_typed_character()`); the mirror and its documentation
+  are gone, and the helper is renamed `_typed_character()` because it no
+  longer mirrors `as.character()`. A tz-aware instant now folds into UTC.
+
+  The adjudication also found the reverse: **metasalmon, not this package, was
+  wrong about parsing ISO-8601 instants.** `as.POSIXct()` has no ISO-8601
+  entry in its default format list and silently truncated
+  `"2024-01-31T10:00:00Z"` to midnight, collapsing two distinct instants on
+  one date into a single grain key. `_parse_datetime()`'s
+  `datetime.fromisoformat()` was correct throughout; metasalmon was brought
+  into line with it. Nothing changed here for that half.
+
 ## 0.2.1
 
 **This release is a parity claim against metasalmon 0.2.1.** Built against the

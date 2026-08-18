@@ -409,7 +409,7 @@ def _normalize_typed_values(
     ``2019`` are the same integer dimension value, and ``100`` and ``100.0``
     are the same number.
     """
-    text = ["" if _is_na(value) else _as_r_character(value) for value in values]
+    text = ["" if _is_na(value) else _typed_character(value) for value in values]
     normalized = list(text)
     present = [index for index, value in enumerate(text) if not _is_blank(value)]
     if not present:
@@ -524,31 +524,38 @@ def _cast_typed_values(
     return cast
 
 
-def _as_r_character(value: object) -> str:
-    """``as.character()`` for the dtypes the typed reader produces.
+def _typed_character(value: object) -> str:
+    """Mirror ``.ms_sdp_observation_typed_character``.
 
     Since the 0.2.0 rung a data resource is typed from its dictionary, so a
     column declared ``integer`` arrives here as a float. Every comparison in
     this module against raw ``codes.csv`` text, and every value the typed
-    normalizer inspects, goes through R's ``as.character()`` on the R side —
-    ``as.character(2019)`` is ``"2019"`` where ``str(2019.0)`` is ``"2019.0"``,
-    which matches nothing.
+    normalizer inspects, needs the lexical form the validators expect —
+    ``2019``, not ``2019.0``, which matches nothing.
 
     The numeric branch agrees with R's ``as.character()`` for every magnitude
     below 1e15, and deliberately keeps plain notation above it where R would
     switch to ``"1e+05"``-style output that its own ``^[+-]?[0-9]+$`` check
-    then rejects. The datetime branch mirrors R exactly, including the fact
-    that the resulting text fails this module's ISO datetime pattern: a
-    datetime-typed observation *dimension* is rejected by metasalmon 0.2.0+ for
-    that reason, and mirroring the rejection is parity. Reported to the hub
-    rather than fixed here.
+    then rejects.
+
+    The datetime branch used to mirror R's ``as.character()`` literally,
+    producing ``"2024-01-31 10:00:00"`` — a space, no ``T``, no zone — which
+    this module's ISO pattern can never match. metasalmon rejected every
+    datetime-typed observation *dimension* for that reason and this package
+    mirrored the rejection deliberately, reporting it to the hub rather than
+    diverging silently. The hub adjudicated it as a metasalmon defect and
+    fixed it there; the branch now emits the ISO form both implementations
+    require, and a tz-aware instant is folded into UTC rather than rendered in
+    its own offset.
     """
     if isinstance(value, bool):
         return "TRUE" if value else "FALSE"
     if isinstance(value, float):
         return format_number_token(value) or ""
     if isinstance(value, pd.Timestamp) or isinstance(value, _dt.datetime):
-        return value.strftime("%Y-%m-%d %H:%M:%S")
+        if value.tzinfo is not None:
+            value = value.astimezone(_dt.timezone.utc).replace(tzinfo=None)
+        return value.strftime("%Y-%m-%dT%H:%M:%SZ")
     return str(value)
 
 
@@ -607,7 +614,7 @@ def _validate_procedure_codes(
             value = data[column].iloc[row]
             if _is_blank(value):
                 continue
-            text = _as_r_character(value)
+            text = _typed_character(value)
             if text not in observed_values:
                 observed_values.append(text)
         missing = [value for value in observed_values if value not in code_values]
