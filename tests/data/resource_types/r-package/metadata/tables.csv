@@ -1,0 +1,2 @@
+dataset_id,table_id,file_name,table_label,description,observation_unit,observation_unit_iri,primary_key
+diff-1,obs,data/obs.csv,Observations,Rows,MISSING METADATA: describe the observation unit for table 'obs'.,,site_id

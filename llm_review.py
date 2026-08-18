@@ -15,6 +15,7 @@ import pandas as pd
 import requests
 
 from .term_search import _normalize_explicit_sources, sources_for_role
+from .text_safety import redact_secrets
 
 
 LLM_ASSESSMENT_COLUMNS = [
@@ -617,7 +618,12 @@ def _assessment_from_item(
 
 def _error_assessment(target, error, config, context) -> dict:
     row = _base_assessment(target, config, context)
-    row["llm_error"] = str(error)
+    # Redacted where the provider's text is CAPTURED, not where it is shown.
+    # This row is returned on the exported ``semantic_llm_assessments``
+    # attribute and written to CSV, so display-time redaction would be too
+    # late — metasalmon 0.2.0 made the same correction on its bundle-review
+    # path for the same reason.
+    row["llm_error"] = redact_secrets(error)
     return row
 
 

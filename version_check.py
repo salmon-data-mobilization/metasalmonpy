@@ -85,7 +85,12 @@ def check_for_updates(
             }
         )
     except Exception as exc:
-        result["message"] = str(exc)
+        # Captured, not displayed: this string is returned to the caller and
+        # may be logged. metasalmon 0.2.0 applied the same redaction here
+        # (``R/version-check.R``).
+        from .text_safety import redact_secrets
+
+        result["message"] = redact_secrets(exc)
 
     if not quiet:
         if result["status"] == "update_available":

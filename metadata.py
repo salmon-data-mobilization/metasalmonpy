@@ -100,7 +100,18 @@ def read_sdp_csv(path: Union[str, Path], **kwargs) -> pd.DataFrame:
 # tag), so this is now the same read rather than a standalone constant — the
 # retirement condition recorded against the constant at 0.1.7. A profile bump
 # is a bundle swap; nothing in Python source states the version.
-SDP_PROFILE_VERSION = sdp_profile_version()
+def __getattr__(name):
+    """Resolve ``SDP_PROFILE_VERSION`` from the loaded bundle, at access time.
+
+    It was a module constant evaluated at import until the 0.2.0 rung. The
+    schema bundle is now loaded remote-first (``sdp_schema.load_sdp_schema``),
+    and an import-time read would have turned every ``import metasalmonpy``
+    into a network call — and pinned the answer before a caller could choose a
+    source. The loader caches per process, so repeated access is free.
+    """
+    if name == "SDP_PROFILE_VERSION":
+        return sdp_profile_version()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 DATASET_META_COLUMNS = [
     "dataset_id",
@@ -382,7 +393,7 @@ def infer_dataset_metadata_from_resources(resources: Mapping[str, pd.DataFrame],
                 "provenance_note": [pd.NA],
                 "created": [pd.NA],
                 "modified": [pd.NA],
-                "spec_version": [SDP_PROFILE_VERSION],
+                "spec_version": [sdp_profile_version()],
             }
         )
     )

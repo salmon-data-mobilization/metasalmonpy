@@ -1,0 +1,1342 @@
+{
+  "integer": [
+    {
+      "token": "0",
+      "reason": null,
+      "canonical": "0",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "1",
+      "reason": null,
+      "canonical": "1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "-1",
+      "reason": null,
+      "canonical": "-1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "+1",
+      "reason": null,
+      "canonical": "1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "007",
+      "reason": null,
+      "canonical": "7",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "1e1",
+      "reason": null,
+      "canonical": "10",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 1
+    },
+    {
+      "token": "1e5",
+      "reason": null,
+      "canonical": "100000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 5
+    },
+    {
+      "token": "1E5",
+      "reason": null,
+      "canonical": "100000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 5
+    },
+    {
+      "token": "10",
+      "reason": null,
+      "canonical": "10",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 1
+    },
+    {
+      "token": "-10",
+      "reason": null,
+      "canonical": "-10",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 1
+    },
+    {
+      "token": "2147483647",
+      "reason": null,
+      "canonical": "2147483647",
+      "lossy": false,
+      "precision": 10,
+      "exponent": 9
+    },
+    {
+      "token": "2147483648",
+      "reason": null,
+      "canonical": "2147483648",
+      "lossy": false,
+      "precision": 10,
+      "exponent": 9
+    },
+    {
+      "token": "-2147483649",
+      "reason": null,
+      "canonical": "-2147483649",
+      "lossy": false,
+      "precision": 10,
+      "exponent": 9
+    },
+    {
+      "token": "4294967296",
+      "reason": null,
+      "canonical": "4294967296",
+      "lossy": false,
+      "precision": 10,
+      "exponent": 9
+    },
+    {
+      "token": "9007199254740992",
+      "reason": null,
+      "canonical": "9007199254740992",
+      "lossy": false,
+      "precision": 16,
+      "exponent": 15
+    },
+    {
+      "token": "9007199254740993",
+      "reason": "beyond exact numeric precision",
+      "canonical": "9007199254740992",
+      "lossy": true,
+      "precision": 16,
+      "exponent": 15
+    },
+    {
+      "token": "9007199254740994",
+      "reason": null,
+      "canonical": "9007199254740994",
+      "lossy": false,
+      "precision": 16,
+      "exponent": 15
+    },
+    {
+      "token": "90071992547409900",
+      "reason": "beyond exact numeric precision",
+      "canonical": "90071992547409904",
+      "lossy": true,
+      "precision": 15,
+      "exponent": 16
+    },
+    {
+      "token": "1234567890123456",
+      "reason": null,
+      "canonical": "1234567890123456",
+      "lossy": false,
+      "precision": 16,
+      "exponent": 15
+    },
+    {
+      "token": "12345678901234567",
+      "reason": "beyond exact numeric precision",
+      "canonical": "12345678901234568",
+      "lossy": true,
+      "precision": 17,
+      "exponent": 16
+    },
+    {
+      "token": "123456789012345",
+      "reason": null,
+      "canonical": "123456789012345",
+      "lossy": false,
+      "precision": 15,
+      "exponent": 14
+    },
+    {
+      "token": "1.0",
+      "reason": null,
+      "canonical": "1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "1.5",
+      "reason": "not a whole number",
+      "canonical": "1.5",
+      "lossy": false,
+      "precision": 2,
+      "exponent": 0
+    },
+    {
+      "token": "-1.5",
+      "reason": "not a whole number",
+      "canonical": "-1.5",
+      "lossy": false,
+      "precision": 2,
+      "exponent": 0
+    },
+    {
+      "token": "0.0",
+      "reason": null,
+      "canonical": "0",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "1e15",
+      "reason": null,
+      "canonical": "1000000000000000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 15
+    },
+    {
+      "token": "1e16",
+      "reason": null,
+      "canonical": "10000000000000000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 16
+    },
+    {
+      "token": "1e17",
+      "reason": null,
+      "canonical": "100000000000000000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 17
+    },
+    {
+      "token": "1e21",
+      "reason": null,
+      "canonical": "1000000000000000000000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 21
+    },
+    {
+      "token": "  42  ",
+      "reason": null,
+      "canonical": "42",
+      "lossy": false,
+      "precision": 2,
+      "exponent": 1
+    },
+    {
+      "token": "1 000",
+      "reason": "unparseable as that type",
+      "canonical": "1 000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 4
+    },
+    {
+      "token": "1,000",
+      "reason": "unparseable as that type",
+      "canonical": "1,000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 4
+    },
+    {
+      "token": "abc",
+      "reason": "unparseable as that type",
+      "canonical": "abc",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "",
+      "reason": null,
+      "canonical": null,
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "NA",
+      "reason": "unparseable as that type",
+      "canonical": "NA",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "na",
+      "reason": "unparseable as that type",
+      "canonical": "na",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "null",
+      "reason": "unparseable as that type",
+      "canonical": "null",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "1e",
+      "reason": "unparseable as that type",
+      "canonical": "1e",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "1e+",
+      "reason": null,
+      "canonical": "1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "1.",
+      "reason": null,
+      "canonical": "1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "+.5",
+      "reason": "not a whole number",
+      "canonical": "0.5",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -1
+    },
+    {
+      "token": ".5",
+      "reason": "not a whole number",
+      "canonical": "0.5",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -1
+    },
+    {
+      "token": "-0",
+      "reason": null,
+      "canonical": "0",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "1e309",
+      "reason": "beyond exact numeric precision",
+      "canonical": "9999999999999999860310597602564577717002641838126363875249660735883565852672743849064846414228960666786379280392654615393353172850252103336275952370615397010730691664689375178569039851073146339641623266071126720011020169553304018596457812688561947201171488461172921822139066929851282122002676667750021070848",
+      "lossy": true,
+      "precision": 1,
+      "exponent": 309
+    },
+    {
+      "token": "1e-400",
+      "reason": "beyond exact numeric precision",
+      "canonical": "0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000001",
+      "lossy": true,
+      "precision": 1,
+      "exponent": -400
+    },
+    {
+      "token": "TRUE",
+      "reason": "unparseable as that type",
+      "canonical": "TRUE",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "1e-5",
+      "reason": "not a whole number",
+      "canonical": "0.00001",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -5
+    },
+    {
+      "token": "0.000001",
+      "reason": "not a whole number",
+      "canonical": "0.000001",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -6
+    },
+    {
+      "token": "1e-300",
+      "reason": "beyond exact numeric precision",
+      "canonical": "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "lossy": true,
+      "precision": 1,
+      "exponent": -300
+    },
+    {
+      "token": "999999999999999",
+      "reason": null,
+      "canonical": "999999999999999",
+      "lossy": false,
+      "precision": 15,
+      "exponent": 14
+    },
+    {
+      "token": "1000000000000000",
+      "reason": null,
+      "canonical": "1000000000000000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 15
+    },
+    {
+      "token": "1100000000000000",
+      "reason": null,
+      "canonical": "1100000000000000",
+      "lossy": false,
+      "precision": 2,
+      "exponent": 15
+    }
+  ],
+  "number": [
+    {
+      "token": "0",
+      "reason": null,
+      "canonical": "0",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "0.0",
+      "reason": null,
+      "canonical": "0",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "-0",
+      "reason": null,
+      "canonical": "0",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "0.1",
+      "reason": null,
+      "canonical": "0.1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -1
+    },
+    {
+      "token": "0.10",
+      "reason": null,
+      "canonical": "0.1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -1
+    },
+    {
+      "token": "0.100",
+      "reason": null,
+      "canonical": "0.1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -1
+    },
+    {
+      "token": "1e5",
+      "reason": null,
+      "canonical": "100000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 5
+    },
+    {
+      "token": "1.0e5",
+      "reason": null,
+      "canonical": "100000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 5
+    },
+    {
+      "token": "3.14",
+      "reason": null,
+      "canonical": "3.14",
+      "lossy": false,
+      "precision": 3,
+      "exponent": 0
+    },
+    {
+      "token": "3.14159265358979",
+      "reason": null,
+      "canonical": "3.14159265358979",
+      "lossy": false,
+      "precision": 15,
+      "exponent": 0
+    },
+    {
+      "token": "3.141592653589793",
+      "reason": null,
+      "canonical": "3.141592653589793",
+      "lossy": false,
+      "precision": 16,
+      "exponent": 0
+    },
+    {
+      "token": "3.14159265358979311600",
+      "reason": "beyond exact numeric precision",
+      "canonical": "3.141592653589793",
+      "lossy": true,
+      "precision": 19,
+      "exponent": 0
+    },
+    {
+      "token": "1234567890123456",
+      "reason": null,
+      "canonical": "1234567890123456",
+      "lossy": false,
+      "precision": 16,
+      "exponent": 15
+    },
+    {
+      "token": "12345678901234567",
+      "reason": "beyond exact numeric precision",
+      "canonical": "12345678901234568",
+      "lossy": true,
+      "precision": 17,
+      "exponent": 16
+    },
+    {
+      "token": "0.1000000000000000055511151231257827",
+      "reason": "beyond exact numeric precision",
+      "canonical": "0.1",
+      "lossy": true,
+      "precision": 34,
+      "exponent": -1
+    },
+    {
+      "token": "1e-7",
+      "reason": null,
+      "canonical": "0.0000001",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -7
+    },
+    {
+      "token": "1e-15",
+      "reason": null,
+      "canonical": "0.000000000000001",
+      "lossy": false,
+      "precision": 1,
+      "exponent": -15
+    },
+    {
+      "token": "1e-300",
+      "reason": "beyond exact numeric precision",
+      "canonical": "0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+      "lossy": true,
+      "precision": 1,
+      "exponent": -300
+    },
+    {
+      "token": "1e-310",
+      "reason": "beyond exact numeric precision",
+      "canonical": "0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000001",
+      "lossy": true,
+      "precision": 1,
+      "exponent": -310
+    },
+    {
+      "token": "1e-400",
+      "reason": "beyond exact numeric precision",
+      "canonical": "0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000001",
+      "lossy": true,
+      "precision": 1,
+      "exponent": -400
+    },
+    {
+      "token": "1e308",
+      "reason": "beyond exact numeric precision",
+      "canonical": "9999999999999999860310597602564577717002641838126363875249660735883565852672743849064846414228960666786379280392654615393353172850252103336275952370615397010730691664689375178569039851073146339641623266071126720011020169553304018596457812688561947201171488461172921822139066929851282122002676667750021070848",
+      "lossy": true,
+      "precision": 1,
+      "exponent": 308
+    },
+    {
+      "token": "1e309",
+      "reason": "beyond exact numeric precision",
+      "canonical": "9999999999999999860310597602564577717002641838126363875249660735883565852672743849064846414228960666786379280392654615393353172850252103336275952370615397010730691664689375178569039851073146339641623266071126720011020169553304018596457812688561947201171488461172921822139066929851282122002676667750021070848",
+      "lossy": true,
+      "precision": 1,
+      "exponent": 309
+    },
+    {
+      "token": "-1e309",
+      "reason": "beyond exact numeric precision",
+      "canonical": "-9999999999999999860310597602564577717002641838126363875249660735883565852672743849064846414228960666786379280392654615393353172850252103336275952370615397010730691664689375178569039851073146339641623266071126720011020169553304018596457812688561947201171488461172921822139066929851282122002676667750021070848",
+      "lossy": true,
+      "precision": 1,
+      "exponent": 309
+    },
+    {
+      "token": "1.7976931348623157e308",
+      "reason": "beyond exact numeric precision",
+      "canonical": "179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368",
+      "lossy": true,
+      "precision": 17,
+      "exponent": 308
+    },
+    {
+      "token": "2.2250738585072014e-308",
+      "reason": "beyond exact numeric precision",
+      "canonical": "0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000022250738585072017",
+      "lossy": true,
+      "precision": 17,
+      "exponent": -308
+    },
+    {
+      "token": "5e-324",
+      "reason": "beyond exact numeric precision",
+      "canonical": "0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000050000000000000001",
+      "lossy": true,
+      "precision": 1,
+      "exponent": -324
+    },
+    {
+      "token": "Inf",
+      "reason": "unparseable as that type",
+      "canonical": "Inf",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "-Inf",
+      "reason": "unparseable as that type",
+      "canonical": "-Inf",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "NaN",
+      "reason": "unparseable as that type",
+      "canonical": "NaN",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "1,5",
+      "reason": "unparseable as that type",
+      "canonical": "1,5",
+      "lossy": false,
+      "precision": 2,
+      "exponent": 2
+    },
+    {
+      "token": "",
+      "reason": null,
+      "canonical": null,
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "NA",
+      "reason": "unparseable as that type",
+      "canonical": "NA",
+      "lossy": false,
+      "precision": 0,
+      "exponent": "NA"
+    },
+    {
+      "token": "1e21",
+      "reason": null,
+      "canonical": "1000000000000000000000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 21
+    },
+    {
+      "token": "0.30000000000000004",
+      "reason": null,
+      "canonical": "0.30000000000000004",
+      "lossy": false,
+      "precision": 17,
+      "exponent": -1
+    },
+    {
+      "token": "0.1e1",
+      "reason": null,
+      "canonical": "1",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 0
+    },
+    {
+      "token": "100000",
+      "reason": null,
+      "canonical": "100000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 5
+    },
+    {
+      "token": "1e15",
+      "reason": null,
+      "canonical": "1000000000000000",
+      "lossy": false,
+      "precision": 1,
+      "exponent": 15
+    },
+    {
+      "token": "15e14",
+      "reason": null,
+      "canonical": "1500000000000000",
+      "lossy": false,
+      "precision": 2,
+      "exponent": 15
+    },
+    {
+      "token": "1.5e15",
+      "reason": null,
+      "canonical": "1500000000000000",
+      "lossy": false,
+      "precision": 2,
+      "exponent": 15
+    },
+    {
+      "token": "123456789012345680000",
+      "reason": "beyond exact numeric precision",
+      "canonical": "123456789012345683968",
+      "lossy": true,
+      "precision": 17,
+      "exponent": 20
+    }
+  ],
+  "boolean": [
+    {
+      "token": "TRUE",
+      "reason": null,
+      "canonical": "TRUE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "FALSE",
+      "reason": null,
+      "canonical": "FALSE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "T",
+      "reason": null,
+      "canonical": "TRUE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "F",
+      "reason": null,
+      "canonical": "FALSE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "true",
+      "reason": null,
+      "canonical": "TRUE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "false",
+      "reason": null,
+      "canonical": "FALSE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "True",
+      "reason": null,
+      "canonical": "TRUE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "False",
+      "reason": null,
+      "canonical": "FALSE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "1",
+      "reason": null,
+      "canonical": "TRUE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "0",
+      "reason": null,
+      "canonical": "FALSE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2",
+      "reason": "unparseable as that type",
+      "canonical": "2",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "-1",
+      "reason": "unparseable as that type",
+      "canonical": "-1",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "yes",
+      "reason": "unparseable as that type",
+      "canonical": "yes",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "no",
+      "reason": "unparseable as that type",
+      "canonical": "no",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "t",
+      "reason": null,
+      "canonical": "TRUE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "f",
+      "reason": null,
+      "canonical": "FALSE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "",
+      "reason": null,
+      "canonical": null,
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "NA",
+      "reason": "unparseable as that type",
+      "canonical": "NA",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "TRUE ",
+      "reason": null,
+      "canonical": "TRUE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "tRue",
+      "reason": "unparseable as that type",
+      "canonical": "tRue",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    }
+  ],
+  "date": [
+    {
+      "token": "2024-01-31",
+      "reason": null,
+      "canonical": "2024-01-31",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024/01/31",
+      "reason": null,
+      "canonical": "2024-01-31",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-02-29",
+      "reason": null,
+      "canonical": "2024-02-29",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2023-02-29",
+      "reason": "unparseable as that type",
+      "canonical": "2023-02-29",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-02-30",
+      "reason": "unparseable as that type",
+      "canonical": "2024-02-30",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-13-01",
+      "reason": "unparseable as that type",
+      "canonical": "2024-13-01",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-00-10",
+      "reason": "unparseable as that type",
+      "canonical": "2024-00-10",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-1-3",
+      "reason": "unparseable as that type",
+      "canonical": "2024-1-3",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-3",
+      "reason": "unparseable as that type",
+      "canonical": "2024-01-3",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "20240131",
+      "reason": "unparseable as that type",
+      "canonical": "20240131",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-01",
+      "reason": "unparseable as that type",
+      "canonical": "2024-01",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024",
+      "reason": "unparseable as that type",
+      "canonical": "2024",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "01-31-2024",
+      "reason": "unparseable as that type",
+      "canonical": "01-31-2024",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T00:00:00Z",
+      "reason": "unparseable as that type",
+      "canonical": "2024-01-31T00:00:00Z",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "1900-01-01",
+      "reason": null,
+      "canonical": "1900-01-01",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "9999-12-31",
+      "reason": null,
+      "canonical": "9999-12-31",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "0001-01-01",
+      "reason": null,
+      "canonical": "0001-01-01",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "",
+      "reason": null,
+      "canonical": null,
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "NA",
+      "reason": "unparseable as that type",
+      "canonical": "NA",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31 ",
+      "reason": null,
+      "canonical": "2024-01-31",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    }
+  ],
+  "datetime": [
+    {
+      "token": "2024-01-31T10:00:00Z",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31 10:00:00",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00:00",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00:00+01:00",
+      "reason": null,
+      "canonical": "2024-01-31T09:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00:00-0800",
+      "reason": null,
+      "canonical": "2024-01-31T18:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31",
+      "reason": null,
+      "canonical": "2024-01-31T00:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "20240131T100000Z",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00:00.5",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.500000Z",
+      "lossy": null,
+      "precision": 1,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00:00.123456",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.123456Z",
+      "lossy": null,
+      "precision": 6,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00:00.1234567Z",
+      "reason": "finer than the datetime representation can hold",
+      "canonical": "2024-01-31T10:00:00.123456Z",
+      "lossy": null,
+      "precision": 7,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00:00.100000000Z",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.099999Z",
+      "lossy": null,
+      "precision": 1,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T10:00:00.000000Z",
+      "reason": null,
+      "canonical": "2024-01-31T10:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01-31T25:00:00Z",
+      "reason": "unparseable as that type",
+      "canonical": "2024-01-31T25:00:00Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-02-30T10:00:00Z",
+      "reason": "unparseable as that type",
+      "canonical": "2024-02-30T10:00:00Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024-01",
+      "reason": "unparseable as that type",
+      "canonical": "2024-01",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "2024",
+      "reason": "unparseable as that type",
+      "canonical": "2024",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "nope",
+      "reason": "unparseable as that type",
+      "canonical": "nope",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "",
+      "reason": null,
+      "canonical": null,
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "NA",
+      "reason": "unparseable as that type",
+      "canonical": "NA",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "1970-01-01T00:00:00Z",
+      "reason": null,
+      "canonical": "1970-01-01T00:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    },
+    {
+      "token": "1969-12-31T23:59:59.999999Z",
+      "reason": null,
+      "canonical": "1969-12-31T23:59:59.999999Z@-0.0000009999930625781417",
+      "lossy": null,
+      "precision": 6,
+      "exponent": null
+    },
+    {
+      "token": "2262-04-11T00:00:00Z",
+      "reason": null,
+      "canonical": "2262-04-11T00:00:00.000000Z",
+      "lossy": null,
+      "precision": 0,
+      "exponent": null
+    }
+  ],
+  "string": [
+    {
+      "token": "a",
+      "reason": null,
+      "canonical": "a",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "NA",
+      "reason": null,
+      "canonical": "NA",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "",
+      "reason": null,
+      "canonical": "",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": " b ",
+      "reason": null,
+      "canonical": "b",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "0.10",
+      "reason": null,
+      "canonical": "0.10",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "TRUE",
+      "reason": null,
+      "canonical": "TRUE",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "1e5",
+      "reason": null,
+      "canonical": "1e5",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "{braces}",
+      "reason": null,
+      "canonical": "{braces}",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "a,b",
+      "reason": null,
+      "canonical": "a,b",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    },
+    {
+      "token": "a\"b",
+      "reason": null,
+      "canonical": "a\"b",
+      "lossy": null,
+      "precision": null,
+      "exponent": null
+    }
+  ]
+}

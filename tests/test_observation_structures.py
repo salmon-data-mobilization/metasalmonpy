@@ -434,3 +434,176 @@ def test_a_symlinked_structure_file_is_refused(tmp_path):
     with pytest.raises(SdpExtensionError, match="symlink"):
         read_sdp_observation_structures(root)
     assert outside.read_text(encoding="utf-8") == "outside\n"
+
+
+def _datetime_dimension_sdp(root: Path) -> Path:
+    """A package whose observation *dimension* is declared ``datetime``.
+
+    Since the 0.2.0 rung the resource is typed from its dictionary, so this
+    column reaches the observation validators as a ``pd.Timestamp`` rather
+    than as CSV text -- the exact input that used to be rejected.
+    """
+    from metasalmonpy import write_salmon_datapackage
+
+    data = pd.DataFrame(
+        {
+            "stock_id": ["fraser", "fraser", "fraser"],
+            "observed_at": [
+                "2024-01-31T10:00:00Z",
+                "2024-02-01T10:00:00Z",
+                "2024-02-01T10:00:00Z",
+            ],
+            "total_spawners": [100.0, 120.0, 120.0],
+        }
+    )
+    dictionary = pd.DataFrame(
+        [
+            {
+                "dataset_id": "datetime-test",
+                "table_id": "counts",
+                "column_name": "stock_id",
+                "column_label": "Stock",
+                "column_description": "Stock identifier",
+                "column_role": "identifier",
+                "value_type": "string",
+                "required": True,
+            },
+            {
+                "dataset_id": "datetime-test",
+                "table_id": "counts",
+                "column_name": "observed_at",
+                "column_label": "Observed at",
+                "column_description": "Instant the count was made",
+                "column_role": "temporal",
+                "value_type": "datetime",
+                "required": True,
+            },
+            {
+                "dataset_id": "datetime-test",
+                "table_id": "counts",
+                "column_name": "total_spawners",
+                "column_label": "Total spawners",
+                "column_description": "Estimated total spawners",
+                "column_role": "measurement",
+                "value_type": "number",
+                "unit_label": "individual",
+                "unit_iri": "http://qudt.org/vocab/unit/INDIV",
+                "term_iri": "https://example.org/variables/spawners",
+                "term_type": "owl_class",
+                "required": True,
+                "property_iri": "https://w3id.org/smn/Abundance",
+                "entity_iri": "https://w3id.org/smn/Stock",
+            },
+        ]
+    )
+    write_salmon_datapackage(
+        resources={"counts": data},
+        dataset_meta=pd.DataFrame(
+            [
+                {
+                    "dataset_id": "datetime-test",
+                    "title": "Datetime dimension test",
+                    "description": "A datetime-typed observation dimension",
+                }
+            ]
+        ),
+        table_meta=pd.DataFrame(
+            [
+                {
+                    "dataset_id": "datetime-test",
+                    "table_id": "counts",
+                    "file_name": "data/counts.csv",
+                    "table_label": "Counts",
+                    "description": "Spawner counts at an instant",
+                }
+            ]
+        ),
+        dict_df=dictionary,
+        path=str(root),
+    )
+    return root
+
+
+def _datetime_structure_rows() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "dataset_id": "datetime-test",
+                "table_id": "counts",
+                "observation_structure_id": "spawners_by_instant",
+                "structure_label": "Spawners by instant",
+                "structure_description": (
+                    "One total-spawner observation per stock and instant."
+                ),
+            }
+        ]
+    )
+
+
+def _datetime_component_rows() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "dataset_id": "datetime-test",
+                "table_id": "counts",
+                "observation_structure_id": "spawners_by_instant",
+                "component_order": order,
+                "column_name": column,
+                "component_role": role,
+                "component_relation_iri": None,
+                "required_when_observed": True,
+            }
+            for order, column, role in (
+                (1, "stock_id", "dimension"),
+                (2, "observed_at", "dimension"),
+                (3, "total_spawners", "measure"),
+            )
+        ]
+    )
+
+
+def test_a_datetime_dimension_is_accepted(tmp_path):
+    """Regression: the deliberate mirror of a metasalmon defect is gone.
+
+    metasalmon rejected every datetime-typed observation dimension, because
+    its normalizer took ``as.character()`` of the POSIXct the typed reader
+    produced -- ``"2024-01-31 10:00:00"``, which its ISO pattern can never
+    match -- and this package mirrored the rejection rather than diverging
+    silently. The hub adjudicated it as a metasalmon defect and fixed it
+    there.
+    """
+    root = _datetime_dimension_sdp(tmp_path / "datetime-sdp")
+
+    write_sdp_observation_structures(
+        root, _datetime_structure_rows(), _datetime_component_rows()
+    )
+    assert validate_sdp_observation_structures(root) is True
+    assert validate_salmon_datapackage(str(root), require_iris=False) is not None
+
+
+def test_typed_datetimes_normalize_to_the_iso_form():
+    from metasalmonpy.observation_structures import (
+        _normalize_typed_values,
+        _typed_character,
+    )
+
+    # A typed instant reaches the canonical lexical form, not R's
+    # ``as.character()`` rendering.
+    assert _typed_character(pd.Timestamp("2024-01-31 10:00:00")) == (
+        "2024-01-31T10:00:00Z"
+    )
+    # A tz-aware instant folds into UTC rather than keeping its own offset.
+    assert _typed_character(pd.Timestamp("2024-01-31 02:00:00-08:00")) == (
+        "2024-01-31T10:00:00Z"
+    )
+    assert _normalize_typed_values(
+        [pd.Timestamp("2024-01-31 10:00:00"), None],
+        "datetime",
+        "observed_at",
+    ) == ["2024-01-31T10:00:00Z", ""]
+    # Text input is unchanged, so malformed text still fails its pattern.
+    assert _normalize_typed_values(
+        ["2024-01-31T02:00:00-08:00"], "datetime", "observed_at"
+    ) == ["2024-01-31T10:00:00Z"]
+    with pytest.raises(SdpExtensionError, match="value_type"):
+        _normalize_typed_values(["2024-01-31 10:00:00"], "datetime", "observed_at")

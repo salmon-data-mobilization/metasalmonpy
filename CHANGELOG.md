@@ -1,5 +1,311 @@
 # Changelog
 
+## Unreleased
+
+Not a version bump: the parity claim stays at **metasalmon 0.2.1** because the
+metasalmon change mirrored here is in that package's development version, not
+in a release. Bump on parity, not on calendar.
+
+### Fixes
+
+- **A `datetime` observation dimension is accepted.** `_as_r_character()`
+  rendered a typed instant as `"2024-01-31 10:00:00"` — a space, no `T`, no
+  zone — which `_DATETIME_RE` can never match, so every datetime-typed
+  observation dimension was rejected. That was **deliberate**: metasalmon had
+  the same defect, from taking `as.character()` of the POSIXct its typed
+  reader produces, and this package mirrored the rejection rather than
+  diverging silently, reporting it to the hub instead. The hub adjudicated it
+  as a metasalmon defect and fixed it there
+  (`.ms_sdp_observation_typed_character()`); the mirror and its documentation
+  are gone, and the helper is renamed `_typed_character()` because it no
+  longer mirrors `as.character()`. A tz-aware instant now folds into UTC.
+
+  The adjudication also found the reverse: **metasalmon, not this package, was
+  wrong about parsing ISO-8601 instants.** `as.POSIXct()` has no ISO-8601
+  entry in its default format list and silently truncated
+  `"2024-01-31T10:00:00Z"` to midnight, collapsing two distinct instants on
+  one date into a single grain key. `_parse_datetime()`'s
+  `datetime.fromisoformat()` was correct throughout; metasalmon was brought
+  into line with it. Nothing changed here for that half.
+
+### Adjudication of the 0.2.0 descriptor divergences
+
+The seven `write_salmon_datapackage()` differences 0.2.0 fixed by conforming
+to metasalmon were re-decided on their merits under Brett's 2026-08-17 ruling
+("if the Python implementation got it right, then update metasalmon").
+**All seven fixes stand**, and three of them are not merely house style —
+they are load-bearing for publication. `smn-data-pkg`'s strict publication
+validator (`scripts/validate_package.py`) compares `schema.fields` to the
+`column_dictionary.csv`-derived list with `==`, so an extra, missing or
+differing key is an error: suppressing `title` when it equals `name`, and
+emitting `constraints: {"required": false}`, each fail it, and a one-element
+`primaryKey` array is rejected by name — `primaryKey must be 'pop_id'; found
+['pop_id']`. Measured, not reasoned: a package written by metasalmon passes
+that validator, and each of this package's pre-0.2.0 behaviours reintroduced
+individually makes it fail. No change was warranted on either side.
+
+## 0.2.1
+
+**This release is a parity claim against metasalmon 0.2.1.** Built against the
+commit that made that version current on `main` (`f675d91`), extracted
+read-only with `git archive` and loaded with `pkgload::load_all()`, and
+verified by **running both implementations over the same inputs**. Paired with
+0.2.0 in one pull request because 0.2.1's per-resource schema URLs are read
+through the loader 0.2.0 introduced, and building an interim shape only to
+rewrite it would have been the more error-prone route. PARITY.md rows 39 and 40 are new.
+
+### Fixes
+
+- **Canonical calendar strings no longer depend on the C library that built
+  the interpreter.** `strftime` hands `%Y` to libc, and glibc does not
+  zero-pad a year below 1000 where the macOS/BSD implementation does, so a
+  date declared `0001-01-01` keyed as `0001-01-01` on macOS and `1-01-01` on
+  Linux. Canonical value keys are what decide whether a data column matches
+  its own `codes.csv`, and `render_resource_frame` writes the same strings
+  into package bytes, so the determinism this rung claims did not actually
+  hold across machines.
+
+  Every calendar rendering now builds its text by explicit padding
+  (`resource_types._iso_date`, `._iso_seconds`) or by `date.isoformat()`,
+  both pure Python. Three call sites outside the new typed reader carried the
+  same defect and are fixed with it: the datetime branch of
+  `observation_structures._normalize_typed_values` — whose *date* branch was
+  already safe, which is what makes it an oversight rather than a choice —
+  `_as_r_character`, and the EML calendar-value round-trip check, which would
+  have rejected a valid pre-1000 date on Linux only.
+
+  `tests/test_platform_determinism_guard.py` now fails on any `strftime` call
+  in a package module, with an allowlist that must name what retires each
+  entry. The guard exists because this failure is **invisible to a macOS
+  developer** — the suite was green locally on every run while
+  `test_canonical_keys_match_era_r[date]` failed in CI — which is the same
+  class of decay `KnbCoreDependencyTests` was written for. PARITY.md row 40
+  registers the open question of whether metasalmon's own date key is
+  portable; the hub owns that side.
+
+- **Per-resource schema URLs in `datapackage.json` are derived from the loaded
+  SDP bundle** rather than composed from a hardcoded constant. 0.2.0 did this
+  for the four core metadata resources; this completes it for the SDP
+  extension resources (`sdp_methods`, `sdp_observation_structures`,
+  `sdp_observation_components`), so **every** URI in a written descriptor —
+  profile, rules, and per-resource schemas — now comes from one validated
+  bundle. The constant remains as the fallback for a bundle that predates the
+  v0.2 extension resources, which is not dead code: such a bundle has no
+  `sdp_methods` entry at all.
+
+  Composing the URL gives the *same answer* as reading it out of the vendored
+  bundle, so a test against that bundle cannot tell the two apart. The
+  regression test moves the bundle's own URLs and asserts both writers follow
+  them.
+
+- **Semantic ranking is reproducible across input orders.** metasalmon 0.2.1
+  gave nine ordering sites the full tie-break key set
+  `(-score, source, ontology, label, iri)`, because score alone is not a total
+  order and — with `seed_semantics=True` — the top-1 pick becomes a written IRI
+  in `column_dictionary.csv`. Seven of those sites have a counterpart here and
+  already carried the key set; this release pins the property with a test that
+  permutes the input and asserts one fixed order.
+
+  The *locale* half of metasalmon's fix is inapplicable here: Python's
+  `sorted`/`sort_values` are codepoint-ordinal (PARITY.md row 3). The two
+  remaining sites — `.apply_embedding_rerank()` and
+  `.ms_merge_semantic_target_candidates()` — have no counterpart because this
+  package has neither an embedding rerank stage nor a retry retrieval pass;
+  recorded as PARITY.md row 39 rather than left as an implied "delivered".
+
+### Parity evidence
+
+Driving `.score_and_rank_terms()` over the same six tie-heavy candidates under
+four input permutations returns **one fixed order on both sides**. The orders
+are not the same order — R ranks `gcdfo` above `smn` where this package does
+the reverse — which confirms PARITY.md row 32's pre-existing ranking-profile
+gap **live rather than by reading**, and is why the test asserts the property
+0.2.1 added and not an order this package is registered as not sharing.
+
+## 0.2.0
+
+**This release is a parity claim against metasalmon 0.2.0.** Under the mirror
+contract a version number here asserts that this package delivers the
+behaviour of the metasalmon release with the same number — not a calendar date
+and not a partial port. metasalmon's 0.2.x releases are deliberately untagged
+history, so everything below was built against the commit that made **0.2.0
+current on `main`** (`3fd1618`), extracted read-only with `git archive` and
+loaded with `pkgload::load_all()`. Every behavioural claim was checked by
+**running both implementations over the same inputs** rather than by reading
+the R source. **metasalmon adopted C collation at 0.2.0**, so the byte
+equalities claimed here need no locale caveat — unlike the 0.1.7 and 0.1.8
+claims, which were measured against era R and do. Deliberate differences are
+registered in [PARITY.md](PARITY.md); rows 35–37 are new here, and rows 21, 25
+and 30 carry corrections this milestone produced.
+
+### Breaking changes
+
+- **`read_salmon_datapackage()` types data resources from the column
+  dictionary.** The dictionary is the sole type authority: a column it declares
+  is converted, a column it does not declare stays text rather than being
+  guessed, and that is what makes the write → read → write round trip lossless.
+  A value that does not satisfy its declared `value_type` **keeps its exact raw
+  token** rather than being silently accepted, rounded, clamped or made
+  missing, and the mismatch is reported as a structured validation issue.
+  Unparseable values, a fractional `integer`, an `integer` or `number` whose
+  precision or magnitude a double cannot hold, and a `datetime` finer than the
+  representation can carry are all detected by an actual round trip — token
+  versus the shortest rendering of the value it produced — not by digit or
+  exponent thresholds, which misclassify in both directions at the boundaries.
+  New module `resource_types.py`.
+
+  **Logged decision: `integer` reads as `float64`, not nullable `Int64`.**
+  metasalmon reads both `integer` and `number` with `readr::col_double()`
+  because `col_integer()` silently `NA`s past 2^31. `Int64` would be *exact*
+  past 2^53 where a double is not — so an `Int64` column would have to accept
+  `9007199254740993`, a token metasalmon reports as beyond exact numeric
+  precision. The float keeps every mismatch verdict identical across the two
+  implementations, and the raw token is preserved either way. PARITY.md row 35.
+
+- **`write_salmon_datapackage(overwrite=True)` no longer empties the package
+  directory.** It replaces only the files it owns — the `metadata/` SDP CSVs,
+  the `data/` resources declared in `tables.csv` (including any a previous
+  write declared and this one does not), `datapackage.json`, and the ownership
+  sentinel — and preserves everything else: reviewed SSSOM mapping sets,
+  ordered measurement decompositions, EML and EDH XML, `eml-mapping.yml`,
+  review notes, the reproducibility manifest, and `publication/` artifacts. The
+  read → edit → write loop silently deleted all of them. The new `prune=True`
+  restores the previous behaviour and requires `overwrite=True`; `create_sdp()`
+  gained the same argument.
+
+- **`infer_value_type()` answers from the class, not from the values.** A
+  `datetime64` column whose values happened to all be midnight used to infer
+  `"date"`. This is public API here (PARITY.md row 5), so it is a behaviour
+  change for callers. metasalmon 0.2.0 fixed the mirror image from the other
+  side — its `Date`-before-`POSIXt` test meant `"datetime"` was never inferred
+  at all and timestamps round-tripped as dates. A single midnight timestamp is
+  a real instant, and a heuristic that erases its time component silently
+  rewrites data on the round trip.
+
+- **Newly written descriptors derive every URI from the loaded SDP bundle.**
+  `profile`, `sdp.profile`, `sdp.rules`, `sdp.specVersion` and the per-resource
+  metadata schema URLs now all come from one validated document rather than
+  from constants in Python source, so an upstream identifier change is
+  followable rather than fatal. The metadata resources in `datapackage.json`
+  previously carried no `schema` and no `description` at all.
+
+### New
+
+- **A remote SDP schema loader**, `sdp_schema.load_sdp_schema()`, remote-first
+  with the vendored bundle as fallback and a per-process cache, mirroring
+  `.ms_load_sdp_schema()`. `source="remote"` aborts rather than silently using
+  a stale bundle; `"auto"` warns once and falls back; `"vendored"` never
+  reaches the network. Identity is **derived** from the loaded bundle and only
+  checked for internal self-consistency — asserting it against a constant is
+  what made an upstream `$id` migration unfollowable in metasalmon 0.1.x.
+
+  **It is born pinned to the `sdp-0.2.0` tag**, not to `main`. metasalmon's own
+  default names `main`, which was `sdp-0.2.0`-shaped when 0.2.1 shipped and is
+  `sdp-0.3.0`-shaped now, so following it literally would fetch a bundle from a
+  spec era this package does not implement. Overridable through
+  `METASALMONPY_SDP_SCHEMA_BASE_URL` / `set_sdp_schema_base_url()`, and both the
+  source and the base URL are read at **call** time. PARITY.md row 38.
+
+- **`validate_salmon_datapackage()` returns real issues.** The `issues` frame
+  was an unconditionally empty `DataFrame(columns=["message"])`; it now carries
+  R's issue columns (`issue_type`, `table_id`, `column_name`, `value`,
+  `message`) and reports every declared type the data did not satisfy.
+
+- **`text_safety.redact_secrets()`**, mirroring `.ms_redact_secrets()`, applied
+  where external text is **captured** rather than where it is displayed: a
+  provider failure stored on the exported `semantic_llm_assessments` attribute
+  is written to CSV, so a display-time redactor is already too late. Applied at
+  the LLM assessment capture, the update check, and the schema loader's remote
+  failure. `knb_publication._redact` stays separate for now — its output is
+  pinned against R fixtures, and metasalmon collapses the two redactors at
+  0.2.5.
+
+### Fixes
+
+- **Reviewed sidecars survive a rewrite** (the read → edit → write loop above).
+
+- **`write_salmon_datapackage()` refuses to write through a symbolic link.**
+  `Path.exists()` follows links, so a `data/` or `metadata/` replaced by one
+  would make every managed child resolve outside the package and be deleted
+  there. The package root, every managed path component, and the legacy
+  root-level metadata shadows are all checked — and checked **before**
+  `tables.csv` is parsed, because the managed-path inventory reads it. A root
+  spelled with a trailing `..` is refused outright: `readlink(2)` resolves
+  every component but the last, so `link/..` inspects `..` inside the target
+  and the root then denotes an unrelated directory. `create_sdp()` replaces its
+  own outputs rather than writing through them, because a hard-linked
+  `README-review.txt` or `semantic_suggestions.csv` would otherwise truncate a
+  shared inode outside the package.
+
+- **Typed resource columns are written back canonically.** A float 100000.0
+  would otherwise reach disk as `100000.0` and a logical as `True`, so a
+  package read and written straight back would not reproduce its own bytes.
+
+- Four descriptor divergences from metasalmon, **all found by driving both
+  writers over the same package** and none of them deliberate: the field
+  `title` was suppressed when it equalled the column name (R emits it whenever
+  `column_label` is non-blank); `constraints` was emitted as
+  `{"required": false}` for every column (R emits the block only for a required
+  one); a single-column `primaryKey` was written as a one-element array (R
+  writes the scalar); and the dataset **contact** contributor was missing
+  entirely. A blank `temporal_start` also produced `"temporal": {"start": "",
+  "end": ""}`, because `pd.notna("")` is true.
+
+- **`column_dictionary.csv` renders logicals as `TRUE`/`FALSE`**, not Python's
+  `True`/`False`, and `datapackage.json` ends with a newline as
+  `jsonlite::write_json` does. With those two, **every file in a package this
+  release writes is byte-identical to metasalmon's** for the same inputs — see
+  below.
+
+- A data resource a previous write declared and this one does not is removed,
+  with a warning naming it. Retaining it would leave undeclared data that
+  validation never looks at but a hand-made ZIP would carry.
+
+### Parity evidence
+
+An SDP written by metasalmon at `3fd1618`, read here and written straight back,
+reproduces **every file byte-for-byte**: `data/obs.csv` (including `100000`,
+`0.1`, `1234567890123456`, `TRUE`/`FALSE`, ISO dates and
+`2024-01-31T10:00:00Z` datetimes), all four `metadata/` CSVs, and
+`datapackage.json`. That package is committed as
+`tests/data/resource_types/r-package/`. R then reads and validates the
+Python-written copy with no issues, and the type mapping is exactly parallel —
+`character/numeric/numeric/logical/Date/POSIXct` against
+`str/float64/float64/boolean/date-object/datetime64`.
+
+Token-level fidelity was measured the same way: **524 observations** across 166
+tokens and six declared types (conversion verdict, canonical key, lossiness,
+significant digits, decimal exponent) were compared against the R
+implementation. All agree except two families, both pinned as tests rather than
+papered over:
+
+- the canonical *display* key for a token outside the double range (`1e309`,
+  `1e-400`, `5e-324`, …), because `readr::parse_double()` clamps a runaway
+  exponent to ±307 where `float()` saturates. Both sides still report the token
+  as beyond exact numeric precision, so no validation verdict differs;
+- the canonical key for a sub-microsecond instant **before** the epoch, where
+  R's POSIXct carries −9.999930625781417e-07 for what Python represents exactly
+  as −1e-06, so R appends its disambiguating `@` suffix and this package does
+  not. Both sides accept the token.
+
+The consequence of PARITY.md row 21 is now visible in a new place and is
+recorded there: a literal `NA` in a **declared numeric** column is a value-type
+mismatch here and was missing under era R, whose reader still took
+`na = c("", "NA")`. This package agrees with metasalmon 0.2.4 onward.
+
+### Internal
+
+- `metadata.SDP_PROFILE_VERSION` resolves through the loader at access time
+  rather than being a module constant evaluated at import — an import-time read
+  would have turned `import metasalmonpy` into a network call.
+- `tests/conftest.py` pins the suite to the vendored bundle, as metasalmon's
+  suite pins `sdp_schema_source = "vendored"`. The gap that pin left in
+  metasalmon — nothing ever exercised a *successful* remote fetch — is closed
+  here with an injected fetcher.
+- `observation_structures` renders typed values through R's `as.character()`
+  semantics before comparing them against raw `codes.csv` text; `str(2019.0)`
+  is `"2019.0"` and matches nothing.
+
 ## 0.1.8
 
 **This release is a parity claim against metasalmon 0.1.8.** Under the mirror

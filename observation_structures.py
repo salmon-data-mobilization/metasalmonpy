@@ -31,6 +31,10 @@ from typing import Dict, List, Optional, Sequence, Union
 
 import pandas as pd
 
+# ``_iso_seconds`` is imported rather than re-spelled here because a
+# ``strftime`` year is not portable below year 1000; see the comment on
+# its definition. Both modules must render calendars the same way.
+from .resource_types import _iso_seconds, format_number_token
 from .sdp_methods import (
     SDP_METHODS_PATH,
     SdpExtensionError,
@@ -408,7 +412,7 @@ def _normalize_typed_values(
     ``2019`` are the same integer dimension value, and ``100`` and ``100.0``
     are the same number.
     """
-    text = ["" if _is_na(value) else str(value) for value in values]
+    text = ["" if _is_na(value) else _typed_character(value) for value in values]
     normalized = list(text)
     present = [index for index, value in enumerate(text) if not _is_blank(value)]
     if not present:
@@ -467,7 +471,7 @@ def _normalize_typed_values(
             if parsed_datetime is None:
                 fail()
                 return normalized  # pragma: no cover - fail() always raises
-            normalized[index] = parsed_datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+            normalized[index] = _iso_seconds(parsed_datetime) + "Z"
     elif declared != "string":
         fail()
     return normalized
@@ -521,6 +525,41 @@ def _cast_typed_values(
         else:
             cast.append(value)
     return cast
+
+
+def _typed_character(value: object) -> str:
+    """Mirror ``.ms_sdp_observation_typed_character``.
+
+    Since the 0.2.0 rung a data resource is typed from its dictionary, so a
+    column declared ``integer`` arrives here as a float. Every comparison in
+    this module against raw ``codes.csv`` text, and every value the typed
+    normalizer inspects, needs the lexical form the validators expect —
+    ``2019``, not ``2019.0``, which matches nothing.
+
+    The numeric branch agrees with R's ``as.character()`` for every magnitude
+    below 1e15, and deliberately keeps plain notation above it where R would
+    switch to ``"1e+05"``-style output that its own ``^[+-]?[0-9]+$`` check
+    then rejects.
+
+    The datetime branch used to mirror R's ``as.character()`` literally,
+    producing ``"2024-01-31 10:00:00"`` — a space, no ``T``, no zone — which
+    this module's ISO pattern can never match. metasalmon rejected every
+    datetime-typed observation *dimension* for that reason and this package
+    mirrored the rejection deliberately, reporting it to the hub rather than
+    diverging silently. The hub adjudicated it as a metasalmon defect and
+    fixed it there; the branch now emits the ISO form both implementations
+    require, and a tz-aware instant is folded into UTC rather than rendered in
+    its own offset.
+    """
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+    if isinstance(value, float):
+        return format_number_token(value) or ""
+    if isinstance(value, pd.Timestamp) or isinstance(value, _dt.datetime):
+        if value.tzinfo is not None:
+            value = value.astimezone(_dt.timezone.utc).replace(tzinfo=None)
+        return _iso_seconds(value) + "Z"
+    return str(value)
 
 
 def _validate_procedure_codes(
@@ -578,7 +617,7 @@ def _validate_procedure_codes(
             value = data[column].iloc[row]
             if _is_blank(value):
                 continue
-            text = str(value)
+            text = _typed_character(value)
             if text not in observed_values:
                 observed_values.append(text)
         missing = [value for value in observed_values if value not in code_values]
