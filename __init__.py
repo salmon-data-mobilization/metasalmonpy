@@ -6,7 +6,7 @@ infer dictionaries, validate metadata, search ontology terms, and build/read
 Frictionless-style Salmon Data Packages.
 """
 
-__version__ = "0.1.8"
+__version__ = "0.2.0"
 
 from .dictionary import (
     apply_salmon_dictionary,

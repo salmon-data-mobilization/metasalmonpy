@@ -67,16 +67,26 @@ def infer_value_type(series: pd.Series) -> str:
     s = pd.Series(series)
     dtype = s.dtype
 
-    # Datetime: treat midnight-only timestamps as dates
+    # A timestamp column is ``datetime``, whatever time of day it carries.
+    #
+    # **Behaviour change at the 0.2.0 rung, and a public one here** (PARITY.md
+    # row 5 makes ``infer_value_type`` public API in this package). It used to
+    # collapse a datetime column whose values were all midnight to ``"date"``.
+    # metasalmon 0.2.0 fixed the mirror-image defect from the other side — its
+    # ``inherits(col, "Date") || inherits(col, "POSIXt")`` tested the wider
+    # class first, so ``"datetime"`` was never inferred at all and timestamps
+    # round-tripped as dates. The rule both now use is the class, not the
+    # values: ``POSIXt``/``datetime64`` is ``datetime``, ``Date``/
+    # ``datetime.date`` is ``date``. A single midnight timestamp is a real
+    # instant, and a heuristic that erases its time component silently
+    # rewrites a user's data on the round trip.
     if pd.api.types.is_datetime64_any_dtype(dtype):
-        non_null = s.dropna()
-        if len(non_null) > 0:
-            times = non_null.dt.time
-            if times.nunique() == 1 and times.iloc[0] == _dt.time(0, 0):
-                return "date"
         return "datetime"
 
-    # Date detection for object columns of date objects
+    # ``date`` has no pandas dtype, so R's ``Date`` class maps to an object
+    # column of ``datetime.date``. This is also what ``resource_types``
+    # produces for a declared ``date`` column, which is what makes the round
+    # trip stable.
     non_null = s.dropna()
     if len(non_null) > 0:
         sample = non_null.iloc[0]

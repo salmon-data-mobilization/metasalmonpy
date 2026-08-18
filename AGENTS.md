@@ -28,8 +28,8 @@ violation like a failing test.
    matches the metasalmon version whose functionality it actually delivers.
    When a metasalmon release ships, mirror the work and bump this package to
    the same number.
-3. **Current honest state:** parity is at **metasalmon 0.1.8**. metasalmon is
-   at 0.3.0. The catch-up (0.2.0 → 0.3.0) is roadmap stream **S10** in the
+3. **Current honest state:** parity is at **metasalmon 0.2.1**. metasalmon is
+   at 0.3.0. The catch-up (0.2.2 → 0.3.0) is roadmap stream **S10** in the
    hub; this package's version stays at the last delivered milestone until
    the next one lands — do **not** bump the number ahead of the functionality
    (Brett's decision, 2026-08-13: bump on parity, not on calendar).
@@ -50,8 +50,9 @@ at its `ROADMAP` card. Do not maintain a competing roadmap here.
 uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
-or `pip install -e ".[test]" && pytest -q`. The suite must stay green
-(93 passed / 3 skipped as of the 2026-08-13 rename).
+or `pip install -e ".[test]" && pytest -q`. The suite must stay green: 585
+passed / 3 skipped with the extras installed, 491 / 97 with core dependencies
+only (0.2.1, 2026-08-17).
 
 ## Dependency boundaries
 
@@ -82,7 +83,9 @@ the extras installed, `tests/test_knb_publication.py::KnbCoreDependencyTests`
 also blocks `yaml` from `sys.meta_path`, so the property fails locally too
 rather than only in CI. When you add a reader to a shared helper, check what
 calls it before assuming the helper is where it belongs (PARITY.md rows 30
-and 34).
+and 34). The SDP schema bundle is the live example: `write_salmon_datapackage()`
+loads it on the core path, so `sdp_schema` reads `sdp.rules.yaml` with a
+top-level-scalar scan rather than PyYAML.
 
 ## Layout notes
 

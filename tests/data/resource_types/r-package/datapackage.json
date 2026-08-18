@@ -1,0 +1,124 @@
+{
+  "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+  "name": "diff-1",
+  "id": "diff-1",
+  "title": "Differential",
+  "description": "R vs Python",
+  "sdp": {
+    "specVersion": "sdp-0.2.0",
+    "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+    "rules": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/sdp.rules.yaml",
+    "metadata": {
+      "dataset": "metadata/dataset.csv",
+      "tables": "metadata/tables.csv",
+      "columnDictionary": "metadata/column_dictionary.csv",
+      "codes": "metadata/codes.csv"
+    }
+  },
+  "resources": [
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_dataset",
+      "path": "metadata/dataset.csv",
+      "title": "SDP dataset metadata",
+      "description": "Dataset-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/dataset.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_tables",
+      "path": "metadata/tables.csv",
+      "title": "SDP tables metadata",
+      "description": "Table-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/tables.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_column_dictionary",
+      "path": "metadata/column_dictionary.csv",
+      "title": "SDP column dictionary metadata",
+      "description": "Column-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/column_dictionary.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_codes",
+      "path": "metadata/codes.csv",
+      "title": "SDP codes metadata",
+      "description": "Controlled code list metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/codes.schema.json"
+    },
+    {
+      "name": "obs",
+      "path": "data/obs.csv",
+      "profile": "tabular-data-resource",
+      "schema": {
+        "fields": [
+          {
+            "name": "site_id",
+            "title": "site_id",
+            "type": "string",
+            "description": "Column site_id"
+          },
+          {
+            "name": "brood_year",
+            "title": "brood_year",
+            "type": "integer",
+            "description": "Column brood_year"
+          },
+          {
+            "name": "count",
+            "title": "count",
+            "type": "number",
+            "description": "Column count"
+          },
+          {
+            "name": "observed",
+            "title": "observed",
+            "type": "boolean",
+            "description": "Column observed"
+          },
+          {
+            "name": "survey_date",
+            "title": "survey_date",
+            "type": "date",
+            "description": "Column survey_date"
+          },
+          {
+            "name": "survey_time",
+            "title": "survey_time",
+            "type": "datetime",
+            "description": "Column survey_time"
+          },
+          {
+            "name": "note",
+            "title": "note",
+            "type": "string",
+            "description": "Column note"
+          }
+        ],
+        "primaryKey": "site_id"
+      },
+      "title": "Observations",
+      "description": "Rows"
+    }
+  ],
+  "contributors": [
+    {
+      "title": "PSC",
+      "role": "creator"
+    },
+    {
+      "title": "Someone",
+      "role": "contact",
+      "email": "a@example.org"
+    }
+  ],
+  "licenses": [
+    {
+      "name": "CC-BY-4.0",
+      "title": "Creative Commons Attribution 4.0 International",
+      "path": "https://creativecommons.org/licenses/by/4.0/"
+    }
+  ]
+}

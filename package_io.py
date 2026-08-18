@@ -27,21 +27,35 @@ from .metadata import (
     parse_logical,
     read_sdp_csv,
     READR_TRIM_CHARS,
-    SDP_PROFILE_VERSION,
+)
+from .resource_types import (
+    VALUE_TYPES,
+    canonical_value_tokens,
+    convert_declared_tokens,
+    render_resource_frame,
+    typed_series,
+    value_type_mismatch_record,
 )
 from .sdp_schema import (
     SDP_PROFILE_URL as _SDP_PROFILE_URL,
     SDP_RULES_URL as _SDP_RULES_URL,
+    load_sdp_schema,
+    sdp_metadata_resource_entries,
 )
 
-# Canonical, publicly resolvable SDP 0.2 contract identifiers. These are
-# values stamped into ``datapackage.json``; nothing here ever fetches them.
-# metasalmon corrected the same constants from the retired
-# ``dfo-pacific-science`` organization at v0.1.8, and the vendored bundle under
-# ``data/`` now carries the matching ``$id``/``profile`` fields.
+# Fallback contract identifiers. Since the 0.2.0 rung the values actually
+# written come from the loaded bundle (``load_sdp_schema()``), so metasalmonpy
+# can follow an upstream identifier change rather than abort on it; these
+# remain for a bundle that omits them, and for callers importing them by name.
 SDP_PROFILE_URL = _SDP_PROFILE_URL
 SDP_RULES_URL = _SDP_RULES_URL
 PACKAGE_SENTINEL = ".metasalmonpy-package"
+METADATA_CSV_NAMES = (
+    "dataset.csv",
+    "tables.csv",
+    "column_dictionary.csv",
+    "codes.csv",
+)
 
 
 def _clean(value):
@@ -70,7 +84,20 @@ def _csv_value(value):
 
 
 def _write_metadata_csv(df: pd.DataFrame, path: Path) -> None:
-    df.to_csv(path, index=False, na_rep="")
+    # A logical column renders as ``TRUE``/``FALSE``, not Python's
+    # ``True``/``False``: ``column_dictionary.csv$required`` is written by both
+    # implementations and read back by both, and the two spellings made every
+    # Python-written dictionary differ from R's byte-for-byte. Found by driving
+    # both writers over the same package at the 0.2.0 rung.
+    out = df.copy()
+    for column in out.columns:
+        series = out[column]
+        if pd.api.types.is_bool_dtype(series.dtype):
+            out[column] = [
+                "" if value is pd.NA or value is None else ("TRUE" if value else "FALSE")
+                for value in series
+            ]
+    out.to_csv(path, index=False, na_rep="")
 
 
 def _read_metadata_csv(path: Path) -> pd.DataFrame:
@@ -100,7 +127,178 @@ def _is_owned_package_dir(target: Path) -> bool:
     return all((target / name).exists() for name in ("dataset.csv", "tables.csv", "column_dictionary.csv"))
 
 
-def _prepare_package_dir(target: Path, overwrite: bool) -> None:
+def _lexical_dir(path: Path) -> Path:
+    """A directory path whose final component is a real name.
+
+    Mirrors ``.ms_lexical_dir()``. Trailing ``/`` and ``/.`` spellings are the
+    ones that matter: ``Path("link/.").is_symlink()`` inspects the resolved
+    target, so a symlinked root spelled ``pkg-link/.`` was accepted.
+    Deliberately not ``resolve()``, which resolves the final component too and
+    would make a symlinked root come back as its target and pass the check it
+    exists to fail.
+    """
+    text = str(path)
+    while True:
+        stripped = re.sub(r"(?<=.)/+$", "", text)
+        stripped = re.sub(r"(?<=.)/+\.$", "", stripped)
+        if stripped == text:
+            return Path(text)
+        text = stripped
+
+
+def _ends_in_parent_ref(path: Path) -> bool:
+    """A trailing ``..`` is the one spelling no lexical check can make safe.
+
+    ``readlink(2)`` resolves every component but the last, so ``a/../link``
+    correctly inspects ``link`` — but ``link/..`` resolves ``link`` as an
+    intermediate component and then reads ``..`` inside the target, which is a
+    directory, so the check sees nothing and the root then denotes the
+    *target's* parent. Collapsing ``..`` lexically would be wrong precisely
+    when an earlier component is a symlink, and resolving it would follow the
+    link this check exists to reject. Refusing the spelling costs nothing:
+    ``a/../b`` and every other ``..`` position still works.
+    """
+    parts = [part for part in str(path).split("/") if part and part != "."]
+    return bool(parts) and parts[-1] == ".."
+
+
+def _assert_managed_paths_contained(target: Path, managed_paths) -> None:
+    """Refuse to delete through a symbolic link.
+
+    Mirrors ``.ms_assert_managed_path_contained()``. ``Path.exists()`` follows
+    links, so a ``data/`` or ``metadata/`` replaced by a symlink would make
+    every managed child resolve outside the package and be deleted there. The
+    KNB archive already fails closed on symlinked path components; the writer
+    must do the same before it removes anything.
+    """
+    root = _lexical_dir(target)
+    if _ends_in_parent_ref(root):
+        raise ValueError(
+            f"Refusing to update {target}: the package root ends in '..'. Which "
+            "directory that names depends on whether an earlier component is a "
+            "symbolic link. Write to the directory itself instead."
+        )
+    # Only ``target`` is checked, never its ancestors: on macOS ``/tmp`` is a
+    # link to ``/private/tmp``, so walking ancestors would reject every
+    # ordinary tempdir write.
+    if root.is_symlink():
+        raise ValueError(
+            f"Refusing to update {target}: the package root is a symbolic link. "
+            "Write to the directory the link points at, or replace the link "
+            "with a real directory."
+        )
+
+    prefix = str(root).rstrip("/") + "/"
+    for candidate in managed_paths:
+        text = str(candidate)
+        if not text.startswith(prefix):
+            continue
+        relative = text[len(prefix):]
+        current = root
+        for part in relative.split("/"):
+            if not part or part == ".":
+                continue
+            current = current / part
+            if current.is_symlink():
+                raise ValueError(
+                    f"Refusing to update {target}: {relative} contains a "
+                    "symbolic-link path component. Replace the link with a real "
+                    "directory or file, or write to a new directory."
+                )
+            if not current.exists():
+                break
+
+
+def _previous_declared_data_paths(target: Path) -> list[str]:
+    """Data resources declared by a previous write.
+
+    Mirrors ``.ms_previous_declared_data_paths()``. Retaining an orphan would
+    leave undeclared data in ``data/`` that validation never looks at but a
+    hand-made ZIP would carry. Degrades to nothing if the previous
+    ``tables.csv`` is absent or unreadable — a corrupt file must never widen
+    the deletion set.
+    """
+    tables_path = _metadata_path(target, "tables.csv")
+    if not tables_path.exists():
+        return []
+    try:
+        previous = read_sdp_csv(tables_path)
+    except Exception:  # noqa: BLE001 - a corrupt file deletes nothing
+        return []
+    if "file_name" not in previous.columns:
+        return []
+    names = []
+    for value in previous["file_name"]:
+        text = str(value).strip()
+        if not text:
+            continue
+        try:
+            # Normalise (which rejects '..' and absolute paths) but do NOT
+            # force into ``data/``: a previous write may legitimately have
+            # declared ``exports/x.csv``. Relocating it would leave the real
+            # orphan behind and delete an unrelated ``data/x.csv`` this write
+            # does not own.
+            normalized = text.replace("\\", "/").strip()
+            if re.match(r"^(?:[A-Za-z]:)?/", normalized) or ".." in normalized.split("/"):
+                continue
+            if not normalized or normalized.endswith("/"):
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        if normalized not in names:
+            names.append(normalized)
+    return names
+
+
+def _package_managed_paths(target: Path, data_file_names) -> list[Path]:
+    """Every path this call is authoritative for, written or not.
+
+    Mirrors ``.ms_package_managed_paths()``. Anything absent from this list
+    survives a rewrite. Deliberately NOT the KNB artifact inventory: that
+    helper answers "what gets published" and aborts when a reviewed sidecar is
+    absent; this one answers "what this call owns", and must degrade rather
+    than abort.
+    """
+    managed = [target / "datapackage.json", target / PACKAGE_SENTINEL]
+    for name in METADATA_CSV_NAMES:
+        managed.append(target / "metadata" / name)
+        # Legacy root-level shadows, which ``_metadata_path()`` still accepts.
+        managed.append(target / name)
+    seen = set()
+    for name in list(data_file_names) + _previous_declared_data_paths(target):
+        text = str(name).strip()
+        if text and text not in seen:
+            seen.add(text)
+            managed.append(target / text)
+    unique: list[Path] = []
+    for candidate in managed:
+        if candidate not in unique:
+            unique.append(candidate)
+    return unique
+
+
+def _replace_create_output(path: Path) -> None:
+    """Remove a create-owned output before recreating it.
+
+    Mirrors ``.ms_replace_create_output()``. The containment check catches
+    symbolic links, but it does not see HARD links, and writing through one
+    truncates the shared inode outside the package. The pre-0.2.0
+    full-directory wipe unlinked these entries first; preserving the directory
+    removed that protection, so it has to be explicit — and it belongs next to
+    each write, not in one caller, so it holds however the writer is reached.
+    """
+    if path.exists() or path.is_symlink():
+        path.unlink()
+
+
+def _prepare_package_dir(
+    target: Path,
+    overwrite: bool,
+    managed_paths=None,
+    prune: bool = False,
+) -> None:
+    if prune and not overwrite:
+        raise ValueError("prune=True requires overwrite=True.")
     if not target.exists():
         target.mkdir(parents=True, exist_ok=True)
         return
@@ -116,11 +314,21 @@ def _prepare_package_dir(target: Path, overwrite: bool) -> None:
             f"Refusing to overwrite non-metasalmonpy directory {target}. "
             "Use a new or empty directory, or clean it manually."
         )
-    for child in entries:
-        if child.is_dir():
-            shutil.rmtree(child)
-        else:
-            child.unlink()
+    if prune:
+        for child in entries:
+            if child.is_dir() and not child.is_symlink():
+                shutil.rmtree(child)
+            else:
+                child.unlink()
+        return
+
+    managed_paths = list(managed_paths or [])
+    _assert_managed_paths_contained(target, managed_paths)
+    for candidate in managed_paths:
+        # No recursive removal: if a managed path ever resolves to a directory
+        # this is a no-op rather than a recursive wipe.
+        if candidate.is_symlink() or (candidate.exists() and candidate.is_file()):
+            candidate.unlink()
 
 
 def _force_data_path(file_name, resource_name: str, format: str) -> str:
@@ -172,26 +380,17 @@ def _is_semantic_code_candidate(column_name: str, series: pd.Series) -> bool:
 
 
 def _metadata_resource_entries(include_codes: bool) -> list[dict]:
-    entries = [
-        ("sdp_dataset", "metadata/dataset.csv", "Dataset metadata"),
-        ("sdp_tables", "metadata/tables.csv", "Table metadata"),
-        (
-            "sdp_column_dictionary",
-            "metadata/column_dictionary.csv",
-            "Column dictionary",
-        ),
-    ]
-    if include_codes:
-        entries.append(("sdp_codes", "metadata/codes.csv", "Code metadata"))
-    return [
-        {
-            "profile": "tabular-data-resource",
-            "name": name,
-            "path": path,
-            "title": title,
-        }
-        for name, path, title in entries
-    ]
+    """The metadata resource entries, derived from the loaded SDP bundle.
+
+    Mirrors ``.ms_sdp_metadata_resource_entries()``. Until the 0.2.0 rung
+    these were three literal tuples in this file carrying no ``schema`` and no
+    ``description``, so a descriptor written here declared metadata resources
+    with no schema while ``sdp_methods`` declared its extension resources with
+    one. metasalmon 0.2.1 closed the same gap from the other side, deriving
+    every per-resource schema URL from the bundle: profile, rules, and
+    per-resource schemas now all come from one validated document.
+    """
+    return sdp_metadata_resource_entries(include_codes=include_codes)
 
 
 _NAMED_LICENSES = {
@@ -310,7 +509,7 @@ def _fill_review_placeholders(
         missing = dataset_meta["spec_version"].isna() | (
             dataset_meta["spec_version"].astype(str).str.strip() == ""
         )
-        dataset_meta.loc[missing, "spec_version"] = SDP_PROFILE_VERSION
+        dataset_meta.loc[missing, "spec_version"] = load_sdp_schema(quiet=True)["version"]
 
     if "column_description" in dictionary:
         missing = dictionary["column_description"].isna() | (
@@ -333,12 +532,26 @@ def write_salmon_datapackage(
     format: str = "csv",
     overwrite: bool = False,
     write_datapackage: bool = True,
+    prune: bool = False,
 ) -> Path:
     """
     Write the canonical Salmon Data Package layout.
 
     Metadata is written under ``metadata/``, table resources under ``data/``,
     and the Frictionless descriptor at the package root.
+
+    ``overwrite=True`` updates the package in place. Since the 0.2.0 rung it
+    **replaces only the files this writer owns** — the ``metadata/`` SDP CSVs,
+    the ``data/`` resources declared in ``tables.csv`` (including any a
+    previous write declared and this one does not), ``datapackage.json``, and
+    the ownership sentinel. Everything else is preserved: reviewed SSSOM
+    mappings and measurement decompositions under ``metadata/semantic/``, EML
+    and EDH XML, ``eml-mapping.yml``, review notes, ``publication/`` artifacts,
+    and the reproducibility manifest. A read → edit → write loop used to delete
+    all of them.
+
+    ``prune=True`` restores the previous behaviour, deleting every entry in the
+    directory first. It requires ``overwrite=True``.
     """
     if format != "csv":
         raise ValueError("Only CSV format is supported. Use format='csv'.")
@@ -373,7 +586,41 @@ def write_salmon_datapackage(
         )
 
     target = Path(path)
-    _prepare_package_dir(target, overwrite=overwrite)
+
+    # Containment BEFORE reading anything. ``_package_managed_paths()`` parses
+    # the previous ``tables.csv``, so a ``metadata/`` or ``metadata/tables.csv``
+    # replaced by a symlink would be read before the guard ran. The metadata
+    # paths are known without reading, so they are checked first — including
+    # the legacy root-level shadows, which ``_metadata_path()`` still accepts
+    # and ``_previous_declared_data_paths()`` will therefore read.
+    _assert_managed_paths_contained(
+        target,
+        [target / "metadata" / name for name in METADATA_CSV_NAMES]
+        + [target / name for name in METADATA_CSV_NAMES]
+        + [target / "datapackage.json", target / PACKAGE_SENTINEL],
+    )
+    resolved_file_names = [
+        table_meta.loc[table_meta["table_id"] == name, "file_name"].iloc[0]
+        for name in resources
+        if (table_meta["table_id"] == name).any()
+    ]
+    managed_paths = _package_managed_paths(target, resolved_file_names)
+    orphaned = [
+        name
+        for name in _previous_declared_data_paths(target)
+        if name not in resolved_file_names and (target / name).exists()
+    ]
+
+    _prepare_package_dir(
+        target, overwrite=overwrite, managed_paths=managed_paths, prune=prune
+    )
+    if not prune and orphaned:
+        warnings.warn(
+            "Removed data resource(s) no longer declared in tables.csv: "
+            + ", ".join(sorted(orphaned)),
+            UserWarning,
+            stacklevel=2,
+        )
     (target / "metadata").mkdir(parents=True, exist_ok=True)
     (target / "data").mkdir(parents=True, exist_ok=True)
 
@@ -398,22 +645,37 @@ def write_salmon_datapackage(
         file_name = _force_data_path(file_name, resource_name, format)
         file_path = target / file_name
         file_path.parent.mkdir(parents=True, exist_ok=True)
-        resource_df.to_csv(file_path, index=False)
+        # Typed columns are rendered canonically rather than handed to
+        # ``to_csv``'s repr: a float 100000.0 would otherwise be written as
+        # "100000.0" and a logical as "True", so a package read by
+        # ``read_salmon_datapackage()`` and written straight back would not
+        # reproduce its own bytes. See ``resource_types.render_resource_frame``
+        # for the one deliberate difference from ``readr::write_csv``.
+        render_resource_frame(resource_df).to_csv(file_path, index=False)
 
         table_dict = dict_valid[
             (dict_valid["dataset_id"] == dataset_id) & (dict_valid["table_id"] == resource_name)
         ]
         fields = []
         for _, row in table_dict.iterrows():
+            # Key order and emission rules mirror the R field builder exactly.
+            # Three differences were found by driving both writers over the
+            # same package at the 0.2.0 rung, and all three were accidental:
+            # the title was suppressed when it equalled the column name (R
+            # emits it whenever ``column_label`` is non-blank), ``constraints``
+            # was emitted with ``required: false`` (R emits the block only for
+            # a required column), and a single-column primary key was written
+            # as a one-element array (R writes the scalar).
             field = {
                 "name": _clean(row["column_name"]),
+                "title": _clean(row.get("column_label")),
                 "type": _clean(row["value_type"]),
                 "description": _clean(row["column_description"]),
             }
-            if _has_value(row.get("column_label")) and row.get("column_label") != row.get("column_name"):
-                field["title"] = _clean(row.get("column_label"))
-            if _has_value(row.get("required")):
-                field["constraints"] = {"required": bool(row.get("required"))}
+            if not _has_value(row.get("column_label")):
+                field.pop("title")
+            if bool(row.get("required")) is True:
+                field["constraints"] = {"required": True}
             for optional_key in [
                 "unit_iri",
                 "term_iri",
@@ -439,21 +701,43 @@ def write_salmon_datapackage(
         if "description" in table_info and _has_value(table_info["description"].iloc[0]):
             resource_entry["description"] = _clean(table_info["description"].iloc[0])
         if "primary_key" in table_info and _has_value(table_info["primary_key"].iloc[0]):
-            resource_entry["schema"]["primaryKey"] = [
-                value.strip() for value in str(table_info["primary_key"].iloc[0]).split(",") if value.strip()
+            primary_key = [
+                value.strip()
+                for value in str(table_info["primary_key"].iloc[0]).split(",")
+                if value.strip()
             ]
+            resource_entry["schema"]["primaryKey"] = (
+                primary_key[0] if len(primary_key) == 1 else primary_key
+            )
         resource_entries.append(resource_entry)
 
+    # Every URI written here comes from the one loaded, self-consistent bundle,
+    # so the descriptor can never declare a profile the bundle disagrees with.
+    sdp_bundle = load_sdp_schema(quiet=True)
+    declared_spec_version = (
+        str(dataset_meta["spec_version"].iloc[0]).strip()
+        if "spec_version" in dataset_meta and _has_value(dataset_meta["spec_version"].iloc[0])
+        else ""
+    )
+    if declared_spec_version and declared_spec_version != sdp_bundle["version"]:
+        warnings.warn(
+            f"metadata/dataset.csv declares {declared_spec_version!r} but the loaded "
+            f"SDP schema is {sdp_bundle['version']!r}. The package will carry both "
+            "values; clear spec_version to adopt the loaded schema version.",
+            UserWarning,
+            stacklevel=2,
+        )
+
     datapackage = {
-        "profile": SDP_PROFILE_URL,
+        "profile": sdp_bundle["profile_uri"],
         "name": re.sub(r"[^a-z0-9._-]+", "-", str(dataset_id).lower()).strip("-"),
         "id": _clean(dataset_id),
         "title": _clean(dataset_meta.get("title", pd.Series([None])).iloc[0]),
         "description": _clean(dataset_meta.get("description", pd.Series([None])).iloc[0]),
         "sdp": {
-            "specVersion": SDP_PROFILE_VERSION,
-            "profile": SDP_PROFILE_URL,
-            "rules": SDP_RULES_URL,
+            "specVersion": sdp_bundle["version"],
+            "profile": sdp_bundle["profile_uri"],
+            "rules": sdp_bundle["rules_uri"],
             "metadata": {
                 "dataset": "metadata/dataset.csv",
                 "tables": "metadata/tables.csv",
@@ -469,18 +753,38 @@ def write_salmon_datapackage(
         datapackage["contributors"] = [
             {"title": _clean(dataset_meta["creator"].iloc[0]), "role": "creator"}
         ]
+    # The contact contributor was simply missing here until the 0.2.0 rung; R
+    # has emitted it since 0.1.x, so a Python-written descriptor silently
+    # dropped the dataset contact.
+    if "contact_name" in dataset_meta and _has_value(dataset_meta["contact_name"].iloc[0]):
+        contact = {
+            "title": _clean(dataset_meta["contact_name"].iloc[0]),
+            "role": "contact",
+        }
+        if "contact_email" in dataset_meta and _has_value(dataset_meta["contact_email"].iloc[0]):
+            contact["email"] = _clean(dataset_meta["contact_email"].iloc[0])
+        if "contact_org" in dataset_meta and _has_value(dataset_meta["contact_org"].iloc[0]):
+            contact["organization"] = _clean(dataset_meta["contact_org"].iloc[0])
+        datapackage["contributors"] = datapackage.get("contributors", []) + [contact]
     if "license" in dataset_meta and _has_value(dataset_meta["license"].iloc[0]):
         license_value = dataset_meta["license"].iloc[0]
         if not _is_review_value(license_value):
             datapackage["licenses"] = [_license_descriptor(license_value)]
-    if "temporal_start" in dataset_meta and pd.notna(dataset_meta["temporal_start"].iloc[0]):
+    # ``_has_value`` rather than ``pd.notna``: an empty ``temporal_start``
+    # is not missing to pandas, so a descriptor carried ``"temporal": {"start":
+    # "", "end": ""}``. R has always tested both conditions.
+    if "temporal_start" in dataset_meta and _has_value(dataset_meta["temporal_start"].iloc[0]):
         datapackage["temporal"] = {"start": _clean(dataset_meta["temporal_start"].iloc[0])}
-        if "temporal_end" in dataset_meta and pd.notna(dataset_meta["temporal_end"].iloc[0]):
+        if "temporal_end" in dataset_meta and _has_value(dataset_meta["temporal_end"].iloc[0]):
             datapackage["temporal"]["end"] = _clean(dataset_meta["temporal_end"].iloc[0])
 
     if write_datapackage:
         with (target / "datapackage.json").open("w", encoding="utf-8") as fp:
             json.dump(datapackage, fp, indent=2)
+            # ``jsonlite::write_json`` terminates the file; ``json.dump`` does
+            # not, and that single byte was the last difference between an
+            # R-written and a Python-written descriptor for the same package.
+            fp.write("\n")
 
     _write_metadata_csv(dataset_meta, target / "metadata" / "dataset.csv")
     _write_metadata_csv(table_meta, target / "metadata" / "tables.csv")
@@ -632,14 +936,10 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
         if not file_path.exists() and not str(file_name).startswith("data/"):
             file_path = target / "data" / str(file_name)
         if file_path.exists():
-            # Data resources go through the same reader as every other SDP CSV.
-            # A bare pd.read_csv() applied pandas' full default NA vocabulary
-            # ("null", "N/A", "nan", "<NA>", "None", "-1.#IND", …) and skipped
-            # readr's trim_ws, so a gear code of "null" was destroyed on read
-            # and a padded header survived into the parsed frame. metasalmon
-            # reads resources with readr's na = c("", "NA") + trim_ws = TRUE;
-            # the literal "NA" stays data here by PARITY.md row 21.
-            resources[str(resource_name)] = read_sdp_csv(file_path)
+            table_dict = dictionary[dictionary["table_id"] == resource_name]
+            resources[str(resource_name)] = _read_resource_csv(
+                file_path, table_dict, str(resource_name)
+            )
 
     return {
         "dataset": dataset_meta,
@@ -648,6 +948,67 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
         "codes": codes,
         "resources": resources,
     }
+
+
+def _read_resource_csv(
+    file_path: Path, table_dict: pd.DataFrame, table_id: str = ""
+) -> pd.DataFrame:
+    """Read a data resource with the types its dictionary declares.
+
+    Mirrors ``.ms_read_resource_csv()`` (metasalmon 0.2.0). **The dictionary is
+    the sole type authority**: a column the dictionary does not declare stays
+    character rather than being guessed, which is what makes the write → read
+    round trip lossless.
+
+    One text read, then in-memory conversion — rather than a typed read plus a
+    re-read when something looks wrong. That keeps the original token available
+    for every fidelity check, and it is one pass over the file instead of two.
+
+    Data resources go through the same reader as every other SDP CSV. A bare
+    ``pd.read_csv()`` applied pandas' full default NA vocabulary ("null",
+    "N/A", "nan", "<NA>", "None", "-1.#IND", …) and skipped readr's
+    ``trim_ws``, so a gear code of "null" was destroyed on read and a padded
+    header survived into the parsed frame. The literal ``"NA"`` stays data here
+    by PARITY.md row 21 — which is also why a literal ``NA`` in a *declared
+    numeric* column is reported as a value-type mismatch here and was silently
+    missing under era R, whose reader still took ``na = c("", "NA")``. That
+    matches metasalmon 0.2.4 onward, and is the one behaviour this reader does
+    not share with the 0.2.0 release it mirrors.
+    """
+    raw = read_sdp_csv(file_path)
+    declared_types = {}
+    if (
+        isinstance(table_dict, pd.DataFrame)
+        and len(table_dict) > 0
+        and {"column_name", "value_type"}.issubset(table_dict.columns)
+    ):
+        names = [str(value).strip() for value in table_dict["column_name"]]
+        types = [str(value).strip() for value in table_dict["value_type"]]
+        lookup = {}
+        for name, value_type in zip(names, types):
+            lookup.setdefault(name, value_type)
+        for column in raw.columns:
+            if column in lookup:
+                declared_types[column] = lookup[column]
+
+    parsed = raw.copy()
+    mismatches = []
+    for column, value_type in declared_types.items():
+        if value_type not in VALUE_TYPES or value_type == "string":
+            continue
+        outcome = convert_declared_tokens(list(raw[column]), value_type)
+        if outcome.reason is None:
+            parsed[column] = typed_series(outcome.values, value_type)
+            continue
+        # The declared type is not satisfied: keep the exact token so the
+        # code-value check still sees it, and report the declaration as wrong.
+        mismatches.append(
+            value_type_mismatch_record(table_id, column, value_type, outcome)
+        )
+
+    if mismatches:
+        parsed.attrs["ms_value_type_mismatches"] = mismatches
+    return parsed
 
 
 def infer_salmon_datapackage_artifacts(
@@ -822,7 +1183,9 @@ def _write_review_readme(package_path: Path, has_suggestions: bool) -> None:
         "",
         "Share the complete package directory or a zip of that directory.",
     ]
-    (package_path / "README-review.txt").write_text(
+    readme_path = package_path / "README-review.txt"
+    _replace_create_output(readme_path)
+    readme_path.write_text(
         "\n".join(lines) + "\n",
         encoding="utf-8",
     )
@@ -954,6 +1317,7 @@ def create_sdp(
     format: str = "csv",
     overwrite: bool = False,
     include_edh_xml: bool = False,
+    prune: bool = False,
 ) -> Path:
     """
     Create a review-ready Salmon Data Package in one call.
@@ -965,7 +1329,11 @@ def create_sdp(
     LLM assessment is strictly opt-in through ``llm_assess=True``. Supplying
     context without enabling assessment warns and makes no provider request.
     ``overwrite=True`` replaces only directories recognized as owned package
-    directories.
+    directories, and since the 0.2.0 rung it replaces only the files the writer
+    owns within them: reviewed sidecars in an existing package survive a
+    rewrite. Pass ``prune=True`` (which requires ``overwrite=True``) for the
+    previous delete-everything behaviour. See
+    :func:`write_salmon_datapackage`.
 
     Returns
     -------
@@ -1025,15 +1393,37 @@ def create_sdp(
         path=path,
         format=format,
         overwrite=overwrite,
+        prune=prune,
+    )
+
+    # ``create_sdp()`` writes these itself, after the generic writer has run,
+    # so they are deliberately absent from the writer's managed paths — that is
+    # what preserves a reviewed copy on a rewrite. They still need the same
+    # containment check: without it a symlinked ``README-review.txt`` is
+    # followed and an external file is truncated.
+    _assert_managed_paths_contained(
+        pkg_path,
+        [
+            pkg_path / "README-review.txt",
+            pkg_path / "semantic_suggestions.csv",
+            pkg_path / "metadata" / "metadata-edh-hnap.xml",
+        ],
     )
 
     suggestions = artifacts.get("semantic_suggestions")
+    suggestions_path = pkg_path / "semantic_suggestions.csv"
     if isinstance(suggestions, pd.DataFrame) and not suggestions.empty:
+        # ``create_sdp()`` owns this file, so it clears its own stale copy
+        # rather than writing through a hard link the pre-0.2.0 full-directory
+        # wipe used to unlink implicitly.
+        _replace_create_output(suggestions_path)
         suggestions.to_csv(
-            pkg_path / "semantic_suggestions.csv",
+            suggestions_path,
             index=False,
             na_rep="",
         )
+    elif suggestions_path.exists() or suggestions_path.is_symlink():
+        suggestions_path.unlink()
     _write_review_readme(
         pkg_path,
         has_suggestions=isinstance(suggestions, pd.DataFrame)
@@ -1044,6 +1434,7 @@ def create_sdp(
         from .edh_xml import edh_build_hnap_xml
 
         output = pkg_path / "metadata" / "metadata-edh-hnap.xml"
+        _replace_create_output(output)
         package = read_salmon_datapackage(pkg_path)
         edh_build_hnap_xml(
             package["dataset"],
@@ -1161,6 +1552,44 @@ def _collect_review_issues(package: Dict[str, object]) -> list[str]:
     return issues
 
 
+# The ``issues`` frame this validator returns was an unconditionally empty
+# ``DataFrame(columns=["message"])`` until the 0.2.0 rung — every finding was
+# raised instead. The typed reader needs a place to *report* rather than
+# raise: a value that does not satisfy its declared ``value_type`` keeps its
+# raw token and the package stays readable, so the mismatch is a structured
+# issue exactly as it is in ``.ms_validate_salmon_datapackage()``. The columns
+# match R's issue tibble; only the ``columns`` category is populated here,
+# because the remaining categories R reports have no Python counterpart yet.
+_ISSUE_COLUMNS = ["issue_type", "table_id", "column_name", "value", "message"]
+
+
+def _value_type_issues(package: Dict[str, object]) -> pd.DataFrame:
+    """Structured issues for every declared type the data did not satisfy."""
+    rows = []
+    resources = package.get("resources") or {}
+    for table_id, frame in resources.items():
+        if not isinstance(frame, pd.DataFrame):
+            continue
+        for mismatch in frame.attrs.get("ms_value_type_mismatches", []):
+            examples = ", ".join(mismatch["examples"])
+            plural = "" if mismatch["count"] == 1 else "s"
+            rows.append(
+                {
+                    "issue_type": "columns",
+                    "message": (
+                        f"Table {table_id!r} column {mismatch['column']!r} declares "
+                        f"value_type {mismatch['declared']!r} but {mismatch['count']} "
+                        f"value{plural} did not satisfy it ({mismatch['reason']}): "
+                        f"{examples}."
+                    ),
+                    "table_id": table_id,
+                    "column_name": mismatch["column"],
+                    "value": examples,
+                }
+            )
+    return pd.DataFrame(rows, columns=_ISSUE_COLUMNS)
+
+
 def validate_salmon_datapackage(
     path: Union[str, Path],
     require_iris: bool = False,
@@ -1237,7 +1666,7 @@ def validate_salmon_datapackage(
     return {
         "package": package,
         "semantic_validation": semantic_validation,
-        "issues": pd.DataFrame(columns=["message"]),
+        "issues": _value_type_issues(package),
     }
 
 

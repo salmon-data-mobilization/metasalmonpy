@@ -1,0 +1,8 @@
+dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,required,unit_label,unit_iri,term_iri,term_type,property_iri,entity_iri,constraint_iri,method_iri
+diff-1,obs,site_id,site_id,Column site_id,identifier,string,FALSE,,,,,,,,
+diff-1,obs,brood_year,brood_year,Column brood_year,temporal,integer,FALSE,,,,,,,,
+diff-1,obs,count,count,Column count,measurement,number,FALSE,,,,,,,,
+diff-1,obs,observed,observed,Column observed,attribute,boolean,FALSE,,,,,,,,
+diff-1,obs,survey_date,survey_date,Column survey_date,temporal,date,FALSE,,,,,,,,
+diff-1,obs,survey_time,survey_time,Column survey_time,temporal,datetime,FALSE,,,,,,,,
+diff-1,obs,note,note,Column note,attribute,string,FALSE,,,,,,,,
