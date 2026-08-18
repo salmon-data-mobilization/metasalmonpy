@@ -202,7 +202,7 @@ Python-written copy with no issues, and the type mapping is exactly parallel —
 `character/numeric/numeric/logical/Date/POSIXct` against
 `str/float64/float64/boolean/date-object/datetime64`.
 
-Token-level fidelity was measured the same way: **524 observations** across 168
+Token-level fidelity was measured the same way: **524 observations** across 166
 tokens and six declared types (conversion verdict, canonical key, lossiness,
 significant digits, decimal exponent) were compared against the R
 implementation. All agree except two families, both pinned as tests rather than
