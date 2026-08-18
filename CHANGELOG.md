@@ -28,6 +28,22 @@ in a release. Bump on parity, not on calendar.
   `datetime.fromisoformat()` was correct throughout; metasalmon was brought
   into line with it. Nothing changed here for that half.
 
+### Adjudication of the 0.2.0 descriptor divergences
+
+The seven `write_salmon_datapackage()` differences 0.2.0 fixed by conforming
+to metasalmon were re-decided on their merits under Brett's 2026-08-17 ruling
+("if the Python implementation got it right, then update metasalmon").
+**All seven fixes stand**, and three of them are not merely house style —
+they are load-bearing for publication. `smn-data-pkg`'s strict publication
+validator (`scripts/validate_package.py`) compares `schema.fields` to the
+`column_dictionary.csv`-derived list with `==`, so an extra, missing or
+differing key is an error: suppressing `title` when it equals `name`, and
+emitting `constraints: {"required": false}`, each fail it, and a one-element
+`primaryKey` array is rejected by name — `primaryKey must be 'pop_id'; found
+['pop_id']`. Measured, not reasoned: a package written by metasalmon passes
+that validator, and each of this package's pre-0.2.0 behaviours reintroduced
+individually makes it fail. No change was warranted on either side.
+
 ## 0.2.1
 
 **This release is a parity claim against metasalmon 0.2.1.** Built against the
