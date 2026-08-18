@@ -50,9 +50,19 @@ at its `ROADMAP` card. Do not maintain a competing roadmap here.
 uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
-or `pip install -e ".[test]" && pytest -q`. The suite must stay green: 587
-passed / 3 skipped with the extras installed, 493 / 97 with core dependencies
-only (0.2.1, 2026-08-17).
+or `pip install -e ".[test]" && pytest -q`. The suite must stay green: 591
+passed / 3 skipped with the extras installed, 497 / 97 with core dependencies
+only (0.2.1, 2026-08-18).
+
+**Run it from a directory named `metasalmonpy`.** The root `__init__.py` and
+`tests/__init__.py` make pytest infer the package name from the checkout
+directory, so a git worktree parked at `.../my-fix` collects the suite as
+package `my-fix` and *every* test errors on a relative import — a wall of
+failures that looks like a broken branch and is only a broken path. Put an
+auxiliary worktree at a path whose last component is `metasalmonpy`
+(`git worktree add ../.worktrees/<topic>/metasalmonpy <branch>`). Retire this
+note if the package ever moves into its own `src/metasalmonpy/` directory,
+which is what would make the checkout name irrelevant.
 
 ## Dependency boundaries
 
@@ -86,6 +96,25 @@ calls it before assuming the helper is where it belongs (PARITY.md rows 30
 and 34). The SDP schema bundle is the live example: `write_salmon_datapackage()`
 loads it on the core path, so `sdp_schema` reads `sdp.rules.yaml` with a
 top-level-scalar scan rather than PyYAML.
+
+## Platform determinism
+
+Canonical keys, identifiers and written bytes must not vary with the machine.
+The Python trap is **`strftime`**: it hands `%Y` to the platform C library,
+and glibc does not zero-pad a year below 1000 where the macOS/BSD
+implementation does, so `date(1, 1, 1)` renders `1-01-01` in CI and
+`0001-01-01` on a developer's Mac. That shipped once already — 0.2.0's new
+`resource_types.py` keyed dates through `strftime`, the whole suite was green
+on every local run, and `test_canonical_keys_match_era_r[date]` failed on
+Linux only.
+
+Build calendar text with `resource_types._iso_date` / `._iso_seconds`, or with
+`date.isoformat()`; all three are pure Python.
+`tests/test_platform_determinism_guard.py` fails on any `strftime` call in a
+package module and carries an allowlist for text a human reads that no machine
+re-checks — each entry naming what would retire it. This is the dependency
+lesson in a second costume: **reading the call site cannot tell you it is
+wrong**, and the environment where it is wrong is not the one you develop in.
 
 ## Layout notes
 

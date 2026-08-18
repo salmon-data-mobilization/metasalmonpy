@@ -68,6 +68,42 @@ _TRIM = " \t\r\n"
 _EPOCH = _dt.datetime(1970, 1, 1)
 
 
+# ``strftime()`` hands ``%Y`` to the platform C library, and the platforms
+# disagree below year 1000: glibc renders ``date(1, 1, 1)`` as ``1-01-01``
+# where the macOS/BSD implementation pads it to ``0001-01-01``. Every calendar
+# string this module produces is a canonical comparison key or a byte of a
+# written package, so none of them may depend on which libc built the
+# interpreter -- and the disagreement is invisible to a macOS developer, which
+# is how it reached CI. The padded form is what the measured R verdicts record
+# and what ISO 8601 requires, so it is the one to converge on -- but note that
+# R's own answer may not be portable either: its internal tzcode is a configure
+# option (``--with-internal-tzcode``, the default on macOS, where
+# ``format(as.Date("0001-01-01"), "%Y-%m-%d")`` was measured as padded), so an R
+# built against glibc may well emit the unpadded form. That is a metasalmon
+# defect rather than a licence to copy it; PARITY.md row 40 registers the
+# possible divergence and the hub owns the fix.
+#
+# Retire these two helpers only if Python's ``strftime`` stops delegating year
+# formatting to libc. ``date.isoformat()`` is already safe (it is pure Python)
+# and is used directly where the value is known to be a plain date; these
+# exist for the second-resolution date-time forms, which ``isoformat()``
+# cannot spell without also committing to a timezone suffix.
+def _iso_date(value: _dt.date) -> str:
+    """``%Y-%m-%d`` with a zero-padded year on every platform."""
+    return "%04d-%02d-%02d" % (value.year, value.month, value.day)
+
+
+def _iso_seconds(value: _dt.datetime, sep: str = "T") -> str:
+    """``%Y-%m-%dT%H:%M:%S`` with a zero-padded year on every platform."""
+    return "%s%s%02d:%02d:%02d" % (
+        _iso_date(value),
+        sep,
+        value.hour,
+        value.minute,
+        value.second,
+    )
+
+
 def _is_blank(token: Any) -> bool:
     """R's ``!present``: NA, or text that is empty after trimming."""
     if token is None:
@@ -533,7 +569,7 @@ def format_datetime_token(value: Optional[_dt.datetime]) -> Optional[str]:
     seconds = _epoch_seconds(value)
     whole = math.floor(seconds)
     micros = int((seconds - whole) * 1_000_000)
-    rendered = (_EPOCH + _dt.timedelta(seconds=whole)).strftime("%Y-%m-%dT%H:%M:%S")
+    rendered = _iso_seconds(_EPOCH + _dt.timedelta(seconds=whole))
     token = "%s.%06dZ" % (rendered, micros)
     if seconds == round(seconds, 6):
         return token
@@ -576,7 +612,7 @@ def canonical_value_tokens(values: Sequence[Any], value_type: Any) -> List[Optio
             parsed = value if isinstance(value, _dt.date) and not isinstance(
                 value, _dt.datetime
             ) else parse_date_token(text)
-            rendered.append(None if parsed is None else parsed.strftime("%Y-%m-%d"))
+            rendered.append(None if parsed is None else _iso_date(parsed))
         else:
             parsed = (
                 value.to_pydatetime()
@@ -639,14 +675,14 @@ def render_resource_frame(frame: pd.DataFrame) -> pd.DataFrame:
             assign(column, [
                 None
                 if pd.isna(value)
-                else pd.Timestamp(value).to_pydatetime().strftime("%Y-%m-%dT%H:%M:%SZ")
+                else _iso_seconds(pd.Timestamp(value).to_pydatetime()) + "Z"
                 for value in series
             ])
         elif series.dtype == object:
             values = list(series)
             if any(isinstance(value, _dt.datetime) for value in values):
                 assign(column, [
-                    value.strftime("%Y-%m-%dT%H:%M:%SZ")
+                    _iso_seconds(value) + "Z"
                     if isinstance(value, _dt.datetime)
                     else value
                     for value in values
