@@ -46,7 +46,7 @@ import pandas as pd
 
 from .atomic_io import apply_default_file_mode
 from .metadata import read_sdp_csv
-from .sdp_schema import sdp_schema_url
+from .sdp_schema import sdp_metadata_resource_schema
 
 SDP_METHODS_PATH = "metadata/methods.csv"
 SDP_METHODS_COLUMNS = (
@@ -444,7 +444,12 @@ def _extension_resource(
         "path": path,
         "title": title,
         "description": description,
-        "schema": sdp_schema_url(schema_file),
+        # Derived from the loaded bundle rather than composed from a constant
+        # (metasalmon 0.2.1): every URI in a written descriptor — profile,
+        # rules, and per-resource schemas — comes from one validated document.
+        # The composition survives as the fallback for a bundle published
+        # before this resource existed.
+        "schema": sdp_metadata_resource_schema(name, schema_file),
     }
 
 

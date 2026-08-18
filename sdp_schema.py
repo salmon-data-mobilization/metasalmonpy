@@ -532,6 +532,29 @@ def sdp_schema_url(schema_file: str) -> str:
     return f"{SDP_PUBLIC_SCHEMA_BASE}/{schema_file}"
 
 
+def sdp_metadata_resource_schema(name: str, fallback_file: str) -> str:
+    """The schema URL for one metadata resource, taken from the loaded bundle.
+
+    Mirrors ``.ms_sdp_metadata_resource_schema()`` (metasalmon 0.2.1). Deriving
+    it means every URI in a written ``datapackage.json`` — profile, rules, and
+    now per-resource schemas — comes from one validated bundle.
+
+    The fallback is not dead code: a bundle published before the v0.2 extension
+    resources existed has no ``sdp_methods`` entry, and composing the public
+    base with the caller's filename is the same URL that shipped before this
+    was derived.
+    """
+    schema = load_sdp_schema(quiet=True)
+    resources = (schema.get("profile") or {}).get("sdp:metadataResources") or []
+    for resource in resources:
+        if resource.get("name") == name:
+            declared = _schema_uri(resource.get("schema"))
+            if declared is not None:
+                return declared
+            break
+    return sdp_schema_url(fallback_file)
+
+
 def sdp_metadata_resource_entries(include_codes: bool = False) -> List[Dict[str, Any]]:
     """The core metadata resource entries a descriptor declares.
 
@@ -579,6 +602,7 @@ __all__ = [
     "load_sdp_schema",
     "reset_schema_cache",
     "sdp_metadata_resource_entries",
+    "sdp_metadata_resource_schema",
     "sdp_profile_uri",
     "sdp_profile_version",
     "sdp_rules_uri",

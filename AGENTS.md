@@ -50,8 +50,8 @@ at its `ROADMAP` card. Do not maintain a competing roadmap here.
 uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
-or `pip install -e ".[test]" && pytest -q`. The suite must stay green: 585
-passed / 3 skipped with the extras installed, 491 / 97 with core dependencies
+or `pip install -e ".[test]" && pytest -q`. The suite must stay green: 587
+passed / 3 skipped with the extras installed, 493 / 97 with core dependencies
 only (0.2.1, 2026-08-17).
 
 ## Dependency boundaries

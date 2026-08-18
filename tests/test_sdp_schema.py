@@ -390,15 +390,16 @@ def test_the_rules_scanner_reads_top_level_scalars_without_pyyaml():
 
 
 
-def test_the_metadata_resources_follow_a_bundle_that_moves_its_schema_urls(monkeypatch):
+def test_both_writers_follow_a_bundle_that_moves_its_schema_urls(monkeypatch):
     """The derivation is load-bearing, not decorative.
 
     Composing the URL from ``SDP_PUBLIC_SCHEMA_BASE`` gives the same answer as
     reading it out of the vendored bundle, so a test against the vendored
     bundle alone cannot tell the two apart. This moves the bundle's own URLs
-    and asserts the core metadata resources follow it.
+    and asserts both the core metadata resources (``package_io``) and the
+    extension resources (``sdp_methods``, metasalmon 0.2.1) follow it.
     """
-    from metasalmonpy import package_io
+    from metasalmonpy import package_io, sdp_methods
 
     moved = sdp_schema._load_vendored_sdp_schema()
     profile = json.loads(json.dumps(moved["profile"]))
@@ -415,6 +416,10 @@ def test_the_metadata_resources_follow_a_bundle_that_moves_its_schema_urls(monke
         "https://elsewhere.example/sdp_column_dictionary.json",
         "https://elsewhere.example/sdp_codes.json",
     ]
+    resource = sdp_methods._extension_resource(
+        "sdp_methods", "metadata/methods.csv", "t", "d", "methods.schema.json"
+    )
+    assert resource["schema"] == "https://elsewhere.example/sdp_methods.json"
 
 
 def test_a_dataset_declaring_a_different_spec_version_warns_and_keeps_both(tmp_path):
@@ -439,3 +444,22 @@ def test_a_dataset_declaring_a_different_spec_version_warns_and_keeps_both(tmp_p
     assert descriptor["sdp"]["specVersion"] == "sdp-0.2.0"
     dataset = (destination / "metadata" / "dataset.csv").read_text(encoding="utf-8")
     assert "sdp-0.1.0" in dataset
+
+
+def test_per_resource_schema_urls_come_from_the_bundle():
+    """metasalmon 0.2.1: the last hardcoded contract value in a descriptor."""
+    for name, expected_file in (
+        ("sdp_dataset", "dataset.schema.json"),
+        ("sdp_methods", "methods.schema.json"),
+        ("sdp_observation_structures", "observation_structures.schema.json"),
+    ):
+        assert sdp_schema.sdp_metadata_resource_schema(name, expected_file).endswith(
+            "/" + expected_file
+        )
+    # The fallback is not dead code: a bundle published before the v0.2
+    # extension resources existed has no ``sdp_methods`` entry, and composing
+    # the public base with the caller's filename is the URL that shipped
+    # before this was derived.
+    assert sdp_schema.sdp_metadata_resource_schema(
+        "sdp_not_in_this_bundle", "future.schema.json"
+    ) == sdp_schema.sdp_schema_url("future.schema.json")

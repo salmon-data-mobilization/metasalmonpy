@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.2.1
+
+**This release is a parity claim against metasalmon 0.2.1.** Built against the
+commit that made that version current on `main` (`f675d91`), extracted
+read-only with `git archive` and loaded with `pkgload::load_all()`, and
+verified by **running both implementations over the same inputs**. Paired with
+0.2.0 in one pull request because 0.2.1's per-resource schema URLs are read
+through the loader 0.2.0 introduced, and building an interim shape only to
+rewrite it would have been the more error-prone route. PARITY.md row 39 is new.
+
+### Fixes
+
+- **Per-resource schema URLs in `datapackage.json` are derived from the loaded
+  SDP bundle** rather than composed from a hardcoded constant. 0.2.0 did this
+  for the four core metadata resources; this completes it for the SDP
+  extension resources (`sdp_methods`, `sdp_observation_structures`,
+  `sdp_observation_components`), so **every** URI in a written descriptor —
+  profile, rules, and per-resource schemas — now comes from one validated
+  bundle. The constant remains as the fallback for a bundle that predates the
+  v0.2 extension resources, which is not dead code: such a bundle has no
+  `sdp_methods` entry at all.
+
+  Composing the URL gives the *same answer* as reading it out of the vendored
+  bundle, so a test against that bundle cannot tell the two apart. The
+  regression test moves the bundle's own URLs and asserts both writers follow
+  them.
+
+- **Semantic ranking is reproducible across input orders.** metasalmon 0.2.1
+  gave nine ordering sites the full tie-break key set
+  `(-score, source, ontology, label, iri)`, because score alone is not a total
+  order and — with `seed_semantics=True` — the top-1 pick becomes a written IRI
+  in `column_dictionary.csv`. Seven of those sites have a counterpart here and
+  already carried the key set; this release pins the property with a test that
+  permutes the input and asserts one fixed order.
+
+  The *locale* half of metasalmon's fix is inapplicable here: Python's
+  `sorted`/`sort_values` are codepoint-ordinal (PARITY.md row 3). The two
+  remaining sites — `.apply_embedding_rerank()` and
+  `.ms_merge_semantic_target_candidates()` — have no counterpart because this
+  package has neither an embedding rerank stage nor a retry retrieval pass;
+  recorded as PARITY.md row 39 rather than left as an implied "delivered".
+
+### Parity evidence
+
+Driving `.score_and_rank_terms()` over the same six tie-heavy candidates under
+four input permutations returns **one fixed order on both sides**. The orders
+are not the same order — R ranks `gcdfo` above `smn` where this package does
+the reverse — which confirms PARITY.md row 32's pre-existing ranking-profile
+gap **live rather than by reading**, and is why the test asserts the property
+0.2.1 added and not an order this package is registered as not sharing.
+
 ## 0.2.0
 
 **This release is a parity claim against metasalmon 0.2.0.** Under the mirror
