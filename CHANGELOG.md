@@ -44,6 +44,33 @@ emitting `constraints: {"required": false}`, each fail it, and a one-element
 that validator, and each of this package's pre-0.2.0 behaviours reintroduced
 individually makes it fail. No change was warranted on either side.
 
+### CI runs both dependency configurations
+
+No behaviour change; a coverage change and a documentation correction.
+
+`parity.yml`'s `python` job installed `.[test]` — `build` plus `pytest`, and
+neither `[eml]` nor `[context]`. The single full-suite CI run was therefore
+core-deps-shaped **by accident**, and the 94 extras-gated tests (EML, KNB,
+context readers) ran nowhere: 499 passed / 97 skipped was the only result CI
+had ever produced. The job is now a two-leg matrix — *core dependencies only*
+(`.[test]`) and *with `[eml]` and `[context]` extras* (`.[test,eml,context]`)
+— because each configuration is the only thing that can test the other's
+claim: `KnbCoreDependencyTests` means nothing in a run that has the extras,
+and the extras-gated tests mean nothing in a run that lacks them.
+
+Each leg asserts its own configuration before running anything — the core leg
+fails if `yaml`, `lxml`, `openpyxl`, `pypdf` or `xlrd` is importable, the
+extras leg fails if any is not — so a typo in an extras list cannot turn the
+extras leg into a second core-deps run that skips the tests it was added for
+and still reports green.
+
+`AGENTS.md` and `PARITY.md` row 30 both said "the core-deps CI job runs the
+whole suite with neither extra installed", which read as a deliberate job
+sitting alongside a normal one. There was only the one job, so the sentence
+described an accident as design and implied broad coverage that existed
+nowhere. Both are corrected, and `KnbCoreDependencyTests`' docstring with
+them. Hub backlog #92.
+
 ## 0.2.1
 
 **This release is a parity claim against metasalmon 0.2.1.** Built against the

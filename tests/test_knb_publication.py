@@ -1657,10 +1657,13 @@ class KnbCoreDependencyTests(unittest.TestCase):
     requirement for whoever calls the function containing it.** The only proof
     is running the path with the module genuinely absent.
 
-    The core-deps CI job would also have caught it, and does. This test exists
-    so the property is enforced in *both* dependency configurations rather
-    than only in the job most contributors never run locally -- the failure
-    mode being that a developer with PyYAML installed sees green and pushes.
+    CI's *core dependencies only* leg would also have caught it, and does.
+    This test exists so the property is enforced in *both* dependency
+    configurations rather than only in the leg most contributors never run
+    locally -- the failure mode being that a developer with PyYAML installed
+    sees green and pushes. (Before 2026-08-21 that leg was a single
+    ``.[test]`` job that lacked the extras only incidentally, so this test was
+    carrying more of the weight than its own wording suggested.)
 
     Retirement condition: delete this class if PyYAML ever becomes a core
     dependency of metasalmonpy. Until then, any new yaml reader reachable from
