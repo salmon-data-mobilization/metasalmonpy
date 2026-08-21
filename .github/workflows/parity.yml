@@ -6,8 +6,48 @@ on:
     branches: [main, master]
 
 jobs:
+  # The suite runs twice, once per dependency configuration, because each
+  # configuration is the only thing that can test the other's claim:
+  #
+  #   * `KnbCoreDependencyTests` and the core-deps property behind PARITY.md
+  #     row 30 only mean something in a run that genuinely lacks the extras.
+  #   * The extras-gated tests (EML, KNB, context readers) only mean something
+  #     in a run that has them. Before this matrix existed there was one job
+  #     installing `.[test]` -- `build` plus `pytest`, and neither extra -- so
+  #     CI was core-deps-shaped by accident and 94 tests never ran here at all
+  #     (hub backlog #92).
+  #
+  # Both legs run the identical step list. The dependency set is the only
+  # difference, which is the entire point: a leg that skipped a step would stop
+  # being comparable to the other one. Add steps to both or to neither.
+  #
+  # *Retires when:* the package has no optional extras, so there is only one
+  # dependency configuration left to run.
   python:
+    name: python suite (${{ matrix.label }})
     runs-on: ubuntu-latest
+    strategy:
+      # Never cancel one leg because the other failed -- the interesting result
+      # is almost always which of the two broke.
+      fail-fast: false
+      matrix:
+        include:
+          - label: core dependencies only
+            extras: "test"
+            # Modules that must be ABSENT. `[test]` is `build` plus `pytest`,
+            # so this leg is core-deps-shaped -- but only incidentally, and an
+            # incidental property is the one that quietly stops holding.
+            absent: "yaml lxml openpyxl pypdf xlrd"
+            present: ""
+          - label: with [eml] and [context] extras
+            extras: "test,eml,context"
+            absent: ""
+            # Modules that must be PRESENT. Without this check a typo in the
+            # extras list would turn this leg into a second core-deps run: the
+            # extras-gated tests would go back to skipping, and the check would
+            # still be green -- backlog #92 recurring with a job named after
+            # the coverage it had stopped providing.
+            present: "yaml lxml openpyxl pypdf xlrd"
     env:
       OPENAI_API_KEY: ""
       OPENROUTER_API_KEY: ""
@@ -21,7 +61,29 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install package and test tools
-        run: python -m pip install --upgrade pip && python -m pip install -e ".[test]"
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[${{ matrix.extras }}]"
+      - name: Verify the dependency configuration is the one claimed
+        env:
+          ABSENT: ${{ matrix.absent }}
+          PRESENT: ${{ matrix.present }}
+        run: |
+          python - <<'PY'
+          import importlib.util
+          import os
+          import sys
+
+          failures = []
+          for name in os.environ.get("ABSENT", "").split():
+              if importlib.util.find_spec(name) is not None:
+                  failures.append(f"{name} is installed but this leg must not have it")
+          for name in os.environ.get("PRESENT", "").split():
+              if importlib.util.find_spec(name) is None:
+                  failures.append(f"{name} is missing but this leg must have it")
+          if failures:
+              print("\n".join(failures), file=sys.stderr)
+              sys.exit(1)
+          print("dependency configuration verified")
+          PY
       - name: Run offline suite
         run: python -m pytest -q
       - name: Run smoke workflow

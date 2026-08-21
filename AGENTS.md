@@ -76,9 +76,12 @@ term-request pipeline.
 uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
-or `pip install -e ".[test]" && pytest -q`. The suite must stay green: 593
+or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
+dependency configurations, and CI runs both (see *Dependency boundaries*): 593
 passed / 3 skipped with the extras installed, 499 / 97 with core dependencies
-only (0.2.1, 2026-08-18).
+only (0.2.1, 2026-08-18). The 94-test gap is the extras-gated EML, KNB and
+context-reader tests; the 3 that skip either way are filesystem-symlink and
+R-availability guards.
 
 **Run it from a directory named `metasalmonpy`.** The root `__init__.py` and
 `tests/__init__.py` make pytest infer the package name from the checkout
@@ -130,10 +133,25 @@ uv pip install --python /tmp/coreenv/bin/python -e .
 /tmp/coreenv/bin/python -m pytest tests/ -q      # must be green
 ```
 
-The core-deps CI job runs exactly this. Because most local environments have
-the extras installed, `tests/test_knb_publication.py::KnbCoreDependencyTests`
-also blocks `yaml` from `sys.meta_path`, so the property fails locally too
-rather than only in CI. When you add a reader to a shared helper, check what
+**CI runs the suite twice**, as the two legs of the `python` matrix in
+`.github/workflows/parity.yml`: *core dependencies only* installs `.[test]` and
+is the run this recipe describes; *with `[eml]` and `[context]` extras* installs
+`.[test,eml,context]` and is the only run that executes the extras-gated tests
+at all. Each leg begins by asserting its own dependency configuration —
+the core leg fails if `yaml`, `lxml`, `openpyxl`, `pypdf` or `xlrd` is
+importable, the extras leg fails if any of them is not — so neither can quietly
+become a copy of the other.
+
+That verification step is the point of the pairing, not decoration. Until
+2026-08-21 there was a single job installing `.[test]`, which is `build` plus
+`pytest` and names no extra, so CI was core-deps-shaped **by accident**: nothing
+declared it, nothing checked it, and the 94 extras-gated tests ran nowhere (hub
+backlog #92). A configuration that holds only incidentally is the one that
+stops holding without anyone noticing.
+
+Because most local environments have the extras installed,
+`tests/test_knb_publication.py::KnbCoreDependencyTests` also blocks `yaml` from
+`sys.meta_path`, so the property fails locally too rather than only in CI. When you add a reader to a shared helper, check what
 calls it before assuming the helper is where it belongs (PARITY.md rows 30
 and 34). The SDP schema bundle is the live example: `write_salmon_datapackage()`
 loads it on the core path, so `sdp_schema` reads `sdp.rules.yaml` with a
