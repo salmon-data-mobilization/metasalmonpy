@@ -410,10 +410,14 @@ def _write_sdp_archive(
                 output_path, dataset_id, list(inventory), payload=existing_bytes
             )
         if not overwrite:
+            # Without the remedy the only way forward was to work out that a
+            # manual delete was required, which made every re-plan after a
+            # corrected input a dead end (metasalmon 0.2.3).
             raise ValueError(
                 "SDP archive output already exists with different bytes and "
                 "overwrite is False. Review the existing publication artifact "
-                "before replacing it."
+                "before replacing it. To rebuild it from the current inputs, "
+                f"pass overwrite=True. Existing: {output_path}."
             )
 
     _atomic_write_raw(archive_bytes, output_path)

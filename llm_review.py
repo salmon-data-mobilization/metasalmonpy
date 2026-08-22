@@ -4,9 +4,12 @@ import hashlib
 import html
 import json
 import os
+import random
 import re
+import time
 import warnings
 import zipfile
+from datetime import datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Callable, Optional, Sequence
@@ -432,6 +435,190 @@ def request_json(messages: list[dict], config: dict):
     return _response_data(response)
 
 
+# --- provider retry (metasalmon 0.2.3) --------------------------------------------------
+
+# Patchable seam for tests; mirrors how R tests stub Sys.sleep.
+_sleep = time.sleep
+
+
+def _uses_openrouter_free(provider: object, model: object) -> bool:
+    """Mirror ``.ms_llm_uses_openrouter_free``."""
+    if provider != "openrouter" or model is None:
+        return False
+    model = str(model)
+    return model == "openrouter/free" or model.endswith(":free")
+
+
+def _uses_chapi_gpt_oss(provider: object, model: object) -> bool:
+    """Mirror ``.ms_llm_uses_chapi_gpt_oss``."""
+    if provider != "chapi" or model is None:
+        return False
+    return re.match(r"^gpt-oss(:|$)", str(model)) is not None
+
+
+def _retry_limit(config: dict) -> int:
+    """Total attempts, not retries — mirror ``.ms_llm_retry_limit``.
+
+    The default was 1, which meant ``attempt >= attempts`` was true on the
+    first pass and the retryable-error classifier below was never consulted
+    for the default providers — a 429 or a 503 failed the whole review on the
+    first try, after the user had already paid for every preceding request.
+    """
+    provider = config.get("provider")
+    model = config.get("model")
+    if _uses_openrouter_free(provider, model):
+        return 4
+    if _uses_chapi_gpt_oss(provider, model):
+        return 4
+    return 3
+
+
+_HTTP_DATE = re.compile(
+    r"^[A-Za-z]{3},\s+([0-9]{2})\s+([A-Za-z]{3})\s+([0-9]{4})"
+    r"\s+([0-9]{2}):([0-9]{2}):([0-9]{2})\s+GMT$"
+)
+_HTTP_MONTHS = {
+    "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+}
+
+
+def _parse_http_date(value: str) -> Optional[datetime]:
+    """An HTTP date, parsed without consulting the process locale.
+
+    Mirrors ``.ms_parse_http_date``: only IMF-fixdate is handled, which is the
+    form RFC 7231 requires senders to use; the two obsolete formats return
+    ``None`` and fall back to bounded backoff. The month table is hardcoded
+    English on purpose — an HTTP date always carries the English names, and a
+    locale-aware parser under a non-English locale is exactly how R's original
+    implementation turned a valid ``Retry-After`` into a sub-second retry.
+    """
+    parts = _HTTP_DATE.match(str(value))
+    if parts is None:
+        return None
+    month = _HTTP_MONTHS.get(parts.group(2))
+    if month is None:
+        return None
+    try:
+        return datetime(
+            int(parts.group(3)), month, int(parts.group(1)),
+            int(parts.group(4)), int(parts.group(5)), int(parts.group(6)),
+            tzinfo=timezone.utc,
+        )
+    except ValueError:
+        return None
+
+
+def _retry_after_seconds(error: BaseException) -> Optional[float]:
+    """How long the server asked us to wait — mirror ``.ms_llm_retry_after_seconds``.
+
+    The header is either delta-seconds or an HTTP-date, and both forms appear
+    in the wild. Returns ``None`` when the error carries no response or no
+    usable header.
+    """
+    response = getattr(error, "response", None)
+    if response is None:
+        return None
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return None
+    try:
+        raw = headers.get("Retry-After")
+    except Exception:
+        return None
+    if raw is None or not str(raw).strip():
+        return None
+    raw = str(raw).strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        pass
+    at = _parse_http_date(raw)
+    if at is None:
+        return None
+    return max(0.0, at.timestamp() - time.time())
+
+
+def _retry_wait_seconds(error: BaseException, attempt: int, max_wait: float = 60.0) -> float:
+    """Mirror ``.ms_llm_retry_wait_seconds``.
+
+    A server that says ``Retry-After`` is telling you the rate-limit window;
+    ignoring it and retrying on a fixed backoff is how a 429 becomes a ban.
+    Capped: a provider asking for a multi-minute wait should fail the call so
+    the caller can decide, rather than silently blocking a review for that
+    long. Without the requested wait, exponential backoff with jitter — a
+    batch of requests that hit the same rate limit must not retry in lockstep.
+    """
+    requested = _retry_after_seconds(error)
+    if requested is not None:
+        return min(requested, max_wait)
+    backoff = min(max_wait, 0.5 * (2 ** (attempt - 1)))
+    return backoff + random.uniform(0.0, backoff / 2.0)
+
+
+_RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+
+# Mirror of `.ms_llm_is_retryable_error`'s pattern list, applied to the
+# message of any error an injected request_fn raises.
+_RETRYABLE_MESSAGE_PATTERNS = (
+    "timeout was reached",
+    "timed out",
+    "http 408",
+    "http 429",
+    "http 500",
+    "http 502",
+    "http 503",
+    "http 504",
+    "temporarily unavailable",
+    "connection reset",
+    "empty reply",
+    "failed to perform http request",
+)
+
+
+def _is_retryable_error(error: BaseException) -> bool:
+    """Mirror ``.ms_llm_is_retryable_error`` — the same retryable set.
+
+    R classifies by message substring because httr2 spells the status into the
+    condition message ("HTTP 429 Too Many Requests"); requests spells it
+    differently ("429 Client Error: ..."), so the structured checks on the
+    attached response and the transport exception types express the identical
+    rule over this library's error shapes. The message patterns remain for
+    errors raised by injected ``request_fn`` hooks, where R and Python see the
+    same author-written text.
+    """
+    response = getattr(error, "response", None)
+    status = getattr(response, "status_code", None) if response is not None else None
+    if isinstance(status, int) and status in _RETRYABLE_STATUS:
+        return True
+    if isinstance(error, (requests.Timeout, requests.ConnectionError)):
+        return True
+    message = str(error).lower()
+    return any(pattern in message for pattern in _RETRYABLE_MESSAGE_PATTERNS)
+
+
+def _request_json_with_retries(messages: list[dict], config: dict):
+    """Mirror ``.ms_llm_request_with_retries``.
+
+    A non-retryable error (including an injected sentinel ``request_fn`` that
+    always raises) is re-raised from the first attempt, so "the LLM was not
+    called" test hooks still prove exactly one call.
+    """
+    attempts = _retry_limit(config)
+    last_error: Optional[BaseException] = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return request_json(messages, config)
+        except Exception as exc:  # noqa: BLE001 - classifier decides below
+            last_error = exc
+            if attempt >= attempts or not _is_retryable_error(exc):
+                raise
+            wait = _retry_wait_seconds(exc, attempt)
+            if wait > 0:
+                _sleep(wait)
+    raise last_error  # pragma: no cover - loop always returns or raises
+
+
 def _candidate_id(row, role: str, position: int) -> str:
     source = _text(row.get("source"), "unknown")
     iri = _text(row.get("iri"))
@@ -797,7 +984,7 @@ def _bundle_messages(payload) -> list[dict]:
 
 def _assess_generic(target, candidates, context, config) -> dict:
     try:
-        result = request_json(
+        result = _request_json_with_retries(
             _generic_messages(target, candidates, context),
             config,
         )
@@ -821,7 +1008,7 @@ def _assess_bundle(
     dictionary,
 ) -> list[dict]:
     try:
-        result = request_json(
+        result = _request_json_with_retries(
             _bundle_messages(
                 _bundle_payload(
                     targets,
@@ -925,7 +1112,7 @@ def _generated_retry_query(target, row, config) -> Optional[str]:
         },
     ]
     try:
-        result = request_json(messages, config)
+        result = _request_json_with_retries(messages, config)
     except Exception:
         return None
     if not isinstance(result, dict):

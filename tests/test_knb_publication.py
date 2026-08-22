@@ -1135,6 +1135,107 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
             )
 
 
+@_REQUIRES_EXTRA
+class KnbDryRunOverwriteTests(unittest.TestCase, _AdapterSeam):
+    """metasalmon 0.2.3: a dry run can be re-planned after correcting an input.
+
+    Three separate gates — the SDP archive writer, the plan-mismatch check,
+    and the resource-map ownership check — each treated an existing artifact
+    as a published one, and none of the messages said a manual delete was the
+    only way forward. ``overwrite=True`` rebuilds derived artifacts and
+    replaces a manifest and resource map left by an *unpublished dry run*;
+    anything that reached the network still requires a reviewed revision.
+    Verified against metasalmon ``main`` by driving both implementations over
+    the same corrected package (see the chunk E differential in the PR).
+    """
+
+    def _correct_input(self, sdp):
+        with open(os.path.join(sdp, "data", "counts.csv"), "a") as handle:
+            handle.write("row-9,2026,9,,\n")
+
+    def test_overwrite_must_be_one_explicit_logical(self):
+        sdp = _fixture_sdp(self)
+        with self.assertRaisesRegex(ValueError, "overwrite must be"):
+            publish_sdp_to_knb(sdp, public=True, dry_run=True, overwrite="yes")
+
+    def test_replan_after_a_corrected_input_names_the_remedy(self):
+        sdp = _fixture_sdp(self)
+        publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        self._correct_input(sdp)
+        with self.assertRaises(ValueError) as caught:
+            publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        # The first gate (the archive writer) must now say the way forward.
+        self.assertIn("overwrite=True", str(caught.exception))
+
+    def test_overwrite_replans_a_dry_run_end_to_end(self):
+        sdp = _fixture_sdp(self)
+        first = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        self._correct_input(sdp)
+        result = publish_sdp_to_knb(
+            sdp, public=True, dry_run=True, overwrite=True
+        )
+        self.assertEqual(result["status"], "dry_run")
+        self.assertNotEqual(
+            result["manifest"]["plan_sha256"], first["manifest"]["plan_sha256"]
+        )
+        # The recovery manifest on disk describes the new plan, not the old.
+        with open(result["manifest_path"], encoding="utf-8") as handle:
+            on_disk = json.load(handle)
+        self.assertEqual(
+            on_disk["plan_sha256"], result["manifest"]["plan_sha256"]
+        )
+        self.assertEqual(on_disk["status"], "dry_run")
+
+    def test_overwrite_with_no_previous_manifest_is_allowed(self):
+        sdp = _fixture_sdp(self)
+        result = publish_sdp_to_knb(
+            sdp, public=True, dry_run=True, overwrite=True
+        )
+        self.assertEqual(result["status"], "dry_run")
+
+    def test_overwrite_cannot_replace_a_published_manifest(self):
+        sdp = _fixture_sdp(self)
+        first = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        manifest_path = first["manifest_path"]
+        with open(manifest_path, encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        manifest["status"] = "complete"
+        with open(manifest_path, "w", encoding="utf-8") as handle:
+            json.dump(manifest, handle)
+        self._correct_input(sdp)
+        archive_path = first["sdp_archive_path"]
+        with open(archive_path, "rb") as handle:
+            published_bytes = handle.read()
+        with self.assertRaises(ValueError) as caught:
+            publish_sdp_to_knb(
+                sdp, public=True, dry_run=True, overwrite=True
+            )
+        message = str(caught.exception)
+        self.assertIn("published manifest", message)
+        self.assertIn("'complete'", message)
+        self.assertIn("revision_manifest", message)
+        # Eligibility is decided BEFORE the plan builder runs: the local
+        # bytes the published manifest describes must survive the refusal.
+        with open(archive_path, "rb") as handle:
+            self.assertEqual(handle.read(), published_bytes)
+
+    def test_an_orphan_resource_map_is_not_bypassed_by_overwrite(self):
+        # A resource map with no manifest at all has no dry-run provenance;
+        # overwrite only replaces what an unpublished dry run left behind.
+        sdp = _fixture_sdp(self)
+        publication_dir = os.path.join(sdp, "publication")
+        os.makedirs(publication_dir, exist_ok=True)
+        with open(
+            os.path.join(publication_dir, "resource-map.rdf"), "w"
+        ) as handle:
+            handle.write("<rdf/>")
+        with self.assertRaises(ValueError) as caught:
+            publish_sdp_to_knb(
+                sdp, public=True, dry_run=True, overwrite=True
+            )
+        self.assertIn("not owned", str(caught.exception))
+
+
 # --- the live state machine ------------------------------------------------------------
 
 

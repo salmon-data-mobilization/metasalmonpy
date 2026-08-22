@@ -10,6 +10,80 @@ metasalmon's post-0.3.0 `main`, which no R release contains, and nobody has
 ruled what a number may claim about that. The bump comes once, at the end of
 the S10 chunks, after that ruling. Bump on parity, not on calendar.
 
+### S10 chunk E — cache, environment and network robustness
+
+metasalmon 0.2.2's and 0.2.3's cache/environment/network behaviours, verified
+by **running both implementations over the same inputs** against metasalmon
+`main` at `794647a` (2026-08-22; the R tree carrying every post-0.3.0 fix —
+same convention as chunks A–C, execplan open decision 2 / hub Q7 pending):
+
+- **The smn/gcdfo term indexes are resolved once per session** (0.2.2).
+  `_smn_term_index()`/`_gcdfo_term_index()` had no cache at all, so every
+  `find_terms()` call re-fetched and re-parsed both ontologies — the same
+  cost R paid when its stamp check sat after the fetch. `refresh=True`
+  bypasses and replaces the cache; a failed resolve caches nothing. The
+  trade mirrors R's: a module updated upstream mid-session is not picked up
+  until `refresh=True`, the stronger guarantee for seeding.
+- **Environment switches are read at call time, under the package's own
+  name.** `SALMONPY_CACHE` was read at import — the exact bug class R 0.2.2
+  fixed for `METASALMON_CACHE`, where an installed package captured the
+  importing process's environment once and the cache could never be enabled
+  afterwards. The switch is now the call-time `METASALMONPY_CACHE`
+  (truthiness verified value-for-value against R), and the stale `SALMONPY_`
+  prefix is renamed to `METASALMONPY_` across the package
+  (`METASALMONPY_DEBUG_FETCH`; test-only Qualark gates renamed cleanly).
+  **Deprecation window, decided here:** the old `SALMONPY_*` spellings keep
+  working with a once-per-process `DeprecationWarning` and are removed in
+  the **first tagged release after the S10 parity release** (PARITY.md row
+  50 carries the decision and its retirement condition).
+- **A failed vocabulary lookup is no longer indistinguishable from a
+  successful empty one** (0.2.2). `_safe_json` returned `None` for both, so
+  a degraded OLS looked exactly like "no such term exists" — the input that
+  drives `request_new_term` escalation, letting an outage manufacture
+  ontology gaps. Failures are now signalled per source and recorded in the
+  diagnostics frame as `status="http_error"` (columns now match R's,
+  including `elapsed_secs`; a source returning rows past a failed side
+  request is a partial answer, not a clean success), surfaced as a warning,
+  and **a degraded lookup is never written to the result cache**. The curl
+  fallback gained `--fail` so an HTTP error page served as valid JSON cannot
+  masquerade as a successful lookup.
+- **`publish_sdp_to_knb()` gains `overwrite`** (0.2.3). A dry run could not
+  be re-planned after correcting an input: the SDP archive writer, the
+  plan-mismatch check, and the resource-map ownership check each treated an
+  existing artifact as a published one, and none of the messages said the
+  way forward. `overwrite=True` rebuilds derived artifacts and replaces a
+  manifest and resource map left by an *unpublished dry run*; eligibility is
+  decided before the plan builder mutates anything, a manifest whose status
+  is not `dry_run` still requires a reviewed revision, and live publication
+  is still gated by `confirm`. Differential: the full corrected-input
+  sequence over the same package matches R gate-for-gate, with byte-exact
+  `package_id`/`series_id` across implementations.
+- **The default LLM providers now retry** (0.2.3). There was no retry at all
+  — a 429 or a 503 failed the whole review on the first try, after the user
+  had already paid for every preceding request. All three provider call
+  sites (generic, bundle, exploration; chat-decomposition stays direct,
+  matching R) route through `_request_json_with_retries`: 3 total attempts
+  (4 for openrouter `:free` and chapi `gpt-oss*`, matching
+  `.ms_llm_retry_limit()`), `Retry-After` honoured in both delta-seconds and
+  IMF-fixdate forms and capped at 60s, locale-independent date parsing,
+  jittered exponential backoff otherwise, and R's retryable set — expressed
+  over this library's error shapes (an attached `response.status_code` and
+  the requests timeout/connection exception types, because requests spells
+  "429 Client Error" where httr2 says "HTTP 429") plus R's message-pattern
+  list verbatim for injected `request_fn` errors. A non-retryable error
+  raises from the first attempt, so a sentinel `request_fn` still proves
+  exactly one call.
+- **The BioPortal API key travels in an `Authorization` header** instead of
+  the query string, where it was written into request logs at both ends and
+  would be quoted by any warning recording the URL (0.2.3). **Request URLs
+  are additionally redacted at capture** in `_safe_json` — before they reach
+  failure records, timeout warnings, or the diagnostics frame — through the
+  shared `text_safety.redact_secrets()`. Placement note for the execplan's
+  open question: the URL-redaction *call sites* land here in E because E
+  rewrites `_safe_json`; the redaction *pattern* they call is strengthened
+  to R 0.2.5's structural `*_token` rule by chunk F, and these sites inherit
+  that automatically.
+
 ### S10 chunk B — the semantic pipeline retarget
 
 Retargets the semantic pipeline onto the dictionary shape chunk A introduced:
