@@ -336,3 +336,98 @@ def test_the_writer_is_absent_and_says_why():
     # It must not look like an unimplemented feature that a caller could
     # trigger by passing better arguments.
     assert "metasalmon" in message
+
+
+# --- chunk G: a 0.2.x-written package reads end-to-end post-A ---------------
+#
+# The methods-sdp fixture above is metasalmon v0.1.8 output and exercises the
+# surviving registry reader in isolation. The era-0.2.6-sdp fixture is a
+# genuine package written by the LAST 0.2.x-behaviour metasalmon tree
+# (hub 5825467 = 1893cfa~1; DESCRIPTION Version: 0.2.6 — the 0.2.x releases
+# are deliberately untagged, and the later "Version: 0.2.6" commits already
+# carry 0.3.0 behaviour). R 4.5.2, LC_COLLATE=C; the registry was written
+# from deliberately reversed row order and era-validated at generation. This
+# is the package shape Python actually receives from R 0.2.x users: era
+# 16-column dictionary binding method_iri, sdp-0.2.0 descriptor, 0.2.4+
+# empty-string missing-value bytes, and a methods registry.
+
+
+def test_the_era_026_fixture_is_unmodified_r_output():
+    root = DATA / "era-0.2.6-sdp"
+    for file in sorted(root.rglob("*")):
+        if not file.is_file():
+            continue
+        name = f"era-0.2.6-sdp/{file.relative_to(root)}"
+        digest = hashlib.sha256(file.read_bytes()).hexdigest()
+        assert digest == CHECKSUMS["sha256"][name], name
+
+
+def test_a_registry_era_package_reads_end_to_end(tmp_path):
+    from metasalmonpy import read_salmon_datapackage
+
+    root = _sdp(tmp_path, "era-0.2.6-sdp")
+
+    package = read_salmon_datapackage(str(root))
+    resource = package["resources"]["stock_recruit"]
+    assert list(resource.columns) == [
+        "stock_id",
+        "brood_year",
+        "spawner_abundance",
+        "estimate_method",
+    ]
+    assert len(resource) == 3
+
+    dictionary = package["dictionary"]
+    # The current dictionary contract plus the era binding column: the reader
+    # normalizes to the sdp-0.3.0 columns and PRESERVES the era method_iri as
+    # a passthrough, so nothing a 0.2.x package recorded is dropped on read.
+    assert "statistical_modifier_iri" in dictionary.columns
+    assert "method_iri" in dictionary.columns
+    bound = dictionary.loc[
+        dictionary["column_name"] == "spawner_abundance", "method_iri"
+    ].iloc[0]
+    assert bound == "https://example.org/methods/expanded-count"
+    assert len(package["codes"]) == 2
+
+    # The registry itself still reads and validates through the surviving
+    # legacy reader (PARITY row 9), in the writer's canonical order.
+    methods = read_sdp_methods(root)
+    assert list(methods.columns) == list(SDP_METHODS_COLUMNS)
+    assert list(methods["method_iri"]) == [
+        "https://example.org/methods/expanded-count",
+        "https://example.org/methods/mark-recapture",
+    ]
+    assert validate_sdp_methods(root) is True
+
+
+def test_a_registry_era_package_validates_toward_migration(tmp_path):
+    # Reading is legacy-supported; VALIDATING a current package that still
+    # carries a registry deliberately is not — every validation surface
+    # points at the migration (chunk A's registry-removal contract), and the
+    # migration's dry run works on the genuine era package without touching
+    # its bytes.
+    from metasalmonpy import migrate_sdp_methods, validate_salmon_datapackage
+
+    root = _sdp(tmp_path, "era-0.2.6-sdp")
+    before = {
+        file.relative_to(root): file.read_bytes()
+        for file in sorted(root.rglob("*"))
+        if file.is_file()
+    }
+
+    with pytest.raises(SdpExtensionError, match="migrate_sdp_methods"):
+        validate_salmon_datapackage(str(root))
+
+    report = migrate_sdp_methods(root, dry_run=True)
+    placements = report["tables"]
+    assert list(placements["table_id"]) == ["stock_recruit"]
+    assert list(placements["method_iri"]) == [
+        "https://example.org/methods/expanded-count"
+    ]
+
+    after = {
+        file.relative_to(root): file.read_bytes()
+        for file in sorted(root.rglob("*"))
+        if file.is_file()
+    }
+    assert before == after

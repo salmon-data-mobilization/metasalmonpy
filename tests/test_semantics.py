@@ -555,5 +555,215 @@ class ReviewedStrategyTests(unittest.TestCase):
             )
 
 
+class StatisticalModifierRetargetTests(unittest.TestCase):
+    """The sixth dictionary slot is statistical_modifier (S10 chunk B).
+
+    Mirrors metasalmon main's discovery behaviour: a modifier target is
+    emitted only when the column text names an aggregation — checked across
+    name, label, AND description with underscores split — so plain
+    measurements do not gain a slot, and the emitted query is the ladder's
+    canonical aggregation word.
+    """
+
+    @staticmethod
+    def _suggest(columns, descriptions, search_calls=None):
+        data = pd.DataFrame({name: [1.0, 2.0] for name in columns})
+        dict_df = infer_dictionary(data, dataset_id="d", table_id="t")
+        dict_df["column_role"] = "measurement"
+        for name, description in descriptions.items():
+            dict_df.loc[
+                dict_df["column_name"] == name, "column_description"
+            ] = description
+
+        def search(query, role=None, sources=None):
+            if search_calls is not None:
+                search_calls.append((str(query), str(role)))
+            return pd.DataFrame(
+                {
+                    "label": [f"{role} candidate"],
+                    "iri": [f"https://example.org/{role}"],
+                    "source": ["smn"],
+                    "ontology": ["o"],
+                    "role": [role],
+                    "match_type": ["label"],
+                    "definition": [""],
+                }
+            )
+
+        return suggest_semantics(data, dict_df, search_fn=search)
+
+    def test_aggregation_named_column_emits_a_modifier_target(self):
+        calls = []
+        out = self._suggest(
+            ["mean_weight"],
+            {"mean_weight": "Weight of sampled fish in grams."},
+            calls,
+        )
+        targets = out.attrs["semantic_targets"]
+        modifier = targets[
+            targets["dictionary_role"] == "statistical_modifier"
+        ]
+        # The aggregation is only in the column NAME, split on underscores.
+        self.assertEqual(len(modifier), 1)
+        self.assertEqual(modifier["search_query"].iloc[0], "mean")
+        self.assertEqual(
+            modifier["target_sdp_field"].iloc[0],
+            "statistical_modifier_iri",
+        )
+        self.assertIn(("mean", "statistical_modifier"), calls)
+        suggestions = out.attrs["semantic_suggestions"]
+        self.assertIn(
+            "statistical_modifier",
+            set(suggestions["dictionary_role"]),
+        )
+
+    def test_total_outranks_mean_in_the_query_ladder(self):
+        out = self._suggest(
+            ["counts"],
+            {"counts": "Total of the mean daily fish counts."},
+        )
+        targets = out.attrs["semantic_targets"]
+        modifier = targets[
+            targets["dictionary_role"] == "statistical_modifier"
+        ]
+        self.assertEqual(modifier["search_query"].tolist(), ["total"])
+
+    def test_plain_measurement_emits_no_modifier_target(self):
+        out = self._suggest(
+            ["fork_length"],
+            {"fork_length": "Fork length of sampled fish in millimetres."},
+        )
+        targets = out.attrs["semantic_targets"]
+        self.assertNotIn(
+            "statistical_modifier",
+            set(targets["dictionary_role"]),
+        )
+        # No dictionary slot is searched as `method` any more: sdp-0.3.0
+        # removed method_iri, and the code-level method role is codes-only.
+        self.assertNotIn("method", set(targets["dictionary_role"]))
+
+    def test_constraint_and_entity_queries_are_role_shaped(self):
+        # Undocumented divergence caught by the chunk-B differential against
+        # metasalmon main (9d8f125): R has shaped these two roles' queries
+        # since era 0.1.7 — constraint "natural"/"hatchery" text becomes an
+        # origin query, and a spawner measurement's entity query becomes
+        # "population" — but the era port only pinned variable/property, so
+        # the raw description leaked into these searches (and from there into
+        # gap detection: a candidate matching the description text turned a
+        # no_candidates target into a candidate_gap).
+        from metasalmonpy.semantics import _measurement_query
+
+        row = {
+            "column_name": "spawner_count",
+            "column_label": "spawner_count",
+            "column_description": "Natural-origin spawner abundance estimate",
+            "value_type": "number",
+            "unit_label": pd.NA,
+        }
+        base = "Natural-origin spawner abundance estimate"
+        self.assertEqual(
+            _measurement_query(row, "constraint", base)[0],
+            "natural origin",
+        )
+        self.assertEqual(
+            _measurement_query(row, "entity", base)[0],
+            "population",
+        )
+        hatchery_row = dict(
+            row, column_description="Hatchery brood year weight"
+        )
+        self.assertEqual(
+            _measurement_query(
+                hatchery_row, "constraint", "Hatchery brood year weight"
+            )[0],
+            "hatchery origin",
+        )
+
+    def test_entity_query_prefers_stock_context_from_sibling_columns(self):
+        # The entity shaping consults the OTHER columns of the same table
+        # (mirrors R's context_has(table_context(...))): a stock column beside
+        # the measurement wins over the spawner fallback.
+        from metasalmonpy.semantics import _measurement_query
+
+        dictionary = pd.DataFrame(
+            {
+                "dataset_id": ["d", "d"],
+                "table_id": ["t", "t"],
+                "column_name": ["spawner_count", "stock_id"],
+                "column_label": ["Spawner count", "Stock identifier"],
+                "column_description": [
+                    "Spawner abundance estimate",
+                    "Stock the survey covers",
+                ],
+            }
+        )
+        row = {
+            "dataset_id": "d",
+            "table_id": "t",
+            "column_name": "spawner_count",
+            "column_label": "Spawner count",
+            "column_description": "Spawner abundance estimate",
+            "value_type": "number",
+            "unit_label": pd.NA,
+        }
+        self.assertEqual(
+            _measurement_query(
+                row,
+                "entity",
+                "Spawner abundance estimate",
+                dictionary=dictionary,
+            )[0],
+            "stock",
+        )
+
+    def test_semantic_targets_attribute_is_always_attached(self):
+        empty = suggest_semantics(
+            None,
+            pd.DataFrame(),
+            search_fn=lambda query, role=None, sources=None: pd.DataFrame(),
+        )
+        self.assertIsInstance(empty.attrs["semantic_targets"], pd.DataFrame)
+        self.assertEqual(len(empty.attrs["semantic_targets"]), 0)
+
+    def test_apply_supports_the_modifier_role_and_refuses_method(self):
+        dict_df = infer_dictionary(
+            pd.DataFrame({"mean_weight": [1.0, 2.0]}),
+            dataset_id="d",
+            table_id="t",
+        )
+        dict_df["column_role"] = "measurement"
+        suggestions = pd.DataFrame(
+            {
+                "column_name": ["mean_weight"],
+                "dictionary_role": ["statistical_modifier"],
+                "target_sdp_field": ["statistical_modifier_iri"],
+                "iri": ["https://w3id.org/smn/MeanStatisticalModifier"],
+                "label": ["Mean"],
+                "search_query": ["mean"],
+            }
+        )
+        applied = apply_semantic_suggestions(
+            dict_df,
+            suggestions,
+            roles=["statistical_modifier"],
+            verbose=False,
+        )
+        self.assertEqual(
+            applied.loc[
+                applied["column_name"] == "mean_weight",
+                "statistical_modifier_iri",
+            ].iloc[0],
+            "https://w3id.org/smn/MeanStatisticalModifier",
+        )
+        # `method` is no longer a dictionary role anywhere in the apply map.
+        with self.assertRaisesRegex(ValueError, "Unsupported roles"):
+            apply_semantic_suggestions(
+                dict_df,
+                suggestions,
+                roles=["method"],
+                verbose=False,
+            )
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

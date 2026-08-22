@@ -307,5 +307,186 @@ class EraInferenceTests(unittest.TestCase):
         )
 
 
+class LegacyCodePrefillTests(unittest.TestCase):
+    """The NuSEDS crosswalks are wired into the package path (chunk B).
+
+    Until S10 chunk B, NO crosswalk was wired into
+    infer_salmon_datapackage_artifacts()/create_sdp() at all — not even the
+    estimate-method one metasalmon has wired all along (an undocumented
+    divergence, now PARITY row 47; hub backlog #101/#102). These mirror
+    metasalmon main's test-package-helpers.R prefill tests, which were
+    verified RED before R's wiring landed.
+    """
+
+    @staticmethod
+    def _artifacts(resources, seed_codes):
+        return infer_salmon_datapackage_artifacts(
+            resources,
+            dataset_id="scope-demo",
+            seed_codes=seed_codes,
+            seed_semantics=False,
+        )
+
+    @staticmethod
+    def _seed_codes(column_name, values, term_iris=None, labels=None):
+        count = len(values)
+        return pd.DataFrame(
+            {
+                "dataset_id": ["scope-demo"] * count,
+                "table_id": ["escapement"] * count,
+                "column_name": [column_name] * count,
+                "code_value": values,
+                "code_label": labels if labels is not None else values,
+                "code_description": [f"{column_name} code"] * count,
+                "vocabulary_iri": [pd.NA] * count,
+                "term_iri": term_iris if term_iris is not None else [pd.NA] * count,
+                "term_type": [pd.NA] * count,
+            }
+        )
+
+    def test_estimate_classification_codes_prefill_without_overwriting(self):
+        resources = {
+            "escapement": pd.DataFrame(
+                {
+                    "ESTIMATE_CLASSIFICATION": [
+                        "TRUE ABUNDANCE (TYPE-1)",
+                        "NO SURVEY THIS YEAR",
+                        "RELATIVE ABUNDANCE (TYPE-4)",
+                    ],
+                    "RUN_TYPE": ["EARLY", "LATE", "EARLY"],
+                    "count": [10, 20, 30],
+                }
+            )
+        }
+        seed_codes = pd.concat(
+            [
+                self._seed_codes(
+                    "ESTIMATE_CLASSIFICATION",
+                    [
+                        "TRUE ABUNDANCE (TYPE-1)",
+                        "NO SURVEY THIS YEAR",
+                        "RELATIVE ABUNDANCE (TYPE-4)",
+                    ],
+                    term_iris=[
+                        pd.NA,
+                        pd.NA,
+                        "https://example.org/custom-type4",
+                    ],
+                ),
+                self._seed_codes("RUN_TYPE", ["EARLY"]),
+            ],
+            ignore_index=True,
+        )
+
+        artifacts = self._artifacts(resources, seed_codes)
+        codes = artifacts["codes"]
+        cls_rows = codes[codes["column_name"] == "ESTIMATE_CLASSIFICATION"]
+
+        def term(value):
+            return cls_rows.loc[
+                cls_rows["code_value"] == value, "term_iri"
+            ].iloc[0]
+
+        self.assertEqual(
+            term("TRUE ABUNDANCE (TYPE-1)"),
+            "https://w3id.org/gcdfo/salmon#Type1",
+        )
+        # The absence marker maps to nothing, by recorded design.
+        no_survey = term("NO SURVEY THIS YEAR")
+        self.assertTrue(pd.isna(no_survey) or no_survey == "")
+        # An explicit caller-supplied IRI wins over the crosswalk.
+        self.assertEqual(
+            term("RELATIVE ABUNDANCE (TYPE-4)"),
+            "https://example.org/custom-type4",
+        )
+        # Unrelated columns stay untouched.
+        run_type = codes.loc[
+            codes["column_name"] == "RUN_TYPE", "term_iri"
+        ].iloc[0]
+        self.assertTrue(pd.isna(run_type) or run_type == "")
+
+    def test_enumeration_methods_codes_prefill_from_enumeration_crosswalk(self):
+        # Hub backlog #102: "Fence" -> gcdfo:FixedSiteCensusManual has always
+        # been in nuseds_enumeration_method_crosswalk(); the division of
+        # labour is the documented one — enumeration (field) methods stay in
+        # the enumeration crosswalk, and "Fence" is NOT added to the estimate
+        # crosswalk. The word rule is "enumeration" alone: NuSEDS names the
+        # column ENUMERATION_METHODS (plural), and a \bmethod\b test can never
+        # match "methods".
+        resources = {
+            "escapement": pd.DataFrame(
+                {
+                    "ENUMERATION_METHODS": [
+                        "Fence",
+                        "Bank Walk",
+                        "Stream Walk, Other",
+                    ],
+                    "count": [10, 20, 30],
+                }
+            )
+        }
+        seed_codes = self._seed_codes(
+            "ENUMERATION_METHODS",
+            ["Fence", "Bank Walk", "Stream Walk, Other"],
+            term_iris=[pd.NA, "https://example.org/custom-bank-walk", pd.NA],
+        )
+
+        artifacts = self._artifacts(resources, seed_codes)
+        codes = artifacts["codes"]
+        enum_rows = codes[codes["column_name"] == "ENUMERATION_METHODS"]
+
+        def term(value):
+            return enum_rows.loc[
+                enum_rows["code_value"] == value, "term_iri"
+            ].iloc[0]
+
+        self.assertEqual(
+            term("Fence"),
+            "https://w3id.org/gcdfo/salmon#FixedSiteCensusManual",
+        )
+        # An explicit caller-supplied IRI wins over the crosswalk.
+        self.assertEqual(
+            term("Bank Walk"),
+            "https://example.org/custom-bank-walk",
+        )
+        # A combined multi-method value has no crosswalk row and stays blank.
+        combined = term("Stream Walk, Other")
+        self.assertTrue(pd.isna(combined) or combined == "")
+
+    def test_estimate_method_codes_prefill_closes_the_unwired_divergence(self):
+        # PARITY row 47: metasalmon has wired the estimate-method crosswalk
+        # into this path all along; this package never wired ANY crosswalk,
+        # and no register recorded the difference. The dictionary-driven flag
+        # is exercised too: the column is named EST_METHOD, and only its
+        # dictionary description says "estimate method".
+        resources = {
+            "escapement": pd.DataFrame(
+                {
+                    "ESTIMATE_METHOD": ["Fixed Site Census", "Sonar-ARIS"],
+                    "count": [10, 20],
+                }
+            )
+        }
+        seed_codes = self._seed_codes(
+            "ESTIMATE_METHOD",
+            ["Fixed Site Census", "Sonar-ARIS"],
+        )
+
+        artifacts = self._artifacts(resources, seed_codes)
+        codes = artifacts["codes"]
+        rows = codes[codes["column_name"] == "ESTIMATE_METHOD"]
+
+        self.assertEqual(
+            rows.loc[
+                rows["code_value"] == "Fixed Site Census", "term_iri"
+            ].iloc[0],
+            "https://w3id.org/gcdfo/salmon#FixedStationTally",
+        )
+        self.assertEqual(
+            rows.loc[rows["code_value"] == "Sonar-ARIS", "term_iri"].iloc[0],
+            "https://w3id.org/gcdfo/salmon#HydroacousticModelling",
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

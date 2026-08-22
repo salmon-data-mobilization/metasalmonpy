@@ -1,0 +1,3 @@
+dataset_id,method_iri,method_label,method_description,method_version,protocol_iri,citation
+era-methods-test,https://example.org/methods/expanded-count,Expanded count,Peak count expanded by observer efficiency.,1.1,https://example.org/protocols/expansion,
+era-methods-test,https://example.org/methods/mark-recapture,Mark-recapture,Two-event Petersen mark-recapture estimate.,2.0,,Era Protocols 2020

@@ -71,14 +71,23 @@ ALLOWED_DECISIONS = {
     "reject_shortlist",
 }
 AUTO_APPLY_ROLES = {"variable", "property", "entity", "unit"}
+# The dictionary slots, in order — the authority every other role surface is
+# checked against (mirrors .ms_semantic_bundle_slot_fields). sdp-0.3.0
+# replaced the dictionary method slot with statistical_modifier_iri.
 BUNDLE_SLOT_FIELDS = {
     "variable": "term_iri",
     "property": "property_iri",
     "entity": "entity_iri",
     "unit": "unit_iri",
     "constraint": "constraint_iri",
-    "method": "method_iri",
+    "statistical_modifier": "statistical_modifier_iri",
 }
+# `method` stays a bundle role with NO slot field: codes-scope targets still
+# search shared-vocabulary procedures for codes.csv term_iri, so the bundle
+# payload names the role (always already_filled_or_not_requested for column
+# bundles) without offering a dictionary field to write
+# (mirrors .ms_semantic_bundle_roles).
+BUNDLE_ROLES = tuple(BUNDLE_SLOT_FIELDS) + ("method",)
 
 
 def _missing(value) -> bool:
@@ -682,15 +691,19 @@ def _bundle_payload(
         for role, field in BUNDLE_SLOT_FIELDS.items()
     }
     slots = []
-    for role, field in BUNDLE_SLOT_FIELDS.items():
+    for role in BUNDLE_ROLES:
+        field = BUNDLE_SLOT_FIELDS.get(role)
         target = target_by_role.get(role)
         if target is None:
             slots.append(
                 {
                     "role": role,
+                    # `method` has no dictionary slot field (sdp-0.3.0 dropped
+                    # method_iri; the role survives only for codes-scope
+                    # searches), so an unrequested role may have no field.
                     "target_sdp_field": field,
                     "status": "already_filled_or_not_requested",
-                    "current_value": current_slots[role],
+                    "current_value": current_slots.get(role),
                     "candidates": [],
                 }
             )
@@ -700,7 +713,7 @@ def _bundle_payload(
             {
                 "role": role,
                 "status": "review",
-                "current_value": current_slots[role],
+                "current_value": current_slots.get(role),
                 "search_query": target.get("search_query"),
                 "target_sdp_field": target.get("target_sdp_field"),
                 "candidates": _candidate_payload(candidates, role),
@@ -747,11 +760,25 @@ def _bundle_payload(
 
 
 def _bundle_messages(payload) -> list[dict]:
+    # The opening "Judge ..." instruction is a role-contract surface: it must
+    # name exactly the dictionary slots (mirrors
+    # .ms_semantic_bundle_system_prompt, which sdp-0.3.0 shipped still naming
+    # the removed `method` slot — the defect the role-contract guard pins).
     return [
         {
             "role": "system",
             "content": (
                 "Review this measurement as one I-ADOPT semantic bundle. "
+                "Judge variable, property, entity, unit, constraint, and "
+                "statistical_modifier together before finalizing any slot. "
+                "A method is never a dictionary slot: procedures are "
+                "usedProcedure-style context recorded on tables.csv or "
+                "resolved through codes.csv, so method targets appear only "
+                "for code values. "
+                "statistical_modifier is part of variable identity (I-ADOPT "
+                "StatisticalModifier); accept one only when the column is an "
+                "aggregation or summary such as a mean, maximum, total, or "
+                "peak. "
                 "Return JSON with bundle_summary and exactly one item in slots "
                 "for each supplied slot whose status is review. Do not assess "
                 "slots already marked as filled. Each item uses role, decision, "
@@ -1342,6 +1369,19 @@ def _has_method_evidence(text: str) -> bool:
     )
 
 
+def _has_modifier_evidence(text: str) -> bool:
+    # Underscores are not word boundaries, so `mean_weight` needs splitting;
+    # lowercased here because R's helper folds case itself
+    # (mirrors .ms_semantic_validator_has_modifier_evidence).
+    return bool(
+        re.search(
+            r"\b(?:mean|average|median|max|maximum|min|minimum|total|"
+            r"cumulative|sum|peak|aggregate|aggregated)\b",
+            re.sub(r"[_.]", " ", text.lower()),
+        )
+    )
+
+
 def _has_constraint_evidence(text: str) -> bool:
     terms = (
         r"origin|life[ -]?cycle|life[ -]?stage|stage|run|season|age|sex|"
@@ -1529,6 +1569,25 @@ def _apply_validators(
                     "SEM_METHOD_EVIDENCE_REQUIRED",
                     "The accepted method candidate lacks explicit field, "
                     "protocol, gear, instrument, or estimation-procedure evidence.",
+                )
+            )
+        if role == "statistical_modifier" and not _has_modifier_evidence(
+            evidence
+        ):
+            # The dictionary's statistical modifier is part of variable
+            # identity, so an accept needs the column itself to name an
+            # aggregation. Without this, an unsupported modifier silently
+            # changes what the variable means. Sits BESIDE the surviving
+            # method validator, not in place of it: the code-level method
+            # role outlives sdp-0.3.0 (mirrors
+            # .ms_validate_semantic_modifier_evidence).
+            row_findings.append(
+                _finding(
+                    row,
+                    "SEM_MODIFIER_EVIDENCE_REQUIRED",
+                    "The accepted statistical-modifier candidate lacks "
+                    "explicit aggregation evidence (mean, median, maximum, "
+                    "minimum, total, or peak).",
                 )
             )
         if role == "constraint" and not _has_constraint_evidence(evidence):

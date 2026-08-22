@@ -154,10 +154,16 @@ def detect_semantic_term_gaps(
     """
     Detect structured ontology gaps from candidate and final LLM evidence.
 
-    When ``suggestions`` is omitted, both semantic attributes are read from
-    ``dict_df``. Explicit suggestions use only LLM fields embedded in that
-    table. Identical duplicate assessments are collapsed; conflicting proposed
-    term fields raise an error.
+    When ``suggestions`` is omitted, the ``semantic_suggestions``,
+    ``semantic_llm_assessments``, and ``semantic_targets`` attributes are read
+    from ``dict_df``; the last is how zero-candidate targets are detected. A
+    target with no retrieval evidence at all — no suggestion row before
+    ``min_score`` filtering, no assessment of any decision — is reported with
+    ``gap_detection_basis = "no_candidates"``, distinguishing "nothing found"
+    from "found and rejected" (``llm_request_new_term``). Explicit suggestions
+    use only LLM fields embedded in that table and keep the historical
+    row-in/row-out behaviour. Identical duplicate assessments are collapsed;
+    conflicting proposed term fields raise an error.
 
     Parameters
     ----------
@@ -181,11 +187,22 @@ def detect_semantic_term_gaps(
     """
     suggestions_explicit = suggestions is not None
     assessments = None
+    targets = None
     if suggestions is None:
         if dict_df is None:
             raise ValueError("Provide either dict_df with semantic_suggestions or suggestions.")
         suggestions = dict_df.attrs.get("semantic_suggestions")
         assessments = dict_df.attrs.get("semantic_llm_assessments")
+        # Targets whose retrieval returned ZERO candidates leave no suggestion
+        # row behind, so an empty suggestions table is not evidence of "no
+        # gaps" -- it is exactly what a concept absent from every vocabulary
+        # looks like (hub backlog #97). suggest_semantics() attaches the
+        # discovered targets; the explicit-suggestions path has no dictionary
+        # to read them from and keeps its historical row-in/row-out behaviour.
+        targets = dict_df.attrs.get("semantic_targets")
+    targets = (
+        pd.DataFrame(targets).copy() if targets is not None else pd.DataFrame()
+    )
 
     df = (
         pd.DataFrame(suggestions).copy()
@@ -225,7 +242,7 @@ def detect_semantic_term_gaps(
         "column_label": pd.NA,
         "column_description": pd.NA,
     }
-    for frame in (df, assessments):
+    for frame in (df, assessments, targets):
         for column in target_key:
             if column not in frame:
                 frame[column] = pd.NA
@@ -234,7 +251,7 @@ def detect_semantic_term_gaps(
                 frame[column] = default
 
     allowed_scopes = {str(scope).lower() for scope in include_target_scopes}
-    for frame in (df, assessments):
+    for frame in (df, assessments, targets):
         frame["target_scope"] = (
             frame["target_scope"].fillna("").astype(str).str.lower().str.strip()
         )
@@ -249,6 +266,14 @@ def detect_semantic_term_gaps(
                 ],
                 inplace=True,
             )
+
+    # "No candidates" means no retrieval evidence AT ALL: neither a suggestion
+    # row (checked BEFORE min_score filtering, so a below-threshold candidate
+    # still counts as "found") nor an assessment of ANY decision -- so the
+    # all-decision frame is snapshotted before the request_new_term filter. A
+    # target whose candidates were found and then filtered or rejected keeps
+    # its historical treatment.
+    all_decision_assessments = assessments.copy()
 
     if not assessments.empty:
         assessments = assessments[
@@ -288,6 +313,18 @@ def detect_semantic_term_gaps(
         key: df.loc[indices].copy()
         for key, indices in candidate_indices.items()
     }
+
+    no_candidate_targets = {}
+    if not targets.empty:
+        retrieved_keys = set(candidate_groups)
+        retrieved_keys.update(
+            key_value(row) for _, row in all_decision_assessments.iterrows()
+        )
+        for _, row in targets.iterrows():
+            key = key_value(row)
+            if key in retrieved_keys or key in no_candidate_targets:
+                continue
+            no_candidate_targets[key] = row
     assessment_groups = {}
     if not assessments.empty:
         proposal_columns = [
@@ -318,18 +355,24 @@ def detect_semantic_term_gaps(
             assessment_groups[key] = group
 
     rows = []
-    all_keys = set(candidate_groups) | set(assessment_groups)
+    all_keys = (
+        set(candidate_groups)
+        | set(assessment_groups)
+        | set(no_candidate_targets)
+    )
     for key_values in all_keys:
         group = candidate_groups.get(key_values, pd.DataFrame())
         assessment_group = assessment_groups.get(
             key_values,
             pd.DataFrame(),
         )
-        metadata = (
-            group.iloc[0]
-            if not group.empty
-            else assessment_group.iloc[0]
-        )
+        no_candidate = no_candidate_targets.get(key_values)
+        if not group.empty:
+            metadata = group.iloc[0]
+        elif not assessment_group.empty:
+            metadata = assessment_group.iloc[0]
+        else:
+            metadata = no_candidate
         candidate_evidence = group.copy()
         if min_score is not None and not candidate_evidence.empty:
             candidate_evidence = candidate_evidence[
@@ -361,7 +404,7 @@ def detect_semantic_term_gaps(
             non_smn = pd.DataFrame()
             candidate_gap = False
         llm_gap = not assessment_group.empty
-        if not candidate_gap and not llm_gap:
+        if not candidate_gap and not llm_gap and no_candidate is None:
             continue
 
         top = None
@@ -427,7 +470,12 @@ def detect_semantic_term_gaps(
             metadata.get("target_description"),
             column_description,
         )
-        if candidate_gap and llm_gap:
+        # An explicit no_candidates basis wins: those rows have neither
+        # candidate nor LLM evidence, and the fallthrough below would
+        # mislabel them candidate_gap.
+        if no_candidate is not None:
+            basis = "no_candidates"
+        elif candidate_gap and llm_gap:
             basis = "candidate_gap_and_llm_request_new_term"
         elif llm_gap:
             basis = "llm_request_new_term"

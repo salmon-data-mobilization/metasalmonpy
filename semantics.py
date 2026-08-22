@@ -21,7 +21,11 @@ ROLE_MAP = {
     "entity_iri": "entity",
     "unit_iri": "unit",
     "constraint_iri": "constraint",
-    "method_iri": "method",
+    # sdp-0.3.0 removed the dictionary method slot; the statistical modifier
+    # is part of variable identity (I-ADOPT StatisticalModifier) and is the
+    # sixth dictionary slot. The code-level `method` role survives for
+    # codes.csv term_iri targets only (S10 chunk B).
+    "statistical_modifier_iri": "statistical_modifier",
 }
 
 
@@ -53,7 +57,39 @@ def _clean_query(value: str) -> str:
     return value.strip()
 
 
-def _measurement_query(row, role: str, base_query: str) -> tuple[str, str]:
+def _table_context_has(row, dictionary, pattern: str) -> bool:
+    """Mirror R's ``context_has(table_context(row, dict), pattern)``.
+
+    True when any OTHER column of the same dataset/table names the pattern in
+    its name, label, or description.
+    """
+    if dictionary is None or len(dictionary) == 0:
+        return False
+    context = dictionary
+    for key in ("dataset_id", "table_id"):
+        if key not in context.columns:
+            return False
+        context = context[
+            context[key].apply(_scalar_text) == _scalar_text(row.get(key))
+        ]
+    if "column_name" in context.columns:
+        context = context[
+            context["column_name"].apply(_scalar_text)
+            != _scalar_text(row.get("column_name"))
+        ]
+    for column in ("column_name", "column_label", "column_description"):
+        if column not in context.columns:
+            continue
+        for value in context[column]:
+            text = _scalar_text(value)
+            if text and re.search(pattern, text, re.IGNORECASE):
+                return True
+    return False
+
+
+def _measurement_query(
+    row, role: str, base_query: str, dictionary=None
+) -> tuple[str, str]:
     column_text = _clean_query(
         _first_non_empty(
             row.get("column_label"),
@@ -67,6 +103,58 @@ def _measurement_query(row, role: str, base_query: str) -> tuple[str, str]:
         if not _is_missing(row.get("unit_label")):
             return _clean_query(row.get("unit_label")), "unit_label"
         return ("count", "count_like_fallback") if count_like else ("", "missing_unit_context")
+    if role == "constraint":
+        # Mirror of R's constraint branch (present since era 0.1.7 but never
+        # ported — an undocumented divergence the chunk-B differential caught:
+        # the raw description leaked into the constraint search).
+        base_lower = base_query.lower()
+        if re.search(r"\bnatural\b", base_lower):
+            return "natural origin", "role_shaping"
+        if re.search(r"\bhatchery\b", base_lower):
+            return "hatchery origin", "role_shaping"
+        return base_query, "column_context"
+    if role == "entity":
+        # Mirror of R's entity branch (same story as the constraint branch).
+        if _table_context_has(row, dictionary, "stock"):
+            return "stock", "role_shaping"
+        if _table_context_has(row, dictionary, "population"):
+            return "population", "role_shaping"
+        if re.search(r"spawner", base_query.lower()):
+            return "population", "role_shaping"
+        return base_query, "column_context"
+    if role == "statistical_modifier":
+        # Part of variable identity, and deliberately conservative: a
+        # statistical-modifier target is emitted only when the column text
+        # names an aggregation, so plain measurements do not gain a slot.
+        # Checked across name, label, AND description -- the aggregation is
+        # often only in the column name (`mean_temperature`), and underscores
+        # do not form \b word boundaries, so they are split first (mirrors
+        # metasalmon's measurement_role_query; a placeholder description
+        # contributes nothing, exactly as R's desc_query does).
+        description = row.get("column_description")
+        modifier_text = re.sub(
+            r"[_.]",
+            " ",
+            " ".join(
+                (
+                    "" if _is_review_placeholder(description)
+                    else _scalar_text(description),
+                    _scalar_text(row.get("column_label")),
+                    _scalar_text(row.get("column_name")),
+                )
+            ).lower(),
+        )
+        if re.search(r"\b(total|cumulative|sum)\b", modifier_text):
+            return "total", "aggregation_evidence"
+        if re.search(r"\b(mean|average)\b", modifier_text):
+            return "mean", "aggregation_evidence"
+        if re.search(r"\bmax(imum)?\b", modifier_text):
+            return "maximum", "aggregation_evidence"
+        if re.search(r"\bmin(imum)?\b", modifier_text):
+            return "minimum", "aggregation_evidence"
+        if re.search(r"\bpeak\b", modifier_text):
+            return "peak", "aggregation_evidence"
+        return "", "no_aggregation_evidence"
     if role in ("variable", "property") and count_like:
         # R evaluates the count-like *test* over name + label + base query, but
         # shapes the query from `base_lower` -- the base query alone. Feeding
@@ -340,10 +428,13 @@ def _measurement_suggestion_is_compatible(
         evidence_text,
     ):
         return False
-    if target_field == "method_iri" and not re.search(
-        r"\b(method|protocol|procedure|gear|estimated|estimate|estimation|"
-        r"enumerat|calculated|derived|modelled|modeled|assay|technique|"
-        r"field method|lab method|survey method)\b",
+    if target_field == "statistical_modifier_iri" and not re.search(
+        # Mirror .ms_measurement_supports_statistical_modifier_slot: applying
+        # a modifier changes what the variable means, so the column itself
+        # must name an aggregation. (sdp-0.3.0 removed the dictionary
+        # method_iri slot this branch used to gate.)
+        r"\b(mean|average|max(imum)?|min(imum)?|total|cumulative|sum|peak|"
+        r"median|aggregate|aggregated|index)\b",
         evidence_text,
     ):
         return False
@@ -531,7 +622,9 @@ def suggest_semantics(
 
     Candidate retrieval covers dictionary columns, controlled codes, table
     observation units, and dataset keywords. Measurement columns are expanded
-    into variable, property, entity, unit, constraint, and method roles.
+    into variable, property, entity, unit, constraint, and
+    statistical_modifier roles; the code-level method role survives for
+    codes.csv term_iri targets.
 
     Parameters
     ----------
@@ -555,7 +648,12 @@ def suggest_semantics(
     pandas.DataFrame
         A normalized dictionary carrying ``semantic_suggestions`` in
         ``DataFrame.attrs`` and, when requested, the stable 30-column
-        ``semantic_llm_assessments`` table.
+        ``semantic_llm_assessments`` table. The dictionary also carries a
+        ``semantic_targets`` attribute with the discovered search targets
+        (one row per unfilled semantic field);
+        :func:`~metasalmonpy.term_requests.detect_semantic_term_gaps` reads it
+        to report targets whose retrieval returned zero candidates, which by
+        construction have no suggestion rows at all.
     """
     from .llm_review import (
         assess_semantic_suggestions,
@@ -598,6 +696,7 @@ def suggest_semantics(
 
     if dictionary.empty and (codes_df is None or codes_df.empty) and table_df.empty and dataset_df.empty:
         dictionary.attrs["semantic_suggestions"] = pd.DataFrame()
+        dictionary.attrs["semantic_targets"] = pd.DataFrame()
         if llm_assess:
             from .llm_review import normalize_assessment_rows
 
@@ -636,7 +735,17 @@ def suggest_semantics(
                 row,
                 role_name,
                 query,
+                dictionary=dictionary,
             )
+            if not role_query.strip():
+                # Mirror R's discovery: a role whose query shaper found no
+                # evidence (an empty unit context, a measurement that names no
+                # aggregation) emits NO target. This matters twice: the LLM
+                # bundle never reviews an evidence-free slot, and the
+                # `semantic_targets` attribute -- which gap detection reads to
+                # find zero-candidate targets -- must not carry targets that
+                # were never searched.
+                continue
             targets.append(
                 {
                     "dataset_id": row.get("dataset_id"),
@@ -984,6 +1093,12 @@ def suggest_semantics(
         dictionary.attrs["semantic_llm_assessments"] = assessments
 
     dictionary.attrs["semantic_suggestions"] = suggestions_df
+    # The discovered targets ride along so `detect_semantic_term_gaps()` can
+    # see the targets retrieval found NOTHING for. Without them, a concept
+    # absent from every vocabulary -- the strongest possible term-gap evidence
+    # -- contributed zero suggestion rows and therefore zero gaps (hub backlog
+    # #97; the mirror had the same defect, measured 2026-08-21).
+    dictionary.attrs["semantic_targets"] = targets_df
     if include_dwc:
         dictionary.attrs["dwc_mappings"] = suggest_dwc_mappings(
             dictionary
@@ -1130,7 +1245,7 @@ def apply_semantic_suggestions(
         "entity": "entity_iri",
         "unit": "unit_iri",
         "constraint": "constraint_iri",
-        "method": "method_iri",
+        "statistical_modifier": "statistical_modifier_iri",
     }
     if roles is not None:
         invalid = set(roles) - set(role_to_field)

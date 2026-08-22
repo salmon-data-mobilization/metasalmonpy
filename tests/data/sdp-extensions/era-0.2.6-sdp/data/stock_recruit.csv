@@ -1,0 +1,4 @@
+stock_id,brood_year,spawner_abundance,estimate_method
+chilko,2016,120000,Mark & Recapture: Petersen
+chilko,2017,95500,Mark & Recapture: Petersen
+quesnel,2016,60250,Area Under the Curve
