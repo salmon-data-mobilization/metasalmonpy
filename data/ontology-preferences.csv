@@ -32,4 +32,7 @@ constraint,smn,1,local,https?://w3id.org/(salmon|smn)/,FALSE,"Salmon Domain Onto
 constraint,envo,2,ols,http://purl.obolibrary.org/obo/ENVO_,FALSE,"Environment Ontology"
 constraint,pato,3,ols,http://purl.obolibrary.org/obo/PATO_,FALSE,"PATO quality constraints"
 constraint,sweet,4,ols,http://sweetontology.net/,FALSE,"SWEET for environmental constraints"
+statistical_modifier,smn,1,local,https?://w3id.org/(salmon|smn)/,FALSE,"Salmon Domain Ontology StatisticalModifierScheme (the reviewed source for aggregations)"
+statistical_modifier,iadopt,2,ols,https?://w3id.org/iadopt/ont/,FALSE,"I-ADOPT StatisticalModifier vocabulary"
+statistical_modifier,stato,3,ols,http://purl.obolibrary.org/obo/STATO_,FALSE,"STATO statistical methods and summary measures"
 wikidata,wikidata,99,wikidata,http://www.wikidata.org/entity/,TRUE,"Wikidata alignment-only (crosswalks/reconciliation)"

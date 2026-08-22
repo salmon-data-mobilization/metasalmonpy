@@ -1058,8 +1058,9 @@ def sources_for_role(role: Optional[str]) -> List[str]:
     Parameters
     ----------
     role
-        One of variable, property, entity, unit, constraint, or method.
-        Unknown and empty roles receive the generic default.
+        One of variable, property, entity, unit, constraint,
+        statistical_modifier, or method. Unknown and empty roles receive the
+        generic default.
 
     Returns
     -------
@@ -1081,6 +1082,10 @@ def sources_for_role(role: Optional[str]) -> List[str]:
         return ["smn", "gcdfo", "gbif", "worms", "bioportal", "ols"]
     if role_key == "method":
         return ["smn", "gcdfo", "bioportal", "ols", "zooma"]
+    if role_key == "statistical_modifier":
+        # The reviewed smn StatisticalModifierScheme first; OLS reaches the
+        # I-ADOPT vocabulary and STATO (see data/ontology-preferences.csv).
+        return ["smn", "ols"]
     if role_key == "variable":
         return ["smn", "gcdfo", "nvs", "ols", "zooma"]
     if role_key == "constraint":

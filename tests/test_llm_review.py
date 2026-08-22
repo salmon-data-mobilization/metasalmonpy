@@ -54,9 +54,11 @@ def _accept_bundle(messages, config):
     slots = []
     for slot in payload["slots"]:
         # Only reviewed slots carry candidates and expect an answer. Since
-        # chunk A removed the dictionary method_iri field, the bundle's method
-        # slot arrives as already_filled_or_not_requested with no candidates
-        # (chunk B retargets that slot to statistical_modifier).
+        # chunk B retargeted the pipeline, the sixth dictionary slot is
+        # statistical_modifier — reviewed only when the column text names an
+        # aggregation — and `method` survives as a bundle role with no
+        # dictionary field (codes-scope searches only), always arriving
+        # already_filled_or_not_requested for column bundles.
         if slot.get("status") != "review" or not slot.get("candidates"):
             continue
         candidate = slot["candidates"][0]
@@ -86,9 +88,12 @@ def test_bundle_review_returns_stable_thirty_column_assessments():
     assessments = result.attrs["semantic_llm_assessments"]
     suggestions = result.attrs["semantic_suggestions"]
     assert list(assessments.columns) == LLM_ASSESSMENT_COLUMNS
-    # Five column slots since chunk A removed the dictionary method_iri field;
-    # the sixth becomes statistical_modifier when chunk B retargets the
-    # semantic pipeline (S10 execplan, chunk B).
+    # Five reviewed column slots: the sixth dictionary slot is
+    # statistical_modifier (chunk B), but a modifier target is emitted only
+    # when the column text names an aggregation, which "fork length" does not
+    # — so its slot arrives already_filled_or_not_requested and is never
+    # assessed. See test_aggregation_measurement_reviews_the_modifier_slot for
+    # the six-slot case.
     assert len(assessments) == 5
 
     # metasalmon v0.1.7 treats this fixture as a count-like measurement: the
@@ -137,22 +142,20 @@ def test_no_review_targets_returns_empty_schema_without_provider_call():
     assert list(assessments.columns) == LLM_ASSESSMENT_COLUMNS
 
 
-def test_partially_filled_measurement_still_uses_one_six_slot_bundle():
+def test_partially_filled_measurement_still_uses_one_seven_slot_bundle():
     data, dictionary = _measurement_dictionary()
     dictionary.loc[0, "unit_iri"] = "http://qudt.org/vocab/unit/MilliM"
     request_count = 0
+    payloads = []
 
     def request(messages, config):
         nonlocal request_count
         request_count += 1
-        payload = json.loads(messages[-1]["content"])
-        assert len(payload["slots"]) == 6
-        unit = next(
-            slot for slot in payload["slots"] if slot["role"] == "unit"
-        )
-        assert unit["status"] == "already_filled_or_not_requested"
-        assert unit["current_value"] == "http://qudt.org/vocab/unit/MilliM"
-        assert payload["current_slots"]["unit"] == unit["current_value"]
+        # Captured, NOT asserted here: an exception raised inside the injected
+        # request_fn is swallowed by the bundle path's provider-failure
+        # handling, so an in-request assert can pass vacuously when the
+        # payload drifts. (The pre-chunk-B six-slot assert did exactly that.)
+        payloads.append(json.loads(messages[-1]["content"]))
         return {
             "bundle_summary": "Retain the existing unit.",
             "slots": [
@@ -162,7 +165,7 @@ def test_partially_filled_measurement_still_uses_one_six_slot_bundle():
                     "confidence": 0.5,
                     "rationale": "Review this unfilled slot.",
                 }
-                for slot in payload["slots"]
+                for slot in payloads[-1]["slots"]
                 if slot["status"] == "review"
             ],
         }
@@ -177,6 +180,37 @@ def test_partially_filled_measurement_still_uses_one_six_slot_bundle():
 
     assessments = result.attrs["semantic_llm_assessments"]
     assert request_count == 1
+    payload = payloads[0]
+    # The bundle names every role: the six dictionary slots plus `method`,
+    # which has no dictionary field left (sdp-0.3.0) and survives for
+    # codes-scope searches only — mirroring .ms_semantic_bundle_roles().
+    assert [slot["role"] for slot in payload["slots"]] == [
+        "variable",
+        "property",
+        "entity",
+        "unit",
+        "constraint",
+        "statistical_modifier",
+        "method",
+    ]
+    unit = next(slot for slot in payload["slots"] if slot["role"] == "unit")
+    assert unit["status"] == "already_filled_or_not_requested"
+    assert unit["current_value"] == "http://qudt.org/vocab/unit/MilliM"
+    assert payload["current_slots"]["unit"] == unit["current_value"]
+    # No aggregation in the column text, so the modifier slot is unrequested.
+    modifier = next(
+        slot
+        for slot in payload["slots"]
+        if slot["role"] == "statistical_modifier"
+    )
+    assert modifier["status"] == "already_filled_or_not_requested"
+    assert modifier["target_sdp_field"] == "statistical_modifier_iri"
+    method = next(
+        slot for slot in payload["slots"] if slot["role"] == "method"
+    )
+    assert method["status"] == "already_filled_or_not_requested"
+    assert method["target_sdp_field"] is None
+    assert "method" not in payload["current_slots"]
     assert len(assessments) == 4
     assert "unit" not in set(assessments["dictionary_role"])
 
@@ -600,6 +634,225 @@ def test_legacy_assessments_normalize_additively_to_thirty_columns():
     assert pd.isna(
         normalized.loc[0, "llm_retry_query_rejection_reason"]
     )
+
+
+def test_aggregation_measurement_reviews_the_modifier_slot():
+    # Mirror of metasalmon's "bundle validators downgrade unsupported
+    # acceptances only" (test-semantic-bundle-validators.R at main): the
+    # column text names an aggregation ("Total"), so the bundle carries the
+    # five base roles plus statistical_modifier. The constraint acceptance
+    # lacks qualifier evidence and is downgraded; every other acceptance —
+    # the modifier's included — is retained.
+    data = pd.DataFrame({"spawner_count": [10, 12]})
+    dictionary = infer_dictionary(data, dataset_id="demo", table_id="fish")
+    dictionary.loc[0, "column_role"] = "measurement"
+    dictionary.loc[0, "column_description"] = (
+        "Total fish observed in a trawl catch."
+    )
+    dictionary.loc[0, "unit_label"] = "count"
+
+    labels = {
+        "variable": "Catch abundance",
+        "property": "Count",
+        "entity": "Fish",
+        "unit": "Count",
+        "constraint": "Catch context",
+        "statistical_modifier": "Total value",
+    }
+
+    def search(query, role=None, sources=None):
+        return pd.DataFrame(
+            {
+                "label": [labels[role]],
+                "iri": [f"https://example.org/{role}"],
+                "source": ["smn"],
+                "ontology": ["demo"],
+                "role": [role],
+                "role_hints": [role],
+                "match_type": ["label"],
+                "definition": [f"A {role} candidate"],
+                "score": [0.9],
+            }
+        )
+
+    result = suggest_semantics(
+        data,
+        dictionary,
+        sources=["smn"],
+        max_per_role=1,
+        search_fn=search,
+        llm_assess=True,
+        llm_request_fn=_accept_bundle,
+    )
+
+    assessments = result.attrs["semantic_llm_assessments"]
+    assert set(assessments["dictionary_role"]) == {
+        "variable",
+        "property",
+        "entity",
+        "unit",
+        "constraint",
+        "statistical_modifier",
+    }
+    modifier = assessments.loc[
+        assessments["dictionary_role"] == "statistical_modifier"
+    ].iloc[0]
+    assert modifier["llm_decision"] == "accept"
+    assert modifier["llm_selected_iri"] == (
+        "https://example.org/statistical_modifier"
+    )
+    assert modifier["target_sdp_field"] == "statistical_modifier_iri"
+    assert modifier["search_query"] == "total"
+    constraint = assessments.loc[
+        assessments["dictionary_role"] == "constraint"
+    ].iloc[0]
+    assert constraint["llm_decision"] == "review"
+    assert "SEM_CONSTRAINT_EVIDENCE_REQUIRED" in constraint["llm_rationale"]
+
+
+def test_modifier_evidence_predicate_splits_underscores():
+    # Mirror of .ms_semantic_validator_has_modifier_evidence: underscores are
+    # not \b word boundaries, so `mean_weight` needs splitting before the
+    # aggregation words can match.
+    from metasalmonpy.llm_review import _has_modifier_evidence
+
+    assert _has_modifier_evidence("Mean water temperature by site")
+    assert _has_modifier_evidence("mean_weight of sampled fish")
+    assert not _has_modifier_evidence("Water temperature in degrees C")
+
+
+def test_modifier_accept_without_aggregation_evidence_downgrades():
+    # SEM_MODIFIER_EVIDENCE_REQUIRED sits BESIDE the surviving method-evidence
+    # validator: an accepted statistical_modifier whose column text names no
+    # aggregation silently changes what the variable means, so the accept is
+    # downgraded to review. Driven at the validator level, as metasalmon's
+    # test-semantic-bundle-validators.R drives
+    # .ms_validate_semantic_modifier_evidence, because the discovery path
+    # never emits an evidence-free modifier target on its own.
+    from metasalmonpy.llm_review import _apply_validators
+
+    target = {
+        "dataset_id": "demo",
+        "table_id": "fish",
+        "column_name": "water_temp",
+        "code_value": pd.NA,
+        "dictionary_role": "statistical_modifier",
+        "target_scope": "column",
+        "target_sdp_file": "column_dictionary.csv",
+        "target_sdp_field": "statistical_modifier_iri",
+        "search_query": "statistical modifier",
+        "target_query_context": "Water temperature in degrees C",
+        "column_label": "Water temperature",
+        "column_description": "Water temperature in degrees C",
+    }
+    targets = pd.DataFrame([target])
+    suggestions = pd.DataFrame(
+        [
+            {
+                **{
+                    key: target[key]
+                    for key in (
+                        "dataset_id",
+                        "table_id",
+                        "column_name",
+                        "code_value",
+                        "dictionary_role",
+                        "target_scope",
+                        "target_sdp_file",
+                        "target_sdp_field",
+                        "search_query",
+                    )
+                },
+                "label": "Mean",
+                "iri": "https://w3id.org/smn/MeanStatisticalModifier",
+                "source": "smn",
+                "ontology": "smn",
+                "role": "statistical_modifier",
+                "role_hints": "statistical_modifier",
+                "match_type": "label",
+                "definition": "The arithmetic mean of the observed values.",
+                "score": 0.9,
+            }
+        ]
+    )
+    row = {
+        **{key: target.get(key) for key in target},
+        "llm_decision": "accept",
+        "llm_selected_candidate_index": 1,
+        "llm_selected_iri": "https://w3id.org/smn/MeanStatisticalModifier",
+        "llm_selected_label": "Mean",
+        "llm_rationale": "Accepted.",
+    }
+
+    empty_dictionary = pd.DataFrame(
+        columns=["dataset_id", "table_id", "column_name"]
+    )
+    rows, findings = _apply_validators(
+        [row],
+        targets,
+        empty_dictionary,
+        suggestions,
+        pd.DataFrame(columns=["source", "chunk_id", "text"]),
+    )
+
+    assert rows[0]["llm_decision"] == "review"
+    assert "SEM_MODIFIER_EVIDENCE_REQUIRED" in rows[0]["llm_rationale"]
+    assert [finding["code"] for finding in findings] == [
+        "SEM_MODIFIER_EVIDENCE_REQUIRED"
+    ]
+    # Other roles are untouched by the modifier validator: the same evidence
+    # under the constraint role trips only the constraint validator.
+    assert not any(
+        finding["code"] == "SEM_MODIFIER_EVIDENCE_REQUIRED"
+        for finding in _apply_validators(
+            [
+                {
+                    **row,
+                    "dictionary_role": "constraint",
+                    "llm_decision": "accept",
+                }
+            ],
+            pd.DataFrame([{**target, "dictionary_role": "constraint"}]),
+            empty_dictionary,
+            suggestions.assign(
+                dictionary_role="constraint",
+                role_hints="constraint",
+            ),
+            pd.DataFrame(columns=["source", "chunk_id", "text"]),
+        )[1]
+    )
+
+
+def test_smn_modifier_candidate_is_not_vetoed_by_role_hints():
+    # Regression mirror (metasalmon main): modifier concepts live in smn's
+    # controlled-vocabularies module, so they used to reach review carrying
+    # only a "constraint" hint and the role-type validator downgraded every
+    # correct accept — the exact silent-hint-layer failure the role contract
+    # names.
+    from metasalmonpy.llm_review import _role_type_message
+    from metasalmonpy.term_search_smn import _smn_role_flags
+
+    flags = _smn_role_flags(
+        label="Mean",
+        definition="The arithmetic mean of the observed values.",
+        resource_kind="Concept",
+        module_name="07-controlled-vocabularies",
+        in_scheme="https://w3id.org/smn/StatisticalModifierScheme",
+        parent_iris="",
+        type_iris="http://w3id.org/iadopt/ont/StatisticalModifier",
+        iri="https://w3id.org/smn/MeanStatisticalModifier",
+    )
+    assert flags["is_statistical_modifier"] is True
+
+    message = _role_type_message(
+        "statistical_modifier",
+        {
+            "iri": "https://w3id.org/smn/MeanStatisticalModifier",
+            "label": "Mean",
+            "role_hints": "constraint|statistical_modifier",
+        },
+    )
+    assert message is None
 
 
 def test_context_decodes_cp1252_and_disambiguates_duplicate_basenames(tmp_path):

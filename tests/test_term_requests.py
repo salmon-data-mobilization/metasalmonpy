@@ -278,5 +278,199 @@ class TermRequestTests(unittest.TestCase):
             detect_semantic_term_gaps(dict_df=dictionary)
 
 
+class NoCandidateGapTests(unittest.TestCase):
+    """Zero-candidate targets are gaps, not silence (hub backlog #97).
+
+    Both entry paths used to short-circuit on empty suggestions, so a concept
+    no vocabulary contains -- one retrieval finds nothing for -- produced
+    zero gaps and a result that read as clean. suggest_semantics() now
+    attaches the discovered targets as ``semantic_targets``, and
+    detect_semantic_term_gaps() reports any target with no retrieval evidence
+    at all as ``gap_detection_basis = "no_candidates"``. Mirrors metasalmon
+    main's test-term-request-helpers.R regression tests, which were verified
+    RED on the pre-fix R tree.
+    """
+
+    @staticmethod
+    def _dictionary(columns):
+        from metasalmonpy import infer_dictionary
+
+        data = pd.DataFrame({name: [1.0, 2.0] for name in columns})
+        dictionary = infer_dictionary(
+            data,
+            dataset_id="demo",
+            table_id="t1",
+        )
+        return data, dictionary
+
+    def test_zero_candidate_target_is_a_no_candidates_gap(self):
+        from metasalmonpy import suggest_semantics
+        from metasalmonpy.term_requests import GAP_COLUMNS
+
+        data, dictionary = self._dictionary(["cryptic_novel_metric"])
+        dictionary.loc[0, "column_role"] = "measurement"
+        dictionary.loc[0, "column_description"] = (
+            "A concept no vocabulary contains a term for"
+        )
+
+        def empty_search(query, role=None, sources=None):
+            return pd.DataFrame()
+
+        out = suggest_semantics(
+            data,
+            dictionary,
+            sources=["ols"],
+            max_per_role=1,
+            search_fn=empty_search,
+        )
+        suggestions = out.attrs["semantic_suggestions"]
+        self.assertEqual(len(suggestions), 0)
+
+        targets = out.attrs["semantic_targets"]
+        self.assertIsInstance(targets, pd.DataFrame)
+        self.assertGreaterEqual(len(targets), 1)
+
+        gaps = detect_semantic_term_gaps(out)
+        self.assertGreaterEqual(len(gaps), 1)
+        self.assertEqual(list(gaps.columns), GAP_COLUMNS)
+        self.assertTrue((gaps["gap_detection_basis"] == "no_candidates").all())
+
+        term_row = gaps[
+            (gaps["column_name"] == "cryptic_novel_metric")
+            & (gaps["target_sdp_field"] == "term_iri")
+        ]
+        self.assertEqual(len(term_row), 1)
+        self.assertEqual(int(term_row["candidate_count"].iloc[0]), 0)
+        self.assertTrue(pd.isna(term_row["top_non_smn_iri"].iloc[0]))
+        self.assertTrue(pd.isna(term_row["llm_decision"].iloc[0]))
+
+    def test_no_candidates_and_candidate_gap_coexist_per_target(self):
+        from metasalmonpy import suggest_semantics
+
+        data, dictionary = self._dictionary(
+            ["spawner_count", "cryptic_novel_metric"]
+        )
+        dictionary["column_role"] = "measurement"
+        dictionary.loc[
+            dictionary["column_name"] == "spawner_count",
+            "column_description",
+        ] = "Natural-origin spawner abundance estimate"
+        dictionary.loc[
+            dictionary["column_name"] == "cryptic_novel_metric",
+            "column_description",
+        ] = "A concept no vocabulary contains a term for"
+
+        # Candidates exist only for the spawner column, and only non-SMN
+        # ones, so it is a classic candidate_gap; the cryptic column finds
+        # nothing anywhere.
+        def selective_search(query, role=None, sources=None):
+            if "spawner" not in str(query).lower():
+                return pd.DataFrame()
+            return pd.DataFrame(
+                {
+                    "label": ["Spawner abundance"],
+                    "iri": ["https://example.org/spawner-abundance"],
+                    "source": ["ols"],
+                    "ontology": ["demo"],
+                    "role": [role],
+                    "match_type": ["label"],
+                    "definition": ["External candidate"],
+                    "score": [0.9],
+                }
+            )
+
+        out = suggest_semantics(
+            data,
+            dictionary,
+            sources=["ols"],
+            max_per_role=1,
+            search_fn=selective_search,
+        )
+        gaps = detect_semantic_term_gaps(out)
+
+        cryptic = gaps[gaps["column_name"] == "cryptic_novel_metric"]
+        spawner = gaps[gaps["column_name"] == "spawner_count"]
+        self.assertGreaterEqual(len(cryptic), 1)
+        self.assertTrue(
+            (cryptic["gap_detection_basis"] == "no_candidates").all()
+        )
+        # The distinction is per TARGET, not per column: the spawner targets
+        # whose query matched keep the historical candidate_gap basis, while
+        # its unit target -- whose "count" query found nothing -- is reported
+        # as no_candidates.
+        self.assertEqual(
+            spawner.loc[
+                spawner["target_sdp_field"] == "term_iri",
+                "gap_detection_basis",
+            ].tolist(),
+            ["candidate_gap"],
+        )
+        self.assertEqual(
+            spawner.loc[
+                spawner["target_sdp_field"] == "unit_iri",
+                "gap_detection_basis",
+            ].tolist(),
+            ["no_candidates"],
+        )
+
+        # The include filters apply to no-candidate targets exactly as they
+        # apply to suggestion-backed ones.
+        only_variable = detect_semantic_term_gaps(
+            out,
+            include_dictionary_roles=["variable"],
+        )
+        self.assertTrue(
+            (only_variable["dictionary_role"] == "variable").all()
+        )
+        self.assertIn(
+            "no_candidates",
+            only_variable.loc[
+                only_variable["column_name"] == "cryptic_novel_metric",
+                "gap_detection_basis",
+            ].tolist(),
+        )
+
+        # The explicit-suggestions path is unchanged: it sees only the rows it
+        # was handed, so an empty table still yields an empty result.
+        self.assertEqual(
+            len(detect_semantic_term_gaps(suggestions=pd.DataFrame())),
+            0,
+        )
+
+    def test_an_assessed_target_is_not_a_no_candidates_gap(self):
+        # "No candidates" means no retrieval evidence at all: a target with an
+        # assessment of ANY decision was found and judged, so it keeps its
+        # historical treatment (here: no gap, because the decision is not
+        # request_new_term).
+        from metasalmonpy import suggest_semantics
+        from metasalmonpy.llm_review import normalize_assessment_rows
+
+        data, dictionary = self._dictionary(["cryptic_novel_metric"])
+        dictionary.loc[0, "column_role"] = "measurement"
+        dictionary.loc[0, "column_description"] = (
+            "A concept no vocabulary contains a term for"
+        )
+
+        def empty_search(query, role=None, sources=None):
+            return pd.DataFrame()
+
+        out = suggest_semantics(
+            data,
+            dictionary,
+            sources=["ols"],
+            max_per_role=1,
+            search_fn=empty_search,
+        )
+        targets = out.attrs["semantic_targets"]
+        assessed = targets.copy()
+        assessed["llm_decision"] = "review"
+        out.attrs["semantic_llm_assessments"] = normalize_assessment_rows(
+            assessed
+        )
+
+        gaps = detect_semantic_term_gaps(out)
+        self.assertEqual(len(gaps), 0)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

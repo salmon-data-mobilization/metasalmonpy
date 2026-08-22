@@ -68,7 +68,11 @@ from .term_search import benchmark_term_ranking_fixtures, find_terms, sources_fo
 from .term_deduplication import deduplicate_proposed_terms, suggest_facet_schemes
 from .validation import validate_semantics
 from .ontology_fetch import fetch_salmon_ontology
-from .nuseds import nuseds_enumeration_method_crosswalk, nuseds_estimate_method_crosswalk
+from .nuseds import (
+    nuseds_enumeration_method_crosswalk,
+    nuseds_estimate_classification_crosswalk,
+    nuseds_estimate_method_crosswalk,
+)
 from .term_requests import detect_semantic_term_gaps, render_ontology_term_request, submit_term_request_issues
 from .version_check import check_for_updates
 from .chat_decomposition import chat_decomposition
@@ -104,6 +108,7 @@ __all__ = [
     "migrate_sdp_methods",
     "ms_setup_github",
     "nuseds_enumeration_method_crosswalk",
+    "nuseds_estimate_classification_crosswalk",
     "nuseds_estimate_method_crosswalk",
     "publish_sdp_to_knb",
     "read_github_csv",

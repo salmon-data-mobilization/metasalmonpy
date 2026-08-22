@@ -130,4 +130,87 @@ def nuseds_estimate_method_crosswalk() -> pd.DataFrame:
     ).sort_values(["method_family", "nuseds_value"]).reset_index(drop=True)
 
 
-__all__ = ["nuseds_enumeration_method_crosswalk", "nuseds_estimate_method_crosswalk"]
+def nuseds_estimate_classification_crosswalk() -> pd.DataFrame:
+    """
+    Return the NuSEDS ``ESTIMATE_CLASSIFICATION`` crosswalk.
+
+    Maps the classification strings to the released gcdfo Hyatt (1997)
+    estimate-type concepts (``gcdfo:Type1``–``gcdfo:Type6``, ``skos:Concept``s
+    under ``gcdfo:EstimateType``).
+
+    Two families of values deliberately map to no Type concept, and the
+    distinction is recorded here rather than forced:
+
+    * ``NO SURVEY THIS YEAR`` is an absence-of-observation marker, not an
+      estimate type — assigning any Hyatt type would assert a survey quality
+      for a survey that did not happen. It maps to missing with a note.
+      ``UNKNOWN`` likewise stays unmapped as an administrative label.
+    * ``RELATIVE: CONSTANT MULTI-YEAR METHODS`` / ``RELATIVE: VARYING
+      MULTI-YEAR METHODS`` are real classifications with no released concept
+      of their own; they link at scheme level (``gcdfo:EstimateType``), the
+      same convention :func:`nuseds_estimate_method_crosswalk` uses for
+      ``Cumulative CPUE``.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Columns ``nuseds_value``, ``estimate_type``, ``ontology_term``, and
+        ``notes``.
+    """
+    multi_year_note = (
+        "No released concept for the multi-year relative classifications; "
+        "linked at EstimateType scheme level. Mint a specific term before "
+        "asserting more."
+    )
+    rows = [
+        ("TRUE ABUNDANCE (TYPE-1)", "Type-1", "gcdfo:Type1", ""),
+        ("TRUE ABUNDANCE (TYPE-2)", "Type-2", "gcdfo:Type2", ""),
+        ("RELATIVE ABUNDANCE (TYPE-3)", "Type-3", "gcdfo:Type3", ""),
+        ("RELATIVE ABUNDANCE (TYPE-4)", "Type-4", "gcdfo:Type4", ""),
+        ("RELATIVE ABUNDANCE (TYPE-5)", "Type-5", "gcdfo:Type5", ""),
+        ("PRESENCE-ABSENCE (TYPE-6)", "Type-6", "gcdfo:Type6", ""),
+        (
+            "RELATIVE: CONSTANT MULTI-YEAR METHODS",
+            pd.NA,
+            "gcdfo:EstimateType",
+            multi_year_note,
+        ),
+        (
+            "RELATIVE: VARYING MULTI-YEAR METHODS",
+            pd.NA,
+            "gcdfo:EstimateType",
+            multi_year_note,
+        ),
+        (
+            "NO SURVEY THIS YEAR",
+            pd.NA,
+            pd.NA,
+            "Absence-of-observation marker, not an estimate type: no survey "
+            "happened, so no Hyatt classification applies. Deliberately "
+            "unmapped.",
+        ),
+        (
+            "UNKNOWN",
+            pd.NA,
+            pd.NA,
+            "Administrative unknown label. Treat as classification-unknown "
+            "unless documented elsewhere.",
+        ),
+    ]
+    return (
+        pd.DataFrame(
+            rows,
+            columns=["nuseds_value", "estimate_type", "ontology_term", "notes"],
+        )
+        # Mirrors R's radix (C-collation) order with missing estimate types
+        # last, sorted among themselves by nuseds_value.
+        .sort_values(["estimate_type", "nuseds_value"], na_position="last")
+        .reset_index(drop=True)
+    )
+
+
+__all__ = [
+    "nuseds_enumeration_method_crosswalk",
+    "nuseds_estimate_classification_crosswalk",
+    "nuseds_estimate_method_crosswalk",
+]

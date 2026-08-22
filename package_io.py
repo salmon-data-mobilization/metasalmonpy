@@ -28,6 +28,11 @@ from .metadata import (
     read_sdp_csv,
     READR_TRIM_CHARS,
 )
+from .nuseds import (
+    nuseds_enumeration_method_crosswalk,
+    nuseds_estimate_classification_crosswalk,
+    nuseds_estimate_method_crosswalk,
+)
 from .resource_types import (
     VALUE_TYPES,
     canonical_value_tokens,
@@ -1024,6 +1029,134 @@ def _read_resource_csv(
     return parsed
 
 
+def _prefill_legacy_code_terms(
+    codes: Optional[pd.DataFrame],
+    dictionary: Optional[pd.DataFrame],
+    required_words: Sequence[str],
+    crosswalk: pd.DataFrame,
+) -> Optional[pd.DataFrame]:
+    """Shared engine for the legacy NuSEDS code-term prefills.
+
+    A codes.csv row gets its ``term_iri`` filled from ``crosswalk`` when
+    (a) its column's name — or its dictionary name/label/description —
+    contains every word in ``required_words``, (b) the row has no explicit
+    ``term_iri``, and (c) the code value has a crosswalk row with a
+    non-missing ontology term. Explicit values always win; crosswalk rows
+    that map to missing (recorded non-mappings, e.g. ``NO SURVEY THIS YEAR``)
+    never fill anything. Mirrors metasalmon's ``.ms_prefill_legacy_code_terms``.
+    """
+    codes = normalize_codes(codes)
+    if codes is None or codes.empty:
+        return codes
+
+    def normalize_text(value) -> Optional[str]:
+        if pd.isna(value):
+            return None
+        text = str(value).strip()
+        return text.lower() if text else None
+
+    def expand_gcdfo_term(value) -> Optional[str]:
+        if pd.isna(value):
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        if text.startswith("gcdfo:"):
+            return "https://w3id.org/gcdfo/salmon#" + text[len("gcdfo:"):]
+        return text
+
+    def column_flag(column_name, column_label=None, column_description=None) -> bool:
+        parts = [
+            "" if pd.isna(value) else str(value)
+            for value in (column_name, column_label, column_description)
+        ]
+        text = normalize_text(re.sub(r"[^0-9a-zA-Z]+", " ", " ".join(parts)))
+        if text is None:
+            return False
+        return all(
+            re.search(rf"\b{re.escape(str(word))}\b", text)
+            for word in required_words
+        )
+
+    target_rows = codes["column_name"].apply(column_flag)
+    if dictionary is not None and len(dictionary) > 0:
+        dictionary = normalize_dictionary(dictionary)
+        flag_lookup = {}
+        for _, dict_row in dictionary.iterrows():
+            key = "\r".join(
+                "" if pd.isna(dict_row.get(column)) else str(dict_row.get(column))
+                for column in ("dataset_id", "table_id", "column_name")
+            )
+            flag_lookup[key] = column_flag(
+                dict_row.get("column_name"),
+                dict_row.get("column_label"),
+                dict_row.get("column_description"),
+            )
+        code_keys = codes.apply(
+            lambda row: "\r".join(
+                "" if pd.isna(row.get(column)) else str(row.get(column))
+                for column in ("dataset_id", "table_id", "column_name")
+            ),
+            axis=1,
+        )
+        target_rows = target_rows | code_keys.map(
+            lambda key: flag_lookup.get(key, False)
+        )
+
+    crosswalk_lookup = {
+        normalize_text(value): expand_gcdfo_term(term)
+        for value, term in zip(
+            crosswalk["nuseds_value"], crosswalk["ontology_term"]
+        )
+    }
+    mapped_terms = codes["code_value"].map(
+        lambda value: crosswalk_lookup.get(normalize_text(value))
+    )
+    existing = codes["term_iri"].map(
+        lambda value: "" if pd.isna(value) else str(value).strip()
+    )
+    fill_rows = (
+        target_rows
+        & (existing == "")
+        & mapped_terms.map(lambda term: term is not None and term != "")
+    )
+    if fill_rows.any():
+        codes = codes.copy()
+        codes.loc[fill_rows, "term_iri"] = mapped_terms[fill_rows]
+    return codes
+
+
+def _prefill_legacy_estimate_method_code_terms(codes, dictionary=None):
+    return _prefill_legacy_code_terms(
+        codes,
+        dictionary,
+        required_words=("estimate", "method"),
+        crosswalk=nuseds_estimate_method_crosswalk(),
+    )
+
+
+def _prefill_legacy_estimate_classification_code_terms(codes, dictionary=None):
+    return _prefill_legacy_code_terms(
+        codes,
+        dictionary,
+        required_words=("estimate", "classification"),
+        crosswalk=nuseds_estimate_classification_crosswalk(),
+    )
+
+
+# "enumeration" alone, not ("enumeration", "method"): NuSEDS names the column
+# ENUMERATION_METHODS (plural), and the engine's \b word test would never
+# match "methods" with the singular. The single word is specific enough —
+# crosswalk keys ("Fence", "Bank Walk", ...) gate what actually fills.
+def _prefill_legacy_enumeration_method_code_terms(codes, dictionary=None):
+    return _prefill_legacy_code_terms(
+        codes,
+        dictionary,
+        required_words=("enumeration",),
+        crosswalk=nuseds_enumeration_method_crosswalk(),
+    )
+
+
 def infer_salmon_datapackage_artifacts(
     resources,
     dataset_id: str = "dataset-1",
@@ -1095,6 +1228,16 @@ def infer_salmon_datapackage_artifacts(
     )
     table_meta = normalize_table_meta(seed_table_meta) if seed_table_meta is not None else infer_table_metadata_from_resources(resource_map, dataset_id)
     codes = normalize_codes(seed_codes) if seed_codes is not None else infer_codes_from_resources(resource_map, dataset_id)
+    # The legacy NuSEDS crosswalk prefills run exactly where metasalmon runs
+    # them (.ms_infer_resource_artifact_context, package mode): after the codes
+    # are settled and before semantic seeding, so a crosswalk-filled term_iri
+    # both lands in codes.csv and suppresses a redundant code-level search.
+    # Hub backlog #101/#102 and PARITY row 47: until S10 chunk B, NO crosswalk
+    # was wired into this path at all — not even the estimate one R has wired
+    # since the crosswalks landed.
+    codes = _prefill_legacy_estimate_method_code_terms(codes, dictionary=dict_df)
+    codes = _prefill_legacy_estimate_classification_code_terms(codes, dictionary=dict_df)
+    codes = _prefill_legacy_enumeration_method_code_terms(codes, dictionary=dict_df)
     dataset_meta = (
         normalize_dataset_meta(seed_dataset_meta)
         if seed_dataset_meta is not None
