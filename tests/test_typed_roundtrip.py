@@ -1,11 +1,14 @@
-"""The write → read → write round trip, against a package era R wrote.
+"""The write → read → write round trip, against a package R wrote.
 
-``tests/data/resource_types/r-package/`` was produced by
-``write_salmon_datapackage()`` running under a read-only extraction of the
-metasalmon commit that made **0.2.1** current. Reading it here and writing it
-straight back must reproduce every byte, because that is what "the dictionary
-is the sole type authority" buys: a value that survives the read is a value the
-writer can put back.
+``tests/data/resource_types/r-package/`` was produced under a read-only
+extraction of metasalmon **main at e02111a** (the v0.3.0 release tree plus the
+post-0.3.0 fixes): the 0.2.1-era fixture was run through R's
+``migrate_sdp_methods()`` and then canonicalized with R's own
+read→``write_salmon_datapackage()`` round trip (verified byte-idempotent in R
+before committing). Reading it here and writing it straight back must
+reproduce every byte, because that is what "the dictionary is the sole type
+authority" buys: a value that survives the read is a value the writer can put
+back.
 
 R adopted C collation at 0.2.0, so these byte claims carry no locale caveat.
 """
@@ -140,7 +143,7 @@ def test_the_descriptor_derives_every_uri_from_the_loaded_bundle(tmp_path):
         )
         assert resource["description"]
     assert descriptor["profile"] == descriptor["sdp"]["profile"]
-    assert descriptor["sdp"]["specVersion"] == "sdp-0.2.0"
+    assert descriptor["sdp"]["specVersion"] == "sdp-0.3.0"
 
 
 def test_infer_value_type_no_longer_collapses_midnight_to_a_date():

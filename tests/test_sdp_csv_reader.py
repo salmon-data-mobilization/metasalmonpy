@@ -235,7 +235,7 @@ def test_a_literal_na_constraint_iri_is_a_canonical_target():
                 "property_iri": "https://w3id.org/smn/Count",
                 "entity_iri": "https://w3id.org/smn/Stock",
                 "constraint_iri": "NA",
-                "method_iri": "",
+                "statistical_modifier_iri": "",
                 "unit_iri": "",
             }
         ]

@@ -1,10 +1,14 @@
-"""Measure-specific SDP observation structures (metasalmon 0.1.8 parity).
+"""Measure-specific SDP observation structures (sdp-0.3.0 shape).
 
-``tests/data/sdp-extensions/structure-sdp`` is genuine metasalmon **v0.1.8**
-output under ``LC_COLLATE=C``: R wrote the paired CSVs from *reversed* row
-order, so the committed bytes are the canonical ordering rather than the input
-ordering, and this suite rewrites them from Python and asserts the bytes come
-back identical -- including ``datapackage.json``.
+``tests/data/sdp-extensions/structure-sdp`` is genuine metasalmon output under
+``LC_COLLATE=C``: the v0.1.8 fixture (whose paired CSVs R wrote from
+*reversed* row order, so the committed bytes are the canonical ordering) was
+run through R ``main``'s ``migrate_sdp_methods()`` — after the contributor
+decision the migration deliberately refuses to make, blanking the one static
+binding of a table whose other methods vary row by row — and canonicalized
+with R's ``write_sdp_observation_structures()``. This suite rewrites the
+resources from Python and asserts the bytes come back identical — including
+``datapackage.json``.
 
 The extraction expectations in ``expected-observations.json`` are R's
 ``extract_sdp_observations()`` return value for the same package, dumped as
@@ -232,17 +236,26 @@ def test_every_measurement_column_must_be_bound_as_a_measure(tmp_path):
         )
 
 
-def test_static_procedures_require_registry_rows(tmp_path):
+def test_a_malformed_table_level_method_iri_is_refused(tmp_path):
+    # sdp-0.3.0: a table-constant procedure lives in tables.csv$method_iri and
+    # must point straight at the shared vocabulary — there is no registry, so
+    # the check is IRI shape, not membership.
     root = _sdp(tmp_path)
-    metadata = read_sdp_observation_structures(root)
-    (root / "metadata" / "methods.csv").unlink()
-    with pytest.raises(SdpExtensionError, match="Static procedure references"):
-        write_sdp_observation_structures(
-            root, metadata["structures"], metadata["components"], overwrite=True
-        )
+    from metasalmonpy.metadata import read_sdp_csv
+
+    tables_path = root / "metadata" / "tables.csv"
+    tables = read_sdp_csv(tables_path)
+    tables["method_iri"] = "methods/weir-count"
+    tables.to_csv(tables_path, index=False, na_rep="")
+    with pytest.raises(
+        SdpExtensionError, match="absolute shared-vocabulary IRI"
+    ):
+        validate_sdp_observation_structures(root)
 
 
-def test_row_varying_procedure_codes_resolve_to_registered_methods(tmp_path):
+def test_row_varying_procedure_codes_resolve_to_absolute_iris(tmp_path):
+    # sdp-0.3.0: procedures resolve to the shared vocabulary directly, so the
+    # check is IRI shape, not membership in a per-package registry.
     root = _sdp(tmp_path)
     from metasalmonpy.metadata import read_sdp_csv
 
@@ -250,9 +263,11 @@ def test_row_varying_procedure_codes_resolve_to_registered_methods(tmp_path):
     codes = read_sdp_csv(codes_path)
     codes.loc[
         codes["code_value"] == "mark_recapture", "term_iri"
-    ] = "https://example.org/methods/not-registered"
+    ] = "methods/not-a-shared-vocabulary-iri"
     codes.to_csv(codes_path, index=False, na_rep="")
-    with pytest.raises(SdpExtensionError, match="unregistered method"):
+    with pytest.raises(
+        SdpExtensionError, match="absolute shared-vocabulary IRI"
+    ):
         validate_sdp_observation_structures(root)
 
     codes.loc[codes["code_value"] == "mark_recapture", "term_iri"] = ""
@@ -274,11 +289,13 @@ def test_an_enumerated_but_unobserved_code_must_still_resolve(tmp_path):
     extra["code_value"] = "unused_method"
     extra["code_label"] = "Unused method"
     extra["code_description"] = "Enumerated but absent from current data rows"
-    extra["term_iri"] = "https://example.org/methods/not-registered"
+    extra["term_iri"] = "methods/not-a-shared-vocabulary-iri"
     pd.concat([codes, extra], ignore_index=True).to_csv(
         codes_path, index=False, na_rep=""
     )
-    with pytest.raises(SdpExtensionError, match="unregistered"):
+    with pytest.raises(
+        SdpExtensionError, match="absolute shared-vocabulary IRI"
+    ):
         validate_sdp_observation_structures(root)
 
 
@@ -383,16 +400,22 @@ def test_package_validation_includes_the_optional_extensions(tmp_path):
 def test_a_package_without_the_extensions_keeps_the_historic_path(tmp_path):
     root = _sdp(tmp_path)
     shutil.rmtree(root / "metadata" / "structure")
-    (root / "metadata" / "methods.csv").unlink()
-    from metasalmonpy.metadata import read_sdp_csv
-
-    dictionary_path = root / "metadata" / "column_dictionary.csv"
-    dictionary = read_sdp_csv(dictionary_path)
-    dictionary["method_iri"] = ""
-    dictionary.to_csv(dictionary_path, index=False, na_rep="")
     # No extension present: validation must behave exactly as it did before
     # 0.1.8, not merely "not crash".
     assert validate_salmon_datapackage(str(root), require_iris=False)["package"]
+
+
+def test_a_lingering_methods_registry_is_an_error_pointing_at_migration(tmp_path):
+    # sdp-0.3.0 removed metadata/methods.csv from the specification; a package
+    # still carrying one must be told to migrate, not validated around.
+    root = _sdp(tmp_path)
+    (root / "metadata" / "methods.csv").write_text(
+        "dataset_id,method_iri,method_label,method_description,"
+        "method_version,protocol_iri,citation\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SdpExtensionError, match="migrate_sdp_methods"):
+        validate_salmon_datapackage(str(root), require_iris=False)
 
 
 def test_a_failed_multi_file_write_rolls_the_whole_set_back(tmp_path):

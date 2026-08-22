@@ -1,9 +1,18 @@
-"""SDP SOSA procedure registry (metasalmon 0.1.8 parity).
+"""The legacy SDP SOSA procedure registry reader, and its IRI predicate.
 
-Fixtures under ``tests/data/sdp-extensions/`` are genuine metasalmon **v0.1.8**
-output (R 4.5.2, ``LC_COLLATE=C``): ``methods-sdp`` was written by R's
-``write_sdp_methods()`` from a deliberately reversed row/column order, so the
-committed bytes prove canonical ordering rather than input order.
+sdp-0.3.0 removed ``metadata/methods.csv`` from the specification and
+metasalmon removed all three registry APIs with it. The reader and validator
+survive **here only**, as legacy read support for R-0.2.x-written packages
+(PARITY.md row 9); a current package carrying a registry is an error pointing
+at ``migrate_sdp_methods()`` on every validation and publication surface,
+which ``tests/test_sdp_methods_migration.py`` covers.
+
+The ``methods-sdp`` fixture under ``tests/data/sdp-extensions/`` is genuine
+metasalmon **v0.1.8** output (R 4.5.2, ``LC_COLLATE=C``) and deliberately
+stays era-shaped: it is exactly the kind of legacy package the surviving
+reader exists for. It was written by R's ``write_sdp_methods()`` from a
+deliberately reversed row/column order, so the committed bytes prove
+canonical ordering rather than input order.
 
 The writer is not mirrored here. That is a logged decision, not an oversight —
 see ``test_the_writer_is_absent_and_says_why`` and PARITY.md row 9.
@@ -38,11 +47,60 @@ def _sdp(tmp_path: Path, name: str) -> Path:
     return target
 
 
-def test_the_registry_columns_are_the_vendored_profile_contract():
-    # The tuple in ``sdp_methods`` exists for readability; the vendored
-    # ``sdp-0.2.0`` schema is the authority. If they ever disagree this package
-    # is writing or accepting columns the profile does not define.
-    assert list(SDP_METHODS_COLUMNS) == sdp_schema_field_names("methods")
+def test_the_registry_columns_are_the_frozen_legacy_contract():
+    # sdp-0.3.0 removed the registry from the specification, so the vendored
+    # bundle no longer defines a ``methods`` table — the tuple in
+    # ``sdp_methods`` is now the frozen legacy contract, kept only to read
+    # packages written before the migration. The bundle must NOT quietly grow
+    # it back: a reappearing schema would mean the pin and the bundle name
+    # different spec eras.
+    with pytest.raises(KeyError):
+        sdp_schema_field_names("methods")
+    assert SDP_METHODS_COLUMNS == (
+        "dataset_id",
+        "method_iri",
+        "method_label",
+        "method_description",
+        "method_version",
+        "protocol_iri",
+        "citation",
+    )
+
+
+# metasalmon's SDP-extension IRI validator resolves ``[[:space:]]`` through
+# TRE (``R/iri-predicates.R`` records the engine as contractual). These are
+# the verdicts metasalmon main (e02111a, R 4.5.2) gives an IRI carrying one
+# exotic codepoint, reproduced by driving ``.ms_sdp_extension_is_absolute_iri``
+# over the same values. Python's ``\s`` disagreed on the first five — it
+# rejected every value R accepts — until ``sdp_methods`` built its patterns
+# from ``metadata.R_SPACE_CLASS`` like ``eml.py`` and ``sssom.py`` (hub
+# backlog #86; PARITY.md row 33's retirement condition).
+_R_ABSOLUTE_IRI_VERDICTS = {
+    "\x1c": True,  # file separator: a control, not TRE whitespace
+    "\x1d": True,  # group separator: a control, not TRE whitespace
+    "\x1e": True,  # record separator: a control, not TRE whitespace
+    "\x1f": True,  # unit separator: a control, not TRE whitespace
+    "\x85": True,  # NEL: a C1 control, not TRE whitespace
+    "\u00a0": True,  # no-break space: NOT whitespace to TRE
+    "\u2007": True,  # figure space: NOT whitespace to TRE
+    "\u202f": True,  # narrow no-break space: NOT whitespace to TRE
+    " ": False,  # plain space
+    "\u1680": False,  # ogham space mark
+    "\u2000": False,  # en quad
+    "\u3000": False,  # ideographic space
+}
+
+
+@pytest.mark.parametrize(
+    ("codepoint", "accepted"), sorted(_R_ABSOLUTE_IRI_VERDICTS.items())
+)
+def test_absolute_iri_shape_uses_r_tre_whitespace(codepoint, accepted):
+    from metasalmonpy.sdp_methods import _is_absolute_iri
+
+    # In an http path: the shape pattern's whitespace class decides.
+    assert _is_absolute_iri(f"https://example.org/m/a{codepoint}b") is accepted
+    # Non-hierarchical scheme: the shape pattern alone.
+    assert _is_absolute_iri(f"urn:example:a{codepoint}b") is accepted
 
 
 def test_the_committed_fixture_is_unmodified_r_output():

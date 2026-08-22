@@ -1,4 +1,0 @@
-dataset_id,method_iri,method_label,method_description,method_version,protocol_iri,citation
-structure-test,https://example.org/methods/expanded-count,Expanded count,Estimates recruits by expanding counts.,,,
-structure-test,https://example.org/methods/mark-recapture,Mark-recapture estimate,Estimates recruits by mark-recapture.,,,
-structure-test,https://example.org/methods/spawning-ground-survey,Spawning-ground survey,Estimates total spawner abundance.,,,

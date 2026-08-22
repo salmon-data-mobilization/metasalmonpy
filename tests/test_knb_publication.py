@@ -1706,18 +1706,33 @@ class KnbCoreDependencyTests(unittest.TestCase):
         self.assertIn("sdp_artifact:metadata/dataset.csv", paths)
         self.assertIn("sdp_artifact:reviewed_semantic_selections.csv", paths)
 
-    def test_the_full_v0_2_inventory_resolves_without_the_eml_extra(self):
-        # The reproducibility manifest, methods registry and observation
-        # structures are all read on this path too; none of them may reach
-        # PyYAML either.
+    def test_the_full_inventory_resolves_without_the_eml_extra(self):
+        # The reproducibility manifest and observation structures are read on
+        # this path too; neither may reach PyYAML. (sdp-0.3.0 removed the
+        # methods registry from the inventory: a lingering one is an error,
+        # covered below.)
         sdp = _fixture_sdp(self, "sdp-full")
         paths = knb._sdp_artifact_paths(sdp)
         for name in (
-            "sdp_artifact:metadata/methods.csv",
             "sdp_artifact:reproducibility/manifest.json",
             "sdp_artifact:metadata/structure/observation_structures.csv",
         ):
             self.assertIn(name, paths)
+        self.assertNotIn("sdp_artifact:metadata/methods.csv", paths)
+
+    def test_a_lingering_registry_is_refused_without_the_eml_extra(self):
+        # sdp-0.3.0 packages must not carry a methods registry; the pointer
+        # at the migration must not require the extra to surface.
+        sdp = _fixture_sdp(self, "sdp-full")
+        with open(
+            os.path.join(sdp, "metadata", "methods.csv"), "w", encoding="utf-8"
+        ) as handle:
+            handle.write(
+                "dataset_id,method_iri,method_label,method_description,"
+                "method_version,protocol_iri,citation\n"
+            )
+        with self.assertRaisesRegex(ValueError, "migrate_sdp_methods"):
+            knb._sdp_artifact_paths(sdp)
 
     def test_a_missing_ledger_still_reports_the_file_error_not_a_binding_one(self):
         # The message for "no ledger at all" stays a file-existence error, as
@@ -1732,15 +1747,19 @@ class KnbCoreDependencyTests(unittest.TestCase):
 
 @_REQUIRES_EXTRA
 class KnbFullExpandedInventoryTests(unittest.TestCase):
-    """The complete v0.2 inventory: reproducibility, methods and structures.
+    """The complete inventory: reproducibility, placements and structures.
 
-    ``tests/data/knb/sdp-full`` is the public fixture SDP after R v0.1.8 moved
-    the reviewed ledger into ``reproducibility/``, wrote the checksum-bound
-    manifest, and added a procedure registry and an observation structure.
-    ``tests/data/knb/r/full`` is R's expanded dry run over exactly that tree.
+    ``tests/data/knb/sdp-full`` is the public fixture SDP after the sdp-0.3.0
+    migration, regenerated against metasalmon **main at e02111a**: the v0.1.8
+    fixture was run through R's ``migrate_sdp_methods()``, the registry's
+    procedure moved onto ``tables.csv`` with its protocol (inside the reviewed
+    closure), and the era missing-value declaration was dropped the same way
+    metasalmon's own test helper dropped it at 0.2.4.
+    ``tests/data/knb/r/full`` is R main's expanded dry run over exactly that
+    tree.
 
-    This is the case the smaller fixture cannot cover: with no registry and no
-    structures present, dropping them from the inventory is invisible.
+    This is the case the smaller fixture cannot cover: with no placements and
+    no structures present, dropping them from the plan is invisible.
     """
 
     def setUp(self):
@@ -1757,7 +1776,6 @@ class KnbFullExpandedInventoryTests(unittest.TestCase):
         paths = [obj["path"] for obj in result["manifest"]["objects"]]
 
         for name in (
-            "metadata/methods.csv",
             "metadata/structure/observation_structures.csv",
             "metadata/structure/observation_components.csv",
             "reproducibility/manifest.json",
@@ -1771,6 +1789,8 @@ class KnbFullExpandedInventoryTests(unittest.TestCase):
             self.assertIn(name, paths, name)
         # The ledger moved; the legacy root-level copy must not be republished.
         self.assertNotIn("reviewed_semantic_selections.csv", paths)
+        # sdp-0.3.0: the registry left the specification and the inventory.
+        self.assertNotIn("metadata/methods.csv", paths)
 
     def test_object_order_pids_and_bytes_match_r(self):
         _, result = self._plan()
@@ -1807,11 +1827,12 @@ class KnbFullExpandedInventoryTests(unittest.TestCase):
             _canonical_file(os.path.join(_R_DIR, "full", "eml.xml")),
         )
 
-    def test_a_registry_method_nothing_uses_is_not_asserted_in_eml(self):
-        # The registry names a compilation procedure, but no dictionary column
-        # and no sosa:usedProcedure component references it, so EML must carry
-        # only the mapping's own dataset-level narrative.
-        sdp, _ = self._plan()
+    def test_the_table_placement_is_asserted_as_a_method_step(self):
+        # sdp-0.3.0: the table-constant procedure and its protocol live on
+        # tables.csv and are emitted as a method step beside the mapping's own
+        # narrative. No sosa:usedProcedure component exists here, so no
+        # used-procedures step is added.
+        sdp, result = self._plan()
         eml = ET.parse(os.path.join(sdp, "metadata", "eml.xml")).getroot()
         methods = knb._find_all_local(eml, "methods")
         steps = [
@@ -1820,11 +1841,17 @@ class KnbFullExpandedInventoryTests(unittest.TestCase):
             for step in node
             if knb._local_name(step.tag) == "methodStep"
         ]
-        self.assertEqual(len(steps), 1)
+        self.assertEqual(len(steps), 2)
         with open(
             os.path.join(sdp, "metadata", "eml.xml"), encoding="utf-8"
         ) as handle:
-            self.assertNotIn("Count compilation", handle.read())
+            text = handle.read()
+        self.assertIn(
+            "https://example.org/methods/count-compilation", text
+        )
+        self.assertIn(
+            "https://example.org/protocols/count-compilation", text
+        )
 
     def test_the_reproducibility_manifest_stays_valid_after_planning(self):
         from metasalmonpy import validate_sdp_reproducibility_manifest

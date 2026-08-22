@@ -1,19 +1,18 @@
 {
-  "profile": "https://dfo-pacific-science.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+  "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json",
   "name": "demo-salmon-2026",
   "id": "demo-salmon-2026",
   "title": "Demonstration salmon counts",
   "description": "A compact fixture for deterministic EML export tests.",
   "sdp": {
-    "specVersion": "sdp-0.2.0",
-    "profile": "https://dfo-pacific-science.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
-    "rules": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/sdp.rules.yaml",
+    "specVersion": "sdp-0.3.0",
+    "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json",
+    "rules": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/sdp.rules.yaml",
     "metadata": {
       "dataset": "metadata/dataset.csv",
       "tables": "metadata/tables.csv",
       "columnDictionary": "metadata/column_dictionary.csv",
       "codes": "metadata/codes.csv",
-      "methods": "metadata/methods.csv",
       "observationStructures": "metadata/structure/observation_structures.csv",
       "observationComponents": "metadata/structure/observation_components.csv"
     }
@@ -106,14 +105,6 @@
       },
       "title": "Salmon counts",
       "description": "One annual abundance record per identifier."
-    },
-    {
-      "profile": "tabular-data-resource",
-      "name": "sdp_methods",
-      "path": "metadata/methods.csv",
-      "title": "SDP methods metadata",
-      "description": "Optional registry of procedures associated with measurements in the package.",
-      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/methods.schema.json"
     },
     {
       "profile": "tabular-data-resource",

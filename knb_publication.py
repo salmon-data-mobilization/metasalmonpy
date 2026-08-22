@@ -599,15 +599,17 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
             str(manifest["artifact"]["path"]),
         ]
 
-    # Methods and mixed-grain observation structures are optional SDP v0.2
-    # metadata. When present they are validated as one complete contract and
-    # become named objects in the expanded representation.
+    # Mixed-grain observation structures are optional metadata. When present
+    # they are validated as one complete contract and become named objects in
+    # the expanded representation. A methods.csv is an sdp-0.2.0 registry and
+    # must be migrated, not published.
     methods_relative: List[str] = []
     if os.path.exists(os.path.join(path, "metadata", "methods.csv")):
-        from .sdp_methods import validate_sdp_methods
-
-        validate_sdp_methods(path)
-        methods_relative = ["metadata/methods.csv"]
+        raise ValueError(
+            "metadata/methods.csv is an sdp-0.2.0 registry; sdp-0.3.0 "
+            "packages must not carry one. Run migrate_sdp_methods() to "
+            "relocate its content and remove it."
+        )
 
     structure_present = [
         os.path.exists(os.path.join(path, name))

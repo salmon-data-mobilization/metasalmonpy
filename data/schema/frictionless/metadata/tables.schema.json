@@ -59,6 +59,21 @@
       "name": "primary_key",
       "type": "string",
       "description": "Comma-separated list of column names forming a primary key, with no spaces."
+    },
+    {
+      "name": "protocol_iri",
+      "type": "string",
+      "description": "IRI (DOI or stable URL) of the documented protocol governing this table's observation events. Start here: a protocol names the per-measurement methods, so the dataset does not repeat them."
+    },
+    {
+      "name": "protocol_citation",
+      "type": "string",
+      "description": "Citation for the protocol. For in-package protocols described in the package README.md, name the section here; protocol_iri may then be omitted."
+    },
+    {
+      "name": "method_iri",
+      "type": "string",
+      "description": "SOSA Procedure IRI when a single method applies to the whole table and there is no protocol document to cite. When the method varies per row, it belongs in the data as a coded column bound with sosa:usedProcedure."
     }
   ],
   "sdp:table": "tables",

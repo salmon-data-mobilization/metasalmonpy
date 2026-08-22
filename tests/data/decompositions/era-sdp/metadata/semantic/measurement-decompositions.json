@@ -2,12 +2,12 @@
   "schema_version": "1.0",
   "artifact": {
     "path": "metadata/semantic/measurement-decompositions.csv",
-    "sha256": "94bc4bfff24fb47606fda08994fef23e84ea9d9e5ad973b06826cc773c0a2ae7",
+    "sha256": "f7eb36fb70c47054a06ab9e072739e30d39ccc76ca0a9a66728500b652418c5f",
     "row_count": 6
   },
   "provenance": {
     "generated_by": "metasalmon::write_sdp_measurement_decompositions",
-    "metasalmon_version": "0.1.8",
+    "metasalmon_version": "0.3.0",
     "semantic_profile": "Ordered SDP semantic profile with I-ADOPT-informed roles; not native I-ADOPT conformance."
   }
 }

@@ -1,14 +1,22 @@
 {
   "generated_by": {
-    "metasalmon_ref": "v0.1.8",
-    "r_version": "R version 4.5.2 (2025-10-31)",
-    "lc_collate": "C"
+    "methods-sdp and repro-sdp": {
+      "metasalmon_ref": "v0.1.8",
+      "r_version": "R version 4.5.2 (2025-10-31)",
+      "lc_collate": "C",
+      "note": "legacy sdp-0.2.0 fixtures, kept for the surviving registry reader"
+    },
+    "structure-sdp": {
+      "metasalmon_ref": "main e02111a (v0.3.0 release tree plus post-0.3.0 fixes)",
+      "r_version": "R version 4.5.2 (2025-10-31)",
+      "lc_collate": "C",
+      "note": "the v0.1.8 fixture run through migrate_sdp_methods() and canonicalized with write_sdp_observation_structures()"
+    }
   },
   "sha256": {
     "methods-sdp/metadata/methods.csv": "acff264824458e30d933d4df487d8203f5a30975a8644016519fff0b8b173738",
     "repro-sdp/reproducibility/manifest.json": "c2b9a89b7bdfe348dad41cf8b5844306e61c1c6835e30855c68a31b7b0f4d21b",
-    "structure-sdp/datapackage.json": "79dac3e7e94ee2f0cd3e7a70874cff18b803401558a7438e7d9991d8bb690a50",
-    "structure-sdp/metadata/methods.csv": "c9d7594219d775a92c7bd359f2a92237866654da1203244b2b2eb492b38ba5dc",
+    "structure-sdp/datapackage.json": "ea98b1fdc1179252ee1eaca76a36cdda5fcf4607a1219026ad81b110cdc00146",
     "structure-sdp/metadata/structure/observation_components.csv": "4c6f4cce3c6db7bf4cf7c7da36762184dc22b7e4a0e790b11ff3ff98818bba07",
     "structure-sdp/metadata/structure/observation_structures.csv": "fcc93a3bbc4582e148d6e74d61796067ac043cf2b3c1bbed077df8a95f68809d"
   }

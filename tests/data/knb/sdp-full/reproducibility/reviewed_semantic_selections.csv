@@ -4,3 +4,4 @@ demo-salmon-2026,counts,count,column,term_iri,variable,accepted,medium,The revie
 demo-salmon-2026,counts,count,column,property_iri,property,accepted,high,The column contains abundance counts.,http://qudt.org/vocab/quantitykind/Count
 demo-salmon-2026,counts,count,column,entity_iri,entity,accepted,high,The counts describe a salmon stock.,https://w3id.org/smn/Stock
 demo-salmon-2026,counts,count,column,unit_iri,unit,accepted,high,The values use the reviewed counting unit.,http://qudt.org/vocab/unit/COUNT
+demo-salmon-2026,counts,,table,method_iri,method,accepted,high,The table-constant procedure was reviewed.,https://example.org/methods/count-compilation

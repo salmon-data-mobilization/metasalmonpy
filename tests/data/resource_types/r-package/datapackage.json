@@ -1,12 +1,12 @@
 {
-  "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+  "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json",
   "name": "diff-1",
   "id": "diff-1",
   "title": "Differential",
   "description": "R vs Python",
   "sdp": {
-    "specVersion": "sdp-0.2.0",
-    "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+    "specVersion": "sdp-0.3.0",
+    "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json",
     "rules": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/sdp.rules.yaml",
     "metadata": {
       "dataset": "metadata/dataset.csv",

@@ -1,17 +1,21 @@
-"""Reviewed EML 2.2.0 export (mirrors metasalmon's ``R/eml-export.R`` at v0.1.7).
+"""Reviewed EML 2.2.0 export (mirrors metasalmon's ``R/eml-export.R``).
 
 EML is deliberately a reviewed, derived representation of a Salmon Data
 Package (SDP). ``create_sdp`` produces a review-ready package; this exporter
 starts only after the package passes strict semantic validation and a human
 has supplied the EML-specific facts that cannot be inferred safely.
 
-Era note: the EML surface changed at metasalmon v0.1.8 (methods-registry
-procedures and more); this module ports the **v0.1.7 tag** exactly. In
-particular, 0.1.7's EML consumes only the mapping sidecar, the semantic
-review ledger, the reviewed vocabulary, and the data resources — it does NOT
-read ``metadata/methods.csv`` (that behaviour is 0.1.8+ and lands at the next
-replay milestone), and the initial profile must not emit a ``usedProcedure``
-annotation.
+Method steps come from the sdp-0.3.0 placements: table-level ``method_iri`` /
+``protocol_iri`` / ``protocol_citation`` and dataset-level ``protocol_iri`` /
+``protocol_citation`` each emit a method step, and the row-varying procedures
+actually used by the data are resolved through ``codes.csv$term_iri`` and
+listed in a dedicated step. A legacy ``metadata/methods.csv`` registry is an
+error pointing at ``migrate_sdp_methods()``. Every vocabulary IRI the method
+path emits stays inside the reviewed closure — a table-level ``method_iri``
+needs an accepted semantic-review ledger row, and table-level plus used
+row-varying procedure IRIs must appear in the vocabulary snapshot; protocol
+IRIs are citations, not vocabulary terms, and are not gated. The initial
+profile still must not emit a ``usedProcedure`` *annotation*.
 
 Parity contract: parity with R is STRUCTURAL, never byte-level (PARITY.md
 entry 4). The document is built with stdlib :mod:`xml.etree.ElementTree` —
@@ -1336,7 +1340,7 @@ _ROLE_FIELDS = (
     ("property_iri", "property"),
     ("entity_iri", "entity"),
     ("constraint_iri", "constraint"),
-    ("method_iri", "method"),
+    ("statistical_modifier_iri", "statistical_modifier"),
     ("unit_iri", "unit"),
 )
 
@@ -1358,15 +1362,15 @@ def _measurement_rows(dictionary: pd.DataFrame) -> pd.DataFrame:
     return dictionary[mask]
 
 
-def _canonical_measurement_iris(dictionary: pd.DataFrame) -> List[str]:
+def _canonical_measurement_iris(path: Path, pkg: Dict[str, object]) -> List[str]:
     """Mirror ``.ms_eml_canonical_measurement_iris``."""
-    measurement = _measurement_rows(dictionary)
+    measurement = _measurement_rows(pkg["dictionary"])
     fields = (
         "term_iri",
         "property_iri",
         "entity_iri",
         "constraint_iri",
-        "method_iri",
+        "statistical_modifier_iri",
         "unit_iri",
     )
     iris: List[str] = []
@@ -1374,6 +1378,18 @@ def _canonical_measurement_iris(dictionary: pd.DataFrame) -> List[str]:
         for iri in _split_iris(list(measurement[field])):
             if iri not in iris:
                 iris.append(iri)
+    # Every vocabulary IRI the EML method path emits stays inside the reviewed
+    # vocabulary closure: table-level procedures and row-varying procedures
+    # resolved through codes. Protocol IRIs are citations (a DOI or document
+    # link), not vocabulary terms, and are deliberately not gated here.
+    tables = pkg["tables"]
+    if "method_iri" in tables.columns:
+        for iri in _split_iris(list(tables["method_iri"])):
+            if iri not in iris:
+                iris.append(iri)
+    for iri in _used_procedures(path, pkg):
+        if iri not in iris:
+            iris.append(iri)
     return iris
 
 
@@ -1396,6 +1412,24 @@ def _canonical_review_targets(pkg: Dict[str, object]) -> List[Dict[str, str]]:
                     "iri": iri,
                 }
             )
+
+    # sdp-0.3.0: a table-level method_iri is a vocabulary selection the EML
+    # method path emits, so it needs an accepted ledger row exactly like the
+    # dictionary slots do. Protocol IRIs are citations, not vocabulary terms.
+    if "method_iri" in tables.columns:
+        for row in range(len(tables)):
+            for iri in _split_iris(tables.iloc[row]["method_iri"]):
+                targets.append(
+                    {
+                        "dataset_id": _as_character(tables.iloc[row]["dataset_id"]),
+                        "table_id": _as_character(tables.iloc[row]["table_id"]),
+                        "column_name": "",
+                        "target_scope": "table",
+                        "target_sdp_field": "method_iri",
+                        "dictionary_role": "method",
+                        "iri": iri,
+                    }
+                )
 
     measurement = _measurement_rows(dictionary)
     for position in range(len(measurement)):
@@ -1623,7 +1657,7 @@ def _vocabulary_snapshot_sha256(row: Dict[str, object]) -> str:
 
 
 def _read_vocabulary(
-    path: Path, dictionary: pd.DataFrame, mapping: dict
+    path: Path, pkg: Dict[str, object], mapping: dict
 ) -> pd.DataFrame:
     """Mirror ``.ms_eml_read_vocabulary``."""
     vocabulary_path = _resource_path(path, mapping["semantic_vocabulary"]["path"])
@@ -1747,7 +1781,7 @@ def _read_vocabulary(
             "EML mapping sidecar."
         )
 
-    expected = sorted(_canonical_measurement_iris(dictionary))
+    expected = sorted(_canonical_measurement_iris(path, pkg))
     actual = sorted(set(iris))
     if expected != actual:
         raise ValueError(
@@ -2938,45 +2972,68 @@ def _present_values(values) -> List[bool]:
     ]
 
 
-def _used_sdp_methods(
-    path: Path, pkg: Dict[str, object], registry: pd.DataFrame
-) -> pd.DataFrame:
-    """Mirror ``.ms_eml_used_sdp_methods``.
+def _sdp_method_placements(pkg: Dict[str, object]) -> pd.DataFrame:
+    """Mirror ``.ms_eml_sdp_method_placements``.
 
-    EML ``methodStep`` asserts that a procedure *was performed* to produce
-    these data. A registry is an inventory of procedures the package knows
-    about, which is not the same claim: an alternative that no observed
-    measurement references must not be asserted as performed. This narrows the
-    registry to procedures actually bound to an observed value, through either
-    route the specification allows:
-
-    * a static ``column_dictionary.method_iri`` on a **measurement** column
-      that has at least one non-empty value (a method annotated on an
-      attribute or identifier column is a legacy dictionary annotation, not a
-      measurement procedure, and is excluded);
-    * a row-varying ``sosa:usedProcedure`` component, resolved through the
-      code values observed where that structure's measure is present.
+    sdp-0.3.0 method placements: a table-constant procedure and its protocol
+    live on ``tables.csv``; a dataset-wide protocol lives on ``dataset.csv``.
+    This frame drives the EML methodStep emission (labels and descriptions
+    belong to the shared vocabulary, so only IRIs and citations exist
+    locally).
     """
-    if not isinstance(registry, pd.DataFrame) or len(registry) == 0:
-        return registry
+    placements: List[Dict[str, object]] = []
+    tables = pkg["tables"]
+    fields = ("method_iri", "protocol_iri", "protocol_citation")
+    for index in range(len(tables)):
+        row = tables.iloc[index]
+        values = {
+            field: (row[field] if field in tables.columns else None)
+            for field in fields
+        }
+        if any(_present_values(values.values())):
+            placements.append(
+                {
+                    "scope": _as_character(row["table_id"]),
+                    "method_iri": values["method_iri"],
+                    "protocol_iri": values["protocol_iri"],
+                    "protocol_citation": values["protocol_citation"],
+                }
+            )
+    dataset = pkg["dataset"]
+    dataset_values = {
+        field: (dataset[field].iloc[0] if field in dataset.columns else None)
+        for field in ("protocol_iri", "protocol_citation")
+    }
+    if any(_present_values(dataset_values.values())):
+        placements.append(
+            {
+                "scope": "dataset",
+                "method_iri": None,
+                "protocol_iri": dataset_values["protocol_iri"],
+                "protocol_citation": dataset_values["protocol_citation"],
+            }
+        )
+    columns = ["scope", "method_iri", "protocol_iri", "protocol_citation"]
+    if not placements:
+        return pd.DataFrame(columns=columns, dtype=object)
+    frame = pd.DataFrame(placements, columns=columns)
+    # Canonical order: these rows drive methodStep emission, so tables.csv row
+    # order would otherwise reach the exported XML bytes and the returned
+    # ``methods`` frame.
+    order = sorted(range(len(frame)), key=lambda i: frame["scope"].iloc[i])
+    return frame.iloc[order].reset_index(drop=True)
 
+
+def _used_procedures(path: Path, pkg: Dict[str, object]) -> List[str]:
+    """Mirror ``.ms_eml_used_procedures``.
+
+    Row-varying procedures actually used by the data: enumerated
+    ``sosa:usedProcedure`` code columns resolved through ``codes.csv``
+    ``term_iri``. EML ``methodStep`` asserts that a procedure *was performed*
+    to produce these data, so only codes observed where the structure's
+    measure is present count.
+    """
     used: List[str] = []
-    dictionary = pkg["dictionary"]
-    if "column_role" in dictionary.columns and "method_iri" in dictionary.columns:
-        present_methods = _present_values(dictionary["method_iri"])
-        for index in range(len(dictionary)):
-            role = dictionary["column_role"].iloc[index]
-            if _is_missing(role) or _as_character(role) != "measurement":
-                continue
-            if not present_methods[index]:
-                continue
-            table_id = _as_character(dictionary["table_id"].iloc[index])
-            column = _as_character(dictionary["column_name"].iloc[index])
-            data = pkg["resources"].get(table_id)
-            if data is None or column not in data.columns:
-                continue
-            if any(_present_values(data[column])):
-                used.append(_as_character(dictionary["method_iri"].iloc[index]))
 
     from .observation_structures import (
         SDP_OBSERVATION_COMPONENTS_PATH,
@@ -3040,33 +3097,49 @@ def _used_sdp_methods(
                 if not _is_missing(value) and _trim(_as_character(value)):
                     used.append(_as_character(value))
 
-    return registry[registry["method_iri"].isin(set(used))]
+    # Canonical order: this list is returned as ``used_methods`` and written
+    # verbatim into EML paragraphs, so encounter order would make the exported
+    # bytes depend on row order.
+    return sorted(set(used))
 
 
-def _add_sdp_method_steps(methods: ET.Element, sdp_methods: pd.DataFrame) -> None:
-    """Emit one ``methodStep`` per procedure actually used by these data."""
-    if not isinstance(sdp_methods, pd.DataFrame) or len(sdp_methods) == 0:
-        return
-    optional = (
-        ("method_version", "Method version"),
-        ("protocol_iri", "Protocol IRI"),
-        ("citation", "Citation"),
-    )
-    for index in range(len(sdp_methods)):
-        method = sdp_methods.iloc[index]
+def _add_sdp_method_steps(
+    methods: ET.Element,
+    sdp_methods: pd.DataFrame,
+    used_procedures: List[str],
+) -> None:
+    """Emit method steps from the sdp-0.3.0 placements and used procedures."""
+    if isinstance(sdp_methods, pd.DataFrame) and len(sdp_methods) > 0:
+        optional = (
+            ("method_iri", "Method IRI"),
+            ("protocol_iri", "Protocol IRI"),
+            ("protocol_citation", "Protocol citation"),
+        )
+        for index in range(len(sdp_methods)):
+            placement = sdp_methods.iloc[index]
+            method_step = ET.SubElement(methods, "methodStep")
+            description = ET.SubElement(method_step, "description")
+            scope = _as_character(placement["scope"])
+            if scope == "dataset":
+                paragraphs = ["Dataset-level protocol."]
+            else:
+                paragraphs = [f"Method and protocol for table '{scope}'."]
+            for field, label in optional:
+                value = placement[field]
+                if not _is_missing(value) and _trim(_as_character(value)):
+                    paragraphs.append(label + ": " + _as_character(value))
+            for paragraph in paragraphs:
+                _add_text(description, "para", paragraph)
+    if used_procedures:
         method_step = ET.SubElement(methods, "methodStep")
         description = ET.SubElement(method_step, "description")
-        paragraphs = [
-            "Method: " + _as_character(method["method_label"]),
-            _as_character(method["method_description"]),
-            "Method IRI: " + _as_character(method["method_iri"]),
-        ]
-        for field, label in optional:
-            value = method[field]
-            if not _is_missing(value) and _trim(_as_character(value)):
-                paragraphs.append(label + ": " + _as_character(value))
-        for paragraph in paragraphs:
-            _add_text(description, "para", paragraph)
+        _add_text(
+            description,
+            "para",
+            "Row-varying procedures used by the data, resolved through codes.csv:",
+        )
+        for iri in used_procedures:
+            _add_text(description, "para", "Procedure IRI: " + iri)
 
 
 def _build_document(
@@ -3078,6 +3151,7 @@ def _build_document(
     data_objects: pd.DataFrame,
     supplementary_objects: pd.DataFrame,
     sdp_methods: pd.DataFrame,
+    used_procedures: List[str],
 ) -> Dict[str, object]:
     """Mirror ``.ms_eml_build_document``."""
     root = ET.Element("{" + _EML_NAMESPACE + "}eml")
@@ -3185,7 +3259,7 @@ def _build_document(
         description = ET.SubElement(method_step, "description")
         _add_text(description, "para", method.get("description"))
 
-    _add_sdp_method_steps(methods, sdp_methods)
+    _add_sdp_method_steps(methods, sdp_methods, used_procedures)
 
     for table_index in range(len(tables)):
         table_row = {
@@ -3482,17 +3556,20 @@ def _export_reviewed(
     configs = _validate_mapping(mapping, pkg)
     revision_key = _revision_key(mapping, required=require_revision_key)
     _read_semantic_review(root, pkg, mapping)
-    vocabulary = _read_vocabulary(root, pkg["dictionary"], mapping)
+    vocabulary = _read_vocabulary(root, pkg, mapping)
     data_objects = _data_objects(root, pkg, mapping)
     supplementary = _supplementary_objects(supplementary_objects)
 
-    from .sdp_methods import SDP_METHODS_PATH, read_sdp_methods
+    from .sdp_methods import SDP_METHODS_PATH
 
     if (root / SDP_METHODS_PATH).exists():
-        sdp_methods = read_sdp_methods(root, validate=True)
-    else:
-        sdp_methods = pd.DataFrame()
-    used_methods = _used_sdp_methods(root, pkg, sdp_methods)
+        raise ValueError(
+            "metadata/methods.csv is an sdp-0.2.0 registry; sdp-0.3.0 "
+            "packages must not carry one. Run migrate_sdp_methods() to "
+            "relocate its content and remove it."
+        )
+    sdp_methods = _sdp_method_placements(pkg)
+    used_procedures = _used_procedures(root, pkg)
 
     built = _build_document(
         root,
@@ -3502,7 +3579,8 @@ def _export_reviewed(
         vocabulary,
         data_objects,
         supplementary,
-        used_methods,
+        sdp_methods,
+        used_procedures,
     )
     _validate_document_links(
         built["document"], pkg["dictionary"], _as_character(mapping["dataset_id"])
@@ -3517,10 +3595,11 @@ def _export_reviewed(
         "public": mapping["publication"]["public"],
         "data_objects": data_objects,
         "supplementary_objects": supplementary,
-        # The complete registry stays available to callers; only the subset
-        # actually bound to observed measurements is asserted in the document.
+        # sdp-0.3.0: ``methods`` is the placements frame and ``used_methods``
+        # the used row-varying procedure IRIs, matching R's
+        # ``write_eml_from_sdp()`` return value.
         "methods": sdp_methods,
-        "used_methods": used_methods,
+        "used_methods": used_procedures,
     }
 
 

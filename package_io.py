@@ -683,7 +683,7 @@ def write_salmon_datapackage(
                 "property_iri",
                 "entity_iri",
                 "constraint_iri",
-                "method_iri",
+                "statistical_modifier_iri",
             ]:
                 value = row.get(optional_key)
                 if pd.notna(value) and value not in ("", None):
@@ -897,6 +897,11 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
                 required = None
                 if isinstance(field.get("constraints"), dict) and "required" in field["constraints"]:
                     required = bool(field["constraints"]["required"])
+                # Older descriptor-first packages carry the semantic bindings
+                # under per-field ``custom`` keys; current writers emit bare
+                # keys. R coalesces custom-first at every field
+                # (``.ms_read_salmon_datapackage``), so this reader does too.
+                custom = field.get("custom") if isinstance(field.get("custom"), dict) else {}
                 dict_rows.append(
                     {
                         "dataset_id": datapackage.get("id") or datapackage.get("name"),
@@ -904,17 +909,25 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
                         "column_name": field.get("name"),
                         "column_label": field.get("title") or field.get("name"),
                         "column_description": field.get("description"),
-                        "column_role": None,
+                        "column_role": custom.get("sdp:columnRole", field.get("column_role")),
                         "value_type": field.get("type", "string"),
-                        "unit_label": None,
-                        "unit_iri": field.get("unit_iri"),
-                        "term_iri": field.get("term_iri"),
-                        "term_type": field.get("term_type"),
+                        "unit_label": custom.get("sdp:unitLabel", field.get("unit_label")),
+                        "unit_iri": custom.get("sdp:unitIri", field.get("unit_iri")),
+                        "term_iri": custom.get("sdp:termIri", field.get("term_iri")),
+                        "term_type": custom.get("sdp:termType", field.get("term_type")),
                         "required": required,
-                        "property_iri": field.get("property_iri"),
-                        "entity_iri": field.get("entity_iri"),
-                        "constraint_iri": field.get("constraint_iri"),
-                        "method_iri": field.get("method_iri"),
+                        "property_iri": custom.get("iAdopt:propertyIri", field.get("property_iri")),
+                        "entity_iri": custom.get("iAdopt:entityIri", field.get("entity_iri")),
+                        "constraint_iri": custom.get("iAdopt:constraintIri", field.get("constraint_iri")),
+                        # The legacy iAdopt:methodIri key is deliberately NOT
+                        # read here: migrate_sdp_methods() reads old
+                        # descriptors directly, so a descriptor-only sdp-0.2.0
+                        # package keeps its method binding until migration
+                        # relocates it to tables.csv.
+                        "statistical_modifier_iri": custom.get(
+                            "iAdopt:statisticalModifierIri",
+                            field.get("statistical_modifier_iri"),
+                        ),
                     }
                 )
 
@@ -1552,6 +1565,60 @@ def _collect_review_issues(package: Dict[str, object]) -> list[str]:
     return issues
 
 
+def _validation_row_context(frame: pd.DataFrame, position: int, id_fields) -> str:
+    """Mirror ``.ms_validation_row_context``: ``row N (field=value, ...)``."""
+    bits = []
+    for field in id_fields:
+        if field not in frame.columns:
+            continue
+        value = frame[field].iloc[position]
+        if _has_value(value):
+            bits.append(f"{field}={value}")
+    if not bits:
+        return f"row {position + 1}"
+    return f"row {position + 1} ({', '.join(bits)})"
+
+
+def _collect_placement_iri_issues(
+    meta: object,
+    source_name: str,
+    id_fields,
+    fields=("method_iri", "protocol_iri"),
+) -> list[str]:
+    """Mirror ``.ms_collect_placement_iri_issues``.
+
+    sdp-0.3.0 moved methods and protocols onto ``tables.csv`` and
+    ``dataset.csv``, so those fields need the same absolute-IRI check the
+    dictionary's IRI columns get. Without it a table could claim
+    ``methods/weir-count`` and validate cleanly: the base schema accepts any
+    string, and the observation-structure validator that does check IRI shape
+    only runs when the optional structure sidecars exist.
+    """
+    from .sdp_methods import _is_absolute_iri, _is_blank as _placement_blank
+
+    if not isinstance(meta, pd.DataFrame) or len(meta) == 0:
+        return []
+    messages = []
+    for field in fields:
+        if field not in meta.columns:
+            continue
+        for position in range(len(meta)):
+            value = meta[field].iloc[position]
+            if _placement_blank(value):
+                continue
+            text = str(value).strip()
+            # ``REVIEW:`` markers have their own dedicated reporting path.
+            if text.upper().startswith("REVIEW:"):
+                continue
+            if not _is_absolute_iri(value):
+                context = _validation_row_context(meta, position, id_fields)
+                messages.append(
+                    f"{source_name} {context} field {field} is not an "
+                    f"absolute IRI: '{text}'."
+                )
+    return messages
+
+
 # The ``issues`` frame this validator returns was an unconditionally empty
 # ``DataFrame(columns=["message"])`` until the 0.2.0 rung — every finding was
 # raised instead. The typed reader needs a place to *report* rather than
@@ -1654,8 +1721,31 @@ def validate_salmon_datapackage(
         normalized,
         require_iris=require_iris,
     )
+
+    # Unconditional: a method or protocol placement that is not an absolute
+    # IRI is malformed in every validation mode, not only under
+    # ``require_iris`` — exactly as in ``.ms_validate_salmon_datapackage()``.
+    placement_issues = _collect_placement_iri_issues(
+        tables,
+        source_name="metadata/tables.csv",
+        id_fields=("table_id", "file_name"),
+    ) + _collect_placement_iri_issues(
+        dataset,
+        source_name="metadata/dataset.csv",
+        id_fields=("dataset_id",),
+        fields=("protocol_iri",),
+    )
+    if placement_issues:
+        issue_frame = pd.DataFrame({"message": placement_issues})
+        existing = semantic_validation.get("issues")
+        if isinstance(existing, pd.DataFrame) and len(existing) > 0:
+            issue_frame = pd.concat([existing, issue_frame], ignore_index=True)
+        semantic_validation["issues"] = issue_frame
+
     if require_iris:
-        review_issues = _collect_review_issues(package)
+        # A malformed placement IRI is worse than an unreviewed one: strict
+        # validation must block it, exactly as it blocks a REVIEW: marker.
+        review_issues = _collect_review_issues(package) + placement_issues
         if review_issues:
             preview = " ".join(review_issues[:5])
             raise ValueError(

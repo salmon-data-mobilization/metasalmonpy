@@ -1,2 +1,2 @@
-dataset_id,title,description,creator,contact_name,contact_email,license,contact_org,contact_position,temporal_start,temporal_end,spatial_extent,dataset_type,source_citation,update_frequency,topic_categories,keywords,security_classification,provenance_note,created,modified,spec_version
-diff-1,Differential,R vs Python,PSC,Someone,a@example.org,CC-BY-4.0,,,,,,,,,,,,,,,sdp-0.2.0
+dataset_id,title,description,creator,contact_name,contact_email,license,contact_org,contact_position,temporal_start,temporal_end,spatial_extent,dataset_type,source_citation,update_frequency,topic_categories,keywords,security_classification,provenance_note,created,modified,spec_version,protocol_iri,protocol_citation
+diff-1,Differential,R vs Python,PSC,Someone,a@example.org,CC-BY-4.0,,,,,,,,,,,,,,,sdp-0.3.0,,

@@ -1,11 +1,12 @@
 """The vendored SDP schema bundle and the contract identifiers it carries.
 
 The bundle under ``data/schema`` and ``data/profiles`` is a verbatim copy of
-the ``sdp-0.2.0`` git tag of ``salmon-data-mobilization/smn-data-pkg``, which
-is also what metasalmon vendors at its ``v0.1.8`` tag (verified byte-for-byte
-when the bundle landed). It is deliberately **not** taken from that
-repository's ``main``, which is ``sdp-0.3.0``-shaped and no longer carries
-``methods.schema.json`` at all.
+the ``sdp-0.3.0`` git tag of ``salmon-data-mobilization/smn-data-pkg``, which
+is also what metasalmon vendors on its post-0.3.0 ``main`` (verified
+byte-for-byte when the bundle was swapped at S10 chunk A). It is deliberately
+taken from the release tag, never from that repository's ``main``: the pin
+and the bundle must name the same spec era, and sdp-0.3.0 itself removed
+``methods.schema.json`` from the specification.
 
 These tests are the guard against the two ways a vendored bundle rots: the
 files silently disappearing from the wheel, and the code drifting away from
@@ -43,11 +44,11 @@ def _copy_vendored_bundle(destination: Path) -> Path:
 def test_the_profile_version_is_read_from_the_vendored_bundle():
     # Not a constant in Python source: a profile bump is a bundle swap. The
     # 0.1.7 register row recorded exactly this as its retirement condition.
-    assert sdp_schema.sdp_profile_version() == "sdp-0.2.0"
+    assert sdp_schema.sdp_profile_version() == "sdp-0.3.0"
     assert SDP_PROFILE_VERSION == sdp_schema.sdp_profile_version()
 
     rules = sdp_schema.vendored_path(sdp_schema.SDP_RULES_PATH)
-    assert rules.read_text(encoding="utf-8").splitlines()[0] == "version: sdp-0.2.0"
+    assert rules.read_text(encoding="utf-8").splitlines()[0] == "version: sdp-0.3.0"
 
 
 def test_a_bundle_with_no_version_key_raises_rather_than_guessing(tmp_path, monkeypatch):
@@ -137,11 +138,16 @@ def test_every_declared_metadata_schema_ships(table):
     assert sdp_schema.sdp_schema_field_names(table)
 
 
-def test_the_bundle_carries_the_0_2_0_extension_schemas():
-    # These three are exactly what taking the bundle from ``main`` would have
-    # lost: sdp-0.3.0 removes the methods registry.
-    for table in ("methods", "observation_structures", "observation_components"):
+def test_the_bundle_carries_the_0_3_0_extension_schemas():
+    # sdp-0.3.0 removed the methods registry from the specification, so the
+    # bundle must not define it: the legacy reader's frozen column tuple in
+    # ``sdp_methods`` is the only surviving record of that schema.
+    for table in ("observation_structures", "observation_components"):
         assert table in sdp_schema.SDP_METADATA_SCHEMA_PATHS
+    assert "methods" not in sdp_schema.SDP_METADATA_SCHEMA_PATHS
+    assert not sdp_schema.vendored_path(
+        "schema/frictionless/metadata/methods.schema.json"
+    ).exists()
 
 
 def test_the_profile_declares_the_optional_extension_resources():
@@ -154,7 +160,6 @@ def test_the_profile_declares_the_optional_extension_resources():
         resource["name"]: resource for resource in profile["sdp:metadataResources"]
     }
     for name, path in (
-        ("sdp_methods", "metadata/methods.csv"),
         (
             "sdp_observation_structures",
             "metadata/structure/observation_structures.csv",
@@ -166,6 +171,8 @@ def test_the_profile_declares_the_optional_extension_resources():
     ):
         assert resources[name]["path"] == path
         assert resources[name]["sdp:requirement"] == "optional"
+    # The registry left the specification at sdp-0.3.0.
+    assert "sdp_methods" not in resources
 
 
 def test_the_bundle_is_declared_as_package_data():
@@ -175,7 +182,7 @@ def test_the_bundle_is_declared_as_package_data():
     for glob in (
         "schema/frictionless/metadata/*.json",
         "schema/*.yaml",
-        "profiles/salmon-data-package/v0.2/*.json",
+        "profiles/salmon-data-package/v0.3/*.json",
     ):
         assert glob in text, glob
 
@@ -239,15 +246,14 @@ def _vendored_bundle_documents():
 
 
 def test_the_remote_base_url_is_pinned_to_the_spec_tag_not_to_main():
-    """metasalmon defaults to ``main``; this package cannot.
+    """Both mirrors pin the spec release tag, never ``main``.
 
-    ``main`` was ``sdp-0.2.0``-shaped when metasalmon 0.2.1 shipped and is
-    ``sdp-0.3.0``-shaped now, so following the default literally would fetch a
-    bundle from a spec era this package does not implement, fail validation,
-    and fall back to the vendored copy on every call. Retirement condition: the
-    pin moves to ``sdp-0.3.0`` at the 0.3.0 rung, with the vendored bundle.
+    Tracking ``main`` meant every upstream spec release broke networked
+    schema loads (sdp-0.3.0 deleted ``methods.schema.json`` and the remote
+    fetch 404ed). The pin, the vendored bundle, and the profile version must
+    all name the same spec era — PARITY.md rows 27 and 38.
     """
-    assert sdp_schema.SDP_SPEC_TAG == "sdp-0.2.0"
+    assert sdp_schema.SDP_SPEC_TAG == "sdp-0.3.0"
     assert sdp_schema.DEFAULT_SDP_SCHEMA_BASE_URL.endswith("/" + sdp_schema.SDP_SPEC_TAG)
     assert sdp_schema.sdp_profile_version() == sdp_schema.SDP_SPEC_TAG
 
@@ -258,7 +264,7 @@ def test_the_base_url_and_source_are_read_at_call_time(monkeypatch):
     monkeypatch.setenv("METASALMONPY_SDP_SCHEMA_BASE_URL", "https://example.org/bundle")
     assert sdp_schema.default_sdp_schema_base_url() == "https://example.org/bundle"
     monkeypatch.delenv("METASALMONPY_SDP_SCHEMA_BASE_URL")
-    assert sdp_schema.default_sdp_schema_base_url().endswith("/sdp-0.2.0")
+    assert sdp_schema.default_sdp_schema_base_url().endswith("/sdp-0.3.0")
     monkeypatch.setenv("METASALMONPY_SDP_SCHEMA_SOURCE", "vendored")
     assert sdp_schema.default_sdp_schema_source() == "vendored"
 
@@ -275,8 +281,8 @@ def test_a_successful_remote_fetch_is_used_and_cached():
     try:
         schema = sdp_schema.load_sdp_schema(fetch_fn=fetcher)
         assert schema["source"] == "remote"
-        assert schema["version"] == "sdp-0.2.0"
-        assert calls and calls[0][0].endswith("/sdp-0.2.0")
+        assert schema["version"] == "sdp-0.3.0"
+        assert calls and calls[0][0].endswith("/sdp-0.3.0")
         # Cached per process: a second call does not fetch again.
         sdp_schema.load_sdp_schema(fetch_fn=fetcher)
         assert len(calls) == 1
@@ -381,7 +387,7 @@ def test_the_rules_scanner_reads_top_level_scalars_without_pyyaml():
     scalars = sdp_schema._rules_scalars(
         sdp_schema.vendored_path(sdp_schema.SDP_RULES_PATH).read_text(encoding="utf-8")
     )
-    assert scalars["version"] == "sdp-0.2.0"
+    assert scalars["version"] == "sdp-0.3.0"
     assert scalars["profile"] == sdp_schema.SDP_PROFILE_URL
     # Nested keys are not top-level scalars and must not be picked up.
     assert "id" not in scalars
@@ -397,9 +403,11 @@ def test_both_writers_follow_a_bundle_that_moves_its_schema_urls(monkeypatch):
     reading it out of the vendored bundle, so a test against the vendored
     bundle alone cannot tell the two apart. This moves the bundle's own URLs
     and asserts both the core metadata resources (``package_io``) and the
-    extension resources (``sdp_methods``, metasalmon 0.2.1) follow it.
+    extension resources (``observation_structures``, metasalmon 0.2.1) follow
+    it. ``sdp_methods`` left the profile at sdp-0.3.0, so its legacy resource
+    entry must keep composing the public fallback URL instead.
     """
-    from metasalmonpy import package_io, sdp_methods
+    from metasalmonpy import observation_structures, package_io, sdp_methods
 
     moved = sdp_schema._load_vendored_sdp_schema()
     profile = json.loads(json.dumps(moved["profile"]))
@@ -416,10 +424,18 @@ def test_both_writers_follow_a_bundle_that_moves_its_schema_urls(monkeypatch):
         "https://elsewhere.example/sdp_column_dictionary.json",
         "https://elsewhere.example/sdp_codes.json",
     ]
-    resource = sdp_methods._extension_resource(
+    structures_resource = observation_structures._observation_resources()[0]
+    assert (
+        structures_resource["schema"]
+        == "https://elsewhere.example/sdp_observation_structures.json"
+    )
+    # The registry left the profile at sdp-0.3.0: its legacy descriptor entry
+    # falls back to the composed public URL, which is exactly what legacy
+    # descriptors declare.
+    legacy = sdp_methods._extension_resource(
         "sdp_methods", "metadata/methods.csv", "t", "d", "methods.schema.json"
     )
-    assert resource["schema"] == "https://elsewhere.example/sdp_methods.json"
+    assert legacy["schema"] == sdp_schema.sdp_schema_url("methods.schema.json")
 
 
 def test_a_dataset_declaring_a_different_spec_version_warns_and_keeps_both(tmp_path):
@@ -441,7 +457,7 @@ def test_a_dataset_declaring_a_different_spec_version_warns_and_keeps_both(tmp_p
             path=str(destination),
         )
     descriptor = json.loads((destination / "datapackage.json").read_text(encoding="utf-8"))
-    assert descriptor["sdp"]["specVersion"] == "sdp-0.2.0"
+    assert descriptor["sdp"]["specVersion"] == "sdp-0.3.0"
     dataset = (destination / "metadata" / "dataset.csv").read_text(encoding="utf-8")
     assert "sdp-0.1.0" in dataset
 
