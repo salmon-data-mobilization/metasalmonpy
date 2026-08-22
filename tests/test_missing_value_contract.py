@@ -123,7 +123,10 @@ def test_literal_na_and_adversarial_tokens_survive_the_round_trip(tmp_path):
     # The bytes themselves must distinguish a literal "NA" from absence --
     # asserting only on the parsed result would pass even if the reader were
     # guessing. This is the exact content R main @ 39818ce writes.
-    written = (target / "data" / "obs.csv").read_text(encoding="utf-8", newline="")
+    # open() rather than Path.read_text(newline=...): the keyword only
+    # reached read_text at Python 3.13, and CI runs older interpreters.
+    with open(target / "data" / "obs.csv", encoding="utf-8", newline="") as fh:
+        written = fh.read()
     assert written == _EXPECTED_RESOURCE_BYTES
 
     back = read_salmon_datapackage(str(target))["resources"]["obs"]
