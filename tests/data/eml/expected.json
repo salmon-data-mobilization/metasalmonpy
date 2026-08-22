@@ -9,16 +9,21 @@
       {
         "table_id": "counts",
         "file_name": "data/counts.csv",
-        "pid": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+        "pid": "urn:uuid:4fa35442-96b8-546f-b71a-2eba31a53543",
         "format_id": "text/csv",
-        "checksum": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb",
-        "size": 87
+        "checksum": "b091c3be338d444280850083d34950c7e4051b4e904e615cb8d735d915a475b2",
+        "size": 85
       }
     ]
   },
   "skos": {
     "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
     "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962"
+  },
+  "revision": {
+    "package_id": "urn:uuid:27627af7-006f-5d4e-a61d-cda7ca9da12f",
+    "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
+    "revision_key": "private-review-2"
   },
   "supplementary": {
     "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
@@ -27,14 +32,9 @@
     "archive_checksum": "f2fba96743febc9ad64977f5116412edd340795fb46ab71032061216b62dd080",
     "archive_size": 37
   },
-  "revision": {
-    "package_id": "urn:uuid:27627af7-006f-5d4e-a61d-cda7ca9da12f",
-    "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
-    "revision_key": "private-review-2"
-  },
   "uuid5_demo": "966aaed4-cfe6-5120-89f0-64d6c459770b",
   "generated_by": {
-    "metasalmon_ref": "v0.1.7",
+    "metasalmon_ref": "main@39818ce836f8a5cab30e31265e3801e5e5115458",
     "emld_version": "0.5.3",
     "r_version": "4.5.2"
   }

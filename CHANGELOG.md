@@ -94,6 +94,69 @@ sentence, and gap detection.
   this chunk: the old six-slot assertion kept passing, green, against the
   new seven-role payload until the assertions moved outside the request.
 
+### S10 chunk C — the missing-value contract
+
+metasalmon 0.2.4's canonical missing-value contract, completed. Most of it
+was forward-ported early (PARITY.md row 21, landed at 0.1.7–0.2.0): every
+reader already preserved a literal `"NA"` — a real fisheries gear code — and
+only the empty field was missing. This chunk delivers the two pieces that
+were not yet true, verified by **running both implementations over the same
+inputs** against metasalmon `main` at `39818ce` (2026-08-22):
+
+- **The token has one authority.** `metadata.csv_na_token()` mirrors
+  `.ms_csv_na_token()` and returns `""`; every canonical CSV writer
+  (`package_io`'s metadata, resource and suggestions writers, the
+  `sdp_methods` extension-CSV renderer, the measurement-decomposition
+  renderer) now passes it explicitly instead of relying on matching literals
+  or on pandas' default `na_rep`, and `scripts/validate_sdp.py` reads through
+  the shared `read_sdp_csv` instead of a bare `pd.read_csv()` whose default
+  NA vocabulary destroyed the very tokens it was validating.
+  `tests/test_missing_value_contract.py` guards the call sites (an implicit
+  agreement that holds only incidentally is the thing that decays), pins the
+  round trip **on the written bytes** — byte-identical to R `main`'s output
+  for the same adversarial frame ("NA", "N/A", "null", "nan", "None",
+  embedded commas/quotes/newlines, non-ASCII, a true missing and a true empty
+  string) — and pins write→read→write as a fixed point.
+
+- **The EML raw-token audit joins the contract, closing PARITY.md row 22's
+  live divergence.** `_ERA_NA_TOKENS` (`("", "NA")`) is deleted; audit
+  missingness is now "raw token trims to `csv_na_token()`", which is exactly
+  R's `is.na(parsed_values)` under R's one-token read. Measured verdict
+  changes, each matched against R `main`: a literal `NA` cell with no
+  declared missing-value code is **accepted** (it was rejected here while R
+  accepted it — the active interop hazard row 22 warned about), a padded
+  `" NA "` cell is **accepted** (data after trimming), a whitespace-only cell
+  still **aborts** as an undeclared non-empty missing token, a declared code
+  the bytes never contain still **aborts**, and a declared `"NA"` code over
+  literal-`NA` data now **aborts** ("declares missing-value code where the
+  parsed value is not missing") exactly as current R does.
+
+- **The era fixture corpora moved with the contract**, because their old
+  bytes were unregenerable: both fixture families declared
+  `missingValueCode = "NA"` over era-written bytes, which current R rejects
+  (declared-but-present) and the converged audit here rejects identically.
+  `tests/data/eml/` was regenerated against metasalmon `main` @ `39818ce`
+  (the SDPs are now sdp-0.3.0-shaped as R's own test helper writes them; the
+  four XML documents are canonically equal between R `main` and this package,
+  with identical identifiers, which is this chunk's EML differential).
+  `tests/data/knb/`'s era pair (`sdp-public`, `sdp-private`) kept its
+  **v0.1.8 parity claim**: the derived artifacts were regenerated under the
+  same era metasalmon v0.1.8 extraction and toolchain with ONLY the
+  missing-value contract moved — the generator was proven first by
+  reproducing all 22 committed era artifacts byte-for-byte from the unmoved
+  inputs. (`sdp-full` had already converged at chunk A;
+  `knb-manifest-v2.json` is a frozen legacy-schema fingerprint fixture and
+  deliberately keeps its era values.) Migrating the era pair to current-main
+  shape instead would have dragged unported KNB behaviours (chunk E scope)
+  into this chunk, which is contractually undiluted.
+
+One divergence found in passing by the byte differential — R fills more
+metadata placeholders than this package and with different prose — is
+registered as PARITY.md row 48 for chunk D rather than fixed here (48
+because the concurrent chunk B had already committed a row 47 on its branch
+— the numbering collision the registers' precedent exists for, caught by
+running the hub's `check-parity-registers.py` before pushing).
+
 ### S10 chunk A — the sdp-0.3.0 method placement model (breaking)
 
 Mirrors metasalmon 0.3.0's breaking change plus its post-0.3.0 fixes.

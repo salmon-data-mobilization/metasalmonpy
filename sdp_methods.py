@@ -42,7 +42,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Union
 import pandas as pd
 
 from .atomic_io import apply_default_file_mode
-from .metadata import R_SPACE_CLASS, read_sdp_csv
+from .metadata import R_SPACE_CLASS, csv_na_token, read_sdp_csv
 from .sdp_schema import sdp_metadata_resource_schema
 
 SDP_METHODS_PATH = "metadata/methods.csv"
@@ -373,13 +373,14 @@ def _is_na(value: object) -> bool:
 def _csv_cell(value: object) -> str:
     """Render one cell the way ``readr::write_csv(na = "")`` does.
 
-    Only a true ``NA`` becomes the empty field. A whitespace-only *string* is
+    Only a true ``NA`` becomes the empty field — ``csv_na_token()``, the one
+    missing-value authority (metasalmon 0.2.4). A whitespace-only *string* is
     data and survives the round trip, exactly as it does through R's
     ``as.character()`` + ``na = ""`` pair — the blank test in
     ``_is_blank`` is a *validation* predicate, not a serialization one.
     """
     if _is_na(value):
-        return ""
+        return csv_na_token()
     if isinstance(value, bool):
         return "TRUE" if value else "FALSE"
     if isinstance(value, float) and value.is_integer():

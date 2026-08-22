@@ -87,13 +87,7 @@
           "minimum_exclusive": false
         },
         "literal_missing": {
-          "measurement_scale": "nominal",
-          "missing_values": [
-            {
-              "code": "NA",
-              "explanation": "No value was supplied."
-            }
-          ]
+          "measurement_scale": "nominal"
         },
         "blank_only": {
           "measurement_scale": "nominal"

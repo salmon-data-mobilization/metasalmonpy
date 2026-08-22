@@ -16,6 +16,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 from .dictionary import infer_dictionary, validate_dictionary
 from .metadata import (
+    csv_na_token,
     ensure_resource_mapping,
     infer_codes_from_resources,
     infer_dataset_metadata_from_resources,
@@ -99,10 +100,16 @@ def _write_metadata_csv(df: pd.DataFrame, path: Path) -> None:
         series = out[column]
         if pd.api.types.is_bool_dtype(series.dtype):
             out[column] = [
-                "" if value is pd.NA or value is None else ("TRUE" if value else "FALSE")
+                csv_na_token()
+                if value is pd.NA or value is None
+                else ("TRUE" if value else "FALSE")
                 for value in series
             ]
-    out.to_csv(path, index=False, na_rep="")
+    # ``csv_na_token()`` is the one authority for the missing-value token
+    # (metasalmon 0.2.4): a missing value writes as the empty field, so a
+    # literal "NA" — a real fisheries gear code — stays distinguishable in the
+    # bytes.
+    out.to_csv(path, index=False, na_rep=csv_na_token())
 
 
 def _read_metadata_csv(path: Path) -> pd.DataFrame:
@@ -656,7 +663,11 @@ def write_salmon_datapackage(
         # ``read_salmon_datapackage()`` and written straight back would not
         # reproduce its own bytes. See ``resource_types.render_resource_frame``
         # for the one deliberate difference from ``readr::write_csv``.
-        render_resource_frame(resource_df).to_csv(file_path, index=False)
+        # ``na_rep=csv_na_token()``: a missing value is the empty field —
+        # the single token authority every canonical read and write shares.
+        render_resource_frame(resource_df).to_csv(
+            file_path, index=False, na_rep=csv_na_token()
+        )
 
         table_dict = dict_valid[
             (dict_valid["dataset_id"] == dataset_id) & (dict_valid["table_id"] == resource_name)
@@ -1576,7 +1587,7 @@ def create_sdp(
         suggestions.to_csv(
             suggestions_path,
             index=False,
-            na_rep="",
+            na_rep=csv_na_token(),
         )
     elif suggestions_path.exists() or suggestions_path.is_symlink():
         suggestions_path.unlink()

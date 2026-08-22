@@ -4,7 +4,8 @@
    "metasalmon_ref": "v0.1.8",
    "r_version": "R version 4.5.2 (2025-10-31)",
    "zip_version": "3.0.1",
-   "digest_version": "0.6.39"
+   "digest_version": "0.6.39",
+   "note": "Regenerated 2026-08-22 (S10 chunk C) under the same era metasalmon v0.1.8 extraction and toolchain, after moving ONLY the 0.2.4 missing-value contract in sdp-public/sdp-private: the literal NA data cell became the empty field and the declared code = 'NA' was dropped, exactly as metasalmon's own test helper moved at 0.2.4. The old bytes were unregenerable: current R rejects a declared missing-value code whose parsed value is not missing, and the converged audit here rejects the same package (register row 22). The generator was proven first by reproducing all 22 committed era artifacts byte-for-byte from the unmoved inputs. knb-manifest-v2.json is a frozen legacy-schema fingerprint fixture and deliberately keeps its era values."
   },
   "full_expanded": {
    "metasalmon_ref": "main e02111a (v0.3.0 release tree plus post-0.3.0 fixes)",
@@ -16,35 +17,35 @@
   "status": "dry_run",
   "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
   "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
-  "resource_map_pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
-  "plan_sha256": "e376db7efc4b7e072e7e347ad6fa0f3f50b206832ed35939654a269dfeafd228"
+  "resource_map_pid": "urn:uuid:cd0a18c2-601c-56df-bdf6-e8b3902224ed",
+  "plan_sha256": "161f0c160b9bc99aa14c86c64e5a3f8d7735de721a0c320a06fb24b0492f4575"
  },
  "private": {
   "status": "dry_run",
   "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
   "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
-  "resource_map_pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
-  "plan_sha256": "36533a92ea86a06ab45a2eb41599912e5f888ddf93e0cdff978bc318c07952a7"
+  "resource_map_pid": "urn:uuid:cd0a18c2-601c-56df-bdf6-e8b3902224ed",
+  "plan_sha256": "bc3693d87e00583e0e26dff827b45ee7ece167b692c3c4ce053a8d24ce13ce35"
  },
  "objects": [
   {
    "role": "data",
    "path": "data/counts.csv",
-   "pid": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+   "pid": "urn:uuid:4fa35442-96b8-546f-b71a-2eba31a53543",
    "format_id": "text/csv",
    "media_type": "text/csv",
-   "size": 87,
-   "sha256": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb",
+   "size": 85,
+   "sha256": "b091c3be338d444280850083d34950c7e4051b4e904e615cb8d735d915a475b2",
    "series_id": null
   },
   {
    "role": "sdp_archive",
    "path": "publication/demo-salmon-2026-salmon-data-package.zip",
-   "pid": "urn:uuid:695ecedb-d5e7-595c-819a-9c33da4ea9c5",
+   "pid": "urn:uuid:cc9157c5-eaf2-5e28-b7b6-e8aeaf2b8892",
    "format_id": "application/zip",
    "media_type": "application/zip",
-   "size": 4196,
-   "sha256": "04c0fe42e0acb3395de7ddb3b2bdd316e94cabc9f3d9a2d158e21a90846a19a5",
+   "size": 4193,
+   "sha256": "ce65a6b8cf3dba4b39e1a127c8e796e89cb554994abe97ade0cb8bfa5d2a3cd1",
    "series_id": null
   },
   {
@@ -53,18 +54,18 @@
    "pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
    "format_id": "https://eml.ecoinformatics.org/eml-2.2.0",
    "media_type": "application/xml",
-   "size": 10725,
-   "sha256": "5f89bd610174d63e6003411931a4d1e5e17552c2e6aa3a60f0aee21b87f63352",
+   "size": 10568,
+   "sha256": "4db48923229e6fb9af3416a71317b73c17ac8f318d2110e9cedcb25a99d08109",
    "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962"
   },
   {
    "role": "resource_map",
    "path": "publication/resource-map.rdf",
-   "pid": "urn:uuid:9a90bb5b-fe13-505c-9537-4131e2ac1fab",
+   "pid": "urn:uuid:cd0a18c2-601c-56df-bdf6-e8b3902224ed",
    "format_id": "http://www.openarchives.org/ore/terms",
    "media_type": "application/rdf+xml",
    "size": 3859,
-   "sha256": "a897ce98ec172c06ebcfb192550f78cb5214fd4bf209253b7a1c7bcd38c476c2",
+   "sha256": "91c5d6893223e10d2911d248950514f1571770d0bd41c3ba16b62b713171d7c4",
    "series_id": null
   }
  ],
@@ -73,8 +74,8 @@
   "dataset_id": "demo-salmon-2026",
   "format_id": "application/zip",
   "media_type": "application/zip",
-  "size": 4196,
-  "sha256": "04c0fe42e0acb3395de7ddb3b2bdd316e94cabc9f3d9a2d158e21a90846a19a5",
+  "size": 4193,
+  "sha256": "ce65a6b8cf3dba4b39e1a127c8e796e89cb554994abe97ade0cb8bfa5d2a3cd1",
   "members": [
    "data/counts.csv",
    "datapackage.json",
@@ -96,7 +97,7 @@
    "reviewed_semantic_selections.csv"
   ],
   "zip_list_sizes": [
-   87,
+   85,
    4397,
    105,
    1023,
@@ -127,7 +128,7 @@
    "blocked_member_nodes": []
   },
   "solr_quote": "a\\\"b\\\\c",
-  "catalog_url": "https://cn.dataone.org/cn/v2/query/solr/?q=id%3A%22urn%3Auuid%3A0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f%22%20OR%20id%3A%22urn%3Auuid%3A695ecedb-d5e7-595c-819a-9c33da4ea9c5%22%20OR%20id%3A%22urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981%22%20OR%20id%3A%22urn%3Auuid%3A9a90bb5b-fe13-505c-9537-4131e2ac1fab%22&fl=id%2CresourceMap%2Cdocuments%2CisDocumentedBy&rows=4&wt=json",
+  "catalog_url": "https://cn.dataone.org/cn/v2/query/solr/?q=id%3A%22urn%3Auuid%3A4fa35442-96b8-546f-b71a-2eba31a53543%22%20OR%20id%3A%22urn%3Auuid%3Acc9157c5-eaf2-5e28-b7b6-e8aeaf2b8892%22%20OR%20id%3A%22urn%3Auuid%3A524161f4-0a68-538d-a666-bc56f254b981%22%20OR%20id%3A%22urn%3Auuid%3Acd0a18c2-601c-56df-bdf6-e8b3902224ed%22&fl=id%2CresourceMap%2Cdocuments%2CisDocumentedBy&rows=4&wt=json",
   "status_ranks": {
    "dry_run": 1,
    "pending": 2,
@@ -195,8 +196,8 @@
  },
  "python_archive": {
   "determinism_reference": "metasalmonpy-zipfile-1",
-  "sha256": "97bd2026e728886b264a4c354665c53699ecf9270b80dfa406ceaf7f6332adf3",
-  "size": 4193,
+  "sha256": "78b2b5e7f611a05cd95a6607c689fa5fd79c3da3e181c57bf72cbdbdd74fa67f",
+  "size": 4189,
   "members": [
    "data/counts.csv",
    "datapackage.json",
@@ -212,18 +213,18 @@
   "status": "dry_run",
   "package_id": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
   "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
-  "resource_map_pid": "urn:uuid:5300659b-b6b0-5753-b443-baaa18b9748b",
-  "plan_sha256": "d842240f1c6a844185e851f85b6ef30862a1aa340703482ee90e50d4916ba4f8",
+  "resource_map_pid": "urn:uuid:2a52958a-df64-54ef-b144-104c0b8c4462",
+  "plan_sha256": "529200411477e818f3d59bf7eb31b0d13a09bd177cdcacf0d5adb16fcf4e3941",
   "representation": "expanded",
   "objects": [
    {
     "role": "data",
     "path": "data/counts.csv",
-    "pid": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+    "pid": "urn:uuid:4fa35442-96b8-546f-b71a-2eba31a53543",
     "format_id": "text/csv",
     "media_type": "text/csv",
-    "size": 87,
-    "sha256": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb"
+    "size": 85,
+    "sha256": "b091c3be338d444280850083d34950c7e4051b4e904e615cb8d735d915a475b2"
    },
    {
     "role": "sdp_artifact",
@@ -294,17 +295,17 @@
     "pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
     "format_id": "https://eml.ecoinformatics.org/eml-2.2.0",
     "media_type": "application/xml",
-    "size": 18155,
-    "sha256": "5d63ab7eb039854d3a24a87eeb5299601f932c74b806a1360979266bc1a50571"
+    "size": 17998,
+    "sha256": "38ac0c678c2a3f9d757e80d56499e63b009a11ba2c5f58555e9b54cafeef0488"
    },
    {
     "role": "resource_map",
     "path": "publication/resource-map.rdf",
-    "pid": "urn:uuid:5300659b-b6b0-5753-b443-baaa18b9748b",
+    "pid": "urn:uuid:2a52958a-df64-54ef-b144-104c0b8c4462",
     "format_id": "http://www.openarchives.org/ore/terms",
     "media_type": "application/rdf+xml",
     "size": 9032,
-    "sha256": "006e10db1822d33b739b5f8a45d3b18f89bc143e7577852707784a2e1b56adf7"
+    "sha256": "11e5fe76ccdb0b9fb96ecb78d8054b6180518d40c7f5850d54f2bf73f373a170"
    }
   ]
  },
