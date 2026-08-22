@@ -19,18 +19,18 @@
   "series_id": "urn:uuid:dbb381fc-39d9-5e1a-b25a-42b209c0b962",
   "representation": "expanded",
   "revision_of": null,
-  "plan_sha256": "d842240f1c6a844185e851f85b6ef30862a1aa340703482ee90e50d4916ba4f8",
+  "plan_sha256": "529200411477e818f3d59bf7eb31b0d13a09bd177cdcacf0d5adb16fcf4e3941",
   "metadata_pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
-  "resource_map_pid": "urn:uuid:5300659b-b6b0-5753-b443-baaa18b9748b",
+  "resource_map_pid": "urn:uuid:2a52958a-df64-54ef-b144-104c0b8c4462",
   "objects": [
     {
       "role": "data",
       "path": "data/counts.csv",
-      "pid": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+      "pid": "urn:uuid:4fa35442-96b8-546f-b71a-2eba31a53543",
       "format_id": "text/csv",
       "media_type": "text/csv",
-      "size": 87,
-      "sha256": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb",
+      "size": 85,
+      "sha256": "b091c3be338d444280850083d34950c7e4051b4e904e615cb8d735d915a475b2",
       "obsoletes": null,
       "state": "planned"
     },
@@ -117,19 +117,19 @@
       "pid": "urn:uuid:524161f4-0a68-538d-a666-bc56f254b981",
       "format_id": "https://eml.ecoinformatics.org/eml-2.2.0",
       "media_type": "application/xml",
-      "size": 18155,
-      "sha256": "5d63ab7eb039854d3a24a87eeb5299601f932c74b806a1360979266bc1a50571",
+      "size": 17998,
+      "sha256": "38ac0c678c2a3f9d757e80d56499e63b009a11ba2c5f58555e9b54cafeef0488",
       "obsoletes": null,
       "state": "planned"
     },
     {
       "role": "resource_map",
       "path": "publication/resource-map.rdf",
-      "pid": "urn:uuid:5300659b-b6b0-5753-b443-baaa18b9748b",
+      "pid": "urn:uuid:2a52958a-df64-54ef-b144-104c0b8c4462",
       "format_id": "http://www.openarchives.org/ore/terms",
       "media_type": "application/rdf+xml",
       "size": 9032,
-      "sha256": "006e10db1822d33b739b5f8a45d3b18f89bc143e7577852707784a2e1b56adf7",
+      "sha256": "11e5fe76ccdb0b9fb96ecb78d8054b6180518d40c7f5850d54f2bf73f373a170",
       "obsoletes": null,
       "state": "planned"
     }

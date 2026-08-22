@@ -1,13 +1,13 @@
 {
-  "profile": "https://dfo-pacific-science.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+  "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json",
   "name": "demo-salmon-2026",
   "id": "demo-salmon-2026",
   "title": "Demonstration salmon counts",
   "description": "A compact fixture for deterministic EML export tests.",
   "sdp": {
-    "specVersion": "sdp-0.2.0",
-    "profile": "https://dfo-pacific-science.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
-    "rules": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/sdp.rules.yaml",
+    "specVersion": "sdp-0.3.0",
+    "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json",
+    "rules": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/sdp.rules.yaml",
     "metadata": {
       "dataset": "metadata/dataset.csv",
       "tables": "metadata/tables.csv",
@@ -22,7 +22,7 @@
       "path": "metadata/dataset.csv",
       "title": "SDP dataset metadata",
       "description": "Dataset-level metadata.",
-      "schema": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/frictionless/metadata/dataset.schema.json"
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/dataset.schema.json"
     },
     {
       "profile": "tabular-data-resource",
@@ -30,7 +30,7 @@
       "path": "metadata/tables.csv",
       "title": "SDP tables metadata",
       "description": "Table-level metadata.",
-      "schema": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/frictionless/metadata/tables.schema.json"
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/tables.schema.json"
     },
     {
       "profile": "tabular-data-resource",
@@ -38,7 +38,7 @@
       "path": "metadata/column_dictionary.csv",
       "title": "SDP column dictionary metadata",
       "description": "Column-level metadata.",
-      "schema": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/frictionless/metadata/column_dictionary.schema.json"
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/column_dictionary.schema.json"
     },
     {
       "profile": "tabular-data-resource",
@@ -46,7 +46,7 @@
       "path": "metadata/codes.csv",
       "title": "SDP codes metadata",
       "description": "Controlled code list metadata.",
-      "schema": "https://dfo-pacific-science.github.io/smn-data-pkg/schema/frictionless/metadata/codes.schema.json"
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/codes.schema.json"
     },
     {
       "name": "counts",
