@@ -11,9 +11,23 @@
       "r_version": "R version 4.5.2 (2025-10-31)",
       "lc_collate": "C",
       "note": "the v0.1.8 fixture run through migrate_sdp_methods() and canonicalized with write_sdp_observation_structures()"
+    },
+    "era-0.2.6-sdp": {
+      "metasalmon_ref": "5825467 (= 1893cfa~1: the last commit with 0.2.x behaviour; DESCRIPTION Version: 0.2.6 \u2014 releases 0.2.0-0.2.6 are deliberately untagged)",
+      "r_version": "R version 4.5.2 (2025-10-31)",
+      "lc_collate": "C",
+      "note": "genuine 0.2.x-written package (era 16-column dictionary binding method_iri, methods registry from deliberately reversed input, era empty-string NA bytes) for the chunk-G end-to-end legacy read test"
     }
   },
   "sha256": {
+    "era-0.2.6-sdp/.metasalmon-package": "4213e8f7faa5c80122ccc652050ce1fd88b5328c468c5593b34b3d3b37c4448b",
+    "era-0.2.6-sdp/data/stock_recruit.csv": "e90315c61eee6fc1c090f92fe2651af09aa56efa2fddea66218c64fc42b342fb",
+    "era-0.2.6-sdp/datapackage.json": "41c8160d0bab8bebc0b3bb6266aa45f8ca02b8c7240184c092cdac33f4e817f5",
+    "era-0.2.6-sdp/metadata/codes.csv": "f7c6d3675a8640b6f8047bfeb5c503f2ca78445ca90690f917372f46441913c1",
+    "era-0.2.6-sdp/metadata/column_dictionary.csv": "a825b4ac8b858d8b64d4f033cd08df185b26a9efb320431db6a9702b8ee1fa62",
+    "era-0.2.6-sdp/metadata/dataset.csv": "7b021323f1d551cb54212bea5cf276e72c5434431e6277e93dd380e08b98facb",
+    "era-0.2.6-sdp/metadata/methods.csv": "0201fe3850fce97226a012e24884eeb892fd703a1d2d238e63ec71442594b8e0",
+    "era-0.2.6-sdp/metadata/tables.csv": "91c1382e1f09f0418e84f1ffb79ed85de055ee02e755cf4299363e46e165b08d",
     "methods-sdp/metadata/methods.csv": "acff264824458e30d933d4df487d8203f5a30975a8644016519fff0b8b173738",
     "repro-sdp/reproducibility/manifest.json": "c2b9a89b7bdfe348dad41cf8b5844306e61c1c6835e30855c68a31b7b0f4d21b",
     "structure-sdp/datapackage.json": "ea98b1fdc1179252ee1eaca76a36cdda5fcf4607a1219026ad81b110cdc00146",

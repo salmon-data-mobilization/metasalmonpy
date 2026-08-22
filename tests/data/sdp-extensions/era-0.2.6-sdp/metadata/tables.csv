@@ -1,0 +1,2 @@
+dataset_id,table_id,file_name,table_label,description,observation_unit,observation_unit_iri,primary_key
+era-methods-test,stock_recruit,data/stock_recruit.csv,Stock recruit,Spawner abundance estimates by stock and brood year.,stock-year,,"stock_id,brood_year"

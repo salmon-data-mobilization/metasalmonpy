@@ -1,0 +1,132 @@
+{
+  "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+  "name": "era-methods-test",
+  "id": "era-methods-test",
+  "title": "Era registry fixture",
+  "description": "A small sdp-0.2.0 package written by metasalmon 0.2.6 for legacy read tests.",
+  "sdp": {
+    "specVersion": "sdp-0.2.0",
+    "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+    "rules": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/sdp.rules.yaml",
+    "metadata": {
+      "dataset": "metadata/dataset.csv",
+      "tables": "metadata/tables.csv",
+      "columnDictionary": "metadata/column_dictionary.csv",
+      "codes": "metadata/codes.csv",
+      "methods": "metadata/methods.csv"
+    }
+  },
+  "resources": [
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_dataset",
+      "path": "metadata/dataset.csv",
+      "title": "SDP dataset metadata",
+      "description": "Dataset-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/dataset.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_tables",
+      "path": "metadata/tables.csv",
+      "title": "SDP tables metadata",
+      "description": "Table-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/tables.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_column_dictionary",
+      "path": "metadata/column_dictionary.csv",
+      "title": "SDP column dictionary metadata",
+      "description": "Column-level metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/column_dictionary.schema.json"
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_codes",
+      "path": "metadata/codes.csv",
+      "title": "SDP codes metadata",
+      "description": "Controlled code list metadata.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/codes.schema.json"
+    },
+    {
+      "name": "stock_recruit",
+      "path": "data/stock_recruit.csv",
+      "profile": "tabular-data-resource",
+      "schema": {
+        "fields": [
+          {
+            "name": "stock_id",
+            "title": "Stock",
+            "type": "string",
+            "description": "Stock identifier",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "brood_year",
+            "title": "Brood year",
+            "type": "integer",
+            "description": "Brood year",
+            "constraints": {
+              "required": true
+            }
+          },
+          {
+            "name": "spawner_abundance",
+            "title": "Spawner abundance",
+            "type": "integer",
+            "description": "Estimated total spawner abundance",
+            "constraints": {
+              "required": true
+            },
+            "method_iri": "https://example.org/methods/expanded-count"
+          },
+          {
+            "name": "estimate_method",
+            "title": "Estimate method",
+            "type": "string",
+            "description": "Estimate method used for the abundance estimate"
+          }
+        ],
+        "primaryKey": [
+          "stock_id",
+          "brood_year"
+        ]
+      },
+      "title": "Stock recruit",
+      "description": "Spawner abundance estimates by stock and brood year."
+    },
+    {
+      "profile": "tabular-data-resource",
+      "name": "sdp_methods",
+      "path": "metadata/methods.csv",
+      "title": "SDP methods metadata",
+      "description": "Optional registry of procedures associated with measurements in the package.",
+      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/methods.schema.json"
+    }
+  ],
+  "contributors": [
+    {
+      "title": "metasalmon era fixture generator",
+      "role": "creator"
+    },
+    {
+      "title": "MISSING METADATA: add primary contact name or team.",
+      "role": "contact",
+      "email": "MISSING METADATA: add primary contact email."
+    }
+  ],
+  "licenses": [
+    {
+      "name": "CC-BY-4.0",
+      "title": "Creative Commons Attribution 4.0 International",
+      "path": "https://creativecommons.org/licenses/by/4.0/"
+    }
+  ],
+  "temporal": {
+    "start": "2016-09-01",
+    "end": "2017-11-30"
+  }
+}

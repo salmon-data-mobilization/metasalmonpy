@@ -1,0 +1,5 @@
+dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,required,unit_label,unit_iri,term_iri,term_type,property_iri,entity_iri,constraint_iri,method_iri
+era-methods-test,stock_recruit,stock_id,Stock,Stock identifier,identifier,string,TRUE,,,,,,,,
+era-methods-test,stock_recruit,brood_year,Brood year,Brood year,temporal,integer,TRUE,,,,,,,,
+era-methods-test,stock_recruit,spawner_abundance,Spawner abundance,Estimated total spawner abundance,measurement,integer,TRUE,count,,,,,,,https://example.org/methods/expanded-count
+era-methods-test,stock_recruit,estimate_method,Estimate method,Estimate method used for the abundance estimate,attribute,string,FALSE,,,,,,,,
