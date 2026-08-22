@@ -10,6 +10,90 @@ metasalmon's post-0.3.0 `main`, which no R release contains, and nobody has
 ruled what a number may claim about that. The bump comes once, at the end of
 the S10 chunks, after that ruling. Bump on parity, not on calendar.
 
+### S10 chunk B — the semantic pipeline retarget
+
+Retargets the semantic pipeline onto the dictionary shape chunk A introduced:
+`statistical_modifier` becomes the sixth reviewed dictionary slot, and the
+code-level `method` role survives for `codes.csv` searches only. Everything
+here was verified by **running both implementations over the same inputs**
+against metasalmon `main` at `9d8f125`; the differential matched on every
+probe — sources per role, all three crosswalks value-for-value, the codes
+prefills, target discovery, bundle payload shape, the prompt's judged-slot
+sentence, and gap detection.
+
+- **Measurement columns discover a `statistical_modifier` target** —
+  deliberately conservative, only when the column text (name, label, or
+  description, underscores split) names an aggregation, so plain measurements
+  gain no slot; the emitted query is the canonical aggregation word
+  (`total` > `mean` > `maximum` > `minimum` > `peak`, mirroring R's ladder).
+  `apply_semantic_suggestions()` maps the role to `statistical_modifier_iri`
+  and no longer accepts `method`; auto-apply stays limited to variable,
+  property, entity, and unit, and a modifier auto-fill additionally requires
+  the column itself to name an aggregation.
+- **The ranking-preferences data gains the three `statistical_modifier`
+  rows** (smn's StatisticalModifierScheme first, then I-ADOPT, then STATO) —
+  `data/ontology-preferences.csv` is again byte-identical to metasalmon's —
+  and `sources_for_role("statistical_modifier")` serves the role from
+  `smn` + `ols`, exactly R's list.
+- **The bundle review names every role**: the payload carries the six
+  dictionary slots plus `method` (no dictionary field; always
+  `already_filled_or_not_requested` for column bundles), and the system
+  prompt's opening instruction judges exactly the dictionary slots — naming
+  `statistical_modifier`, never `method`, which is described as
+  usedProcedure-style context instead. **`SEM_MODIFIER_EVIDENCE_REQUIRED`**
+  lands *beside* the surviving `SEM_METHOD_EVIDENCE_REQUIRED`, downgrading a
+  modifier accept whose column text names no aggregation.
+- **A role-contract guard that states its own limited scope**
+  (`tests/test_role_contract_guard.py`): it pins six of metasalmon's seven
+  role surfaces — the prompt, the slot/role maps, the hint emitters, the
+  retrieval filters, the deterministic validators, and the ranking
+  preferences — and says plainly that the seventh (`role_boost`) is
+  unreachable here because this package has no ranking-profile system (hub
+  backlog #87, PARITY.md row 32). A tripwire test fails the moment a profile
+  system appears, so the guard is extended rather than silently narrower.
+- **Gap detection sees zero-candidate targets** (hub backlog #97, the same
+  defect metasalmon fixed in PR #75): `suggest_semantics()` now attaches its
+  discovered targets as a `semantic_targets` attribute, and
+  `detect_semantic_term_gaps()` reports any target with no retrieval evidence
+  at all — no suggestion row before `min_score`, no assessment of any
+  decision — as `gap_detection_basis = "no_candidates"`, distinguishing
+  "nothing found" from "found and rejected". The distinction is per target,
+  not per column, and the scope/role filters apply to no-candidate targets
+  exactly as to suggestion-backed ones. The explicit-`suggestions` path keeps
+  its historical row-in/row-out behaviour.
+- **`nuseds_estimate_classification_crosswalk()`** maps the NuSEDS
+  `ESTIMATE_CLASSIFICATION` strings onto the released gcdfo Hyatt (1997)
+  types (`gcdfo:Type1`–`Type6`), records `NO SURVEY THIS YEAR` and `UNKNOWN`
+  as deliberate non-mappings, and links the multi-year relative
+  classifications at scheme level (hub backlog #101).
+- **All three NuSEDS crosswalks are wired into the package path** — the
+  shared prefill engine fills `codes.csv` `term_iri` during `create_sdp()` /
+  `infer_salmon_datapackage_artifacts()` for estimate-method,
+  estimate-classification, and enumeration-method code values (matching on
+  the word `enumeration` alone, because `ENUMERATION_METHODS` is plural and a
+  `\bmethod\b` test can never match it), never overwriting an explicit
+  caller-supplied IRI. Until now **no** crosswalk was wired here at all,
+  although metasalmon has wired the estimate one since its initial commit —
+  a previously undocumented divergence, registered as **PARITY row 47** in
+  this change (hub backlog #102).
+
+#### Fixed in passing
+
+- **Measurement constraint and entity queries are role-shaped, as R's have
+  been since era 0.1.7**: constraint text naming `natural`/`hatchery` becomes
+  an origin query, and a spawner measurement's entity query becomes
+  `population` (or `stock`/`population` when a sibling column names one). The
+  era port pinned only the variable/property shaping, so the raw description
+  leaked into these two searches — an undocumented divergence the chunk-B
+  differential caught, which also cascaded into gap detection (a candidate
+  matching the description text turned a genuinely-empty target into a
+  `candidate_gap`).
+- The bundle payload-shape test no longer asserts inside the injected
+  `request_fn`, where the bundle path's provider-failure handling swallows
+  `AssertionError` and lets a drifted payload pass vacuously — observed in
+  this chunk: the old six-slot assertion kept passing, green, against the
+  new seven-role payload until the assertions moved outside the request.
+
 ### S10 chunk A — the sdp-0.3.0 method placement model (breaking)
 
 Mirrors metasalmon 0.3.0's breaking change plus its post-0.3.0 fixes.
