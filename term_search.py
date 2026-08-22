@@ -5,6 +5,9 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import warnings
@@ -27,6 +30,7 @@ from .term_search_smn import (
     _smn_role_hints,
     parse_smn_ttl_modules,
 )
+from .text_safety import redact_secrets
 
 try:
     from importlib import resources
@@ -40,8 +44,53 @@ except ImportError:  # pragma: no cover
 
 
 _warned_bioportal_missing = False
-_cache_enabled = os.getenv("SALMONPY_CACHE", "").lower() in {"1", "true", "yes"}
 _term_cache: Dict[tuple, pd.DataFrame] = {}
+
+# Legacy SALMONPY_* spellings that already warned once this process, so the
+# deprecation nudge fires once per variable rather than once per call.
+_legacy_env_warned: set = set()
+
+
+def _env_flag(name: str) -> bool:
+    """Read the ``METASALMONPY_<name>`` on/off switch **at call time**.
+
+    A module-level binding is evaluated when the module is imported, so an
+    installed package captured the importing process's environment once and a
+    user who set the variable afterwards was never heard — the exact bug class
+    metasalmon 0.2.2 fixed for ``METASALMON_CACHE`` (a top-level R binding
+    evaluated when the namespace was built). Mirrors
+    ``.metasalmon_cache_enabled()``: unset and empty are both "off".
+
+    The pre-rename ``SALMONPY_<name>`` spelling still works with a
+    ``DeprecationWarning`` while the S10 deprecation window is open; it is
+    consulted only when the current spelling is unset or empty, and is removed
+    in the first tagged release after the S10 parity release (see CHANGELOG).
+    """
+    current = os.getenv(f"METASALMONPY_{name}", "")
+    if current != "":
+        return current.lower() in {"1", "true", "yes"}
+    legacy = os.getenv(f"SALMONPY_{name}", "")
+    if legacy != "":
+        if name not in _legacy_env_warned:
+            warnings.warn(
+                f"SALMONPY_{name} is deprecated; set METASALMONPY_{name} "
+                "instead. The old spelling is removed in the first release "
+                "after the S10 parity release.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            _legacy_env_warned.add(name)
+        return legacy.lower() in {"1", "true", "yes"}
+    return False
+
+
+def _cache_enabled() -> bool:
+    return _env_flag("CACHE")
+
+
+def _debug_fetch_enabled() -> bool:
+    return _env_flag("DEBUG_FETCH")
+
 _USER_AGENT = "metasalmonpy/unknown"
 if _pkg_version:
     try:
@@ -67,44 +116,121 @@ def _empty_terms(role=None) -> pd.DataFrame:
     )
 
 
+# Per-call sinks installed by find_terms() around each source function, so a
+# failed vocabulary lookup can be *recorded* without discarding the rows that
+# did resolve. Mirrors metasalmon's `.ms_signal_search_failure()` +
+# withCallingHandlers pair: R signals a classed condition that is silent when
+# nobody handles it, so outside find_terms() a failure stays quiet here too.
+_search_failure_sinks: List[List[str]] = []
+
+
+def _signal_search_failure(url: str, detail: str) -> None:
+    """Record a vocabulary lookup that did not answer.
+
+    The point is that a failed lookup must never be indistinguishable from a
+    successful empty one. It was: ``_safe_json`` returned ``None`` for both,
+    every caller collapsed ``None`` into ``_empty_terms()``, and the
+    diagnostic recorded ``status="success", count=0``. A degraded OLS
+    therefore looked exactly like "no such term exists", which is the input
+    that drives ``request_new_term`` escalation — so an outage manufactured
+    ontology gaps (metasalmon 0.2.2).
+    """
+    if _search_failure_sinks:
+        _search_failure_sinks[-1].append(
+            f"Vocabulary API request failed: {detail}"
+        )
+
+
+_TIMEOUT_ERROR_PATTERN = re.compile(
+    r"timeout|timed out|operation timed out|timeout exceeded|timedout"
+)
+
+
+def _is_timeout_error(message: object) -> bool:
+    """Mirror ``.ms_is_timeout_error``."""
+    if message is None:
+        return False
+    return bool(_TIMEOUT_ERROR_PATTERN.search(str(message).lower().strip()))
+
+
+def _warn_request_timeout(safe_url: str, detail: str) -> None:
+    warnings.warn(
+        "Vocabulary API request timed out while querying "
+        f"{safe_url}. {detail}",
+        RuntimeWarning,
+        stacklevel=3,
+    )
+
+
 def _safe_json(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 30) -> Optional[dict]:
     merged_headers = headers.copy() if headers else {}
     merged_headers.setdefault("User-Agent", _USER_AGENT)
 
-    _debug = os.getenv("SALMONPY_DEBUG_FETCH", "").lower() in {"1", "true", "yes"}
+    _debug = _debug_fetch_enabled()
+    # Redacted at capture, not at display: the redacted form is what reaches
+    # warnings, failure records and the diagnostics frame, all of which
+    # outlive this call. metasalmon no longer puts a key in a URL either, but
+    # a user-supplied endpoint or a future source could, and this is the one
+    # place every source's URL is recorded (metasalmon 0.2.3).
+    safe_url = redact_secrets(url)
 
     try:
         req = urllib.request.Request(url, headers=merged_headers)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status >= 300:
                 if _debug:
-                    print(f"[_safe_json] HTTP error {resp.status}", file=__import__('sys').stderr)
+                    print(f"[_safe_json] HTTP error {resp.status}", file=sys.stderr)
+                if resp.status == 408:
+                    _warn_request_timeout(safe_url, "HTTP 408 (Request Timeout)")
+                _signal_search_failure(safe_url, f"HTTP {resp.status}")
                 return None
             body = resp.read().decode("utf-8")
             return json.loads(body)
+    except urllib.error.HTTPError as http_err:
+        # A real server answer. The curl fallback below exists for broken
+        # local HTTPS stacks; re-asking a server that already said 404/503
+        # would only repeat the same answer, so this signals immediately —
+        # matching R, whose httr GET never falls back at all.
+        if _debug:
+            print(f"[_safe_json] HTTP error {http_err.code}", file=sys.stderr)
+        if http_err.code == 408:
+            _warn_request_timeout(safe_url, "HTTP 408 (Request Timeout)")
+        _signal_search_failure(safe_url, f"HTTP {http_err.code}")
+        return None
     except Exception as _urllib_err:
         # Some environments ship Python builds that fail to establish HTTPS
         # connections (e.g., Errno 8/9 "nodename nor servname provided" or
         # "Bad file descriptor"). Fall back to curl if available.
         if _debug:
-            print(f"[_safe_json] urllib failed: {type(_urllib_err).__name__}", file=__import__('sys').stderr)
+            print(f"[_safe_json] urllib failed: {type(_urllib_err).__name__}", file=sys.stderr)
+        urllib_detail = redact_secrets(str(_urllib_err))
         try:
             if shutil.which("curl") is None:
                 if _debug:
-                    print("[_safe_json] curl not found", file=__import__('sys').stderr)
+                    print("[_safe_json] curl not found", file=sys.stderr)
+                if _is_timeout_error(urllib_detail):
+                    _warn_request_timeout(safe_url, urllib_detail)
+                _signal_search_failure(safe_url, urllib_detail)
                 return None
-            cmd = ["curl", "-s", "-L", url]
+            # --fail keeps the fallback honest: without it an HTTP error page
+            # served as valid JSON would masquerade as a successful lookup —
+            # the exact failure mode the signalling above exists to prevent.
+            cmd = ["curl", "-s", "--fail", "-L", url]
             for key, value in merged_headers.items():
                 cmd.extend(["-H", f"{key}: {value}"])
             if _debug:
-                print(f"[_safe_json] running curl (timeout={timeout})...", file=__import__('sys').stderr)
+                print(f"[_safe_json] running curl (timeout={timeout})...", file=sys.stderr)
             body = subprocess.check_output(cmd, timeout=timeout).decode("utf-8")
             if _debug:
-                print(f"[_safe_json] curl success: {len(body)} bytes", file=__import__('sys').stderr)
+                print(f"[_safe_json] curl success: {len(body)} bytes", file=sys.stderr)
             return json.loads(body) if body else None
         except Exception as _curl_err:
             if _debug:
-                print(f"[_safe_json] curl failed: {type(_curl_err).__name__}: {_curl_err}", file=__import__('sys').stderr)
+                print(f"[_safe_json] curl failed: {type(_curl_err).__name__}: {_curl_err}", file=sys.stderr)
+            curl_detail = redact_secrets(str(_curl_err))
+            if _is_timeout_error(urllib_detail) or _is_timeout_error(curl_detail):
+                _warn_request_timeout(safe_url, urllib_detail)
+            _signal_search_failure(safe_url, f"{urllib_detail}; {curl_detail}")
             return None
 
 
@@ -297,8 +423,12 @@ def _search_bioportal(query: str, role) -> pd.DataFrame:
             _warned_bioportal_missing = True
         return _empty_terms(role)
     encoded = urllib.parse.quote(query, safe="")
-    url = f"https://data.bioontology.org/search?q={encoded}&apikey={apikey}"
-    data = _safe_json(url)
+    # The key travels in a header, not the query string. In the URL it was
+    # written into request logs and proxy logs at both ends, and would be
+    # quoted verbatim by any warning or diagnostic that records the URL
+    # (metasalmon 0.2.3).
+    url = f"https://data.bioontology.org/search?q={encoded}"
+    data = _safe_json(url, headers={"Authorization": f"apikey token={apikey}"})
     coll = data.get("collection", []) if data else []
     if not coll:
         return _empty_terms(role)
@@ -744,58 +874,88 @@ def _parse_salmon_rdfxml(xml_text: str, iri_pattern: str) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=list(SMN_INDEX_COLUMNS))
 
 
+# An index that has already been resolved in this session is returned without
+# touching the network or the parser (metasalmon 0.2.2).
+#
+# The trade is deliberate: an index is resolved once per session, so a module
+# updated upstream mid-session is not picked up until ``refresh=True``. That
+# matches the decision already taken for the schema bundle — once a session
+# resolves an identity, everything it writes carries that same identity — and
+# it is the stronger guarantee for seeding, where two columns in one package
+# must not be seeded against two different ontology versions.
+_smn_index_cache: Dict[str, pd.DataFrame] = {}
+_gcdfo_index_cache: Dict[str, pd.DataFrame] = {}
+
+
+def _cached_term_index(cache: Dict[str, pd.DataFrame], refresh: bool, resolve) -> pd.DataFrame:
+    """Mirror ``.ms_cached_term_index``: resolve once per session.
+
+    A failed ``resolve()`` raises and caches nothing, so the next call tries
+    again rather than freezing an outage for the rest of the session.
+    """
+    if not refresh and "index" in cache:
+        return cache["index"]
+    index = resolve()
+    cache["index"] = index
+    return index
+
+
 def _smn_term_index(refresh: bool = False) -> pd.DataFrame:
     """
     Build the Salmon Domain Ontology (smn) term index.
 
-    ``refresh`` is accepted for forward-compatibility with the planned
-    session cache (metasalmon 0.2.2 parity); no caching exists yet, so every
-    call resolves the index anew.
+    Resolved once per session; ``refresh=True`` bypasses and replaces the
+    session cache (metasalmon 0.2.2 parity).
     """
-    del refresh  # no session cache yet; see docstring
-    try:
-        texts = {
-            url: _fetch_ontology_text(url, _SMN_TTL_ACCEPT) for url in _smn_module_urls()
-        }
-        index: Optional[pd.DataFrame] = parse_smn_ttl_modules(texts)
-    except Exception:
-        index = None
-    if index is not None and not index.empty:
+
+    def resolve() -> pd.DataFrame:
+        try:
+            texts = {
+                url: _fetch_ontology_text(url, _SMN_TTL_ACCEPT) for url in _smn_module_urls()
+            }
+            index: Optional[pd.DataFrame] = parse_smn_ttl_modules(texts)
+        except Exception:
+            index = None
+        if index is not None and not index.empty:
+            return index
+
+        # The modules are Turtle-first on W3ID; the root is the RDF/XML
+        # fallback for when they are unavailable or parse to nothing.
+        xml_text = _fetch_ontology_text(
+            _SMN_ROOT_URL, _RDFXML_ACCEPT, fallback_urls=_SMN_ROOT_FALLBACK_URLS
+        )
+        index = _parse_salmon_rdfxml(xml_text, iri_pattern=_SMN_IRI_PATTERN)
+        if index.empty:
+            raise RuntimeError(
+                "Salmon Domain Ontology (smn) fetch succeeded but parsed to an empty "
+                "term index; refusing to return a silently empty index."
+            )
         return index
 
-    # The modules are Turtle-first on W3ID; the root is the RDF/XML fallback
-    # for when they are unavailable or parse to nothing.
-    xml_text = _fetch_ontology_text(
-        _SMN_ROOT_URL, _RDFXML_ACCEPT, fallback_urls=_SMN_ROOT_FALLBACK_URLS
-    )
-    index = _parse_salmon_rdfxml(xml_text, iri_pattern=_SMN_IRI_PATTERN)
-    if index.empty:
-        raise RuntimeError(
-            "Salmon Domain Ontology (smn) fetch succeeded but parsed to an empty "
-            "term index; refusing to return a silently empty index."
-        )
-    return index
+    return _cached_term_index(_smn_index_cache, refresh, resolve)
 
 
 def _gcdfo_term_index(refresh: bool = False) -> pd.DataFrame:
     """
     Build the DFO Salmon Ontology (gcdfo) term index.
 
-    ``refresh`` is accepted for forward-compatibility with the planned
-    session cache (metasalmon 0.2.2 parity); no caching exists yet, so every
-    call resolves the index anew.
+    Resolved once per session; ``refresh=True`` bypasses and replaces the
+    session cache (metasalmon 0.2.2 parity).
     """
-    del refresh  # no session cache yet; see docstring
-    xml_text = _fetch_ontology_text(
-        _GCDFO_URL, _RDFXML_ACCEPT, fallback_urls=_GCDFO_FALLBACK_URLS
-    )
-    index = _parse_salmon_rdfxml(xml_text, iri_pattern=_GCDFO_IRI_PATTERN)
-    if index.empty:
-        raise RuntimeError(
-            "DFO Salmon Ontology (gcdfo) fetch succeeded but parsed to an empty "
-            "term index; refusing to return a silently empty index."
+
+    def resolve() -> pd.DataFrame:
+        xml_text = _fetch_ontology_text(
+            _GCDFO_URL, _RDFXML_ACCEPT, fallback_urls=_GCDFO_FALLBACK_URLS
         )
-    return index
+        index = _parse_salmon_rdfxml(xml_text, iri_pattern=_GCDFO_IRI_PATTERN)
+        if index.empty:
+            raise RuntimeError(
+                "DFO Salmon Ontology (gcdfo) fetch succeeded but parsed to an empty "
+                "term index; refusing to return a silently empty index."
+            )
+        return index
+
+    return _cached_term_index(_gcdfo_index_cache, refresh, resolve)
 
 
 def _filter_local_index(index: pd.DataFrame, query: str, role, source: str, ontology: str) -> pd.DataFrame:
@@ -1122,7 +1282,7 @@ def find_terms(
         return _empty_terms(role)
 
     cache_key = (query, role, tuple(sorted(resolved_sources)), expand_query)
-    if _cache_enabled and cache_key in _term_cache:
+    if _cache_enabled() and cache_key in _term_cache:
         return _term_cache[cache_key].copy()
 
     queries = _expand_query(query, role) if expand_query else [query]
@@ -1130,6 +1290,15 @@ def find_terms(
     diagnostics = []
     for query_variant in queries:
         for src in resolved_sources:
+            start_time = time.time()
+            # Failures signalled by ``_safe_json`` are recorded here rather
+            # than raised, so an optional enrichment request that fails does
+            # not discard the rows that did resolve — but the source can no
+            # longer report ``status="success"`` when it never heard back
+            # (metasalmon 0.2.2). The sink is per source call, mirroring R's
+            # call-local accumulator.
+            failures: List[str] = []
+            _search_failure_sinks.append(failures)
             try:
                 if src == "smn":
                     res = _search_smn(query_variant, role)
@@ -1151,11 +1320,42 @@ def find_terms(
                     res = _search_worms(query_variant, role)
                 else:
                     res = _empty_terms(role)
-                diagnostics.append({"source": src, "query": query_variant, "status": "success", "count": len(res), "error": ""})
+                diagnostics.append(
+                    {
+                        "source": src,
+                        "query": query_variant,
+                        # A source that returned rows despite a failed side
+                        # request is still a partial answer, not a clean
+                        # success.
+                        "status": "success" if not failures else "http_error",
+                        "count": len(res),
+                        "elapsed_secs": round(time.time() - start_time, 2),
+                        "error": None if not failures else "; ".join(failures),
+                    }
+                )
                 results.append(res)
             except Exception as exc:
-                diagnostics.append({"source": src, "query": query_variant, "status": "error", "count": 0, "error": str(exc)})
+                err_msg = redact_secrets(str(exc))
+                if _is_timeout_error(err_msg):
+                    warnings.warn(
+                        f"Vocabulary API lookup timed out for source {src!r} "
+                        f"while searching {query_variant!r}. {err_msg}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                diagnostics.append(
+                    {
+                        "source": src,
+                        "query": query_variant,
+                        "status": "error",
+                        "count": 0,
+                        "elapsed_secs": round(time.time() - start_time, 2),
+                        "error": err_msg,
+                    }
+                )
                 results.append(_empty_terms(role))
+            finally:
+                _search_failure_sinks.pop()
 
     combined = pd.concat(results, ignore_index=True) if results else _empty_terms(role)
     vocab_tbl = _load_iadopt_vocab()
@@ -1181,8 +1381,28 @@ def find_terms(
         ]
         + [col for col in ["role_hints", "zooma_confidence", "zooma_annotator"] if col in ranked.columns]
     ]
-    ranked.attrs["diagnostics"] = pd.DataFrame(diagnostics)
-    if _cache_enabled:
+    diag_df = pd.DataFrame(diagnostics)
+    ranked.attrs["diagnostics"] = diag_df
+
+    degraded = [
+        entry for entry in diagnostics if entry["status"] in ("error", "http_error")
+    ]
+    if degraded:
+        failed_sources = sorted({entry["source"] for entry in degraded})
+        warnings.warn(
+            "Vocabulary lookup was incomplete: "
+            f"{', '.join(repr(source) for source in failed_sources)} did not "
+            "answer. Treat an empty or short result as unknown rather than as "
+            'an ontology gap. See result.attrs["diagnostics"] for per-source '
+            "detail.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    # A degraded lookup is never cached. Caching it would freeze an outage's
+    # empty result for the rest of the session, so every later column would
+    # inherit the same manufactured gap (metasalmon 0.2.2).
+    if _cache_enabled() and not degraded:
         _term_cache[cache_key] = ranked.copy()
     return ranked
 

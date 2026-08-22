@@ -264,6 +264,75 @@ if __name__ == "__main__":  # pragma: no cover
     unittest.main()
 
 
+class TermIndexSessionCacheTests(unittest.TestCase):
+    """An index already resolved in this session is returned without touching
+    the network or the parser (metasalmon 0.2.2).
+
+    The stamp check used to sit *after* the fetch and the parse on the R side,
+    so every ``find_terms()`` call paid 11 conditional GETs and a full reparse
+    before discovering nothing had changed; here there was no session cache at
+    all, which is the same cost. The conftest fixture clears the caches around
+    every test, so each test below owns its whole session.
+    """
+
+    def _counting(self, inner):
+        calls = {"n": 0}
+
+        def fetch(url, accept, fallback_urls=(), timeout=30):
+            calls["n"] += 1
+            return inner(url, accept, fallback_urls, timeout)
+
+        return fetch, calls
+
+    def test_smn_index_is_resolved_once_per_session(self):
+        fetch, calls = self._counting(_smn_fetch)
+        with mock.patch.object(ts, "_fetch_ontology_text", side_effect=fetch):
+            first = ts._smn_term_index()
+            first_cost = calls["n"]
+            second = ts._smn_term_index()
+        self.assertGreater(first_cost, 0)
+        self.assertEqual(calls["n"], first_cost)
+        self.assertIs(second, first)
+
+    def test_gcdfo_index_is_resolved_once_per_session(self):
+        fetch, calls = self._counting(_gcdfo_fetch)
+        with mock.patch.object(ts, "_fetch_ontology_text", side_effect=fetch):
+            first = ts._gcdfo_term_index()
+            second = ts._gcdfo_term_index()
+        self.assertEqual(calls["n"], 1)
+        self.assertIs(second, first)
+
+    def test_refresh_bypasses_and_replaces_the_session_cache(self):
+        # The trade is deliberate: a module updated upstream mid-session is
+        # not picked up until refresh=True — the stronger guarantee for
+        # seeding, where two columns in one package must not be seeded
+        # against two different ontology versions.
+        fetch, calls = self._counting(_gcdfo_fetch)
+        with mock.patch.object(ts, "_fetch_ontology_text", side_effect=fetch):
+            ts._gcdfo_term_index()
+            ts._gcdfo_term_index(refresh=True)
+            ts._gcdfo_term_index()
+        self.assertEqual(calls["n"], 2)
+
+    def test_a_failed_resolve_is_not_cached(self):
+        # An outage must not freeze an error (or an empty index) for the rest
+        # of the session; the next call tries again.
+        with mock.patch.object(ts, "_fetch_ontology_text", side_effect=_failing_fetch):
+            with self.assertRaises(RuntimeError):
+                ts._gcdfo_term_index()
+        with mock.patch.object(ts, "_fetch_ontology_text", side_effect=_gcdfo_fetch):
+            index = ts._gcdfo_term_index()
+        self.assertFalse(index.empty)
+
+    def test_find_terms_pays_no_fetch_after_the_first_call(self):
+        fetch, calls = self._counting(_smn_fetch)
+        with mock.patch.object(ts, "_fetch_ontology_text", side_effect=fetch):
+            find_terms("population", role="entity", sources=("smn",))
+            first_cost = calls["n"]
+            find_terms("spawner", role="entity", sources=("smn",))
+        self.assertEqual(calls["n"], first_cost)
+
+
 class NonTurtleModuleTests(unittest.TestCase):
     """One corrupted module must not silently drop its terms (PR 6 review)."""
 

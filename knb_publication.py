@@ -1360,11 +1360,24 @@ def _require_new_revision_pids(
 
 
 def _assert_resource_map_owned(
-    plan: Dict[str, object], previous: Optional[Dict[str, object]]
+    plan: Dict[str, object],
+    previous: Optional[Dict[str, object]],
+    overwrite: bool = False,
 ) -> None:
     """Mirror ``.ms_knb_assert_resource_map_owned``."""
     resource_map_path = str(plan["resource_map_path"])
     if not os.path.exists(resource_map_path):
+        return
+    # Same principle as the plan check in ``publish_sdp_to_knb``: a resource
+    # map left by a dry run was never sent to DataONE, so it is a local
+    # scratch artifact rather than a published one. This was the third gate
+    # in the re-plan dead end — clearing the artifact writers and the plan
+    # check only to stop here (metasalmon 0.2.3).
+    if (
+        overwrite is True
+        and previous is not None
+        and _optional_scalar(previous.get("status")) == "dry_run"
+    ):
         return
     previous_objects = _manifest_objects(previous)
     resource_maps = [
@@ -1388,7 +1401,8 @@ def _assert_resource_map_owned(
     if not owned:
         raise ValueError(
             "The pre-existing resource map file is not owned by the exact "
-            "matching publication manifest."
+            "matching publication manifest. If it is left over from an "
+            "unpublished dry run, pass overwrite=True to replace it."
         )
 
 
@@ -1638,6 +1652,7 @@ def _build_plan(
     representation: str = "archive",
     prior_manifest: Optional[Dict[str, object]] = None,
     resource_map_path: Optional[str] = None,
+    overwrite: bool = False,
 ) -> Dict[str, object]:
     """Mirror ``.ms_knb_build_plan``: the whole pure, offline planner."""
     if representation not in ("archive", "expanded"):
@@ -1662,7 +1677,7 @@ def _build_plan(
     _require_review_ledger_binding(path, mapping)
     archive: Optional[Dict[str, object]] = None
     if representation == "archive":
-        archive = knb_archive._write_sdp_archive(path)
+        archive = knb_archive._write_sdp_archive(path, overwrite=overwrite)
         package_objects = [
             _sdp_archive_object(archive, path, str(mapping["dataset_id"]))
         ]
@@ -1671,11 +1686,14 @@ def _build_plan(
             path, str(mapping["dataset_id"])
         )
     supplementary_objects = _supplementary_object_plan(package_objects)
-    # R calls the writer with its default ``overwrite = FALSE``: an identical
-    # document re-writes idempotently, a different one must be reviewed.
+    # ``overwrite`` reaches both derived-artifact writers (the SDP archive
+    # above and the EML document here); each still re-writes an identical
+    # document idempotently, and a different one must be reviewed unless the
+    # caller passed ``overwrite=True`` against an unpublished dry run.
     eml = write_eml_from_sdp(
         path,
         output_path=eml_path,
+        overwrite=overwrite,
         supplementary_objects=supplementary_objects,
         require_revision_key=prior_manifest is not None,
     )
@@ -3568,6 +3586,7 @@ def publish_sdp_to_knb(
     confirm: Optional[bool] = None,
     revision_manifest: Optional[Union[str, Path]] = None,
     representation: str = "archive",
+    overwrite: bool = False,
 ) -> Dict[str, object]:
     """Publish a reviewed Salmon Data Package to production KNB.
 
@@ -3640,6 +3659,16 @@ def publish_sdp_to_knb(
         individually named objects whose relative paths can reconstruct the
         package. ``"archive"`` (the compatibility default) publishes one
         deterministic ZIP in addition to each source data object.
+    overwrite:
+        Rebuild derived publication artifacts (the SDP archive and
+        ``eml.xml``) when they already exist with different bytes, and replace
+        a manifest and resource map left by an *unpublished dry run*. The
+        default ``False`` refuses, which protects an artifact you may already
+        have published; pass ``True`` to re-plan after correcting an input
+        such as ``eml-mapping.yml``. Anything that reached the network is
+        unaffected: a manifest whose status is not ``dry_run`` still requires
+        a reviewed revision, because its DataONE PIDs are immutable, and live
+        publication is still gated by ``confirm``.
 
     Returns
     -------
@@ -3652,6 +3681,7 @@ def publish_sdp_to_knb(
         raise ValueError(
             'representation must be one of "archive" or "expanded".'
         )
+    _validate_flag(overwrite, "overwrite")
     _validate_flag(public, "public")
     _validate_flag(dry_run, "dry_run")
     if not dry_run and confirm is not True:
@@ -3704,6 +3734,26 @@ def publish_sdp_to_knb(
             f"{manifest_parent}."
         )
 
+    # Eligibility is decided BEFORE the plan builder runs, because the builder
+    # mutates: it rewrites the SDP archive and ``eml.xml`` in place. Deciding
+    # after it would let ``overwrite=True`` against a published manifest
+    # destroy the published local bytes and only then abort on the status
+    # check, leaving the recovery manifest pointing at checksums that no
+    # longer exist on disk (metasalmon 0.2.3).
+    previous_status = (
+        None if previous is None else _optional_scalar(previous.get("status"))
+    )
+    overwrite_eligible = overwrite is True and (
+        previous is None or previous_status == "dry_run"
+    )
+    if overwrite is True and not overwrite_eligible:
+        raise ValueError(
+            "overwrite cannot replace artifacts described by a published "
+            f"manifest. Existing manifest status: {previous_status!r}. "
+            "DataONE PIDs are immutable. Supply revision_manifest and a new "
+            "manifest_path for a reviewed revision."
+        )
+
     plan = _build_plan(
         root,
         eml_path,
@@ -3712,20 +3762,36 @@ def publish_sdp_to_knb(
         representation=representation,
         prior_manifest=prior_manifest,
         resource_map_path=resource_map_path,
+        overwrite=overwrite_eligible,
     )
     if previous is not None and _optional_scalar(
         previous.get("plan_sha256")
     ) != plan["plan_sha256"]:
-        raise ValueError(
-            "The existing publication manifest describes a different plan. "
-            "DataONE PIDs are immutable. Supply revision_manifest and a new "
-            "manifest_path for a reviewed revision."
-        )
+        # A dry-run manifest records a plan that was never sent to DataONE:
+        # no PID was minted, so immutability does not apply to it. Replacing
+        # it is exactly how a user iterates after correcting an input, and
+        # refusing was the second half of the re-plan dead end —
+        # ``overwrite=True`` got past the artifact writers only to stop here.
+        # Anything that reached the network still requires a reviewed
+        # revision.
+        previous_was_dry_run = previous_status == "dry_run"
+        if not (previous_was_dry_run and overwrite_eligible):
+            remedy = (
+                "The existing manifest is an unpublished dry run; pass "
+                "overwrite=True to replace it."
+                if previous_was_dry_run
+                else "DataONE PIDs are immutable. Supply revision_manifest "
+                "and a new manifest_path for a reviewed revision."
+            )
+            raise ValueError(
+                "The existing publication manifest describes a different "
+                "plan. " + remedy
+            )
     if not dry_run:
         _require_reviewed_manifest(previous, plan)
         _require_rights_authorization(plan)
 
-    _assert_resource_map_owned(plan, previous)
+    _assert_resource_map_owned(plan, previous, overwrite=overwrite_eligible)
     _atomic_write_raw(plan["resource_map_bytes"], str(plan["resource_map_path"]))
     manifest = _manifest(
         plan, status="dry_run" if dry_run else "pending", previous=previous

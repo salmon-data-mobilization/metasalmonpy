@@ -56,16 +56,16 @@ class GithubIOTests(unittest.TestCase):
         self.assertNotIn("Authorization", captured["headers"])
 
     def test_read_github_csv_integration(self):
-        if not os.getenv("SALMONPY_RUN_QUALARK_TEST", ""):
-            self.skipTest("Qualark fetch test disabled. Set SALMONPY_RUN_QUALARK_TEST=1 to enable.")
+        if not os.getenv("METASALMONPY_RUN_QUALARK_TEST", ""):
+            self.skipTest("Qualark fetch test disabled. Set METASALMONPY_RUN_QUALARK_TEST=1 to enable.")
 
         token = github_io._github_token()
         if not token:
             self.skipTest("No GitHub token configured; skipping Qualark fetch test.")
 
-        repo = os.getenv("SALMONPY_QUALARK_TEST_REPO", "dfo-pacific-science/qualark-data")
-        path = os.getenv("SALMONPY_QUALARK_TEST_PATH", "data/gold/dimension_tables/dim_date.csv")
-        ref = os.getenv("SALMONPY_QUALARK_TEST_REF", "main")
+        repo = os.getenv("METASALMONPY_QUALARK_TEST_REPO", "dfo-pacific-science/qualark-data")
+        path = os.getenv("METASALMONPY_QUALARK_TEST_PATH", "data/gold/dimension_tables/dim_date.csv")
+        ref = os.getenv("METASALMONPY_QUALARK_TEST_REF", "main")
         headers = {"Authorization": f"token {token}", "User-Agent": "metasalmonpy-test"}
 
         try:

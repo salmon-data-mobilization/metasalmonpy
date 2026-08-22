@@ -162,7 +162,9 @@ The source site is `_quarto.yml`, `index.qmd`, `getting-started.qmd`,
 ## Extras
 - Validate metadata CSVs: `python -m metasalmonpy.scripts.validate_sdp --dataset metadata/dataset.csv --tables metadata/tables.csv --dictionary metadata/column_dictionary.csv [--codes metadata/codes.csv] [--require-semantics]`
 - Draft a new term request: `python -m metasalmonpy.scripts.draft_new_term --label "<label>" --definition "<definition>" --term-type skos_concept --parent-iri <iri>`
-- Enable term search cache: set `SALMONPY_CACHE=1`
+- Enable term search cache: set `METASALMONPY_CACHE=1` (read at call time; the
+  pre-rename `SALMONPY_CACHE` spelling still works with a `DeprecationWarning`
+  until the first release after the S10 parity release)
 - Check explicitly for a newer release: `python -c "import metasalmonpy; print(metasalmonpy.check_for_updates())"`
 
 ## Releasing
