@@ -3,17 +3,23 @@ import argparse
 import sys
 from pathlib import Path
 
-import pandas as pd
-
 try:
     from metasalmonpy.dictionary import CORE_SEMANTIC_FIELDS
+    from metasalmonpy.metadata import read_sdp_csv
 except Exception:  # pragma: no cover - script fallback when executed directly
     from dictionary import CORE_SEMANTIC_FIELDS
+    from metadata import read_sdp_csv
 
 
 def load_csv(path):
+    # The shared SDP reader, not a bare pd.read_csv(): pandas' default NA
+    # vocabulary destroyed a literal "NA" (a real fisheries code that appears
+    # in code_value and IRI cells) and tokens like "null" on the way in, so
+    # this script validated different values than the package reads. The empty
+    # field is the only missing token (metasalmon 0.2.4) and it survives here
+    # as the empty string, which the `== ""` checks below already handle.
     try:
-        return pd.read_csv(path)
+        return read_sdp_csv(path)
     except Exception as exc:
         raise SystemExit(f"Failed to read {path}: {exc}")
 

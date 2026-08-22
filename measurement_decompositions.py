@@ -41,7 +41,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import pandas as pd
 
 from .atomic_io import atomic_write
-from .metadata import normalize_dictionary, read_sdp_csv
+from .metadata import csv_na_token, normalize_dictionary, read_sdp_csv
 
 SDP_DECOMPOSITION_SCHEMA_VERSION = "1.0"
 SDP_DECOMPOSITION_CSV_PATH = "metadata/semantic/measurement-decompositions.csv"
@@ -467,7 +467,11 @@ def _csv_bytes(rows: pd.DataFrame) -> bytes:
                 fields.append(str(int(orders[row])))
             elif name == "related_component_order":
                 value = related[row]
-                fields.append("" if _is_missing(value) else str(int(value)))
+                # Missing renders as csv_na_token(): the empty field, the one
+                # missing-value authority (metasalmon 0.2.4).
+                fields.append(
+                    csv_na_token() if _is_missing(value) else str(int(value))
+                )
             else:
                 fields.append(_csv_field(cells[name][row]))
         lines.append(",".join(fields))

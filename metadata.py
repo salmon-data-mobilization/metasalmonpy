@@ -54,6 +54,34 @@ def _trim_cell(value):
     return value.strip(READR_TRIM_CHARS) if isinstance(value, str) else value
 
 
+def csv_na_token() -> str:
+    """The one missing-value token, used by every canonical read and write.
+
+    Mirrors ``.ms_csv_na_token()`` (metasalmon 0.2.4). It exists as a function
+    rather than a literal because the contract is only sound if both sides
+    agree, and the sides live in different files: readr's own defaults do not
+    agree with each other — it *writes* a missing value as the two characters
+    ``NA`` and *reads* ``c("", "NA")`` as missing — so a value that is
+    literally the string ``"NA"``, a real fisheries gear code, was written
+    indistinguishably from a missing value and destroyed at write time, where
+    no reader could recover it.
+
+    The residual ambiguity is deliberate and shared with R: an empty string
+    and a missing value share the empty field. CSV cannot distinguish them
+    without quoting conventions readers disagree about, and the dictionary
+    already treats blank as absent.
+
+    One representation note that is this package's own (PARITY.md row 21):
+    R's readers map the token to ``NA_character_``, while ``read_sdp_csv``
+    keeps it as the empty string. Same token set, different in-memory
+    spelling — which is why the reader passes ``na_values=[]`` rather than
+    ``na_values=[csv_na_token()]``: mapping the token to ``NaN`` would change
+    the representation row 21 records, not the bytes on disk this token
+    governs.
+    """
+    return ""
+
+
 def read_sdp_csv(path: Union[str, Path], **kwargs) -> pd.DataFrame:
     """Read an SDP CSV exactly the way metasalmon's ``readr::read_csv`` does.
 
@@ -69,10 +97,11 @@ def read_sdp_csv(path: Union[str, Path], **kwargs) -> pd.DataFrame:
       missing-value token is matched. ``pandas`` does none of this, so
       ``a, b`` (a space after the comma) parsed as ``" b"`` here while R read
       ``"b"``.
-    * **The empty field is the only missing token.** metasalmon 0.2.4
-      established that ``"NA"`` is a real fisheries gear code, so a literal
-      ``NA`` round-trips as the string it is rather than being destroyed at
-      read time.
+    * **The empty field is the only missing token** — ``csv_na_token()``,
+      the same single authority the writers render missing values through.
+      metasalmon 0.2.4 established that ``"NA"`` is a real fisheries gear
+      code, so a literal ``NA`` round-trips as the string it is rather than
+      being destroyed at read time.
 
     ``skipinitialspace`` is what lets pandas see ``  "quoted, value"  `` as
     one quoted field the way readr's tokenizer does; the explicit strip
@@ -422,6 +451,7 @@ __all__ = [
     "SDP_PROFILE_VERSION",
     "TABLE_META_COLUMNS",
     "align_columns",
+    "csv_na_token",
     "ensure_resource_mapping",
     "infer_codes_from_resources",
     "infer_dataset_metadata_from_resources",
