@@ -62,8 +62,5 @@ tables:
         minimum_exclusive: no
       literal_missing:
         measurement_scale: nominal
-        missing_values:
-        - code: NA
-          explanation: No value was supplied.
       blank_only:
         measurement_scale: nominal

@@ -75,8 +75,8 @@
       <entityDescription>One annual abundance record per identifier.</entityDescription>
       <physical id="physical-791bcd176867565f942ac0a1dc3ae5c8">
         <objectName>counts.csv</objectName>
-        <size unit="byte">87</size>
-        <authentication method="SHA-256">ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb</authentication>
+        <size unit="byte">85</size>
+        <authentication method="SHA-256">b091c3be338d444280850083d34950c7e4051b4e904e615cb8d735d915a475b2</authentication>
         <characterEncoding>UTF-8</characterEncoding>
         <dataFormat>
           <textFormat>
@@ -91,7 +91,7 @@
         </dataFormat>
         <distribution>
           <online>
-            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f</url>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:4fa35442-96b8-546f-b71a-2eba31a53543</url>
           </online>
         </distribution>
       </physical>
@@ -163,10 +163,6 @@
               </nonNumericDomain>
             </nominal>
           </measurementScale>
-          <missingValueCode>
-            <code>NA</code>
-            <codeExplanation>No value was supplied.</codeExplanation>
-          </missingValueCode>
         </attribute>
         <attribute id="attribute-dcbae7746af05d1fad52c1bc1fff4815">
           <attributeName>blank_only</attributeName>
@@ -204,14 +200,14 @@
       </constraint>
       <numberOfRecords>2</numberOfRecords>
     </dataTable>
-    <otherEntity id="other-entity-94197984b43f5427b492c7189a667fc4">
-      <alternateIdentifier system="DataONE">urn:uuid:695ecedb-d5e7-595c-819a-9c33da4ea9c5</alternateIdentifier>
+    <otherEntity id="other-entity-00e1f3ae72d552a38e93930847307d79">
+      <alternateIdentifier system="DataONE">urn:uuid:cc9157c5-eaf2-5e28-b7b6-e8aeaf2b8892</alternateIdentifier>
       <entityName>Canonical Salmon Data Package</entityName>
       <entityDescription>A complete, validated Salmon Data Package containing the source data, canonical SDP metadata, reviewed semantic selections, SSSOM mapping sets, and measurement-decomposition artifacts.</entityDescription>
-      <physical id="physical-3a6706d84592563b83610c6e51e57bc0">
+      <physical id="physical-a924030f06e555e894acb3453fffa73e">
         <objectName>demo-salmon-2026-salmon-data-package.zip</objectName>
-        <size unit="byte">4196</size>
-        <authentication method="SHA-256">04c0fe42e0acb3395de7ddb3b2bdd316e94cabc9f3d9a2d158e21a90846a19a5</authentication>
+        <size unit="byte">4193</size>
+        <authentication method="SHA-256">ce65a6b8cf3dba4b39e1a127c8e796e89cb554994abe97ade0cb8bfa5d2a3cd1</authentication>
         <compressionMethod>zip</compressionMethod>
         <dataFormat>
           <externallyDefinedFormat>
@@ -221,7 +217,7 @@
         <distribution>
           <online>
             <onlineDescription>Download Canonical Salmon Data Package</onlineDescription>
-            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:695ecedb-d5e7-595c-819a-9c33da4ea9c5</url>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:cc9157c5-eaf2-5e28-b7b6-e8aeaf2b8892</url>
           </online>
         </distribution>
       </physical>

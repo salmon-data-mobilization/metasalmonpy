@@ -277,14 +277,18 @@ class EmlIdentifierTests(unittest.TestCase):
 
 @_REQUIRES_EXTRA
 class EmlMissingTokenTests(unittest.TestCase):
-    """Undeclared missing tokens: R decides on the *parsed* value.
+    """Missing-token audit under the one missing-value token (PARITY row 22).
 
-    R derives missingness from the frame ``readr`` parsed with
-    ``trim_ws = TRUE`` and then audits the *raw* token, so a cell of three
-    spaces is a parsed-missing cell whose raw token is non-empty and
-    undeclared. Matching the raw token against the missing vocabulary instead
-    accepted data R rejects. Both refusals below were confirmed by running
-    metasalmon v0.1.7 over this same fixture.
+    R decides on the *parsed* value: missingness is ``is.na()`` over the
+    frame ``readr`` parsed with ``trim_ws = TRUE`` and
+    ``na = .ms_csv_na_token()``, and since metasalmon 0.2.4 that sole token
+    is the empty field. So a cell of three spaces is a parsed-missing cell
+    whose raw token is non-empty and undeclared — rejected — while a literal
+    ``NA``, padded or not, is data. Until S10 chunk C this audit kept readr's
+    era token set ``("", "NA")`` and rejected the ``NA`` cells current R
+    accepts (register row 22's live divergence). Every verdict below was
+    measured by running metasalmon main @ ``39818ce`` over this same fixture
+    with the same patched cells (2026-08-22).
     """
 
     def _with_cell(self, value: str) -> str:
@@ -294,11 +298,23 @@ class EmlMissingTokenTests(unittest.TestCase):
             text = handle.read()
         # blank_only declares no missing-value codes, so any non-empty token
         # that parses as missing is undeclared.
-        replaced = text.replace("B,2025,12,NA,", "B,2025,12,NA," + value)
+        replaced = text.replace("B,2025,12,,", "B,2025,12,," + value)
         self.assertNotEqual(replaced, text)
         with open(path, "w", encoding="utf-8", newline="") as handle:
             handle.write(replaced)
         return sdp
+
+    def _declare_code(self, sdp: str, code: str) -> None:
+        import yaml
+
+        mapping_path = os.path.join(sdp, "metadata", "eml-mapping.yml")
+        with open(mapping_path, encoding="utf-8") as handle:
+            mapping = yaml.safe_load(handle)
+        mapping["tables"]["counts"]["attributes"]["blank_only"][
+            "missing_values"
+        ] = [{"code": code, "explanation": "Declared for the audit test."}]
+        with open(mapping_path, "w", encoding="utf-8") as handle:
+            yaml.safe_dump(mapping, handle, sort_keys=False)
 
     def test_whitespace_only_cell_is_an_undeclared_missing_token(self):
         sdp = self._with_cell("   ")
@@ -306,17 +322,48 @@ class EmlMissingTokenTests(unittest.TestCase):
             write_eml_from_sdp(sdp, overwrite=True)
         self.assertIn("undeclared non-empty missing", str(caught.exception))
 
-    def test_padded_na_cell_is_an_undeclared_missing_token(self):
+    def test_a_literal_na_cell_is_data_not_missing(self):
+        # The convergence that closes register row 22: "NA" is a real
+        # fisheries gear code, and with the empty field as the sole missing
+        # token there is nothing missing about it. R (main @ 39818ce) accepts
+        # this exact package; the era audit rejected it.
+        sdp = self._with_cell("NA")
+        self.assertTrue(write_eml_from_sdp(sdp, overwrite=True)["validation"])
+
+    def test_a_padded_na_cell_is_data_not_missing(self):
+        # " NA " trims to the gear code, not to the missing token. Measured
+        # against R main @ 39818ce: ACCEPT. (Era R and the era audit both
+        # rejected it, which the pre-chunk-C version of this test asserted.)
         sdp = self._with_cell(" NA ")
-        with self.assertRaises(ValueError) as caught:
-            write_eml_from_sdp(sdp, overwrite=True)
-        self.assertIn("undeclared non-empty missing", str(caught.exception))
+        self.assertTrue(write_eml_from_sdp(sdp, overwrite=True)["validation"])
 
     def test_a_genuinely_empty_cell_stays_implicit_absence(self):
         # The fixture's own blank_only column is empty on row 2 and must keep
-        # exporting cleanly -- the refusal above must not become a blanket ban.
+        # exporting cleanly -- the refusals here must not become a blanket ban.
         sdp = _fixture_sdp(self, "sdp-default")
         self.assertTrue(write_eml_from_sdp(sdp, overwrite=True)["validation"])
+
+    def test_a_declared_code_the_bytes_never_contain_is_rejected(self):
+        # Mirrors R's "declares missing-value code that does not occur in the
+        # raw CSV bytes" abort, measured at main @ 39818ce.
+        sdp = _fixture_sdp(self, "sdp-default")
+        self._declare_code(sdp, "MISSING")
+        with self.assertRaises(ValueError) as caught:
+            write_eml_from_sdp(sdp, overwrite=True)
+        self.assertIn("not occur in the raw CSV bytes", str(caught.exception))
+
+    def test_a_declared_na_code_over_literal_na_data_is_rejected(self):
+        # With one missing token there is no non-empty missing token left to
+        # declare: a declared "NA" names cells whose parsed value is data,
+        # which R rejects as "declares missing-value code where the parsed
+        # value is not missing" (measured at main @ 39818ce). This is the
+        # invariant that made the era fixtures unregenerable -- they declared
+        # missingValueCode "NA" over era-written bytes.
+        sdp = self._with_cell("NA")
+        self._declare_code(sdp, "NA")
+        with self.assertRaises(ValueError) as caught:
+            write_eml_from_sdp(sdp, overwrite=True)
+        self.assertIn("not missing", str(caught.exception))
 
 
 class EmlNumericCoercionTests(unittest.TestCase):

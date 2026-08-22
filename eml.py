@@ -50,7 +50,7 @@ from typing import Dict, List, Optional, Union
 import pandas as pd
 
 from .atomic_io import apply_default_file_mode
-from .metadata import R_CNTRL_CLASS, R_SPACE_CLASS, read_sdp_csv
+from .metadata import R_CNTRL_CLASS, R_SPACE_CLASS, csv_na_token, read_sdp_csv
 
 EML_VERSION = "2.2.0"
 _EML_NAMESPACE = "https://eml.ecoinformatics.org/eml-2.2.0"
@@ -115,14 +115,6 @@ _STRTOD_RE = re.compile(
     )""",
     re.VERBOSE,
 )
-
-# readr's era missing-token set, used ONLY to reproduce how metasalmon 0.1.7
-# parsed a data *resource* (readr defaults, na = c("", "NA")) when auditing raw
-# CSV tokens against declared EML missing-value codes. Reviewed sidecars go
-# through read_sdp_csv instead, where a literal "NA" is data (metasalmon
-# 0.2.4). Both are narrower than pandas' default NA vocabulary, which would
-# treat tokens like "null" as missing where R does not.
-_ERA_NA_TOKENS = ("", "NA")
 
 _VALID_SCALES = ("nominal", "ordinal", "interval", "ratio", "dateTime")
 _VALID_NUMBER_TYPES = ("natural", "whole", "integer", "real")
@@ -2470,21 +2462,27 @@ def _validate_raw_table(
     return raw
 
 
-def _era_parsed_missing(raw_values: List[str]) -> List[bool]:
-    """Missingness of the parsed resource under readr's era defaults.
+def _parsed_missing(raw_values: List[str]) -> List[bool]:
+    """Missingness of the parsed resource under the one missing-value token.
 
-    metasalmon 0.1.7 reads package resources with ``readr::read_csv``
-    defaults, so a parsed cell is missing exactly when its raw token is ""
-    or "NA" **after readr's ``trim_ws = TRUE`` has run**. Deriving this from
-    the raw tokens keeps the missing-value contract identical to R 0.1.7
-    instead of inheriting pandas' larger default NA vocabulary.
+    R computes missingness as ``is.na(parsed_values)`` over the frame readr
+    parsed with ``trim_ws = TRUE`` and ``na = .ms_csv_na_token()``, and since
+    metasalmon 0.2.4 that sole token is the empty field — so a parsed cell is
+    missing exactly when its raw token trims to ``csv_na_token()``. Deriving
+    this from the raw tokens keeps the audit on the same contract as every
+    other reader in this package instead of inheriting pandas' larger default
+    NA vocabulary.
 
-    R computes missingness from the parsed frame, so it is the *trimmed*
-    token that decides: a cell of three spaces and a cell of ``" NA "`` both
-    parse to ``NA`` in R and are therefore undeclared missing tokens. Matching
-    the untrimmed token let those cells through here while R rejected them.
+    It is the *trimmed* token that decides: a cell of three spaces parses to
+    missing while its raw token is non-empty, which is exactly the undeclared
+    missing token the audit exists to catch. A literal ``NA`` — a real
+    fisheries gear code — is data whether padded or not, and so is every
+    other non-blank token. Until this chunk the audit kept readr's *era*
+    token set ``("", "NA")``, which rejected a literal ``NA`` cell current R
+    accepts; measured against metasalmon main @ 39818ce (2026-08-22), this
+    closes PARITY.md row 22.
     """
-    return [_trim(value) in _ERA_NA_TOKENS for value in raw_values]
+    return [_trim(value) == csv_na_token() for value in raw_values]
 
 
 def _add_missing_values(
@@ -2522,7 +2520,7 @@ def _add_missing_values(
             + " that do(es) not occur in the raw CSV bytes."
         )
 
-    parsed_missing = _era_parsed_missing(raw_values)
+    parsed_missing = _parsed_missing(raw_values)
     declared_but_present = list(
         dict.fromkeys(
             raw_values[row]

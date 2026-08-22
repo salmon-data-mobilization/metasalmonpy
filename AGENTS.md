@@ -77,9 +77,9 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 629
-passed / 3 skipped with the extras installed, 533 / 99 with core dependencies
-only (S10 chunk A, 2026-08-22). The 96-test gap is the extras-gated EML, KNB and
+dependency configurations, and CI runs both (see *Dependency boundaries*): 639
+passed / 3 skipped with the extras installed, 540 / 102 with core dependencies
+only (S10 chunk C, 2026-08-22). The 99-test gap is the extras-gated EML, KNB and
 context-reader tests; the 3 that skip either way are filesystem-symlink and
 R-availability guards.
 

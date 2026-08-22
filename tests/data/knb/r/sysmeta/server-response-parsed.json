@@ -1,9 +1,9 @@
 {
   "serial_version": 1,
-  "identifier": "urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f",
+  "identifier": "urn:uuid:4fa35442-96b8-546f-b71a-2eba31a53543",
   "format_id": "text/csv",
-  "size": 87,
-  "checksum": "ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb",
+  "size": 85,
+  "checksum": "b091c3be338d444280850083d34950c7e4051b4e904e615cb8d735d915a475b2",
   "checksum_algorithm": "SHA-256",
   "submitter": "https://orcid.org/0000-0001-9317-0364",
   "rights_holder": "https://orcid.org/0000-0001-9317-0364",

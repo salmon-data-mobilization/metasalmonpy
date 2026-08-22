@@ -75,8 +75,8 @@
       <entityDescription>One annual abundance record per identifier.</entityDescription>
       <physical id="physical-791bcd176867565f942ac0a1dc3ae5c8">
         <objectName>counts.csv</objectName>
-        <size unit="byte">87</size>
-        <authentication method="SHA-256">ea30531ee0c04f9c2d7916852cc9825f9c2670fcde9ca22a4f503c4189e0a0eb</authentication>
+        <size unit="byte">85</size>
+        <authentication method="SHA-256">b091c3be338d444280850083d34950c7e4051b4e904e615cb8d735d915a475b2</authentication>
         <characterEncoding>UTF-8</characterEncoding>
         <dataFormat>
           <textFormat>
@@ -91,7 +91,7 @@
         </dataFormat>
         <distribution>
           <online>
-            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:0d0a5e0e-ac1a-57c8-93cf-aca2a1d83a9f</url>
+            <url>https://knb.ecoinformatics.org/knb/d1/mn/v2/object/urn:uuid:4fa35442-96b8-546f-b71a-2eba31a53543</url>
           </online>
         </distribution>
       </physical>
@@ -163,10 +163,6 @@
               </nonNumericDomain>
             </nominal>
           </measurementScale>
-          <missingValueCode>
-            <code>NA</code>
-            <codeExplanation>No value was supplied.</codeExplanation>
-          </missingValueCode>
         </attribute>
         <attribute id="attribute-dcbae7746af05d1fad52c1bc1fff4815">
           <attributeName>blank_only</attributeName>
