@@ -53,6 +53,12 @@ def _accept_bundle(messages, config):
     payload = json.loads(messages[-1]["content"])
     slots = []
     for slot in payload["slots"]:
+        # Only reviewed slots carry candidates and expect an answer. Since
+        # chunk A removed the dictionary method_iri field, the bundle's method
+        # slot arrives as already_filled_or_not_requested with no candidates
+        # (chunk B retargets that slot to statistical_modifier).
+        if slot.get("status") != "review" or not slot.get("candidates"):
+            continue
         candidate = slot["candidates"][0]
         slots.append(
             {
@@ -80,7 +86,10 @@ def test_bundle_review_returns_stable_thirty_column_assessments():
     assessments = result.attrs["semantic_llm_assessments"]
     suggestions = result.attrs["semantic_suggestions"]
     assert list(assessments.columns) == LLM_ASSESSMENT_COLUMNS
-    assert len(assessments) == 6
+    # Five column slots since chunk A removed the dictionary method_iri field;
+    # the sixth becomes statistical_modifier when chunk B retargets the
+    # semantic pipeline (S10 execplan, chunk B).
+    assert len(assessments) == 5
 
     # metasalmon v0.1.7 treats this fixture as a count-like measurement: the
     # description carries the organism token "fish" and the column is numeric,
@@ -97,9 +106,8 @@ def test_bundle_review_returns_stable_thirty_column_assessments():
         "entity": "accept",
         "unit": "review",
         "constraint": "accept",
-        "method": "accept",
     }
-    assert suggestions["llm_selected"].sum() == 4
+    assert suggestions["llm_selected"].sum() == 3
 
 
 def test_no_review_targets_returns_empty_schema_without_provider_call():
@@ -169,7 +177,7 @@ def test_partially_filled_measurement_still_uses_one_six_slot_bundle():
 
     assessments = result.attrs["semantic_llm_assessments"]
     assert request_count == 1
-    assert len(assessments) == 5
+    assert len(assessments) == 4
     assert "unit" not in set(assessments["dictionary_role"])
 
 
@@ -236,7 +244,7 @@ def test_malformed_bundle_response_falls_back_per_target():
     )
 
     assessments = result.attrs["semantic_llm_assessments"]
-    assert request_count == 7
+    assert request_count == 6
     assert set(assessments["llm_decision"]) == {"review"}
     assert assessments["llm_error"].isna().all()
 
@@ -330,7 +338,7 @@ def test_duplicate_retry_query_is_recorded_without_second_request_or_search():
     assessments = result.attrs["semantic_llm_assessments"]
     unit = assessments.loc[assessments["dictionary_role"] == "unit"].iloc[0]
     assert request_count == 1
-    assert len(search_calls) == 6
+    assert len(search_calls) == 5
     assert unit["llm_decision"] == "retry_search"
     assert (
         unit["llm_retry_query_rejection_reason"]
@@ -509,7 +517,7 @@ def test_provider_failure_preserves_deterministic_suggestions():
 
     suggestions = result.attrs["semantic_suggestions"]
     assessments = result.attrs["semantic_llm_assessments"]
-    assert len(suggestions) == 6
+    assert len(suggestions) == 5
     assert assessments["llm_error"].str.contains(
         "provider unavailable",
         na=False,
@@ -517,50 +525,37 @@ def test_provider_failure_preserves_deterministic_suggestions():
 
 
 def test_generated_method_words_do_not_count_as_procedure_evidence():
-    data, dictionary = _measurement_dictionary(
-        "Fork length of each sampled fish."
-    )
+    # sdp-0.3.0 removed the dictionary method_iri slot, so no column-level
+    # method target exists any more — but the code-level method role survives
+    # (codes still resolve to shared sosa:Procedure concepts) and this
+    # validator with it. Covered at unit level exactly as metasalmon main's
+    # test-semantic-bundle-validators.R covers .ms_validate_semantic_method_evidence.
+    from metasalmonpy.llm_review import _has_method_evidence
 
-    result = suggest_semantics(
-        data,
-        dictionary,
-        search_fn=_search_stub(),
-        llm_assess=True,
-        llm_request_fn=_accept_bundle,
+    assert not _has_method_evidence(
+        "Catch count does not identify a measurement procedure."
     )
-
-    assessments = result.attrs["semantic_llm_assessments"]
-    method = assessments.loc[
-        assessments["dictionary_role"] == "method"
-    ].iloc[0]
-    assert method["llm_decision"] == "review"
-    assert pd.isna(method["llm_selected_candidate_index"])
-    assert "SEM_METHOD_EVIDENCE_REQUIRED" in method["llm_rationale"]
-    findings = assessments.attrs["semantic_validator_findings"]
-    assert "SEM_METHOD_EVIDENCE_REQUIRED" in set(findings["code"])
+    # Role-shaped generated text ("method slot", "procedure") is not evidence.
+    assert not _has_method_evidence(
+        "Catch enumeration procedure. A method slot generated for this "
+        "column. Catch count; no procedure supplied."
+    )
 
 
 def test_field_anchored_context_can_supply_method_evidence():
-    data, dictionary = _measurement_dictionary(
-        "Fork length of each sampled fish."
-    )
+    # The positive half of the surviving validator: explicit field, gear, or
+    # instrument language is procedure evidence. (The column-level route that
+    # used to exercise this through llm_context_text died with the dictionary
+    # method_iri slot; the code-level method role keeps the validator alive.)
+    from metasalmonpy.llm_review import _has_method_evidence
 
-    result = suggest_semantics(
-        data,
-        dictionary,
-        search_fn=_search_stub(),
-        llm_assess=True,
-        llm_context_text=(
-            "fork_length was measured in the field using a measuring board."
-        ),
-        llm_request_fn=_accept_bundle,
+    assert _has_method_evidence(
+        "A technician measured fork length in the field with a measuring "
+        "board from the snout tip to the caudal-fin fork."
     )
-
-    assessments = result.attrs["semantic_llm_assessments"]
-    method = assessments.loc[
-        assessments["dictionary_role"] == "method"
-    ].iloc[0]
-    assert method["llm_decision"] == "accept"
+    assert _has_method_evidence(
+        "fork_length was measured in the field using a measuring board."
+    )
 
 
 def test_native_role_hint_mismatch_downgrades_accept():

@@ -54,7 +54,6 @@ from .sdp_methods import (
     _read_extension_csv,
     _validate_closed_rows,
     _validate_descriptor_resource,
-    read_sdp_methods,
 )
 
 SDP_OBSERVATION_STRUCTURES_PATH = "metadata/structure/observation_structures.csv"
@@ -395,13 +394,6 @@ def _validate_bindings(
         )
 
 
-def _method_registry(root: Path) -> pd.DataFrame:
-    """Mirror ``.ms_sdp_observation_method_registry``."""
-    if not (root / SDP_METHODS_PATH).exists():
-        return pd.DataFrame({"dataset_id": [], "method_iri": []}, dtype=object)
-    return read_sdp_methods(root, validate=True)
-
-
 def _normalize_typed_values(
     values: Sequence[object], value_type: object, column_name: str
 ) -> List[str]:
@@ -568,7 +560,6 @@ def _validate_procedure_codes(
     data: pd.DataFrame,
     observed_rows: List[int],
     codes: Optional[pd.DataFrame],
-    methods: pd.DataFrame,
 ) -> None:
     """Mirror ``.ms_sdp_observation_validate_procedure_codes``."""
     procedures = bound.loc[
@@ -577,7 +568,6 @@ def _validate_procedure_codes(
             for value in bound["component_relation_iri"]
         ]
     ]
-    registered = set(zip(methods["dataset_id"], methods["method_iri"]))
     for _, procedure in procedures.iterrows():
         column = procedure["column_name"]
         if codes is None or len(codes) == 0:
@@ -606,10 +596,14 @@ def _validate_procedure_codes(
                     "through exactly one metadata/codes.csv row with a "
                     f"term_iri. Column {column}, code {code_value}."
                 )
-            if (structure["dataset_id"], str(method_iri)) not in registered:
+            # sdp-0.3.0: procedures resolve to the shared vocabulary directly,
+            # so the check is IRI shape, not membership in a per-package
+            # registry.
+            if not _is_absolute_iri(method_iri):
                 raise SdpExtensionError(
-                    "An enumerated sosa:usedProcedure code resolves to an "
-                    f"unregistered method. Column {column}, code {code_value}."
+                    "An enumerated sosa:usedProcedure code must resolve to an "
+                    "absolute shared-vocabulary IRI. "
+                    f"Column {column}, code {code_value}, term {method_iri}."
                 )
 
         observed_values: List[str] = []
@@ -638,22 +632,25 @@ def _validate_data(
     package: Dict[str, object],
 ) -> None:
     """Mirror ``.ms_sdp_observation_validate_data``."""
-    methods = _method_registry(root)
+    # sdp-0.3.0: a table-constant procedure lives in tables.csv$method_iri and
+    # must point straight at the shared vocabulary — there is no registry.
     dictionary = package["dictionary"]
+    tables = package.get("tables")
     static_methods: List[str] = []
-    if "method_iri" in dictionary.columns:
-        for value in dictionary["method_iri"]:
+    if isinstance(tables, pd.DataFrame) and "method_iri" in tables.columns:
+        for value in tables["method_iri"]:
             if not _is_blank(value) and str(value) not in static_methods:
                 static_methods.append(str(value))
-    if static_methods:
-        registered = set(methods["method_iri"])
-        missing = [value for value in static_methods if value not in registered]
-        if missing:
-            raise SdpExtensionError(
-                "Static procedure references used by observation structures "
-                "require metadata/methods.csv registry rows. Unregistered "
-                "method_iri: " + ", ".join(missing) + "."
-            )
+    invalid_static = [
+        value for value in static_methods if not _is_absolute_iri(value)
+    ]
+    if invalid_static:
+        raise SdpExtensionError(
+            "Every table-level method_iri must be an absolute "
+            "shared-vocabulary IRI. Invalid method_iri: "
+            + ", ".join(invalid_static)
+            + "."
+        )
 
     codes = package.get("codes")
     dictionary_index = {
@@ -676,7 +673,7 @@ def _validate_data(
             if not _is_blank(data[measure].iloc[index])
         ]
         _validate_procedure_codes(
-            structure, bound, data, observed_rows, codes, methods
+            structure, bound, data, observed_rows, codes
         )
         if not observed_rows:
             continue
@@ -818,16 +815,21 @@ def _assert_paired(root: Path, require_present: bool = True) -> bool:
 def validate_optional_sdp_observation_metadata(path: Union[str, Path]) -> bool:
     """Mirror ``.ms_validate_optional_sdp_observation_metadata``.
 
-    Called from ``validate_salmon_datapackage``. The absence of both optional
-    extensions preserves the historic validation path exactly; presence of
-    either validates the canonical files and their data-level bindings.
+    Called from ``validate_salmon_datapackage``. The absence of the optional
+    observation-structure extension preserves the historic validation path
+    exactly; presence validates the canonical files and their data-level
+    bindings. A lingering ``metadata/methods.csv`` is an sdp-0.2.0 registry
+    and is an error pointing at :func:`~metasalmonpy.migrate_sdp_methods`,
+    exactly as in R.
     """
     root = _extension_root(path)
     methods_path = root / SDP_METHODS_PATH
     if methods_path.exists() or _is_symlink(methods_path):
-        from .sdp_methods import validate_sdp_methods
-
-        validate_sdp_methods(root)
+        raise SdpExtensionError(
+            "metadata/methods.csv is an sdp-0.2.0 registry; sdp-0.3.0 "
+            "packages must not carry one. Run migrate_sdp_methods() to "
+            "relocate its content and remove it."
+        )
     structure_paths = _observation_paths(root)
     if any(
         path.exists() or _is_symlink(path) for path in structure_paths.values()

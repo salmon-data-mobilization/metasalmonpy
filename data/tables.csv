@@ -1,2 +1,2 @@
-dataset_id,table_id,file_name,table_label,description,observation_unit,observation_unit_iri,primary_key
-nuseds_fraser_coho_sample,nuseds_fraser_coho,nuseds-fraser-coho-sample.csv,Fraser-area coho escapement estimates (sample),Sample of NuSEDS coho escapement records for PFMA 29,EscapementEstimate,,POP_ID
+dataset_id,table_id,file_name,table_label,description,observation_unit,observation_unit_iri,primary_key,protocol_iri,protocol_citation,method_iri
+nuseds_fraser_coho_sample,nuseds_fraser_coho,nuseds-fraser-coho-sample.csv,Fraser-area coho escapement estimates (sample),Sample of NuSEDS coho escapement records for PFMA 29,EscapementEstimate,https://w3id.org/smn/EscapementEstimate,POP_ID,,,https://w3id.org/gcdfo/salmon#AerialSurveyCount

@@ -136,6 +136,9 @@ DATASET_META_COLUMNS = [
     "created",
     "modified",
     "spec_version",
+    # sdp-0.3.0 placement fields: a dataset-wide protocol citation.
+    "protocol_iri",
+    "protocol_citation",
 ]
 
 TABLE_META_COLUMNS = [
@@ -147,6 +150,12 @@ TABLE_META_COLUMNS = [
     "observation_unit",
     "observation_unit_iri",
     "primary_key",
+    # sdp-0.3.0 placement fields: a table-constant procedure and its protocol
+    # live on tables.csv (a method describes how a value was produced; it was
+    # never part of what the value *is*, so it left the column dictionary).
+    "protocol_iri",
+    "protocol_citation",
+    "method_iri",
 ]
 
 DICTIONARY_COLUMNS = [
@@ -165,7 +174,11 @@ DICTIONARY_COLUMNS = [
     "property_iri",
     "entity_iri",
     "constraint_iri",
-    "method_iri",
+    # sdp-0.3.0: a statistical modifier (I-ADOPT StatisticalModifier) is part
+    # of variable identity — a *mean* weight and a *maximum* weight are
+    # different variables — so it belongs in the dictionary. ``method_iri``
+    # never did, and moved to ``tables.csv`` / the data (see TABLE_META_COLUMNS).
+    "statistical_modifier_iri",
 ]
 
 CODES_COLUMNS = [

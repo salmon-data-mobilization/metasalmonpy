@@ -1,16 +1,16 @@
-dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,unit_label,unit_iri,term_iri,term_type,required,property_iri,entity_iri,constraint_iri,method_iri
+dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,unit_label,unit_iri,term_iri,term_type,required,property_iri,entity_iri,constraint_iri,statistical_modifier_iri
 nuseds_fraser_coho_sample,nuseds_fraser_coho,POP_ID,Population ID,NuSEDS population identifier,identifier,string,,,,,TRUE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,POPULATION,Population name,Population name with area context,attribute,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,AREA,PFMA area,Pacific Fishery Management Area code,attribute,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,WATERBODY,Waterbody name,Local stream or river name,attribute,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,ANALYSIS_YR,Run year,Brood/run year of escapement estimate,temporal,integer,,,,,TRUE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,SPECIES,Species code,Species common name/code (Coho),categorical,string,,,,,TRUE,,,,
-nuseds_fraser_coho_sample,nuseds_fraser_coho,RUN_TYPE,Run timing,Run timing category (e.g., Fall),categorical,string,,,,,,,,
-nuseds_fraser_coho_sample,nuseds_fraser_coho,NATURAL_SPAWNERS_TOTAL,Total natural spawners,Estimated total natural-origin spawners,measurement,integer,Individual,https://qudt.org/vocab/unit/INDIV,https://w3id.org/example/salmon#AbsoluteSpawnerAbundance,skos_concept,FALSE,https://w3id.org/smn/Abundance,https://w3id.org/gcdfo/salmon#ConservationUnit,https://w3id.org/example/salmon#WildOriginConstraint,https://w3id.org/gcdfo/salmon#AerialSurveyCount
+nuseds_fraser_coho_sample,nuseds_fraser_coho,RUN_TYPE,Run timing,"Run timing category (e.g., Fall)",categorical,string,,,,,,,,,
+nuseds_fraser_coho_sample,nuseds_fraser_coho,NATURAL_SPAWNERS_TOTAL,Total natural spawners,Estimated total natural-origin spawners,measurement,integer,Individual,https://qudt.org/vocab/unit/INDIV,https://w3id.org/gcdfo/salmon#SpawnerAbundance,owl_class,FALSE,https://w3id.org/smn/Abundance,https://w3id.org/gcdfo/salmon#ConservationUnit,https://w3id.org/smn/NaturalOrigin,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,ENUMERATION_METHODS,Enumeration methods,Field methods applied (may be multiple),categorical,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,ESTIMATE_METHOD,Estimate method,Analytical method used for estimate,categorical,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,ESTIMATE_CLASSIFICATION,Estimate classification,Classification of abundance estimate,categorical,string,,,,,FALSE,,,,
-nuseds_fraser_coho_sample,nuseds_fraser_coho,ESTIMATE_STAGE,Estimate stage,Stage of estimate (e.g., final, near-final),categorical,string,,,,FALSE,,,
+nuseds_fraser_coho_sample,nuseds_fraser_coho,ESTIMATE_STAGE,Estimate stage,"Stage of estimate (e.g., final, near-final)",categorical,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,RELIABILITY,Reliability rating,Relative reliability flag,categorical,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,START_DTT,Start date,Start date of survey period,temporal,date,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,END_DTT,End date,End date of survey period,temporal,date,,,,,FALSE,,,,

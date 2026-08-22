@@ -1,5 +1,5 @@
-dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,required,unit_label,unit_iri,term_iri,term_type,property_iri,entity_iri,constraint_iri,method_iri
+dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,required,unit_label,unit_iri,term_iri,term_type,property_iri,entity_iri,constraint_iri,statistical_modifier_iri
 demo-salmon-2026,counts,count,Count,,measurement,integer,,count,http://qudt.org/vocab/unit/COUNT,https://w3id.org/psc/vocab/PSC-CV-000035,skos_concept,http://qudt.org/vocab/quantitykind/Count,https://w3id.org/smn/Stock,https://w3id.org/gcdfo/salmon#FreshwaterAgeDimension; https://w3id.org/gcdfo/salmon#Age1YearClass,
-demo-salmon-2026,Zsite,flow,Stream flow,,measurement,number,,,,https://w3id.org/psc/vocab/PSC-CV-000101,skos_concept,http://qudt.org/vocab/quantitykind/VolumeFlowRate,,,https://w3id.org/gcdfo/salmon#FixedSiteCensusManual
+demo-salmon-2026,Zsite,flow,Stream flow,,measurement,number,,,,https://w3id.org/psc/vocab/PSC-CV-000101,skos_concept,http://qudt.org/vocab/quantitykind/VolumeFlowRate,,,https://w3id.org/smn/MeanStatisticalModifier
 Alpha-DS-2027,t1,c1,Length,,measurement,number,,metre,http://qudt.org/vocab/unit/M,https://example.org/vocab/c1,skos_concept,,,,
 demo-salmon-2026,counts,site_id,Site identifier,,identifier,string,,,,,,,,,

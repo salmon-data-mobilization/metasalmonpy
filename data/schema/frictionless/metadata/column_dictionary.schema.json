@@ -130,9 +130,9 @@
       "description": "I-ADOPT constraint IRI(s). Separate multiple IRIs with semicolons."
     },
     {
-      "name": "method_iri",
+      "name": "statistical_modifier_iri",
       "type": "string",
-      "description": "Optional static SOSA Procedure IRI applying to every non-empty value in this measurement column. Retained for compatibility; this is not an I-ADOPT variable component."
+      "description": "I-ADOPT statistical modifier IRI (iop:StatisticalModifier) stating what the reported value represents across the observations it summarizes (mean, maximum, total, peak, ...). Part of variable identity, unlike a method. Recommended vocabulary: smn:StatisticalModifierScheme."
     }
   ],
   "sdp:table": "column_dictionary",

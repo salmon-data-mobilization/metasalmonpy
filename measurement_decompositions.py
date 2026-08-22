@@ -9,11 +9,11 @@ stores that detail in a separate, manifest-bound artifact. Its roles are
 informed by I-ADOPT, but the artifact does not claim native I-ADOPT
 conformance and is not an SSSOM mapping set.
 
-Era note: the component-role vocabulary here deliberately includes the
-transitional ``method`` role. metasalmon 0.3.0 later replaced it with
-``statistical_modifier``; that change lands at this replay's own 0.3.0
-milestone, so 0.1.7-era artifacts with method components must read, write,
-and validate here exactly as they did in R 0.1.7.
+sdp-0.3.0 note: there is no ``method`` component role. A decomposition row
+binds one measurement's identity, and a row-varying procedure would pin an
+arbitrary one — the same reason the dictionary dropped ``method_iri``. The
+0.1.7-era transitional ``method`` role was replaced by
+``statistical_modifier`` at 0.3.0, on both sides of the mirror.
 
 Byte-parity contract: ``_csv_bytes`` must reproduce R's
 ``.ms_sdp_decomposition_csv_bytes`` (``readr::format_csv(rows, na = "")``)
@@ -73,21 +73,21 @@ _CHARACTER_COLUMNS = tuple(
     column for column in _COLUMNS if column not in _ORDER_COLUMNS
 )
 
-# The 0.1.7-era closed role vocabulary. ``method`` is transitional: it is
-# replaced by ``statistical_modifier`` at the 0.3.0 milestone and must be
-# accepted (and ``statistical_modifier`` rejected) until then.
-_ALLOWED_ROLES = ("property", "entity", "constraint", "method", "unit")
+# The sdp-0.3.0 closed role vocabulary: no ``method`` role. A decomposition
+# row binds one variable's identity, and a row-varying procedure would pin an
+# arbitrary one (it lives in the data, resolved through codes.csv, or on
+# tables.csv when table-constant).
+_ALLOWED_ROLES = ("property", "entity", "constraint", "statistical_modifier", "unit")
 
 _BINDING_FIELDS = ("dataset_id", "table_id", "column_name")
 _MEASUREMENT_FIELDS = _BINDING_FIELDS + ("measurement_concept_iri",)
 
-# Dictionary slot column -> required component role (era order, method
-# included).
+# Dictionary slot column -> required component role (sdp-0.3.0 order).
 _SLOT_ROLES = (
     ("property_iri", "property"),
     ("entity_iri", "entity"),
     ("constraint_iri", "constraint"),
-    ("method_iri", "method"),
+    ("statistical_modifier_iri", "statistical_modifier"),
     ("unit_iri", "unit"),
 )
 
@@ -939,10 +939,11 @@ def write_sdp_measurement_decompositions(
       ``term_iri``.
     - ``component_order`` is a positive, contiguous, per-measurement
       sequence.
-    - ``component_role`` is one of ``property``, ``entity``,
-      ``constraint``, ``method``, or ``unit``; repeated roles are allowed.
-      (``method`` is the transitional 0.1.7-era role replaced by
-      ``statistical_modifier`` at 0.3.0.)
+    - ``component_role`` is one of ``property``, ``entity``, ``constraint``,
+      ``statistical_modifier``, or ``unit``; repeated roles are allowed.
+      (There is no ``method`` role at sdp-0.3.0: a decomposition row binds
+      one variable's identity, and a row-varying procedure would pin an
+      arbitrary one.)
     - ``component_status`` is ``matched`` or ``gap``. A matched row
       requires an absolute ``component_iri``. A gap requires a blank
       ``component_iri`` plus a non-empty ``component_label`` and
@@ -956,8 +957,8 @@ def write_sdp_measurement_decompositions(
       tokenized or inferred.
 
     Every non-empty dictionary ``property_iri``, ``entity_iri``,
-    ``constraint_iri``, ``method_iri``, and ``unit_iri`` must appear as a
-    matched component of the same role. Semicolon-separated dictionary
+    ``constraint_iri``, ``statistical_modifier_iri``, and ``unit_iri`` must
+    appear as a matched component of the same role. Semicolon-separated dictionary
     constraints are checked separately. Additional same-role components and
     explicit gaps stay only in this artifact, leaving the frozen SDP
     dictionary columns unchanged.

@@ -818,57 +818,111 @@ class EmlOutputFileTests(unittest.TestCase):
 
 @_REQUIRES_EXTRA
 class EmlSdpMethodTests(unittest.TestCase):
-    """Registry procedures reach EML only when they were actually used.
+    """Method steps come from the sdp-0.3.0 placements, inside the closure.
 
-    An EML ``methodStep`` asserts that a procedure *was performed* to produce
-    these data. A registry is an inventory of procedures the package knows
-    about, which is a different claim -- so an alternative that no observed
-    measurement references must not appear. Verified against metasalmon
-    v0.1.8: the document this package produces for the used-method fixture is
-    ``ET.canonicalize``-equal to R's, including which methods it omits.
+    sdp-0.3.0 removed the methods registry: a table-constant procedure and its
+    protocol live on ``tables.csv``, a dataset-wide protocol on
+    ``dataset.csv``, and row-varying procedures resolve through
+    ``codes.csv$term_iri``. Every vocabulary IRI the method path emits stays
+    inside the reviewed closure — a table-level ``method_iri`` needs an
+    accepted ledger row and a vocabulary-snapshot entry — while protocol IRIs
+    are citations and are deliberately not gated. Verified against metasalmon
+    main (e02111a): the placements document below matches R's method steps
+    paragraph for paragraph.
     """
 
-    def _sdp_with_registry(self, methods_rows, dictionary_method=None):
-        from metasalmonpy.metadata import read_sdp_csv
-
+    def _sdp_with_legacy_registry(self, methods_rows):
         sdp = _fixture_sdp(self, "sdp-default")
-        if dictionary_method is not None:
-            path = os.path.join(sdp, "metadata", "column_dictionary.csv")
-            dictionary = read_sdp_csv(path)
-            dictionary.loc[
-                dictionary["column_name"] == "count", "method_iri"
-            ] = dictionary_method
-            dictionary.to_csv(path, index=False, na_rep="")
         columns = (
             "dataset_id,method_iri,method_label,method_description,"
             "method_version,protocol_iri,citation"
         )
         lines = [columns] + [",".join(row) for row in methods_rows]
-        os.makedirs(os.path.join(sdp, "metadata"), exist_ok=True)
         with open(
             os.path.join(sdp, "metadata", "methods.csv"), "w", encoding="utf-8"
         ) as handle:
             handle.write("\n".join(lines) + "\n")
-
-        # A registry always arrives here inside an R-written package, and R's
-        # writer registers the resource in the descriptor as it writes. Doing
-        # the same by hand keeps the fixture a package the reader accepts
-        # rather than one only this test could produce.
-        from metasalmonpy.sdp_methods import _methods_resource
-
-        descriptor_path = os.path.join(sdp, "datapackage.json")
-        with open(descriptor_path, encoding="utf-8") as handle:
-            descriptor = json.load(handle)
-        descriptor["resources"] = list(descriptor.get("resources") or []) + [
-            _methods_resource()
-        ]
-        descriptor.setdefault("sdp", {}).setdefault("metadata", {})[
-            "methods"
-        ] = "metadata/methods.csv"
-        with open(descriptor_path, "w", encoding="utf-8") as handle:
-            json.dump(descriptor, handle, indent=2)
-            handle.write("\n")
         return sdp
+
+    def _add_table_method_to_review_closure(
+        self, sdp, method_iri, method_label, table_id="counts",
+        dataset_id="demo-salmon-2026",
+    ):
+        """Port of metasalmon's ``add_table_method_to_review_closure()``."""
+        import hashlib
+
+        from metasalmonpy.eml import _vocabulary_snapshot_sha256
+        from metasalmonpy.metadata import read_sdp_csv
+
+        vocabulary_path = os.path.join(
+            sdp, "metadata", "semantic_vocabulary.csv"
+        )
+        vocabulary = read_sdp_csv(vocabulary_path)
+        method_row = {
+            "iri": method_iri,
+            "label": method_label,
+            "definition": "A reviewed shared-vocabulary procedure.",
+            "source": "smn",
+            "ontology": "smn",
+            "resource_kind": "Concept",
+            "type_iris": "http://www.w3.org/ns/sosa/Procedure",
+            "native_type": "skos:Concept",
+            "source_url": "https://w3id.org/smn/",
+            "source_artifact_sha256": "3" * 64,
+        }
+        method_row["reviewed_snapshot_sha256"] = _vocabulary_snapshot_sha256(
+            method_row
+        )
+        vocabulary = pd.concat(
+            [vocabulary, pd.DataFrame([method_row])], ignore_index=True
+        )
+        vocabulary.to_csv(vocabulary_path, index=False, na_rep="")
+
+        review_path = os.path.join(sdp, "reviewed_semantic_selections.csv")
+        review = read_sdp_csv(review_path)
+        review = pd.concat(
+            [
+                review,
+                pd.DataFrame(
+                    [
+                        {
+                            "dataset_id": dataset_id,
+                            "table_id": table_id,
+                            "column_name": "",
+                            "target_scope": "table",
+                            "target_sdp_field": "method_iri",
+                            "dictionary_role": "method",
+                            "decision": "accepted",
+                            "confidence": "high",
+                            "review_rationale": (
+                                "The table-constant procedure was reviewed."
+                            ),
+                            "iri": method_iri,
+                        }
+                    ]
+                ),
+            ],
+            ignore_index=True,
+        )
+        review.to_csv(review_path, index=False, na_rep="")
+
+        mapping_path = os.path.join(sdp, "metadata", "eml-mapping.yml")
+        import yaml
+
+        with open(mapping_path, encoding="utf-8") as handle:
+            mapping = yaml.safe_load(handle)
+        with open(mapping_path, encoding="utf-8") as handle:
+            text = handle.read()
+        text = text.replace(
+            mapping["semantic_vocabulary"]["sha256"],
+            hashlib.sha256(Path(vocabulary_path).read_bytes()).hexdigest(),
+        )
+        text = text.replace(
+            mapping["semantic_review"]["sha256"],
+            hashlib.sha256(Path(review_path).read_bytes()).hexdigest(),
+        )
+        with open(mapping_path, "w", encoding="utf-8") as handle:
+            handle.write(text)
 
     def _steps(self, path):
         document = ET.parse(path).getroot()
@@ -884,67 +938,156 @@ class EmlSdpMethodTests(unittest.TestCase):
             if local(step.tag) == "methodStep"
         ]
 
-    def test_an_unreferenced_registry_method_is_not_asserted_as_performed(self):
-        sdp = self._sdp_with_registry(
+    def test_method_steps_come_from_tables_and_dataset_placements(self):
+        from metasalmonpy.metadata import read_sdp_csv
+
+        sdp = _fixture_sdp(self, "sdp-default")
+        tables_path = os.path.join(sdp, "metadata", "tables.csv")
+        tables = read_sdp_csv(tables_path)
+        tables["method_iri"] = "https://example.org/methods/mark-recapture"
+        tables["protocol_iri"] = "https://example.org/protocols/mark-recapture"
+        tables["protocol_citation"] = (
+            "Example Salmon Program. 2026. Mark-recapture protocol."
+        )
+        tables.to_csv(tables_path, index=False, na_rep="")
+        # The emitted method IRI must be inside the review/vocabulary closure;
+        # the protocol IRIs are citations and deliberately are not.
+        self._add_table_method_to_review_closure(
+            sdp,
+            "https://example.org/methods/mark-recapture",
+            "Mark-recapture estimate",
+        )
+        dataset_path = os.path.join(sdp, "metadata", "dataset.csv")
+        dataset = read_sdp_csv(dataset_path)
+        dataset["protocol_iri"] = (
+            "https://example.org/protocols/monitoring-program"
+        )
+        dataset["protocol_citation"] = (
+            "Example Salmon Program. 2026. Monitoring program protocol."
+        )
+        dataset.to_csv(dataset_path, index=False, na_rep="")
+
+        result = write_eml_from_sdp(sdp, overwrite=True)
+
+        steps = self._steps(result["path"])
+        # Mapping narrative + one table placement + one dataset placement.
+        self.assertEqual(len(steps), 3)
+        texts = ["".join(step.itertext()) for step in steps]
+        table_text = texts[1]
+        dataset_text = texts[2]
+        self.assertIn("Method and protocol for table 'counts'.", table_text)
+        self.assertIn(
+            "https://example.org/methods/mark-recapture", table_text
+        )
+        self.assertIn(
+            "https://example.org/protocols/mark-recapture", table_text
+        )
+        self.assertIn("Mark-recapture protocol", table_text)
+        self.assertIn("Dataset-level protocol.", dataset_text)
+        self.assertIn(
+            "https://example.org/protocols/monitoring-program", dataset_text
+        )
+        self.assertIn("Monitoring program protocol", dataset_text)
+
+        self.assertEqual(
+            list(result["methods"].columns),
+            ["scope", "method_iri", "protocol_iri", "protocol_citation"],
+        )
+        self.assertEqual(
+            list(result["methods"]["scope"]), ["counts", "dataset"]
+        )
+        method_iris = list(result["methods"]["method_iri"])
+        self.assertEqual(
+            method_iris[0], "https://example.org/methods/mark-recapture"
+        )
+        self.assertTrue(pd.isna(method_iris[1]) or method_iris[1] in ("", None))
+        self.assertEqual(result["used_methods"], [])
+
+    def test_an_unreviewed_table_method_iri_is_refused(self):
+        # A table-level method_iri is a vocabulary selection the EML method
+        # path emits, so it needs an accepted ledger row and a vocabulary
+        # snapshot entry exactly like the dictionary slots do.
+        from metasalmonpy.metadata import read_sdp_csv
+
+        sdp = _fixture_sdp(self, "sdp-default")
+        tables_path = os.path.join(sdp, "metadata", "tables.csv")
+        tables = read_sdp_csv(tables_path)
+        tables["method_iri"] = "https://example.org/methods/mark-recapture"
+        tables.to_csv(tables_path, index=False, na_rep="")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"exactly one accepted row .*counts\.method_iri",
+        ):
+            write_eml_from_sdp(sdp, overwrite=True)
+
+    def test_a_leftover_registry_aborts_pointing_at_migration(self):
+        sdp = self._sdp_with_legacy_registry(
             [
                 (
                     "demo-salmon-2026",
-                    "https://example.org/methods/unreferenced",
-                    "Unreferenced method",
-                    "Registered but not used to produce this data object.",
+                    "https://example.org/methods/mark-recapture",
+                    "Mark-recapture estimate",
+                    "A legacy registry row.",
                     "",
                     "",
                     "",
                 )
             ]
         )
-        result = write_eml_from_sdp(sdp, overwrite=True)
+        with self.assertRaisesRegex(ValueError, "migrate_sdp_methods"):
+            write_eml_from_sdp(sdp, overwrite=True)
 
-        self.assertEqual(len(result["methods"]), 1)
-        self.assertEqual(len(result["used_methods"]), 0)
-        self.assertEqual(len(self._steps(result["path"])), 1)
-        with open(result["path"], encoding="utf-8") as handle:
-            self.assertNotIn("Unreferenced method", handle.read())
-
-    def test_a_method_on_a_non_measurement_column_is_not_a_procedure(self):
-        # A legacy dictionary annotation on an attribute column is not a
-        # performed measurement procedure.
-        from metasalmonpy.eml import _used_sdp_methods
+    def test_eml_asserts_only_row_varying_procedures_actually_observed(self):
+        # Replaces the registry-era "only procedures actually used" tests: the
+        # used-procedure list now comes from enumerated sosa:usedProcedure
+        # code columns resolved through codes.csv term_iri, restricted to code
+        # values observed alongside a populated measure. An
+        # enumerated-but-unobserved code must not be asserted as performed.
+        from metasalmonpy.eml import _used_procedures
         from metasalmonpy.metadata import read_sdp_csv
         from metasalmonpy.package_io import validate_salmon_datapackage
 
-        sdp = _fixture_sdp(self, "sdp-default")
-        path = os.path.join(sdp, "metadata", "column_dictionary.csv")
-        dictionary = read_sdp_csv(path)
-        dictionary.loc[
-            dictionary["column_name"] == "literal_missing", "method_iri"
-        ] = "https://example.org/methods/attribute-cleanup"
-        dictionary.to_csv(path, index=False, na_rep="")
-
-        package = validate_salmon_datapackage(sdp, require_iris=True)["package"]
-        registry = pd.DataFrame(
-            [
-                {
-                    "dataset_id": "demo-salmon-2026",
-                    "method_iri": "https://example.org/methods/attribute-cleanup",
-                    "method_label": "Attribute cleanup",
-                    "method_description": "A legacy dictionary annotation.",
-                    "method_version": "",
-                    "protocol_iri": "",
-                    "citation": "",
-                }
-            ]
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, True)
+        sdp = os.path.join(root, "structure-sdp")
+        shutil.copytree(
+            os.path.join(
+                os.path.dirname(__file__), "data", "sdp-extensions",
+                "structure-sdp",
+            ),
+            sdp,
         )
+        codes_path = os.path.join(sdp, "metadata", "codes.csv")
+        codes = read_sdp_csv(codes_path)
+        extra = codes.iloc[[0]].copy()
+        extra["code_value"] = "unobserved_method"
+        extra["code_label"] = "Unobserved method"
+        extra["code_description"] = (
+            "Enumerated but absent from current data rows"
+        )
+        extra["term_iri"] = "https://example.org/methods/unobserved"
+        pd.concat([codes, extra], ignore_index=True).to_csv(
+            codes_path, index=False, na_rep=""
+        )
+
+        pkg = validate_salmon_datapackage(sdp, require_iris=False)["package"]
+        used = _used_procedures(Path(sdp), pkg)
 
         self.assertEqual(
-            len(_used_sdp_methods(Path(sdp), package, registry)), 0
+            used,
+            [
+                "https://example.org/methods/expanded-count",
+                "https://example.org/methods/mark-recapture",
+            ],
         )
+        self.assertNotIn("https://example.org/methods/unobserved", used)
 
-    def test_a_package_with_no_registry_emits_the_mapping_narrative_only(self):
+    def test_a_package_with_no_placements_emits_the_mapping_narrative_only(self):
         sdp = _fixture_sdp(self, "sdp-default")
         result = write_eml_from_sdp(sdp, overwrite=True)
         self.assertEqual(len(result["methods"]), 0)
-        self.assertEqual(len(result["used_methods"]), 0)
+        self.assertEqual(result["used_methods"], [])
         self.assertEqual(len(self._steps(result["path"])), 1)
 
 

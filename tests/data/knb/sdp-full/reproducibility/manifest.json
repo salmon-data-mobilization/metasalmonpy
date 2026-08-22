@@ -12,8 +12,8 @@
       "path": "reproducibility/reviewed_semantic_selections.csv",
       "role": "reviewed_semantic_selections",
       "media_type": "text/csv",
-      "sha256": "c38bc55daed99e4250341820ef72aecb0d74ca4f4a3d7ee3d7f718dfc69e8ad3",
-      "size_bytes": 853
+      "sha256": "f44ff5c64cf0d16d2e84fa86c2790de1b78b2f216a84aadccfbbe7544e293e4f",
+      "size_bytes": 1005
     },
     {
       "path": "reproducibility/source/source-manifest.csv",
@@ -46,6 +46,6 @@
   ],
   "provenance": {
     "generated_by": "metasalmon::write_sdp_reproducibility_manifest",
-    "metasalmon_version": "0.1.8"
+    "metasalmon_version": "0.3.0"
   }
 }

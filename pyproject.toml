@@ -35,10 +35,10 @@ package-dir = { "metasalmonpy" = ".", "metasalmonpy.data" = "data", "metasalmonp
     "*.md",
     "schema/*.json",
     # The vendored SDP bundle, taken verbatim from the smn-data-pkg
-    # ``sdp-0.2.0`` tag. Without these three globs the wheel installs but every
+    # ``sdp-0.3.0`` tag. Without these three globs the wheel installs but every
     # schema read fails at runtime, so `tests/test_sdp_schema.py` asserts them.
     "schema/*.yaml",
     "schema/frictionless/metadata/*.json",
-    "profiles/salmon-data-package/v0.2/*.json",
+    "profiles/salmon-data-package/v0.3/*.json",
     "xsd/eml-2.2.0/*",
 ]

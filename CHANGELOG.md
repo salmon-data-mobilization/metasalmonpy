@@ -2,9 +2,128 @@
 
 ## Unreleased
 
-Not a version bump: the parity claim stays at **metasalmon 0.2.1** because the
-metasalmon change mirrored here is in that package's development version, not
-in a release. Bump on parity, not on calendar.
+Not a version bump: the parity claim stays at **metasalmon 0.2.1**. The S10
+chunk-A work below is the sdp-0.3.0 breaking change, and it lands deliberately
+unversioned: *which* number the finished port may carry is the execplan's open
+decision 2 (hub Q7) — the chunks deliver behaviour verified against
+metasalmon's post-0.3.0 `main`, which no R release contains, and nobody has
+ruled what a number may claim about that. The bump comes once, at the end of
+the S10 chunks, after that ruling. Bump on parity, not on calendar.
+
+### S10 chunk A — the sdp-0.3.0 method placement model (breaking)
+
+Mirrors metasalmon 0.3.0's breaking change plus its post-0.3.0 fixes.
+Everything here was verified by **running both implementations over the same
+inputs** against metasalmon `main` at `e02111a` (the v0.3.0 release tree plus
+the post-0.3.0 fixes, including the 2026-08-21/22 recon-defect wave), never by
+reading R source alone; the four R-derived fixture families in `tests/data/`
+were regenerated at that commit and each carries its provenance.
+
+- **`column_dictionary.csv` loses `method_iri` and gains
+  `statistical_modifier_iri`.** A statistical modifier is part of variable
+  identity — a *mean* weight and a *maximum* weight are different variables —
+  so it belongs in the dictionary. A method never was: a procedure shared by a
+  whole table now lives in `tables.csv` `method_iri`, protocols are cited
+  through `protocol_iri` / `protocol_citation` on `tables.csv` and
+  `dataset.csv`, and a row-varying method lives in the data as a code column
+  resolving through `codes.csv` `term_iri`. The rename reaches all nine
+  affected modules (`metadata`, `dictionary`, `validation`, `package_io`,
+  `sdp_methods`, `observation_structures`, `eml`, `measurement_decompositions`,
+  `term_requests`); the semantic-pipeline retarget (`semantics`, `llm_review`)
+  is chunk B, so until it lands measurements review five column slots and the
+  bundle's method slot arrives `already_filled_or_not_requested`.
+
+- **The vendored schema bundle and `SDP_SPEC_TAG` move to `sdp-0.3.0`
+  together** (PARITY.md rows 27 and 38: the pin and the bundle must never name
+  different spec eras). The bundle is a verbatim copy of the upstream
+  `sdp-0.3.0` git tag — byte-identical to what metasalmon vendors — which has
+  no `methods.schema.json`: the registry left the specification, so
+  `SDP_METHODS_COLUMNS` is now a frozen legacy contract rather than a read of
+  the bundle.
+
+- **`migrate_sdp_methods()` migrates sdp-0.2.0 packages**, ported from
+  metasalmon `main` so **every stop fires in the dry run as well as the real
+  run** (the release tree checked the placement destination only after the
+  dry-run return, so a clean preview could promise a migration the real run
+  refused). It relocates what can be relocated mechanically and stops and
+  reports on anything needing a judgement call: carriers disagreeing about one
+  column, columns of one table bound to different methods, a method bound to
+  only some measurement columns, bindings naming undeclared tables or no
+  table/column at all, an existing `tables.csv` claim that disagrees, and a
+  non-bool `dry_run`. `REVIEW:` bindings are dropped and reported; registry
+  labels are reported toward the shared vocabulary. The rewrite is atomic —
+  registry renamed aside first, restored on failure — and the legacy
+  `iAdopt:methodIri` descriptor key is read by the migration (and only by the
+  migration). The final R fixture suite landed as pytest before the code, per
+  the execplan's logged decision, and a nine-case differential (three
+  migrating shapes, five stops, one no-op) matched R stop-for-stop with
+  byte-identical rewrites.
+
+- **The registry is removed from every current-package surface with errors
+  that point at the migration** — `validate_salmon_datapackage()`, EML export,
+  and KNB publication all refuse a lingering `metadata/methods.csv`. The
+  **reader and validator survive** (`read_sdp_methods()` /
+  `validate_sdp_methods()`) as deliberate legacy read support: this package
+  receives R-0.2.x-written packages that carry a registry (PARITY.md row 9).
+  `write_sdp_methods()` stays a raising stub, its message now saying the
+  registry **is removed** at SDP 0.3.0 and pointing at the migration.
+
+- **Method and protocol placements get the absolute-IRI check the dictionary
+  columns already had**: `tables.csv` `method_iri`/`protocol_iri` and
+  `dataset.csv` `protocol_iri` are checked unconditionally (reported in the
+  returned semantic issues), and strict validation (`require_iris=True`)
+  blocks them exactly as it blocks a `REVIEW:` marker. Observation-structure
+  validation now checks table-level and enumerated `sosa:usedProcedure` IRIs
+  for shared-vocabulary shape instead of registry membership.
+
+- **EML method steps come from the placements.** Table-level method/protocol
+  fields and dataset-level protocol fields each emit a method step, and
+  row-varying procedures actually used by the data are listed from their code
+  resolutions. `write_eml_from_sdp()`'s `methods` return is now the placements
+  frame and `used_methods` the used-procedure IRIs. Every vocabulary IRI the
+  method path emits stays inside the reviewed closure — a table-level
+  `method_iri` needs an accepted semantic-review ledger row and a
+  vocabulary-snapshot entry; protocol IRIs are citations and are not gated.
+  Measurement decompositions drop the `method` component role for
+  `statistical_modifier`, for the same reason the dictionary did.
+
+### Fixes folded into chunk A
+
+- **A failed rollback inside the shared atomic writer no longer deletes the
+  backup holding the original bytes**, and the warning now names that file
+  (mirrors metasalmon 0.3.0's fix; `observation_structures` inherits it
+  through the shared writer). The rollback also survives a destination that
+  something replaced with a directory, instead of crashing past the restore.
+
+- **`sdp_methods` now builds its IRI patterns from `metadata.R_SPACE_CLASS`**
+  exactly as `eml` and `sssom` already did (hub backlog #86, PARITY.md
+  row 33 discharged). Python's `\s` disagreed with R's TRE `[[:space:]]` on 8
+  codepoints and rejected every one where R accepts, so this validator was
+  the stricter side and could refuse SDP-extension IRIs metasalmon accepts.
+  Verdicts for all 12 probe codepoints now match R exactly, pinned by a
+  membership test like the ones `test_eml.py` and `test_sssom.py` carry.
+
+- **The bundled `column_dictionary.csv` demo was corrupt as shipped**: two
+  descriptions with unquoted commas shifted every later field, so RUN_TYPE
+  parsed with `column_role` `" Fall)"` and ESTIMATE_STAGE with `value_type`
+  `" near-final)"` — schema-invalid values in a file users are pointed at as
+  a starting point (the same defect metasalmon fixed at 0.3.0; found
+  independently by the hub's 2026-08-21 recon). The demo metadata and sample
+  data are now byte-copies of metasalmon `main`'s (`e02111a`), which also
+  picks up the recon-wave example fixes (resolving IRIs, ISO dates, the
+  crosswalked codes) and closes a previously unregistered drift in the demo
+  `dataset.csv` source citation.
+
+- **`read_salmon_datapackage()`'s descriptor branch now coalesces the
+  per-field `custom` keys** (`sdp:columnRole`, `sdp:unitLabel`, `sdp:unitIri`,
+  `sdp:termIri`, `sdp:termType`, `iAdopt:propertyIri`, `iAdopt:entityIri`,
+  `iAdopt:constraintIri`, `iAdopt:statisticalModifierIri`) before the bare
+  field properties, as R always has. Found while porting the reader half of
+  the flip: this reader had silently dropped semantic bindings and column
+  roles from descriptor-first legacy packages that carry them only under
+  `custom`. The legacy `iAdopt:methodIri` key is deliberately **not** read —
+  the migration reads old descriptors directly, so a descriptor-only
+  sdp-0.2.0 package keeps its method binding until migration relocates it.
 
 ### Fixes
 

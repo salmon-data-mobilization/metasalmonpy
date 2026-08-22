@@ -52,6 +52,7 @@ from .reproducibility import (
     write_sdp_reproducibility_manifest,
 )
 from .sdp_methods import (
+    migrate_sdp_methods,
     read_sdp_methods,
     validate_sdp_methods,
     write_sdp_methods,
@@ -100,6 +101,7 @@ __all__ = [
     "infer_dictionary",
     "infer_salmon_datapackage_artifacts",
     "infer_value_type",
+    "migrate_sdp_methods",
     "ms_setup_github",
     "nuseds_enumeration_method_crosswalk",
     "nuseds_estimate_method_crosswalk",

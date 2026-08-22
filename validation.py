@@ -73,7 +73,7 @@ def validate_semantics(
 
     if "required" not in dict_df.columns:
         dict_df["required"] = False
-    for col in ["term_iri", "property_iri", "entity_iri", "unit_iri", "constraint_iri", "method_iri"]:
+    for col in ["term_iri", "property_iri", "entity_iri", "unit_iri", "constraint_iri", "statistical_modifier_iri"]:
         if col not in dict_df.columns:
             dict_df[col] = pd.NA
     for col in ["table_id", "column_name", "column_role", "column_description"]:
@@ -109,7 +109,7 @@ def validate_semantics(
         "entity_iri",
         "unit_iri",
         "constraint_iri",
-        "method_iri",
+        "statistical_modifier_iri",
     ]
     iri_issue_rows = []
     for col in [c for c in semantic_cols if c in dict_df.columns]:

@@ -40,14 +40,15 @@ SEMANTIC_COLUMNS = [
     "property_iri",
     "entity_iri",
     "constraint_iri",
-    "method_iri",
+    "statistical_modifier_iri",
 ]
 
 # Core ontology fields used in strict semantic checks for measurements.
 # - term/property/entity/unit are required for explicit I-ADOPT-style semantics.
-# - constraint/method are optional qualifiers (e.g., age/phase/method tags).
+# - constraint/statistical modifier are optional qualifiers (e.g., age/phase
+#   tags, or the aggregation that is part of the variable's identity).
 CORE_SEMANTIC_FIELDS = ["term_iri", "property_iri", "entity_iri", "unit_iri"]
-OPTIONAL_SEMANTIC_FIELDS = ["constraint_iri", "method_iri"]
+OPTIONAL_SEMANTIC_FIELDS = ["constraint_iri", "statistical_modifier_iri"]
 MEASUREMENT_SEMANTIC_FIELDS = CORE_SEMANTIC_FIELDS + OPTIONAL_SEMANTIC_FIELDS
 
 
@@ -442,7 +443,7 @@ def infer_dictionary(
             "property_iri": [pd.NA] * n_cols,
             "entity_iri": [pd.NA] * n_cols,
             "constraint_iri": [pd.NA] * n_cols,
-            "method_iri": [pd.NA] * n_cols,
+            "statistical_modifier_iri": [pd.NA] * n_cols,
         }
     )
 

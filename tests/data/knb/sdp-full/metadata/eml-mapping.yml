@@ -7,10 +7,10 @@ language: eng
 publication_date: '2026-01-01'
 semantic_vocabulary:
   path: metadata/semantic_vocabulary.csv
-  sha256: fd6c78eab176792dd1a23ed8937d86f565c0a308afd8c52743ed293906f1163f
+  sha256: e075d299a1e104f779da652798bc033e78473f3a4638ae125278066d38cfb035
 semantic_review:
   path: reproducibility/reviewed_semantic_selections.csv
-  sha256: c38bc55daed99e4250341820ef72aecb0d74ca4f4a3d7ee3d7f718dfc69e8ad3
+  sha256: f44ff5c64cf0d16d2e84fa86c2790de1b78b2f216a84aadccfbbe7544e293e4f
 publication:
   public: yes
 rights_authorization:
@@ -62,8 +62,5 @@ tables:
         minimum_exclusive: no
       literal_missing:
         measurement_scale: nominal
-        missing_values:
-        - code: NA
-          explanation: No value was supplied.
       blank_only:
         measurement_scale: nominal

@@ -108,7 +108,7 @@ def test_validate_semantics_reports_missing_semantics_fields():
         'entity_iri': [''],
         'unit_iri': ['m'],
         'constraint_iri': [''],
-        'method_iri': [''],
+        'statistical_modifier_iri': [''],
     })
 
     result = validate_semantics(dict_df, require_iris=False)
@@ -116,7 +116,7 @@ def test_validate_semantics_reports_missing_semantics_fields():
 
     assert set(missing['field'].tolist()) == {
         'term_iri', 'property_iri', 'entity_iri',
-        'constraint_iri', 'method_iri'
+        'constraint_iri', 'statistical_modifier_iri'
     }
     assert missing.shape[0] == 5
     assert missing.loc[missing['field'] == 'term_iri', 'column_name'].iloc[0] == 'age'

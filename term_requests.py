@@ -789,7 +789,7 @@ def render_ontology_term_request(
                     "- entity_iri:",
                     "- unit_iri:",
                     "- constraint_iri:",
-                    "- method_iri:",
+                    "- statistical_modifier_iri:",
                     "",
                     "## Additional notes",
                     "",

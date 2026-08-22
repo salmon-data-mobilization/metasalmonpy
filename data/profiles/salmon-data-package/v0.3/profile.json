@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json",
+  "$id": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json",
   "title": "Salmon Data Package Profile",
   "description": "Custom Frictionless Data Package profile for Salmon Data Package (SDP) packages.",
   "type": "object",
@@ -10,7 +10,7 @@
   ],
   "properties": {
     "profile": {
-      "const": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.2/profile.json"
+      "const": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json"
     },
     "resources": {
       "type": "array",
@@ -127,7 +127,7 @@
       }
     }
   ],
-  "sdp:version": "sdp-0.2.0",
+  "sdp:version": "sdp-0.3.0",
   "sdp:metadataResources": [
     {
       "name": "sdp_dataset",
@@ -165,15 +165,6 @@
       "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/codes.schema.json",
       "sdp:requirement": "conditional",
       "sdp:condition": "Required when any column_dictionary.csv row has column_role equal to categorical."
-    },
-    {
-      "name": "sdp_methods",
-      "path": "metadata/methods.csv",
-      "profile": "tabular-data-resource",
-      "title": "SDP methods metadata",
-      "description": "Optional registry of procedures associated with measurements in the package.",
-      "schema": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/frictionless/metadata/methods.schema.json",
-      "sdp:requirement": "optional"
     },
     {
       "name": "sdp_observation_structures",

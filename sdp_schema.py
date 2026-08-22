@@ -16,20 +16,23 @@ the mechanics:
   different sources, so one package could carry two disagreeing versions. The
   loader caches per process and both now resolve identically.
 
-**The remote base URL is pinned to the ``sdp-0.2.0`` tag, not to ``main``.**
-metasalmon's own default points at ``main``, which was ``sdp-0.2.0``-shaped
-when 0.2.1 shipped and is ``sdp-0.3.0``-shaped now — so following it literally
-would make this package fetch a bundle from a spec era it does not implement,
-fail validation, and fall back to the vendored copy on every call. The pin
-reproduces the bundle metasalmon 0.2.1 actually loaded. It is overridable, so
-nothing is locked away: ``METASALMONPY_SDP_SCHEMA_BASE_URL`` (or
-:func:`set_sdp_schema_base_url`) names any ref or host. See PARITY.md row 38.
-**Retirement condition:** the pin moves to ``sdp-0.3.0`` at the 0.3.0 rung,
-which swaps the vendored bundle at the same time; the two must never name
-different spec eras.
+**The remote base URL is pinned to the ``sdp-0.3.0`` tag, not to ``main``.**
+metasalmon's default is pinned to the same tag (``R/schema-helpers.R``,
+``.ms_default_sdp_schema_base_url()``): tracking ``main`` meant every upstream
+spec release broke networked schema loads — ``sdp-0.3.0`` deleted
+``methods.schema.json`` and the remote fetch 404ed. Advancing the pin is part
+of implementing a new spec version, and it moves **together with the vendored
+bundle, never separately** (PARITY.md rows 27 and 38 record why: the two must
+never name different spec eras). It is overridable, so nothing is locked away:
+``METASALMONPY_SDP_SCHEMA_BASE_URL`` (or :func:`set_sdp_schema_base_url`)
+names any ref or host.
 
 The vendored bundle under ``data/schema`` and ``data/profiles`` is a verbatim
-copy of the upstream ``sdp-0.2.0`` git tag.
+copy of the upstream ``sdp-0.3.0`` git tag. That tag has no
+``methods.schema.json``: sdp-0.3.0 removed the ``metadata/methods.csv``
+registry from the specification, so the legacy registry *reader* in
+``sdp_methods`` carries its own frozen column contract instead of reading one
+from this bundle.
 """
 
 from __future__ import annotations
@@ -44,8 +47,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 
-# The upstream ref this package's parity claim is measured against.
-SDP_SPEC_TAG = "sdp-0.2.0"
+# The upstream ref this package's parity claim is measured against. Moves
+# only together with the vendored bundle under ``data/`` (PARITY.md rows 27
+# and 38).
+SDP_SPEC_TAG = "sdp-0.3.0"
 DEFAULT_SDP_SCHEMA_BASE_URL = (
     "https://raw.githubusercontent.com/salmon-data-mobilization/smn-data-pkg/"
     + SDP_SPEC_TAG
@@ -56,7 +61,7 @@ DEFAULT_SDP_SCHEMA_BASE_URL = (
 # are what callers use.
 SDP_PROFILE_URL = (
     "https://salmon-data-mobilization.github.io/smn-data-pkg/"
-    "profiles/salmon-data-package/v0.2/profile.json"
+    "profiles/salmon-data-package/v0.3/profile.json"
 )
 SDP_PUBLIC_SCHEMA_BASE = (
     "https://salmon-data-mobilization.github.io/smn-data-pkg/"
@@ -66,12 +71,14 @@ SDP_RULES_URL = (
     "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/sdp.rules.yaml"
 )
 
+# sdp-0.3.0 removed the ``methods`` table: the registry left the
+# specification, so the bundle no longer defines (and the upstream tag no
+# longer serves) ``methods.schema.json``.
 SDP_METADATA_SCHEMA_PATHS = {
     "dataset": "schema/frictionless/metadata/dataset.schema.json",
     "tables": "schema/frictionless/metadata/tables.schema.json",
     "column_dictionary": "schema/frictionless/metadata/column_dictionary.schema.json",
     "codes": "schema/frictionless/metadata/codes.schema.json",
-    "methods": "schema/frictionless/metadata/methods.schema.json",
     "observation_structures": (
         "schema/frictionless/metadata/observation_structures.schema.json"
     ),
@@ -81,7 +88,7 @@ SDP_METADATA_SCHEMA_PATHS = {
 }
 
 SDP_RULES_PATH = "schema/sdp.rules.yaml"
-SDP_PROFILE_PATH = "profiles/salmon-data-package/v0.2/profile.json"
+SDP_PROFILE_PATH = "profiles/salmon-data-package/v0.3/profile.json"
 
 # The four core metadata resources a descriptor always declares, in the order
 # metasalmon writes them.
@@ -351,7 +358,7 @@ def default_sdp_schema_source() -> str:
 
 
 def vendored_path(relative: str) -> Path:
-    """Absolute path to one file of the vendored ``sdp-0.2.0`` bundle."""
+    """Absolute path to one file of the vendored ``sdp-0.3.0`` bundle."""
     return _DATA_DIR / relative
 
 

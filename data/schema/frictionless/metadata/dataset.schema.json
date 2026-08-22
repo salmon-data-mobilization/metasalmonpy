@@ -166,6 +166,16 @@
       "type": "string",
       "description": "SDP specification version.",
       "example": "sdp-0.2.0"
+    },
+    {
+      "name": "protocol_iri",
+      "type": "string",
+      "description": "Convenience only: the protocol IRI when the same protocol governs every table. The primary placement is tables.csv."
+    },
+    {
+      "name": "protocol_citation",
+      "type": "string",
+      "description": "Convenience only: the protocol citation when uniform across tables."
     }
   ],
   "sdp:table": "dataset",
