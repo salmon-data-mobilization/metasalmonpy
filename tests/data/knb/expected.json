@@ -111,9 +111,6 @@
   "resource_map_pid_demo": "urn:uuid:78b7bbcd-1e5e-55de-b817-d278e652cc97",
   "sha256_text_demo": "2a97516c354b68848cdbd8f54a226a0a55b21ed138e207ad6c5cbb9c00aa5aea",
   "resolve_url_demo": "https://cn.dataone.org/cn/v2/resolve/urn%3Auuid%3Aabc",
-  "redact_bearer": "Authorization: Bearer [REDACTED]",
-  "redact_jwt": "token [REDACTED JWT] here",
-  "redact_option": "dataone_token=[REDACTED] trailing",
   "orcid_key": "0000-0001-9317-0364",
   "replication_public": {
    "replication_allowed": true,

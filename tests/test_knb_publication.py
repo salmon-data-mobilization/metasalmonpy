@@ -446,17 +446,27 @@ class KnbHelperParityTests(unittest.TestCase):
         )
 
     def test_redaction_matches(self):
+        # Until S10 chunk F these three strings were pinned against era R's
+        # `.ms_knb_redact()` through the deleted `knb_publication._redact`;
+        # the KNB boundary now redacts through the one shared redactor, and
+        # the expectations are `.ms_redact_secrets()` on metasalmon main @
+        # 794647a, byte-for-byte (chunk F differential). Note the first
+        # string's output *changed* with the consolidation, exactly as it
+        # did in R at 0.2.5: the credential-header rule now takes the whole
+        # line, not just the Bearer payload.
+        from metasalmonpy.text_safety import redact_secrets
+
         self.assertEqual(
-            knb._redact("Authorization: Bearer abc.def-ghi_jkl"),
-            self.helpers["redact_bearer"],
+            redact_secrets("Authorization: Bearer abc.def-ghi_jkl"),
+            "Authorization=[REDACTED]",
         )
         self.assertEqual(
-            knb._redact("token eyJhbGciOi.eyJzdWIi.c2ln here"),
-            self.helpers["redact_jwt"],
+            redact_secrets("token eyJhbGciOi.eyJzdWIi.c2ln here"),
+            "token [REDACTED JWT] here",
         )
         self.assertEqual(
-            knb._redact("dataone_token=secretvalue trailing"),
-            self.helpers["redact_option"],
+            redact_secrets("dataone_token=secretvalue trailing"),
+            "dataone_token=[REDACTED]",
         )
 
     def test_orcid_and_subject_matching_match(self):
