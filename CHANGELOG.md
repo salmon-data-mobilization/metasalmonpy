@@ -10,6 +10,50 @@ metasalmon's post-0.3.0 `main`, which no R release contains, and nobody has
 ruled what a number may claim about that. The bump comes once, at the end of
 the S10 chunks, after that ruling. Bump on parity, not on calendar.
 
+### S10 chunk F — redaction
+
+metasalmon 0.2.5's redaction contract, verified by driving both redactors
+over a 31-string adversarial battery (credential headers, cookie jars,
+serialized JSON credentials, qualified tokens, token-count diagnostics, JWTs,
+provider keys, URLs with query-string keys, multi-line splits): **byte-identical
+to `.ms_redact_secrets()` on metasalmon `main` @ `794647a`** after this chunk,
+against three divergences before it.
+
+- **Credential redaction covers qualified token names.** `_CREDENTIAL_NAME`
+  enumerated `dataone[_-]?token`, so the production credential was redacted
+  and `dataone_test_token` / `knb_staging_token` were not — the worst
+  possible split, since staging is the credential a first-time user is most
+  likely to paste into a script, and it leaked *at rest*: captured provider
+  errors are stored on returned frames and written to CSV. The rule is now
+  structural — any qualified name whose final segment is `token` — so a
+  credential introduced later is covered without another patch. `token` must
+  be the final segment, so `max_token_count` and `total_tokens` survive in
+  provider diagnostics, and a name continuing past `token`
+  (`dataone_token_v2`) is deliberately unmatched, matching R's recorded
+  trade — that last verdict *changed* here, from redacted to left alone.
+  The separator's whitespace class was also aligned to R's PCRE
+  `[[:space:]]`, so a name split from its value by a newline redacts
+  identically on both sides.
+- **The second redaction implementation is deleted.**
+  `knb_publication._redact` (mirror of the `.ms_knb_redact()` R 0.2.5
+  deleted) and `text_safety.redact_secrets()` were two implementations of
+  one security contract, and only one gets extended when a pattern changes —
+  exactly how the gap above arose in R. KNB boundary messages (`_abort_safe`,
+  the live-adapter warning wrapper, the DataONE REST error) now redact
+  through the shared function, which is strictly stronger: it also catches
+  `x-api-key`, provider API keys, and serialized JSON credential forms the
+  deleted version missed. One observable output changed with the
+  consolidation, exactly as it did in R at 0.2.5: a `Authorization: Bearer …`
+  line is now redacted as a credential header (whole line), not just its
+  Bearer payload. `tests/test_text_safety.py::test_exactly_one_redactor_exists`
+  is the standing guard, and PARITY.md row 37's redaction half retires as
+  converged. The era `expected.json` fixture's three `redact_*` helper
+  values retire with the function they pinned.
+- The capture-time URL-redaction sites chunk E placed in `_safe_json`
+  inherit the structural rule automatically — the one-redactor property is
+  what makes that sentence true, which is why 0.2.3's URL rule and this
+  consolidation were scoped together.
+
 ### S10 chunk E — cache, environment and network robustness
 
 metasalmon 0.2.2's and 0.2.3's cache/environment/network behaviours, verified

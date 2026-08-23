@@ -51,6 +51,7 @@ from urllib.parse import quote
 
 from . import eml as _eml
 from .atomic_io import atomic_write
+from .text_safety import redact_secrets
 
 # --- constants ----------------------------------------------------------------------
 
@@ -1867,32 +1868,21 @@ def _require_replication_policy(policy: object, public: bool) -> Dict[str, objec
 # --- redaction and safe aborts ---------------------------------------------------------
 
 
-def _redact(value: object) -> str:
-    """Mirror ``.ms_knb_redact``: redact where external text is captured."""
-    text = str(value)
-    text = re.sub(
-        r"Bearer[ \t\r\n\f\v]+[A-Za-z0-9._~-]+",
-        "Bearer [REDACTED]",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+",
-        "[REDACTED JWT]",
-        text,
-    )
-    text = re.sub(
-        r"(dataone_token|authorization|cookie)[=:][^ \t\r\n\f\v]+",
-        lambda match: match.group(1) + "=[REDACTED]",
-        text,
-        flags=re.IGNORECASE,
-    )
-    return text
+# The second redaction implementation is deleted (S10 chunk F, mirroring
+# metasalmon 0.2.5). ``_redact`` here and ``text_safety.redact_secrets`` were
+# two implementations of one security contract, and on the R side only one
+# was extended when the pattern last changed — which is exactly how the
+# qualified-token gap arose. KNB messages now redact through the shared
+# function, which is strictly stronger: it also catches ``x-api-key``,
+# provider API keys, and serialized JSON credential forms the deleted
+# version missed.
 
 
 def _abort_safe(error: BaseException) -> None:
     """Mirror ``.ms_knb_abort_safe``: remote text is data, never a template."""
-    raise RuntimeError("KNB publication failed: " + _redact(str(error))) from None
+    raise RuntimeError(
+        "KNB publication failed: " + redact_secrets(str(error))
+    ) from None
 
 
 # --- SystemMetadata --------------------------------------------------------------------
@@ -2662,7 +2652,7 @@ def _run_publication(
             )
     except Warning as warning:
         raise RuntimeError(
-            "Live KNB adapter warning: " + _redact(str(warning))
+            "Live KNB adapter warning: " + redact_secrets(str(warning))
         ) from None
     except Exception as error:  # noqa: BLE001 - redaction is the contract
         _abort_safe(error)
@@ -3241,7 +3231,7 @@ class DataOneRestAdapter:
             )
         except requests.RequestException as error:
             raise KnbHttpError(
-                f"DataONE request to {url} failed: {_redact(error)}"
+                f"DataONE request to {url} failed: {redact_secrets(error)}"
             ) from None
         return response
 
