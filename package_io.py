@@ -47,6 +47,7 @@ from .resource_types import (
     typed_series,
     value_type_mismatch_record,
 )
+from .sdp_methods import _atomic_write_set
 from .sdp_schema import (
     SDP_PROFILE_URL as _SDP_PROFILE_URL,
     SDP_RULES_URL as _SDP_RULES_URL,
@@ -94,7 +95,21 @@ def _csv_value(value):
     return "" if cleaned is None else cleaned
 
 
-def _write_metadata_csv(df: pd.DataFrame, path: Path) -> None:
+def _metadata_csv_bytes(df: pd.DataFrame) -> bytes:
+    """Render one SDP metadata CSV to bytes, installed later by the commit step.
+
+    Mirrors ``.ms_sdp_extension_csv_bytes()``. Rendering to bytes rather than
+    to a path is what lets ``write_salmon_datapackage()`` decide whether to
+    touch the caller's package *after* every input-dependent computation has
+    succeeded (hub backlog #96's ordering half).
+
+    The bytes are the exact bytes the former ``to_csv(path, ...)`` call
+    produced — same frame preparation, same keyword arguments, only the
+    destination changed. ``to_csv(None)`` and ``to_csv(path)`` share one
+    encoder, and ``test_metadata_csv_bytes_match_a_direct_to_csv_write``
+    pins that rather than trusting it: the writer's job here is to reorder
+    when bytes are installed, never to change what they are.
+    """
     # A logical column renders as ``TRUE``/``FALSE``, not Python's
     # ``True``/``False``: ``column_dictionary.csv$required`` is written by both
     # implementations and read back by both, and the two spellings made every
@@ -114,7 +129,53 @@ def _write_metadata_csv(df: pd.DataFrame, path: Path) -> None:
     # (metasalmon 0.2.4): a missing value writes as the empty field, so a
     # literal "NA" — a real fisheries gear code — stays distinguishable in the
     # bytes.
-    out.to_csv(path, index=False, na_rep=csv_na_token())
+    return out.to_csv(index=False, na_rep=csv_na_token()).encode("utf-8")
+
+
+def _resource_csv_bytes(resource_df: pd.DataFrame) -> bytes:
+    """Render one data resource to bytes, installed later by the commit step.
+
+    Typed columns are rendered canonically rather than handed to ``to_csv``'s
+    repr: a float 100000.0 would otherwise be written as "100000.0" and a
+    logical as "True", so a package read by ``read_salmon_datapackage()`` and
+    written straight back would not reproduce its own bytes. See
+    ``resource_types.render_resource_frame`` for the one deliberate difference
+    from ``readr::write_csv``. ``na_rep=csv_na_token()``: a missing value is
+    the empty field — the single token authority every canonical read and
+    write shares.
+    """
+    return (
+        render_resource_frame(resource_df)
+        .to_csv(index=False, na_rep=csv_na_token())
+        .encode("utf-8")
+    )
+
+
+def _datapackage_json_bytes(datapackage: Dict[str, object]) -> bytes:
+    """Render ``datapackage.json`` with the exact writer it has always used.
+
+    ``json.dumps(..., indent=2)`` plus the terminating newline is byte-for-byte
+    the former ``json.dump(datapackage, fp, indent=2)`` followed by
+    ``fp.write("\\n")`` into a UTF-8 handle: one encoder, and ``ensure_ascii``
+    defaults to True on both, so nothing above U+007F reaches the encoding
+    step.
+
+    Deliberately NOT ``sdp_methods._json_bytes()`` or any other JSON helper in
+    this package. Mirrors R's reason for keeping ``.ms_datapackage_json_bytes()``
+    separate from ``.ms_sdp_extension_json_bytes()``: the sibling helpers differ
+    in separators, sort order or NA handling, and changing the descriptor's
+    bytes is an observable behaviour change this fix must not smuggle in. The
+    terminating newline is itself the last byte that was ever wrong here — it
+    was the final difference between an R-written and a Python-written
+    descriptor for the same package.
+    """
+    return (json.dumps(datapackage, indent=2) + "\n").encode("utf-8")
+
+
+def _package_ownership_bytes() -> bytes:
+    """Byte-identical to the ``write_text("metasalmonpy-owned\\n")`` call that
+    wrote the sentinel before the write path became transactional."""
+    return "metasalmonpy-owned\n".encode("utf-8")
 
 
 def _read_metadata_csv(path: Path) -> pd.DataFrame:
@@ -308,19 +369,31 @@ def _replace_create_output(path: Path) -> None:
         path.unlink()
 
 
-def _prepare_package_dir(
+def _check_package_write_dir(
     target: Path,
     overwrite: bool,
-    managed_paths=None,
     prune: bool = False,
 ) -> None:
+    """Non-destructive preflight for a package write.
+
+    Creates a missing directory and refuses the calls that must not proceed
+    (missing ``overwrite``, ``prune`` without ``overwrite``, a non-metasalmonpy
+    target). Deliberately performs **no deletion** — that is
+    ``_commit_package_write()``'s job, and only after the entire write set has
+    been rendered to bytes.
+
+    Keeping deletion out of this function is the fix for hub backlog #96's
+    ordering half. Its predecessor, ``_prepare_package_dir()``, unlinked the
+    managed paths here — before the resource rendering, the schema load, the
+    descriptor build and every metadata write — so any exception in that window
+    destroyed the caller's package.
+    """
     if prune and not overwrite:
         raise ValueError("prune=True requires overwrite=True.")
     if not target.exists():
         target.mkdir(parents=True, exist_ok=True)
         return
-    entries = list(target.iterdir())
-    if not entries:
+    if not list(target.iterdir()):
         return
     if not overwrite:
         raise FileExistsError(
@@ -331,21 +404,79 @@ def _prepare_package_dir(
             f"Refusing to overwrite non-metasalmonpy directory {target}. "
             "Use a new or empty directory, or clean it manually."
         )
+
+
+def _commit_package_write(
+    target: Path,
+    writes: "Mapping[Path, bytes]",
+    managed_paths=None,
+    prune: bool = False,
+) -> Path:
+    """The single destructive step of a package write.
+
+    Mirrors ``.ms_commit_package_write()``. ``writes`` is the complete,
+    already-rendered write set (bytes keyed by absolute target path), so
+    nothing user-input-dependent can abort past this point.
+
+    Non-prune: install through ``sdp_methods._atomic_write_set()`` — every
+    replacement is fully staged as a same-directory sibling before any current
+    file moves, each replaced file is renamed aside first, and a failure
+    mid-install restores the originals — then unlink the managed paths this
+    call did not rewrite (orphaned data resources, legacy root-level metadata
+    shadows, a stale ``codes.csv``). An abort anywhere leaves the previous
+    package intact.
+
+    ``_atomic_write_set()`` is reused rather than reimplemented here for the
+    same reason R reuses ``.ms_sdp_extension_atomic_write_set()``: it already
+    carries the staged-sibling install, the symlink and directory-at-path
+    refusals, the umask-default mode restore (``atomic_io.apply_default_file_mode``,
+    PARITY.md row 24) and the backup-detach rollback fix. A second transactional
+    writer would be a second thing to keep hardened, and the two would drift.
+
+    **``prune=True`` is honestly weaker, and says so.** Prune wipes files this
+    writer does not own, which is exactly what makes the rollback guarantee
+    unavailable there: the wiped sidecars are not in the write set, so nothing
+    exists to restore them from. The wipe therefore runs as late as possible —
+    after every input-dependent computation and the full byte rendering have
+    succeeded — and the residual window is pure filesystem failure (disk full,
+    permissions revoked) between the wipe and the install. That difference is
+    deliberate: ``prune=True`` is an explicit request to delete everything this
+    call does not write.
+    """
+    managed_paths = list(managed_paths or [])
+    # Containment before anything destructive: refuse to delete or replace
+    # through a symbolic link. The same guard the pre-#96 unlink ran, now also
+    # covering the prune wipe, which previously relied on the writer's earlier
+    # metadata-subset check alone.
+    _assert_managed_paths_contained(target, managed_paths)
+
     if prune:
-        for child in entries:
+        for child in list(target.iterdir()):
             if child.is_dir() and not child.is_symlink():
                 shutil.rmtree(child)
             else:
                 child.unlink()
-        return
 
-    managed_paths = list(managed_paths or [])
-    _assert_managed_paths_contained(target, managed_paths)
-    for candidate in managed_paths:
-        # No recursive removal: if a managed path ever resolves to a directory
-        # this is a no-op rather than a recursive wipe.
-        if candidate.is_symlink() or (candidate.exists() and candidate.is_file()):
-            candidate.unlink()
+    # ``metadata/`` and ``data/`` unconditionally, matching what the writer
+    # body created before this step existed: a package with every resource
+    # skipped still gets an empty ``data/``.
+    for directory in [target / "metadata", target / "data"] + [
+        path.parent for path in writes
+    ]:
+        directory.mkdir(parents=True, exist_ok=True)
+
+    _atomic_write_set({str(path): payload for path, payload in writes.items()})
+
+    if not prune:
+        for candidate in managed_paths:
+            if candidate in writes:
+                continue
+            # No recursive removal: if a managed path ever resolves to a
+            # directory this is a no-op rather than a recursive wipe.
+            if candidate.is_symlink() or (candidate.exists() and candidate.is_file()):
+                candidate.unlink()
+
+    return target
 
 
 def _force_data_path(file_name, resource_name: str, format: str) -> str:
@@ -540,6 +671,26 @@ def write_salmon_datapackage(
 
     ``prune=True`` restores the previous behaviour, deleting every entry in the
     directory first. It requires ``overwrite=True``.
+
+    **The write is transactional over the files it owns.** The full write set —
+    data resources, metadata CSVs, ``datapackage.json`` and the ownership
+    sentinel — is rendered to bytes before anything on disk is touched, then
+    installed through a staged-sibling write set that rolls the originals back
+    if any install fails. An abort at any point therefore leaves the caller's
+    previous package byte-intact and readable. Before this, the managed paths
+    were unlinked *first* and the replacements written afterwards, so any
+    exception in between destroyed the package (hub backlog #96's ordering
+    half; metasalmon PR #77).
+
+    ``prune=True`` is the one honest exception, and it is narrower rather than
+    absent. The wipe removes files this writer does not own, so those sidecars
+    are not in the write set and nothing can restore them. The wipe now runs as
+    late as possible — after every input-dependent computation and the full
+    byte rendering have succeeded, so an input-triggered abort still leaves
+    everything intact — but a *pure filesystem* failure (disk full, permissions
+    revoked) between the wipe and the install remains unrecoverable. That is
+    deliberate: ``prune=True`` is an explicit request to delete everything this
+    call does not write.
     """
     if format != "csv":
         raise ValueError("Only CSV format is supported. Use format='csv'.")
@@ -599,21 +750,22 @@ def write_salmon_datapackage(
         if name not in resolved_file_names and (target / name).exists()
     ]
 
-    _prepare_package_dir(
-        target, overwrite=overwrite, managed_paths=managed_paths, prune=prune
-    )
-    if not prune and orphaned:
-        warnings.warn(
-            "Removed data resource(s) no longer declared in tables.csv: "
-            + ", ".join(sorted(orphaned)),
-            UserWarning,
-            stacklevel=2,
-        )
-    (target / "metadata").mkdir(parents=True, exist_ok=True)
-    (target / "data").mkdir(parents=True, exist_ok=True)
+    # Non-destructive preflight only. Nothing on disk is deleted or replaced
+    # until every input-dependent computation below has succeeded: the old
+    # ordering unlinked the managed paths here and wrote replacements
+    # afterwards, so ANY abort in between — a typed metadata column, a broken
+    # schema bundle, a serialization error — destroyed the caller's package
+    # (hub backlog #96). The entire write set is rendered to bytes first and
+    # every deletion and replacement happens in one place,
+    # ``_commit_package_write()``, at the end.
+    _check_package_write_dir(target, overwrite=overwrite, prune=prune)
 
     dataset_id = dataset_meta["dataset_id"].iloc[0]
 
+    # Keyed by absolute target path. Assigning by key keeps the last rendering
+    # when two resources resolve to one file, matching the last-write-wins
+    # behaviour of the sequential writes it replaced.
+    writes: Dict[Path, bytes] = {}
     resource_entries = []
     for resource_name, resource_df in resources.items():
         table_info = table_meta[table_meta["table_id"] == resource_name]
@@ -631,19 +783,8 @@ def write_salmon_datapackage(
             else f"{resource_name}.{format}"
         )
         file_name = _force_data_path(file_name, resource_name, format)
-        file_path = target / file_name
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        # Typed columns are rendered canonically rather than handed to
-        # ``to_csv``'s repr: a float 100000.0 would otherwise be written as
-        # "100000.0" and a logical as "True", so a package read by
-        # ``read_salmon_datapackage()`` and written straight back would not
-        # reproduce its own bytes. See ``resource_types.render_resource_frame``
-        # for the one deliberate difference from ``readr::write_csv``.
-        # ``na_rep=csv_na_token()``: a missing value is the empty field —
-        # the single token authority every canonical read and write shares.
-        render_resource_frame(resource_df).to_csv(
-            file_path, index=False, na_rep=csv_na_token()
-        )
+        # Rendered to bytes now, installed later by ``_commit_package_write()``.
+        writes[target / file_name] = _resource_csv_bytes(resource_df)
 
         table_dict = dict_valid[
             (dict_valid["dataset_id"] == dataset_id) & (dict_valid["table_id"] == resource_name)
@@ -783,23 +924,37 @@ def write_salmon_datapackage(
         if "temporal_end" in dataset_meta and _has_value(dataset_meta["temporal_end"].iloc[0]):
             datapackage["temporal"]["end"] = _clean(dataset_meta["temporal_end"].iloc[0])
 
-    if write_datapackage:
-        with (target / "datapackage.json").open("w", encoding="utf-8") as fp:
-            json.dump(datapackage, fp, indent=2)
-            # ``jsonlite::write_json`` terminates the file; ``json.dump`` does
-            # not, and that single byte was the last difference between an
-            # R-written and a Python-written descriptor for the same package.
-            fp.write("\n")
-
-    _write_metadata_csv(dataset_meta, target / "metadata" / "dataset.csv")
-    _write_metadata_csv(table_meta, target / "metadata" / "tables.csv")
-    _write_metadata_csv(
-        dict_valid,
-        target / "metadata" / "column_dictionary.csv",
-    )
+    # Render canonical SDP metadata after any file_name defaults were resolved.
+    metadata_dir = target / "metadata"
+    writes[metadata_dir / "dataset.csv"] = _metadata_csv_bytes(dataset_meta)
+    writes[metadata_dir / "tables.csv"] = _metadata_csv_bytes(table_meta)
+    writes[metadata_dir / "column_dictionary.csv"] = _metadata_csv_bytes(dict_valid)
     if codes is not None:
-        _write_metadata_csv(codes, target / "metadata" / "codes.csv")
-    (target / PACKAGE_SENTINEL).write_text("metasalmonpy-owned\n", encoding="utf-8")
+        writes[metadata_dir / "codes.csv"] = _metadata_csv_bytes(codes)
+
+    if write_datapackage:
+        writes[target / "datapackage.json"] = _datapackage_json_bytes(datapackage)
+    writes[target / PACKAGE_SENTINEL] = _package_ownership_bytes()
+
+    # The single destructive step: everything above this line is pure
+    # computation over the caller's inputs, everything below it is filesystem
+    # installation of already-final bytes.
+    _commit_package_write(
+        target,
+        writes,
+        managed_paths=managed_paths,
+        prune=prune,
+    )
+
+    # Reported only once the replacement is actually installed: before the fix
+    # this warned about deletions the caller might never receive a package for.
+    if not prune and orphaned:
+        warnings.warn(
+            "Removed data resource(s) no longer declared in tables.csv: "
+            + ", ".join(sorted(orphaned)),
+            UserWarning,
+            stacklevel=2,
+        )
 
     return target
 
