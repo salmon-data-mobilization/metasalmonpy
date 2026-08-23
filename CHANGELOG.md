@@ -10,6 +10,67 @@ metasalmon's post-0.3.0 `main`, which no R release contains, and nobody has
 ruled what a number may claim about that. The bump comes once, at the end of
 the S10 chunks, after that ruling. Bump on parity, not on calendar.
 
+### S10 chunk H — the abort-safe write path
+
+`write_salmon_datapackage()` is now **transactional over the files it owns**.
+The mirror of metasalmon PR #77 (hub backlog #96's ordering half), and the
+defect it fixes was measured present here before the fix, not inherited on
+faith.
+
+- **An abort no longer destroys the caller's package.** The old path called
+  `_prepare_package_dir()` first — unlinking every managed path, or
+  `shutil.rmtree`-wiping the directory under `prune` — and only afterwards
+  rendered resources, loaded the SDP schema, built the descriptor and wrote
+  the metadata CSVs. Every one of those is an abort point, and an exception
+  in that window left the package with its data CSVs and **nothing else**:
+  `datapackage.json`, all of `metadata/`, and the ownership sentinel deleted
+  with no replacement. Measured against the pre-fix code, an injected abort
+  during the descriptor build reduced a valid package to a single
+  `data/obs.csv`.
+- **Render first, install atomically, clean up last.** The complete write set
+  — data resources, metadata CSVs, `datapackage.json`, sentinel — is rendered
+  to bytes before anything on disk is touched, then installed by
+  `_commit_package_write()`, the single destructive step. Installation goes
+  through `sdp_methods._atomic_write_set()`, the existing rollback-capable
+  writer this package already mirrors from R, rather than a second one:
+  same-directory staged siblings, originals renamed aside, rollback on any
+  mid-install failure, umask-default modes. Stale managed paths this call did
+  not rewrite are unlinked only **after** the install succeeds.
+  `_prepare_package_dir()` is replaced by `_check_package_write_dir()`, which
+  performs no deletion at all.
+- **`prune=True` is honestly narrower rather than silently equal.** The wipe
+  removes files this writer does not own, so those sidecars are not in the
+  write set and nothing can restore them. The wipe now runs as late as
+  possible — after every input-dependent computation and the full byte
+  rendering have succeeded, so an input-triggered abort leaves the package and
+  its sidecars intact — but a *pure filesystem* failure between the wipe and
+  the install remains unrecoverable. Stated in the code and in the function's
+  own docstring instead of being papered over. The symlink containment guard
+  now also covers the prune wipe, which previously relied on the earlier
+  metadata-subset check alone.
+- **The bytes did not change.** The reorder is byte-neutral by construction —
+  each file is rendered through its exact former writer call, deliberately not
+  through a shared JSON or CSV helper that differs in separators or
+  terminators. Verified rather than asserted: five packages (the shipped
+  30-row example, an R-written fixture round-tripped, an in-place rewrite, a
+  `prune=True` rewrite, and a no-codes/no-descriptor package) hash identically
+  file-for-file before and after, and the example package remains
+  byte-identical to metasalmon `main` @ `3b620ae` on all six shared files.
+  Two guard tests pin the in-memory renders against direct `to_csv` and
+  `json.dump` writes so a future pandas or stdlib change cannot drift them.
+- **A structural guard, with a stated retirement condition.**
+  `tests/test_write_datapackage_abort_safety.py` fails if the writer body
+  regains a direct filesystem call, which is what would reopen the window
+  while every trigger-specific test stayed green. It says what it covers and
+  what would retire it; its scan surface differs from R's twin
+  (PARITY.md row 52).
+- `create_sdp()` writes the package through the same helper, so it inherits
+  the fix; a regression test pins that. Its three **create-owned sidecars**
+  (`README-review.txt`, `semantic_suggestions.csv`,
+  `metadata/metadata-edh-hnap.xml`) are still unlink-then-rewrite — hub
+  backlog #111's shape, measured present here and, for the EDH XML, on a
+  *wider* window than R's. Registered as PARITY.md row 53, not fixed here.
+
 ### S10 chunk F — redaction
 
 metasalmon 0.2.5's redaction contract, verified by driving both redactors
