@@ -111,7 +111,12 @@ def test_a_value_that_fails_its_declared_type_keeps_its_token_and_is_reported(tm
     assert mismatches[0]["column"] == "count"
     assert mismatches[0]["reason"] == "beyond exact numeric precision"
 
-    issues = validate_salmon_datapackage(str(broken))["issues"]
+    # Since S10 chunk D the validator ENFORCES the declaration, as metasalmon
+    # always has: a value-type mismatch is a structural issue and the call
+    # aborts, carrying the full typed frame on the error (PARITY.md row 41).
+    with pytest.raises(ValueError, match="beyond exact numeric precision") as excinfo:
+        validate_salmon_datapackage(str(broken))
+    issues = excinfo.value.issues
     assert list(issues.columns) == [
         "issue_type",
         "table_id",
@@ -120,6 +125,7 @@ def test_a_value_that_fails_its_declared_type_keeps_its_token_and_is_reported(tm
         "message",
     ]
     assert len(issues) == 1
+    assert issues["issue_type"].iloc[0] == "columns"
     assert "beyond exact numeric precision" in issues["message"].iloc[0]
     assert issues["column_name"].iloc[0] == "count"
 

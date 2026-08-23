@@ -28,6 +28,12 @@ def _reviewed_artifacts():
             "title": ["Demo catches"],
             "description": ["Reviewed catch observations."],
             "creator": ["DFO"],
+            # A reviewed package carries real contacts: since the S10 chunk D
+            # placeholder convergence the writer fills blank contact fields
+            # with MISSING METADATA: prose exactly as metasalmon does, and a
+            # package holding placeholders is by definition not reviewed.
+            "contact_name": ["Demo Contact"],
+            "contact_email": ["demo@example.org"],
             "license": ["Open Government Licence - Canada"],
         }
     )
@@ -229,7 +235,12 @@ def test_strict_package_validation_rejects_review_markers(tmp_path):
     )
 
     validate_salmon_datapackage(package_path, require_iris=False)
-    with pytest.raises(ValueError, match="unresolved review"):
+    # Strict validation now blocks in validate_dictionary() with metasalmon's
+    # exact message — REVIEW-prefixed dictionary IRIs abort before the final
+    # review sweep, as in R (S10 chunk D differential).
+    with pytest.raises(
+        ValueError, match="REVIEW-prefixed IRI values remain"
+    ):
         validate_salmon_datapackage(package_path, require_iris=True)
 
 
