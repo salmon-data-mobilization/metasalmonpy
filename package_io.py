@@ -18,15 +18,20 @@ from .dictionary import infer_dictionary, validate_dictionary
 from .metadata import (
     csv_na_token,
     ensure_resource_mapping,
+    fill_review_placeholders_dataset_meta,
+    fill_review_placeholders_dictionary,
+    fill_review_placeholders_table_meta,
     infer_codes_from_resources,
     infer_dataset_metadata_from_resources,
     infer_table_metadata_from_resources,
+    is_review_placeholder,
     normalize_codes,
     normalize_dataset_meta,
     normalize_dictionary,
     normalize_table_meta,
     parse_logical,
     read_sdp_csv,
+    scalar_text,
     READR_TRIM_CHARS,
 )
 from .nuseds import (
@@ -490,48 +495,19 @@ def _fill_review_placeholders(
     table_meta: pd.DataFrame,
     dictionary: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    dataset_meta = dataset_meta.copy()
-    table_meta = table_meta.copy()
-    dictionary = dictionary.copy()
+    """Fill blank metadata with metasalmon's exact placeholder prose.
 
-    for column, label in (
-        ("title", "dataset title"),
-        ("description", "dataset description"),
-    ):
-        if column in dataset_meta:
-            missing = dataset_meta[column].isna() | (
-                dataset_meta[column].astype(str).str.strip() == ""
-            )
-            dataset_meta.loc[missing, column] = f"MISSING METADATA: {label}"
-
-    for column, label in (
-        ("description", "table description"),
-        ("observation_unit", "table observation unit"),
-    ):
-        if column in table_meta:
-            missing = table_meta[column].isna() | (
-                table_meta[column].astype(str).str.strip() == ""
-            )
-            table_meta.loc[missing, column] = f"MISSING METADATA: {label}"
-
-    # metasalmon v0.1.7 stopped defaulting a blank spec_version to the frozen
-    # literal "sdp-0.1.0" and started taking it from the vendored profile rules,
-    # so a package never claims an older profile than the one it was written to.
-    if "spec_version" in dataset_meta:
-        missing = dataset_meta["spec_version"].isna() | (
-            dataset_meta["spec_version"].astype(str).str.strip() == ""
-        )
-        dataset_meta.loc[missing, "spec_version"] = load_sdp_schema(quiet=True)["version"]
-
-    if "column_description" in dictionary:
-        missing = dictionary["column_description"].isna() | (
-            dictionary["column_description"].astype(str).str.strip() == ""
-        )
-        dictionary.loc[missing, "column_description"] = dictionary.loc[
-            missing, "column_name"
-        ].map(lambda value: f"MISSING DESCRIPTION: {value}")
-
-    return dataset_meta, table_meta, dictionary
+    Coverage and prose were converged on current metasalmon by a byte
+    differential of ``write_salmon_datapackage()`` output over identical
+    blank input (S10 chunk D), retiring PARITY.md row 48. The three fill
+    helpers live in ``metadata.py`` because the ``infer_*`` functions apply
+    them too, exactly as metasalmon's do.
+    """
+    return (
+        fill_review_placeholders_dataset_meta(dataset_meta),
+        fill_review_placeholders_table_meta(table_meta),
+        fill_review_placeholders_dictionary(dictionary),
+    )
 
 
 def write_salmon_datapackage(
@@ -684,13 +660,22 @@ def write_salmon_datapackage(
             # as a one-element array (R writes the scalar).
             field = {
                 "name": _clean(row["column_name"]),
+                # A blank column_label stays as an explicit null, exactly as
+                # R's builder leaves the NA in place and jsonlite renders it —
+                # popping the key made the two descriptors differ on any
+                # unlabeled column (S10 chunk D byte differential).
                 "title": _clean(row.get("column_label")),
                 "type": _clean(row["value_type"]),
                 "description": _clean(row["column_description"]),
             }
-            if not _has_value(row.get("column_label")):
-                field.pop("title")
-            if bool(row.get("required")) is True:
+            # Mirror R's isTRUE(): only a genuine True emits the constraints
+            # block. ``bool(...)`` alone read a missing ``required`` as true —
+            # iterrows() hands a boolean-dtype NA back as a truthy float nan —
+            # so every blank ``required`` claimed the column was required
+            # (found by the S10 chunk D descriptor byte differential; the
+            # shipped example's RUN_TYPE and ESTIMATE_STAGE rows hit it).
+            required_flag = row.get("required")
+            if not pd.isna(required_flag) and bool(required_flag) is True:
                 field["constraints"] = {"required": True}
             for optional_key in [
                 "unit_iri",
@@ -784,7 +769,11 @@ def write_salmon_datapackage(
         datapackage["contributors"] = datapackage.get("contributors", []) + [contact]
     if "license" in dataset_meta and _has_value(dataset_meta["license"].iloc[0]):
         license_value = dataset_meta["license"].iloc[0]
-        if not _is_review_value(license_value):
+        # R gates on ``.ms_is_review_placeholder()`` — the three placeholder
+        # spellings — not on the broader review-value test: a bare
+        # ``REVIEW:`` licence reaches the descriptor and aborts there, in
+        # both implementations.
+        if not is_review_placeholder(license_value):
             datapackage["licenses"] = [_license_descriptor(license_value)]
     # ``_has_value`` rather than ``pd.notna``: an empty ``temporal_start``
     # is not missing to pandas, so a descriptor carried ``"temporal": {"start":
@@ -968,6 +957,14 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
             table_dict = dictionary[dictionary["table_id"] == resource_name]
             resources[str(resource_name)] = _read_resource_csv(
                 file_path, table_dict, str(resource_name)
+            )
+        else:
+            # Mirrors R's read warning; the validator reports the missing
+            # resource as a typed issue on top of this.
+            warnings.warn(
+                f"Resource file '{file_path}' not found, skipping",
+                UserWarning,
+                stacklevel=2,
             )
 
     return {
@@ -1689,48 +1686,123 @@ def create_salmon_datapackage_from_data(
     return package_path
 
 
-def _collect_review_issues(package: Dict[str, object]) -> list[str]:
-    issues = []
-    tables = package["tables"]
-    if isinstance(tables, pd.DataFrame):
-        for idx, row in tables.iterrows():
-            if not _has_value(row.get("observation_unit_iri")):
-                issues.append(
-                    f"metadata/tables.csv row {idx + 1} has a blank "
-                    "observation_unit_iri."
-                )
-
-    for key, file_name in (
-        ("dataset", "metadata/dataset.csv"),
-        ("tables", "metadata/tables.csv"),
-        ("dictionary", "metadata/column_dictionary.csv"),
-        ("codes", "metadata/codes.csv"),
-    ):
-        frame = package.get(key)
-        if not isinstance(frame, pd.DataFrame):
-            continue
-        for column in frame.columns:
-            for idx, value in frame[column].items():
-                if _is_review_value(value):
-                    issues.append(
-                        f"{file_name} row {idx + 1} field {column} "
-                        f"contains unresolved review value {value!r}."
-                    )
-    return issues
-
-
 def _validation_row_context(frame: pd.DataFrame, position: int, id_fields) -> str:
     """Mirror ``.ms_validation_row_context``: ``row N (field=value, ...)``."""
     bits = []
     for field in id_fields:
         if field not in frame.columns:
             continue
-        value = frame[field].iloc[position]
-        if _has_value(value):
+        value = scalar_text(frame[field].iloc[position])
+        if value:
             bits.append(f"{field}={value}")
     if not bits:
         return f"row {position + 1}"
     return f"row {position + 1} ({', '.join(bits)})"
+
+
+def _collect_review_placeholder_issues(
+    frame: object, source_name: str, id_fields=()
+) -> list[str]:
+    """Mirror ``.ms_collect_review_placeholder_issues``: strict-mode messages
+    for every unresolved ``MISSING METADATA:`` / ``MISSING DESCRIPTION:`` /
+    ``REVIEW REQUIRED:`` placeholder left in one metadata file."""
+    if not isinstance(frame, pd.DataFrame) or len(frame) == 0:
+        return []
+    messages = []
+    for field in frame.columns:
+        for position in range(len(frame)):
+            value = frame[field].iloc[position]
+            if pd.isna(value) or not is_review_placeholder(value):
+                continue
+            context = _validation_row_context(frame, position, id_fields)
+            messages.append(
+                f"{source_name} {context} field {field} still contains an "
+                f"unresolved review placeholder ({value}). Replace it before "
+                "final validation."
+            )
+    return messages
+
+
+def _collect_missing_table_observation_unit_iri_issues(
+    table_meta: object, source_name: str = "metadata/tables.csv"
+) -> list[str]:
+    """Mirror ``.ms_collect_missing_table_observation_unit_iri_issues``."""
+    if (
+        not isinstance(table_meta, pd.DataFrame)
+        or len(table_meta) == 0
+        or "observation_unit_iri" not in table_meta.columns
+    ):
+        return []
+    messages = []
+    for position in range(len(table_meta)):
+        if scalar_text(table_meta["observation_unit_iri"].iloc[position]):
+            continue
+        context = _validation_row_context(
+            table_meta, position, ("table_id", "file_name")
+        )
+        messages.append(
+            f"{source_name} {context} field observation_unit_iri is blank. "
+            "Final validation requires a resolved table observation-unit IRI."
+        )
+    return messages
+
+
+_REVIEW_IRI_RE = re.compile(r"^\s*REVIEW\s*:", re.IGNORECASE)
+
+
+def _collect_review_iri_issues(frame: object, source_name: str) -> list[str]:
+    """Mirror ``.ms_collect_review_iri_issues``: REVIEW-prefixed values left
+    in any ``*_iri`` column of one metadata file."""
+    if not isinstance(frame, pd.DataFrame) or len(frame) == 0:
+        return []
+    messages = []
+    for field in frame.columns:
+        if not str(field).endswith("_iri"):
+            continue
+        for position in range(len(frame)):
+            value = frame[field].iloc[position]
+            if pd.isna(value) or not _REVIEW_IRI_RE.match(str(value)):
+                continue
+            messages.append(
+                f"{source_name} row {position + 1} field {field} still "
+                f"contains a REVIEW-prefixed IRI ({value}). Remove the REVIEW "
+                "prefix only after final manual validation."
+            )
+    return messages
+
+
+def _collect_review_issues(package: Dict[str, object]) -> list[str]:
+    """Every unresolved review signal across the package's metadata frames.
+
+    Placeholders, blank table observation-unit IRIs, and REVIEW-prefixed
+    IRIs, with R's message texts. The EDH XML gates build on this;
+    ``validate_salmon_datapackage()``'s strict path composes the same
+    collectors itself so its issue set stays R-shaped.
+    """
+    dataset = package.get("dataset")
+    tables = package.get("tables")
+    dictionary = package.get("dictionary")
+    codes = package.get("codes")
+    return (
+        _collect_review_placeholder_issues(
+            dataset, "metadata/dataset.csv", ("dataset_id",)
+        )
+        + _collect_review_placeholder_issues(
+            tables, "metadata/tables.csv", ("table_id", "file_name")
+        )
+        + _collect_missing_table_observation_unit_iri_issues(tables)
+        + _collect_review_placeholder_issues(
+            dictionary,
+            "metadata/column_dictionary.csv",
+            ("table_id", "column_name"),
+        )
+        + _collect_review_placeholder_issues(
+            codes, "metadata/codes.csv", ("table_id", "column_name", "code_value")
+        )
+        + _collect_review_iri_issues(tables, "metadata/tables.csv")
+        + _collect_review_iri_issues(dictionary, "metadata/column_dictionary.csv")
+        + _collect_review_iri_issues(codes, "metadata/codes.csv")
+    )
 
 
 def _collect_placement_iri_issues(
@@ -1773,49 +1845,711 @@ def _collect_placement_iri_issues(
     return messages
 
 
-# The ``issues`` frame this validator returns was an unconditionally empty
-# ``DataFrame(columns=["message"])`` until the 0.2.0 rung — every finding was
-# raised instead. The typed reader needs a place to *report* rather than
-# raise: a value that does not satisfy its declared ``value_type`` keeps its
-# raw token and the package stays readable, so the mismatch is a structured
-# issue exactly as it is in ``.ms_validate_salmon_datapackage()``. The columns
-# match R's issue tibble; only the ``columns`` category is populated here,
-# because the remaining categories R reports have no Python counterpart yet.
+# The five columns of R's issue tibble, in R's order. Until S10 chunk D only
+# the ``columns`` category was populated here and every other finding raised
+# at the first structural problem with an untyped string (PARITY.md row 41 /
+# hub backlog #91); ``_collect_package_validation_issues`` below now
+# accumulates all eight typed categories and the validator aborts once,
+# exactly as ``.ms_collect_package_validation_issues()`` does.
 _ISSUE_COLUMNS = ["issue_type", "table_id", "column_name", "value", "message"]
 
 
-def _value_type_issues(package: Dict[str, object]) -> pd.DataFrame:
-    """Structured issues for every declared type the data did not satisfy."""
-    rows = []
-    resources = package.get("resources") or {}
-    for table_id, frame in resources.items():
-        if not isinstance(frame, pd.DataFrame):
+def _trimmed_unique(values) -> list[str]:
+    """R's ``trimmed_unique()``: trim, drop NA/blank, unique preserving order."""
+    out: list[str] = []
+    for value in values:
+        if pd.isna(value):
             continue
-        for mismatch in frame.attrs.get("ms_value_type_mismatches", []):
-            examples = ", ".join(mismatch["examples"])
-            plural = "" if mismatch["count"] == 1 else "s"
-            rows.append(
-                {
-                    "issue_type": "columns",
-                    "message": (
-                        f"Table {table_id!r} column {mismatch['column']!r} declares "
-                        f"value_type {mismatch['declared']!r} but {mismatch['count']} "
-                        f"value{plural} did not satisfy it ({mismatch['reason']}): "
-                        f"{examples}."
-                    ),
-                    "table_id": table_id,
-                    "column_name": mismatch["column"],
-                    "value": examples,
-                }
+        text = str(value).strip(READR_TRIM_CHARS)
+        if text and text not in out:
+            out.append(text)
+    return out
+
+
+def _drop_blank(values) -> list[str]:
+    """R's ``drop_blank()``: the ``trimmed_unique`` tail for canonical tokens."""
+    out: list[str] = []
+    for value in values:
+        if value is None or (isinstance(value, float) and value != value):
+            continue
+        if value != "" and value not in out:
+            out.append(value)
+    return out
+
+
+def _detect_wide_columns(column_names) -> list[str]:
+    """Mirror ``.ms_detect_wide_columns()`` — thresholds exact.
+
+    Column names that look like data values rather than variable names: bare
+    year-like names, or a shared stem with numeric suffixes, across **three
+    or more** columns (so an ordinary ``x2``/``x3`` pair is not flagged).
+    Feeds a warning, never an issue: the SDP may accept untidy data, it must
+    simply stop implying it checked (metasalmon 0.2.6).
+    """
+    names: list[str] = []
+    for name in column_names:
+        if pd.isna(name):
+            continue
+        text = str(name).strip(READR_TRIM_CHARS)
+        if text:
+            names.append(text)
+    if len(names) < 3:
+        return []
+
+    year_like = [name for name in names if re.match(r"^[Xx]?(19|20)[0-9]{2}$", name)]
+    if len(year_like) >= 3:
+        return sorted(year_like)
+
+    # A shared stem with numeric tails: count_1998, count_1999, count_2000.
+    stems = [re.sub(r"[_.-]?[0-9]+$", "", name) for name in names]
+    numeric_tail = [stem != name for stem, name in zip(stems, names)]
+    if not any(numeric_tail):
+        return []
+    tally: dict[str, int] = {}
+    for stem, tail in zip(stems, numeric_tail):
+        if tail:
+            tally[stem] = tally.get(stem, 0) + 1
+    repeated = {stem for stem, count in tally.items() if count >= 3}
+    if not repeated:
+        return []
+    return sorted(
+        name
+        for name, stem, tail in zip(names, stems, numeric_tail)
+        if tail and stem in repeated
+    )
+
+
+def _collect_unresolved_placeholders(package: Dict[str, object]) -> list[str]:
+    """Mirror ``.ms_collect_unresolved_placeholders()``.
+
+    Metadata fields still holding a ``MISSING METADATA:`` / ``MISSING
+    DESCRIPTION:`` / ``REVIEW REQUIRED:`` marker, reported as
+    ``file$column`` so a user can go straight to the cell.
+    """
+    found: list[str] = []
+    for file_name, key in (
+        ("dataset.csv", "dataset"),
+        ("tables.csv", "tables"),
+        ("column_dictionary.csv", "dictionary"),
+        # The strict path scans codes for the same markers, so omitting it
+        # here would leave part of the default-mode behaviour silently
+        # conditional on ``require_iris``.
+        ("codes.csv", "codes"),
+    ):
+        frame = package.get(key)
+        if not isinstance(frame, pd.DataFrame) or len(frame) == 0:
+            continue
+        for column in frame.columns:
+            if any(is_review_placeholder(value) for value in frame[column]):
+                entry = f"{file_name}${column}"
+                if entry not in found:
+                    found.append(entry)
+    return sorted(found)
+
+
+def _nonempty_text_values(value) -> list[str]:
+    """R's ``.ms_nonempty_text_values()``: flatten, trim, drop blanks, unique."""
+    flat: list = []
+
+    def _flatten(item):
+        if isinstance(item, (list, tuple, set, pd.Series)):
+            for element in item:
+                _flatten(element)
+        elif isinstance(item, dict):
+            for element in item.values():
+                _flatten(element)
+        else:
+            flat.append(item)
+
+    _flatten(value)
+    out: list[str] = []
+    for item in flat:
+        if item is None or pd.isna(item):
+            continue
+        text = str(item).strip(READR_TRIM_CHARS)
+        if text and text not in out:
+            out.append(text)
+    return out
+
+
+def _collect_composite_hint_values(
+    dataset_meta,
+    table_meta,
+    datapackage_path,
+    hint_fields,
+    optional_hint_fields=(),
+) -> list[dict]:
+    """Mirror ``.ms_collect_composite_hint_values()``: (source, field, value)
+    triples from dataset.csv, tables.csv, and the descriptor (top level and
+    per resource), de-duplicated preserving first occurrence."""
+    all_fields = list(dict.fromkeys(list(hint_fields) + list(optional_hint_fields)))
+    rows: list[dict] = []
+
+    def add(source, field, values):
+        for value in values:
+            entry = {"source": source, "field": field, "value": value}
+            if entry not in rows:
+                rows.append(entry)
+
+    def collect_from_frame(frame, source_label):
+        if not isinstance(frame, pd.DataFrame) or len(frame) == 0:
+            return
+        for field in [column for column in frame.columns if column in all_fields]:
+            add(source_label, field, _nonempty_text_values(frame[field]))
+
+    collect_from_frame(dataset_meta, "dataset.csv")
+    collect_from_frame(table_meta, "tables.csv")
+
+    if datapackage_path:
+        descriptor_path = Path(datapackage_path)
+        datapackage = None
+        if descriptor_path.exists():
+            try:
+                with descriptor_path.open("r", encoding="utf-8") as fp:
+                    datapackage = json.load(fp)
+            except (OSError, ValueError):
+                datapackage = None
+        if isinstance(datapackage, dict):
+            for field in all_fields:
+                if datapackage.get(field) is not None:
+                    add(
+                        "datapackage",
+                        field,
+                        _nonempty_text_values(datapackage[field]),
+                    )
+            for resource in datapackage.get("resources") or []:
+                if not isinstance(resource, dict):
+                    continue
+                resource_name = resource.get("name") or "<unnamed_resource>"
+                for field in all_fields:
+                    if resource.get(field) is not None:
+                        add(
+                            f"datapackage_resource:{resource_name}",
+                            field,
+                            _nonempty_text_values(resource[field]),
+                        )
+    return rows
+
+
+def _values_indicate_composite_intent(values) -> bool:
+    """R's ``.ms_values_indicate_composite_intent()``: substring, any case."""
+    return any("composite" in str(value).lower() for value in values)
+
+
+def _column_has_populated_values(series: pd.Series) -> bool:
+    """Mirror ``.ms_column_has_populated_values()``."""
+    values = series.dropna()
+    if len(values) == 0:
+        return False
+    if (
+        pd.api.types.is_object_dtype(values)
+        or pd.api.types.is_string_dtype(values)
+        or isinstance(values.dtype, pd.CategoricalDtype)
+    ):
+        return any(str(value).strip(READR_TRIM_CHARS) for value in values)
+    return True
+
+
+def _detect_wsp_composite_signal(resources) -> dict:
+    """Mirror ``.ms_detect_wsp_composite_signal()``."""
+    required_columns = ["SPN_ABD_WILD", "SPN_TREND_WILD", "RAPID_STATUS"]
+    resources = resources or {}
+    matches = [name for name in resources if str(name).lower() == "cu_timeseries"]
+    if not matches:
+        return {
+            "cu_timeseries_present": False,
+            "required_columns": required_columns,
+            "populated_columns": [],
+            "any_populated": False,
+        }
+    frame = resources[matches[0]]
+    present = [column for column in required_columns if column in frame.columns]
+    populated = [
+        column for column in present if _column_has_populated_values(frame[column])
+    ]
+    return {
+        "cu_timeseries_present": True,
+        "required_columns": required_columns,
+        "populated_columns": populated,
+        "any_populated": len(populated) > 0,
+    }
+
+
+def _collect_package_validation_issues(
+    package: Dict[str, object],
+    path: Optional[Union[str, Path]] = None,
+    require_iris: bool = False,
+) -> pd.DataFrame:
+    """Mirror ``.ms_collect_package_validation_issues()`` — the typed,
+    accumulate-then-report collector behind ``validate_salmon_datapackage()``.
+
+    Every finding is tagged with one of R's eight ``issue_type`` values —
+    ``dataset``, ``tables``, ``dictionary``, ``codes``, ``resource``,
+    ``columns``, ``primary_key``, ``composite_intent`` — and all findings are
+    collected before the caller aborts once (hub backlog #91 / PARITY.md
+    row 41). Issue messages are byte-identical to R's, verified by
+    differential fixtures in ``tests/test_validation_hardening.py``.
+
+    Two warnings fire during collection, mirroring metasalmon 0.2.6's tidy
+    checks: unresolved metadata placeholders (default mode only — the strict
+    path reports them as errors instead) and column names that look like
+    data values (a warning in both modes, never an issue).
+    """
+    issues: list[dict] = []
+
+    def add_issue(issue_type, message, table_id=None, column_name=None, value=None):
+        issues.append(
+            {
+                "issue_type": issue_type,
+                "table_id": table_id,
+                "column_name": column_name,
+                "value": value,
+                "message": message,
+            }
+        )
+
+    dataset = package.get("dataset")
+    tables = package.get("tables")
+    dictionary = package.get("dictionary")
+    codes = package.get("codes")
+    resources = package.get("resources") or {}
+
+    dataset_rows = len(dataset) if isinstance(dataset, pd.DataFrame) else 0
+    if dataset_rows != 1:
+        add_issue(
+            "dataset",
+            f"dataset.csv should contain exactly one row; found {dataset_rows}.",
+        )
+    if not isinstance(tables, pd.DataFrame) or len(tables) == 0:
+        add_issue("tables", "No rows found in tables.csv.")
+
+    # Tidy check 3 (metasalmon 0.2.6): surface ``MISSING METADATA:`` markers
+    # in the *default* mode. The strict path already reports these as errors,
+    # so this adds only the missing half — an ordinary call previously
+    # returned zero issues and said nothing, letting a package look clean
+    # while stating in its own metadata that its metadata is missing. No
+    # issue is raised here; the strict path stays the single error channel.
+    if not require_iris:
+        placeholder_fields = _collect_unresolved_placeholders(package)
+        if placeholder_fields:
+            count = len(placeholder_fields)
+            warnings.warn(
+                f"{count} metadata field{'' if count == 1 else 's'} still "
+                f"hold{'s' if count == 1 else ''} a placeholder: "
+                + ", ".join(placeholder_fields[:6])
+                + ". Replace them before publication; require_iris=True "
+                "reports these as errors.",
+                UserWarning,
+                stacklevel=3,
             )
-    return pd.DataFrame(rows, columns=_ISSUE_COLUMNS)
+    if not isinstance(dictionary, pd.DataFrame) or len(dictionary) == 0:
+        add_issue("dictionary", "No rows found in column_dictionary.csv.")
+
+    if isinstance(tables, pd.DataFrame) and "table_id" in tables.columns:
+        seen: list = []
+        dup_tables: list[str] = []
+        for value in tables["table_id"]:
+            key = None if pd.isna(value) else str(value)
+            if key in seen:
+                if (
+                    key is not None
+                    and key.strip(READR_TRIM_CHARS)
+                    and key not in dup_tables
+                ):
+                    dup_tables.append(key)
+            else:
+                seen.append(key)
+        if dup_tables:
+            add_issue(
+                "tables",
+                "Duplicate table_id values in tables.csv: "
+                + ", ".join(dup_tables)
+                + ".",
+            )
+
+    table_ids = (
+        _trimmed_unique(tables["table_id"])
+        if isinstance(tables, pd.DataFrame) and "table_id" in tables.columns
+        else []
+    )
+    dict_table_ids = (
+        _trimmed_unique(dictionary["table_id"])
+        if isinstance(dictionary, pd.DataFrame) and "table_id" in dictionary.columns
+        else []
+    )
+    extra_dict_tables = [t for t in dict_table_ids if t not in table_ids]
+    if extra_dict_tables:
+        add_issue(
+            "dictionary",
+            "column_dictionary.csv references table_id values not present in "
+            "tables.csv: " + ", ".join(extra_dict_tables) + ".",
+        )
+
+    if isinstance(codes, pd.DataFrame) and len(codes) > 0:
+        code_table_ids = _trimmed_unique(codes["table_id"])
+        extra_code_tables = [t for t in code_table_ids if t not in table_ids]
+        if extra_code_tables:
+            add_issue(
+                "codes",
+                "codes.csv references table_id values not present in "
+                "tables.csv: " + ", ".join(extra_code_tables) + ".",
+            )
+
+    n_table_rows = len(tables) if isinstance(tables, pd.DataFrame) else 0
+    for position in range(n_table_rows):
+        table_id = (
+            scalar_text(tables["table_id"].iloc[position])
+            if "table_id" in tables.columns
+            else ""
+        )
+        if not table_id:
+            continue
+
+        file_name = (
+            scalar_text(tables["file_name"].iloc[position])
+            if "file_name" in tables.columns
+            else ""
+        )
+        if table_id not in resources:
+            add_issue(
+                "resource",
+                f"Table '{table_id}' points to resource '{file_name}', but "
+                "that file could not be loaded.",
+                table_id=table_id,
+            )
+            continue
+
+        table_dict = (
+            dictionary[dictionary["table_id"] == table_id]
+            if isinstance(dictionary, pd.DataFrame)
+            and "table_id" in dictionary.columns
+            else pd.DataFrame(columns=["column_name", "value_type"])
+        )
+        dict_cols = (
+            _trimmed_unique(table_dict["column_name"])
+            if "column_name" in table_dict.columns
+            else []
+        )
+        if not dict_cols:
+            add_issue(
+                "dictionary",
+                f"No dictionary rows found for table '{table_id}'.",
+                table_id=table_id,
+            )
+            continue
+
+        data_df = resources[table_id]
+        data_cols = [str(column) for column in data_df.columns]
+
+        # Tidy check 1 (metasalmon 0.2.6): a declared primary key must
+        # actually identify a row. The field was declared in tables.csv and
+        # read by nothing that tested it, so a table could claim a key and
+        # ship duplicates. Skipped, as in R, when the table_id row is not
+        # unique — the duplicate-table_id issue already covers that state.
+        matching = tables[tables["table_id"] == table_id]
+        if len(matching) == 1 and "primary_key" in matching.columns:
+            key_text = scalar_text(matching["primary_key"].iloc[0])
+            key_cols = [
+                part.strip(READR_TRIM_CHARS) for part in re.split(r"[,;|]", key_text)
+            ]
+            key_cols = [part for part in key_cols if part]
+            present = list(
+                dict.fromkeys(part for part in key_cols if part in data_cols)
+            )
+            if key_cols and len(present) == len(key_cols):
+                # A missing component is as fatal as a duplicate: the row has
+                # no identity at all. Checked separately because the key join
+                # renders a missing value as text, which is unlikely to
+                # collide and so would pass the duplicate test while
+                # identifying nothing.
+                missing_key = []
+                for column in present:
+                    for value in data_df[column]:
+                        if pd.isna(value) or not str(value).strip(READR_TRIM_CHARS):
+                            missing_key.append(column)
+                            break
+                if missing_key:
+                    n_missing = len(missing_key)
+                    add_issue(
+                        "tables",
+                        f"Table '{table_id}' declares primary key "
+                        f"'{', '.join(key_cols)}' but "
+                        f"column{'' if n_missing == 1 else 's'} "
+                        f"{', '.join(missing_key)} "
+                        f"contain{'s' if n_missing == 1 else ''} missing values.",
+                        table_id=table_id,
+                    )
+
+                key_values = [
+                    "\r".join(str(data_df[column].iloc[i]) for column in present)
+                    for i in range(len(data_df))
+                ]
+                seen_keys: set = set()
+                duplicated_keys: list[str] = []
+                for value in key_values:
+                    if value in seen_keys:
+                        if value not in duplicated_keys:
+                            duplicated_keys.append(value)
+                    else:
+                        seen_keys.add(value)
+                if duplicated_keys:
+                    n_dup = len(duplicated_keys)
+                    add_issue(
+                        "tables",
+                        f"Table '{table_id}' declares primary key "
+                        f"'{', '.join(key_cols)}' but {n_dup} "
+                        f"row{'' if n_dup == 1 else 's'} "
+                        f"repeat{'s' if n_dup == 1 else ''} it.",
+                        table_id=table_id,
+                    )
+
+        # Tidy check 2 (metasalmon 0.2.6): column names that look like
+        # values. A warning, never an issue — the SDP accepts untidy data,
+        # it just stops implying it checked. R points at
+        # tidyr::pivot_longer(); the pandas counterpart is melt().
+        wide_cols = _detect_wide_columns(data_cols)
+        if wide_cols:
+            n_wide = len(wide_cols)
+            warnings.warn(
+                f"Table '{table_id}' may not be tidy: {n_wide} column "
+                f"name{'' if n_wide == 1 else 's'} "
+                f"look{'s' if n_wide == 1 else ''} like data values: "
+                + ", ".join(wide_cols[:6])
+                + ". Tidy data puts each variable in a column and each "
+                "observation in a row. Consider pandas.melt() before "
+                "packaging.",
+                UserWarning,
+                stacklevel=3,
+            )
+
+        # Values that do not satisfy their declared ``value_type``. The
+        # reader keeps the raw token rather than NA-ing it, so the code-value
+        # check below still sees the offending value; this reports the
+        # declaration mismatch itself.
+        for mismatch in data_df.attrs.get("ms_value_type_mismatches", []):
+            examples = ", ".join(str(example) for example in mismatch["examples"])
+            count = mismatch["count"]
+            add_issue(
+                "columns",
+                f"Table '{table_id}' column '{mismatch['column']}' declares "
+                f"value_type '{mismatch['declared']}' but {count} "
+                f"value{'' if count == 1 else 's'} did not satisfy it "
+                f"({mismatch['reason']}): {examples}.",
+                table_id=table_id,
+                column_name=mismatch["column"],
+                value=examples,
+            )
+
+        missing_in_data = [c for c in dict_cols if c not in data_cols]
+        if missing_in_data:
+            add_issue(
+                "columns",
+                f"Table '{table_id}' is missing dictionary columns in data: "
+                + ", ".join(missing_in_data)
+                + ".",
+                table_id=table_id,
+                column_name=", ".join(missing_in_data),
+            )
+
+        extra_in_data = list(
+            dict.fromkeys(c for c in data_cols if c not in dict_cols)
+        )
+        if extra_in_data:
+            add_issue(
+                "columns",
+                f"Table '{table_id}' has data columns not listed in "
+                "column_dictionary.csv: " + ", ".join(extra_in_data) + ".",
+                table_id=table_id,
+                column_name=", ".join(extra_in_data),
+            )
+
+        primary_key = (
+            scalar_text(matching["primary_key"].iloc[0])
+            if "primary_key" in matching.columns and len(matching)
+            else ""
+        )
+        if primary_key:
+            pk_cols = [
+                part.strip(READR_TRIM_CHARS) for part in primary_key.split(",")
+            ]
+            pk_cols = [part for part in pk_cols if part]
+            missing_pk = list(
+                dict.fromkeys(part for part in pk_cols if part not in data_cols)
+            )
+            if missing_pk:
+                add_issue(
+                    "primary_key",
+                    f"Table '{table_id}' primary_key references columns not "
+                    "present in data: " + ", ".join(missing_pk) + ".",
+                    table_id=table_id,
+                    column_name=", ".join(missing_pk),
+                )
+
+        if isinstance(codes, pd.DataFrame) and len(codes) > 0:
+            table_codes = codes[codes["table_id"] == table_id]
+            code_columns = _trimmed_unique(table_codes["column_name"])
+
+            for column_name in code_columns:
+                if column_name not in dict_cols:
+                    add_issue(
+                        "codes",
+                        f"codes.csv references table '{table_id}' column "
+                        f"'{column_name}', but that column is not in "
+                        "column_dictionary.csv.",
+                        table_id=table_id,
+                        column_name=column_name,
+                    )
+
+                if column_name not in data_cols:
+                    add_issue(
+                        "codes",
+                        f"codes.csv references table '{table_id}' column "
+                        f"'{column_name}', but that column is not present in "
+                        "data.",
+                        table_id=table_id,
+                        column_name=column_name,
+                    )
+                    continue
+
+                # Canonicalize both sides through the declared type. The data
+                # column is a parsed vector and ``code_value`` is always raw
+                # CSV text, so comparing raw text of each made a package fail
+                # against its own codes.
+                dict_names = [
+                    str(value).strip(READR_TRIM_CHARS)
+                    for value in table_dict["column_name"]
+                ]
+                column_value_type = (
+                    table_dict["value_type"].iloc[dict_names.index(column_name)]
+                    if column_name in dict_names
+                    else None
+                )
+                raw_code_values = list(
+                    table_codes["code_value"][
+                        table_codes["column_name"] == column_name
+                    ]
+                )
+                # The data resource is fidelity-checked when it is read, but
+                # code values are raw text that never passes through that
+                # path. Without the same check, a code token carrying more
+                # precision than its declared type can hold canonicalizes
+                # onto a different data value and the comparison silently
+                # succeeds.
+                code_outcome = convert_declared_tokens(
+                    raw_code_values, column_value_type
+                )
+                if code_outcome.reason is not None:
+                    offenders = list(
+                        dict.fromkeys(
+                            str(offender) for offender in code_outcome.offenders
+                        )
+                    )[:3]
+                    n_bad = len(code_outcome.offenders)
+                    add_issue(
+                        "codes",
+                        f"Table '{table_id}' column '{column_name}' declares "
+                        f"value_type '{column_value_type}' but {n_bad} "
+                        f"codes.csv value{'' if n_bad == 1 else 's'} did not "
+                        f"satisfy it ({code_outcome.reason}): "
+                        + ", ".join(offenders)
+                        + ".",
+                        table_id=table_id,
+                        column_name=column_name,
+                    )
+                data_values = _drop_blank(
+                    canonical_value_tokens(
+                        list(data_df[column_name]), column_value_type
+                    )
+                )
+                code_values = _drop_blank(
+                    canonical_value_tokens(raw_code_values, column_value_type)
+                )
+                missing_code_values = [
+                    value for value in data_values if value not in code_values
+                ]
+                if missing_code_values:
+                    add_issue(
+                        "codes",
+                        f"Table '{table_id}' column '{column_name}' has data "
+                        "values not listed in codes.csv: "
+                        + ", ".join(missing_code_values)
+                        + ".",
+                        table_id=table_id,
+                        column_name=column_name,
+                        value=", ".join(missing_code_values),
+                    )
+
+    composite_hints = _collect_composite_hint_values(
+        dataset_meta=dataset,
+        table_meta=tables,
+        datapackage_path=(
+            Path(path) / "datapackage.json" if path is not None else None
+        ),
+        hint_fields=("route", "route_key", "upload_route", "data_level"),
+        optional_hint_fields=("source_name",),
+    )
+    if _values_indicate_composite_intent(
+        [hint["value"] for hint in composite_hints]
+    ):
+        wsp_signal = _detect_wsp_composite_signal(resources)
+        if not wsp_signal["any_populated"]:
+            hint_fields_detected = ", ".join(
+                dict.fromkeys(hint["field"] for hint in composite_hints)
+            )
+            hint_values_detected = ", ".join(
+                dict.fromkeys(hint["value"] for hint in composite_hints)
+            )
+            required = ", ".join(wsp_signal["required_columns"])
+            add_issue(
+                "composite_intent",
+                "Explicit composite route intent detected in "
+                f"{hint_fields_detected} ({hint_values_detected}), but no "
+                "populated WSP composite signal columns were found in "
+                f"cu_timeseries. Populate at least one of: {required}.",
+                table_id="cu_timeseries",
+                column_name=required,
+                value=hint_values_detected,
+            )
+
+    return pd.DataFrame(issues, columns=_ISSUE_COLUMNS)
+
+
+def _abort_package_validation_issues(issues: pd.DataFrame) -> None:
+    """Mirror ``.ms_abort_package_validation_issues()``.
+
+    One abort naming the total, previewing up to ten messages, and — a
+    Python-side affordance R's cli abort cannot offer — carrying the full
+    typed frame on the raised error as ``.issues``.
+    """
+    total = len(issues)
+    preview_n = min(10, total)
+    lines = [
+        f"Salmon Data Package validation failed with {total} structural "
+        f"issue{'' if total == 1 else 's'}."
+    ]
+    lines.extend(str(message) for message in issues["message"].iloc[:preview_n])
+    if total > preview_n:
+        remaining = total - preview_n
+        lines.append(f"{remaining} more issue{'' if remaining == 1 else 's'} not shown.")
+    error = ValueError("\n".join(lines))
+    error.issues = issues
+    raise error
 
 
 def validate_salmon_datapackage(
     path: Union[str, Path],
     require_iris: bool = False,
 ) -> Dict[str, object]:
-    """Validate package structure, ID alignment, and semantic review state."""
+    """Validate package structure, ID alignment, and semantic review state.
+
+    Mirrors ``validate_salmon_datapackage()`` in metasalmon: every structural
+    finding is collected into one typed issue frame (eight ``issue_type``
+    categories, five columns) and reported in a single raise whose ``.issues``
+    attribute carries the frame — never one untyped error at the first
+    problem (hub backlog #91 / PARITY.md row 41, converged at S10 chunk D).
+    The returned ``issues`` frame is therefore empty whenever the call
+    returns, exactly as in R.
+    """
     target = Path(path)
     package = read_salmon_datapackage(target)
     dataset = package["dataset"]
@@ -1836,25 +2570,11 @@ def validate_salmon_datapackage(
             f"{sorted(dataset_ids)}"
         )
 
-    for _, row in tables.iterrows():
-        table_id_value = str(row.get("table_id") or "")
-        if table_id_value not in package["resources"]:
-            raise ValueError(
-                f"Resource file is missing for table {table_id_value!r}."
-            )
-        expected = set(
-            dictionary.loc[
-                dictionary["table_id"].astype(str) == table_id_value,
-                "column_name",
-            ].astype(str)
-        )
-        actual = set(package["resources"][table_id_value].columns.astype(str))
-        if expected != actual:
-            raise ValueError(
-                f"Resource columns for table {table_id_value!r} do not match "
-                f"the dictionary: expected {sorted(expected)}, got "
-                f"{sorted(actual)}."
-            )
+    issues = _collect_package_validation_issues(
+        package, path=target, require_iris=require_iris
+    )
+    if len(issues) > 0:
+        _abort_package_validation_issues(issues)
 
     # SDP procedure and observation-structure resources are optional. Their
     # absence preserves the historic validation path exactly; when present,
@@ -1863,6 +2583,29 @@ def validate_salmon_datapackage(
     from .observation_structures import validate_optional_sdp_observation_metadata
 
     validate_optional_sdp_observation_metadata(target)
+
+    if require_iris:
+        final_review_issues = (
+            _collect_review_placeholder_issues(
+                dataset, "metadata/dataset.csv", ("dataset_id",)
+            )
+            + _collect_review_placeholder_issues(
+                tables, "metadata/tables.csv", ("table_id", "file_name")
+            )
+            + _collect_missing_table_observation_unit_iri_issues(tables)
+            + _collect_review_placeholder_issues(
+                dictionary,
+                "metadata/column_dictionary.csv",
+                ("table_id", "column_name"),
+            )
+            + _collect_review_placeholder_issues(
+                codes,
+                "metadata/codes.csv",
+                ("table_id", "column_name", "code_value"),
+            )
+        )
+    else:
+        final_review_issues = []
 
     normalized = validate_dictionary(
         dictionary,
@@ -1876,6 +2619,9 @@ def validate_salmon_datapackage(
         require_iris=require_iris,
     )
 
+    table_review_issues = _collect_review_iri_issues(
+        tables, source_name="metadata/tables.csv"
+    )
     # Unconditional: a method or protocol placement that is not an absolute
     # IRI is malformed in every validation mode, not only under
     # ``require_iris`` — exactly as in ``.ms_validate_salmon_datapackage()``.
@@ -1889,8 +2635,9 @@ def validate_salmon_datapackage(
         id_fields=("dataset_id",),
         fields=("protocol_iri",),
     )
-    if placement_issues:
-        issue_frame = pd.DataFrame({"message": placement_issues})
+    appended_semantic_issues = table_review_issues + placement_issues
+    if appended_semantic_issues:
+        issue_frame = pd.DataFrame({"message": appended_semantic_issues})
         existing = semantic_validation.get("issues")
         if isinstance(existing, pd.DataFrame) and len(existing) > 0:
             issue_frame = pd.concat([existing, issue_frame], ignore_index=True)
@@ -1899,18 +2646,52 @@ def validate_salmon_datapackage(
     if require_iris:
         # A malformed placement IRI is worse than an unreviewed one: strict
         # validation must block it, exactly as it blocks a REVIEW: marker.
-        review_issues = _collect_review_issues(package) + placement_issues
-        if review_issues:
-            preview = " ".join(review_issues[:5])
-            raise ValueError(
-                f"Final validation failed with {len(review_issues)} unresolved "
-                f"review issue(s). {preview}"
+        final_review_issues = (
+            final_review_issues + table_review_issues + placement_issues
+        )
+        if final_review_issues:
+            total = len(final_review_issues)
+            preview = list(dict.fromkeys(final_review_issues))[:10]
+            lines = [
+                f"Final validation failed with {total} unresolved review "
+                f"issue{'' if total == 1 else 's'}."
+            ]
+            lines.extend(preview)
+            lines.append(
+                "Resolve placeholder metadata, blank table observation-unit "
+                "IRIs, and any REVIEW-prefixed IRIs before strict validation."
             )
+            if total > len(preview):
+                remaining = total - len(preview)
+                lines.append(
+                    f"{remaining} more unresolved review "
+                    f"issue{'' if remaining == 1 else 's'} not shown."
+                )
+            raise ValueError("\n".join(lines))
+
+    sem_issues = semantic_validation.get("issues")
+    if isinstance(sem_issues, pd.DataFrame) and len(sem_issues) > 0:
+        total = len(sem_issues)
+        preview = list(
+            dict.fromkeys(str(message) for message in sem_issues["message"])
+        )[:3]
+        lines = [
+            f"Package structure is valid, but validate_semantics() reported "
+            f"{total} semantic issue{'' if total == 1 else 's'}."
+        ]
+        lines.extend("- " + message for message in preview)
+        if total > len(preview):
+            remaining = total - len(preview)
+            lines.append(
+                f"{remaining} more semantic issue{'' if remaining == 1 else 's'} "
+                "returned in the result."
+            )
+        warnings.warn("\n".join(lines), UserWarning, stacklevel=2)
 
     return {
         "package": package,
         "semantic_validation": semantic_validation,
-        "issues": _value_type_issues(package),
+        "issues": issues,
     }
 
 

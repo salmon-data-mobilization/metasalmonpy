@@ -279,6 +279,253 @@ def parse_logical(values) -> pd.Series:
     )
 
 
+# --- review placeholders and identifier titles ------------------------------
+#
+# In metasalmon these helpers live in ``R/dictionary-helpers.R``
+# (``.ms_fill_review_placeholders_*``, ``.ms_titleize_identifier``); they sit
+# here rather than in ``dictionary.py`` because the ``infer_*`` functions in
+# this module apply them, and ``dictionary.py`` imports this module.
+
+
+def scalar_text(value) -> str:
+    """Mirror ``.ms_scalar_text()``: first element as trimmed text, NA -> ""."""
+    if isinstance(value, (pd.Series, list, tuple)):
+        value = value[0] if len(value) else None
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return ""
+    return str(value).strip(READR_TRIM_CHARS)
+
+
+# ``.ms_is_review_placeholder()``: the three placeholder spellings the fill
+# helpers write. Deliberately narrower than "anything starting MISSING" — a
+# bare ``REVIEW:`` IRI marker has its own dedicated reporting paths
+# (``validate_dictionary`` and ``_collect_review_iri_issues``).
+_REVIEW_PLACEHOLDER_RE = re.compile(
+    r"^\s*(MISSING METADATA|MISSING DESCRIPTION|REVIEW REQUIRED)\s*:",
+    re.IGNORECASE,
+)
+
+
+def is_review_placeholder(value) -> bool:
+    """Mirror ``.ms_is_review_placeholder()``."""
+    text = scalar_text(value)
+    return bool(text) and _REVIEW_PLACEHOLDER_RE.match(text) is not None
+
+
+def _humanize_identifier(value) -> str:
+    """Mirror ``.ms_humanize_identifier()``: separators to single spaces."""
+    text = re.sub(r"[-_]+", " ", str(value))
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(READR_TRIM_CHARS)
+
+
+# ``tools::toTitleCase`` ported verbatim (R 4.5.2): the same word lists, the
+# same token split (each delimiter is its own token), the same keep rules.
+# The fill helpers write its output into ``metadata/dataset.csv`` and
+# ``metadata/tables.csv``, so quirks like ``"under_over" -> "under over"``
+# (both words are in the keep-as-is list) are part of the byte contract and
+# pinned by tests against R-measured output — do not "fix" them here.
+_TITLE_ALONE = frozenset({
+    "2D", "3D", "AIC", "BayesX", "GoF", "HTML", "LaTeX", "MonetDB", "OpenBUGS",
+    "TeX", "U.S.", "U.S.A.", "WinBUGS", "aka", "et", "al.", "ggplot2", "i.e.",
+    "jar", "jars", "ncdf", "netCDF", "rgl", "rpart", "xls", "xlsx",
+    # R's ``either`` list: words kept exactly as supplied.
+    "all", "above", "after", "along", "also", "among", "any", "both", "can",
+    "few", "it", "less", "log", "many", "may", "more", "over", "some", "their",
+    "then", "this", "under", "until", "using", "von", "when", "where", "which",
+    "will", "without", "yet", "you", "your",
+})
+_TITLE_LOWER_PATTERN = (
+    r"^(a|an|and|are|as|at|be|but|by|en|for|if|in|is|nor|not|of|on|or|per|so"
+    r"|the|to|v[.]?|via|vs[.]?|from|into|than|that|with)$"
+)
+_TITLE_LOWER_RE = re.compile(_TITLE_LOWER_PATTERN, re.IGNORECASE)
+_TITLE_LOWER_CASE_SENSITIVE_RE = re.compile(_TITLE_LOWER_PATTERN)
+_TITLE_DELIMITERS = ' -/"()\n\t'
+
+
+def _split_title_tokens(text: str) -> list[str]:
+    """R's ``C_splitString(x, " -/\\"()\\n\\t")``: delimiters are 1-char tokens."""
+    tokens: list[str] = []
+    current = ""
+    for character in text:
+        if character in _TITLE_DELIMITERS:
+            if current:
+                tokens.append(current)
+                current = ""
+            tokens.append(character)
+        else:
+            current += character
+    if current:
+        tokens.append(current)
+    return tokens
+
+
+def _title_case_word(word: str) -> str:
+    first = word[:1]
+    if len(word) >= 3 and first in ("'", '"'):
+        return first + word[1:2].upper() + word[2:].lower()
+    return first.upper() + word[1:].lower()
+
+
+def _to_title_case(text) -> str:
+    if text is None or pd.isna(text):
+        return text
+    tokens = _split_title_tokens(str(text))
+    n = len(tokens)
+    alone = [
+        token in _TITLE_ALONE or re.match(r"^'.*'$", token) is not None
+        for token in tokens
+    ]
+    havecaps = [
+        re.match(r"^[^\W\d_].*[A-Z]", token) is not None for token in tokens
+    ]
+    lower = [bool(_TITLE_LOWER_RE.match(token)) for token in tokens]
+    if lower:
+        lower[0] = False
+    # A word after ``foo: `` or ``foo- `` stays capitalized — unless the dash
+    # stands alone and the word is one of the lowercase set (case-sensitive
+    # here, exactly as in R).
+    for index in range(n):
+        if (
+            re.search(r"[-:]$", tokens[index])
+            and index + 2 < n
+            and tokens[index + 1] == " "
+            and re.match(r"^['0-9A-Za-z]", tokens[index + 2])
+            and not (
+                tokens[index] == "-"
+                and _TITLE_LOWER_CASE_SENSITIVE_RE.match(tokens[index + 2])
+            )
+        ):
+            lower[index + 2] = False
+    for index in range(n - 1):
+        if tokens[index] == '"':
+            lower[index + 1] = False
+    tokens = [
+        token.lower() if flag else token for token, flag in zip(tokens, lower)
+    ]
+    out = []
+    for token, is_alone, has_caps, is_lower in zip(tokens, alone, havecaps, lower):
+        keep = has_caps or is_lower or len(token) == 1 or is_alone
+        out.append(token if keep else _title_case_word(token))
+    return "".join(out)
+
+
+def titleize_identifier(value) -> str:
+    """Mirror ``.ms_titleize_identifier()``: humanize, then title-case."""
+    humanized = _humanize_identifier(value)
+    if not humanized:
+        return humanized
+    return _to_title_case(humanized)
+
+
+def _blank_mask(series: pd.Series) -> pd.Series:
+    """R's ``is.na(x) | trimws(x) == ""`` over one metadata column."""
+    return pd.Series(
+        [
+            pd.isna(value) or not str(value).strip(READR_TRIM_CHARS)
+            for value in series
+        ],
+        index=series.index,
+    )
+
+
+def fill_review_placeholders_dataset_meta(dataset_meta: pd.DataFrame) -> pd.DataFrame:
+    """Mirror ``.ms_fill_review_placeholders_dataset_meta()`` exactly.
+
+    Prose and coverage were converged on current metasalmon by differential
+    run (S10 chunk D), retiring PARITY.md row 48: R fills ``creator``,
+    ``contact_name``, ``contact_email`` and ``license`` with ``MISSING
+    METADATA:`` guidance, titleizes a blank ``title`` from ``dataset_id``, and
+    writes dataset-specific ``MISSING DESCRIPTION:`` prose.
+    """
+    out = dataset_meta.copy()
+
+    if "title" in out.columns:
+        blank = _blank_mask(out["title"])
+        if blank.any():
+            out.loc[blank, "title"] = [
+                titleize_identifier(value) for value in out.loc[blank, "dataset_id"]
+            ]
+
+    if "description" in out.columns:
+        blank = _blank_mask(out["description"])
+        if blank.any():
+            out.loc[blank, "description"] = [
+                "MISSING DESCRIPTION: describe the contents and purpose of "
+                f"dataset '{value}'."
+                for value in out.loc[blank, "dataset_id"]
+            ]
+
+    for column, placeholder in (
+        ("creator", "MISSING METADATA: add creator, team, or originating program."),
+        ("contact_name", "MISSING METADATA: add primary contact name or team."),
+        ("contact_email", "MISSING METADATA: add primary contact email."),
+        ("license", "MISSING METADATA: add dataset license (for example, CC-BY-4.0)."),
+    ):
+        if column in out.columns:
+            blank = _blank_mask(out[column])
+            if blank.any():
+                out.loc[blank, column] = placeholder
+
+    if "spec_version" in out.columns:
+        blank = _blank_mask(out["spec_version"])
+        if blank.any():
+            out.loc[blank, "spec_version"] = sdp_profile_version()
+
+    return out
+
+
+def fill_review_placeholders_table_meta(table_meta: pd.DataFrame) -> pd.DataFrame:
+    """Mirror ``.ms_fill_review_placeholders_table_meta()`` exactly."""
+    out = table_meta.copy()
+
+    if "table_label" in out.columns:
+        blank = _blank_mask(out["table_label"])
+        if blank.any():
+            out.loc[blank, "table_label"] = [
+                titleize_identifier(value) for value in out.loc[blank, "table_id"]
+            ]
+
+    if "description" in out.columns:
+        blank = _blank_mask(out["description"])
+        if blank.any():
+            out.loc[blank, "description"] = [
+                f"MISSING DESCRIPTION: describe what each row in table '{value}' "
+                "represents."
+                for value in out.loc[blank, "table_id"]
+            ]
+
+    if "observation_unit" in out.columns:
+        blank = _blank_mask(out["observation_unit"])
+        if blank.any():
+            out.loc[blank, "observation_unit"] = [
+                f"MISSING METADATA: describe the observation unit for table "
+                f"'{value}'."
+                for value in out.loc[blank, "table_id"]
+            ]
+
+    return out
+
+
+def fill_review_placeholders_dictionary(dictionary: pd.DataFrame) -> pd.DataFrame:
+    """Mirror ``.ms_fill_review_placeholders_dictionary()`` exactly."""
+    out = dictionary.copy()
+
+    if "column_description" in out.columns:
+        blank = _blank_mask(out["column_description"])
+        if blank.any():
+            out.loc[blank, "column_description"] = [
+                f"MISSING DESCRIPTION: define what '{column}' means in table "
+                f"'{table}'."
+                for column, table in zip(
+                    out.loc[blank, "column_name"], out.loc[blank, "table_id"]
+                )
+            ]
+
+    return out
+
+
 def ensure_resource_mapping(resources, table_id: str = "table-1") -> dict[str, pd.DataFrame]:
     if isinstance(resources, pd.DataFrame):
         return {table_id: resources.copy()}
@@ -328,15 +575,22 @@ def infer_table_metadata_from_resources(resources: Mapping[str, pd.DataFrame], d
             {
                 "dataset_id": dataset_id,
                 "table_id": table_id,
-                "file_name": f"{table_id}.csv",
-                "table_label": table_id,
+                # R: ``file.path("data", paste0(tab_id, ".csv"))`` and a
+                # titleized label; the returned frame is placeholder-filled,
+                # so ``description``/``observation_unit`` come back as
+                # ``MISSING ...:`` prose exactly as metasalmon returns them
+                # (S10 chunk D differential; previously bare NA / table_id).
+                "file_name": f"data/{table_id}.csv",
+                "table_label": titleize_identifier(table_id),
                 "description": pd.NA,
                 "observation_unit": pd.NA,
                 "observation_unit_iri": pd.NA,
                 "primary_key": id_cols[0] if id_cols else pd.NA,
             }
         )
-    return normalize_table_meta(pd.DataFrame(rows))
+    return fill_review_placeholders_table_meta(
+        normalize_table_meta(pd.DataFrame(rows))
+    )
 
 
 def infer_codes_from_resources(resources: Mapping[str, pd.DataFrame], dataset_id: str = "dataset-1") -> pd.DataFrame:
@@ -411,32 +665,38 @@ def infer_dataset_metadata_from_resources(resources: Mapping[str, pd.DataFrame],
             unique_keywords.append(keyword)
             seen.add(key)
 
-    return normalize_dataset_meta(
-        pd.DataFrame(
-            {
-                "dataset_id": [dataset_id],
-                "title": [pd.NA],
-                "description": [pd.NA],
-                "creator": [pd.NA],
-                "contact_name": [pd.NA],
-                "contact_email": [pd.NA],
-                "license": [pd.NA],
-                "contact_org": [pd.NA],
-                "contact_position": [pd.NA],
-                "temporal_start": [temporal_start],
-                "temporal_end": [temporal_end],
-                "spatial_extent": [spatial_extent],
-                "dataset_type": [pd.NA],
-                "source_citation": [pd.NA],
-                "update_frequency": [pd.NA],
-                "topic_categories": [pd.NA],
-                "keywords": ["; ".join(unique_keywords[:8])],
-                "security_classification": [pd.NA],
-                "provenance_note": [pd.NA],
-                "created": [pd.NA],
-                "modified": [pd.NA],
-                "spec_version": [sdp_profile_version()],
-            }
+    # The returned frame is placeholder-filled, exactly as metasalmon's
+    # ``infer_dataset_metadata_from_resources()`` returns it (S10 chunk D
+    # differential): titleized ``title``, ``MISSING ...:`` prose for
+    # description/creator/contacts/license, and the profile ``spec_version``.
+    return fill_review_placeholders_dataset_meta(
+        normalize_dataset_meta(
+            pd.DataFrame(
+                {
+                    "dataset_id": [dataset_id],
+                    "title": [pd.NA],
+                    "description": [pd.NA],
+                    "creator": [pd.NA],
+                    "contact_name": [pd.NA],
+                    "contact_email": [pd.NA],
+                    "license": [pd.NA],
+                    "contact_org": [pd.NA],
+                    "contact_position": [pd.NA],
+                    "temporal_start": [temporal_start],
+                    "temporal_end": [temporal_end],
+                    "spatial_extent": [spatial_extent],
+                    "dataset_type": [pd.NA],
+                    "source_citation": [pd.NA],
+                    "update_frequency": [pd.NA],
+                    "topic_categories": [pd.NA],
+                    "keywords": ["; ".join(unique_keywords[:8])],
+                    "security_classification": [pd.NA],
+                    "provenance_note": [pd.NA],
+                    "created": [pd.NA],
+                    "modified": [pd.NA],
+                    "spec_version": [pd.NA],
+                }
+            )
         )
     )
 
@@ -453,13 +713,19 @@ __all__ = [
     "align_columns",
     "csv_na_token",
     "ensure_resource_mapping",
+    "fill_review_placeholders_dataset_meta",
+    "fill_review_placeholders_dictionary",
+    "fill_review_placeholders_table_meta",
     "infer_codes_from_resources",
     "infer_dataset_metadata_from_resources",
     "infer_table_metadata_from_resources",
+    "is_review_placeholder",
     "normalize_codes",
     "normalize_dataset_meta",
     "normalize_dictionary",
     "normalize_table_meta",
     "parse_logical",
     "read_sdp_csv",
+    "scalar_text",
+    "titleize_identifier",
 ]

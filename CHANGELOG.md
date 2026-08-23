@@ -128,6 +128,83 @@ same convention as chunks A–C, execplan open decision 2 / hub Q7 pending):
   to R 0.2.5's structural `*_token` rule by chunk F, and these sites inherit
   that automatically.
 
+### S10 chunk D — validation hardening
+
+`validate_salmon_datapackage()` becomes metasalmon's validator: the typed,
+accumulate-then-report issue system, the 0.2.6 tidy checks, and the
+placeholder fill converged on current R. Everything here was verified by
+**running both implementations over the same fixture packages** against a
+pristine `git archive` of metasalmon `main` at `9d8f125` (2026-08-22):
+seventeen single-defect corruptions of the shipped example plus one stacked
+five-issue package matched **field-for-field across all five issue columns,
+message bytes included**, and two whole written packages (the shipped example
+and a blank-metadata fill probe) came out **byte-identical file-for-file**,
+`datapackage.json` included.
+
+- **The typed issue collector (hub backlog #91 / PARITY.md row 41, closed).**
+  Structural findings accumulate into R's five-column frame (`issue_type`,
+  `table_id`, `column_name`, `value`, `message`) across all **eight** typed
+  categories — `dataset`, `tables`, `dictionary`, `codes`, `resource`,
+  `columns`, `primary_key`, `composite_intent` — and the validator aborts
+  once with the full list (ten-message preview, R's wording), never at the
+  first problem with an untyped string. The raised `ValueError` carries the
+  frame as `.issues`. The `codes` and `composite_intent` categories are new
+  here in full: code values are canonicalized through their declared type on
+  both sides of the comparison, and the WSP composite-intent check (route
+  hints in metadata or the descriptor vs populated `cu_timeseries` signal
+  columns) is ported whole. **This lifts the standing prohibition on
+  cross-implementation issue-count verification** recorded in the execplan
+  and in row 41: both sides now report the same issue set for the same
+  broken package, so milestone checks may compare counts and categories.
+- **`value_type` declarations are enforced, not just reported** (the #98
+  exposure): a value that fails its declared type — including `date`, where
+  R rejected DD-MON-YY bytes and this package's validator returned normally
+  with a side-channel frame — is now a structural `columns` issue and the
+  call aborts. Previously `validate_salmon_datapackage()` could not fail for
+  any value-type mismatch at all.
+- **metasalmon 0.2.6's tidy checks.** A declared primary key must identify a
+  row: missing values in key columns and duplicated key tuples are errors
+  (`tables` issues), and a key naming absent columns is a `primary_key`
+  issue. Column names that look like data values — bare year-like names, or
+  a shared numeric-suffix stem, across three or more columns — warn without
+  ever erroring, in both validation modes; the message points at
+  `pandas.melt()` where R points at `tidyr::pivot_longer()` (PARITY.md
+  row 49, the only deliberate difference in the check). Unresolved
+  `MISSING METADATA:` placeholders are surfaced as a default-mode warning
+  naming each `file$column`; strict mode keeps reporting them as errors.
+- **The placeholder fill converges on R, at the byte level (PARITY.md
+  row 48, closed).** Blank `creator`, `contact_name`, `contact_email` and
+  `license` gain R's `MISSING METADATA:` guidance; blank `title` and
+  `table_label` are titleized from their identifiers via a verbatim
+  `tools::toTitleCase` port; dataset, table and column-description prose is
+  R's exact wording. `infer_dataset_metadata_from_resources()` and
+  `infer_table_metadata_from_resources()` return placeholder-filled frames
+  as R's do (titleized labels, `data/`-prefixed file names).
+- **Two descriptor defects found by the byte differential, fixed.** A blank
+  dictionary `required` wrote `constraints: {"required": true}` — the
+  inverted claim, on every unlabeled-required column including the shipped
+  example's RUN_TYPE and ESTIMATE_STAGE rows — because `iterrows()` hands a
+  boolean-dtype NA back as a truthy float `nan`. And a blank `column_label`
+  omitted the `title` key where R emits an explicit `null`.
+- **Strict-mode review reporting uses R's messages and composition.**
+  Placeholder, blank observation-unit-IRI, REVIEW-prefixed-IRI and
+  malformed-placement findings are collected with R's message texts and
+  row contexts; `validate_dictionary()` gains R's REVIEW-marker handling
+  (default-mode warning, strict abort with R's wording) and R's per-field
+  strict message (`Measurement columns require term_iri; missing in rows
+  8.`). Reading a package whose declared resource file is missing now warns
+  (`Resource file '…' not found, skipping`), as R has always done, and the
+  default mode warns when `validate_semantics()` reports issues, naming the
+  first three.
+- **The missing example round-trip test** (the #100 exposure):
+  `tests/test_example_round_trip.py` builds an SDP from the shipped 30-row
+  example and validates it in **both** modes, pinning strict validation to
+  **zero** issues and lenient validation to silence, plus a well-formedness
+  gate over every shipped metadata CSV. metasalmon's counterpart pins its
+  fuller 173-row example to exactly one known strict failure; that example
+  is not shipped here (PARITY.md row 46, open), so the tiny example's
+  zero-issue pin is the whole gate.
+
 ### S10 chunk B — the semantic pipeline retarget
 
 Retargets the semantic pipeline onto the dictionary shape chunk A introduced:

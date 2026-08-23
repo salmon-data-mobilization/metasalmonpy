@@ -482,6 +482,16 @@ def infer_dictionary(
     return dict_df
 
 
+def _collapse_inline(values) -> str:
+    """cli's inline vector collapse: ``8``, ``8 and 9``, ``7, 8, and 9``."""
+    texts = [str(value) for value in values]
+    if len(texts) <= 1:
+        return "".join(texts)
+    if len(texts) == 2:
+        return f"{texts[0]} and {texts[1]}"
+    return ", ".join(texts[:-1]) + f", and {texts[-1]}"
+
+
 def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd.DataFrame:
     """
     Validate dictionary structure and value constraints.
@@ -525,6 +535,55 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
     measurement_rows = (df["column_role"] == "measurement") & ~df["column_role"].isna()
     semantic_fields = CORE_SEMANTIC_FIELDS
 
+    # REVIEW-prefixed IRI markers: draft semantic assignments written for
+    # human review. Strict validation blocks on them; the default mode warns.
+    # Mirrors metasalmon's validate_dictionary() — previously this lived only
+    # in validate_salmon_datapackage()'s strict sweep, so validating a
+    # dictionary frame directly never saw them (S10 chunk D).
+    iri_fields = [
+        field
+        for field in (
+            "term_iri",
+            "property_iri",
+            "entity_iri",
+            "unit_iri",
+            "constraint_iri",
+            "statistical_modifier_iri",
+        )
+        if field in df.columns
+    ]
+    review_re = re.compile(r"^\s*REVIEW\s*:", re.IGNORECASE)
+    review_summary = []
+    for field in iri_fields:
+        rows = [
+            position + 1
+            for position, value in enumerate(df[field])
+            if not pd.isna(value) and review_re.match(str(value))
+        ]
+        if rows:
+            names = df["column_name"].iloc[[row - 1 for row in rows]].tolist()
+            review_summary.append(
+                f"{field}: "
+                + ", ".join(
+                    f"{name} (rows {row})" for name, row in zip(names, rows)
+                )
+            )
+    if review_summary:
+        if require_iris:
+            raise ValueError(
+                "Validation cannot pass while REVIEW-prefixed IRI values "
+                "remain. Resolve these fields before final validation: "
+                + "; ".join(review_summary)
+            )
+        warnings.warn(
+            "REVIEW-prefixed IRI values were found. These are draft semantic "
+            "assignments written for human review: "
+            + "; ".join(review_summary)
+            + ". Before final validation or publication, replace or confirm "
+            "the IRI and remove the REVIEW prefix.",
+            UserWarning,
+        )
+
     if measurement_rows.any():
         missing_by_field = {}
         for field in semantic_fields:
@@ -533,18 +592,18 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
                 missing_by_field[field] = missing_field
 
         if require_iris:
-            if missing_by_field:
-                missing_parts = []
-                for field, missing_field in missing_by_field.items():
-                    idx = missing_field[missing_field].index
-                    rows = (idx + 1).tolist()
-                    columns = df.loc[idx, "column_name"].tolist()
-                    if columns:
-                        fields = [f"{name} (row {row})" for name, row in zip(columns, rows)]
-                        missing_parts.append(f"{field}: {', '.join(fields)}")
+            # R aborts on the FIRST field with missing rows, naming that
+            # field and its 1-based rows — "Measurement columns require
+            # term_iri; missing in rows 8." — with cli's inline collapse for
+            # several rows. Field order is the CORE_SEMANTIC_FIELDS order.
+            for field in semantic_fields:
+                missing_field = missing_by_field.get(field)
+                if missing_field is None:
+                    continue
+                rows = (missing_field[missing_field].index + 1).tolist()
                 raise ValueError(
-                    "Measurement columns require semantic fields; missing values in: "
-                    + "; ".join(missing_parts)
+                    f"Measurement columns require {field}; missing in rows "
+                    f"{_collapse_inline(rows)}."
                 )
 
         elif missing_by_field:
