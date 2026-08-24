@@ -149,12 +149,3 @@ needs both checkouts, so it runs in neither repository's CI as things stand.
 Where it runs automatically is an open question. Until it is answered, this is a
 local step before committing a register change.
 
-> **Rows 54-58 are one-sided as of 2026-08-24** and the check above reports
-> them as such. They were added by the metasalmon 0.4.0 parity port, which had
-> write access to this repository and not to the hub; the twin text for
-> `knowledge/parity-deviations.md` was handed to a maintainer with the port's
-> report. This is the *expected* transient state for a difference discovered on
-> the mirror side, not drift — but it is indistinguishable from drift to the
-> check, so it is written down here. **It stops being expected the moment the
-> hub lands its twins**; if this note outlives that, the twins were never
-> filed.
