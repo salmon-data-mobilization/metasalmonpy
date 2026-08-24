@@ -1,14 +1,211 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
-Not a version bump: the parity claim stays at **metasalmon 0.2.1**. The S10
-chunk-A work below is the sdp-0.3.0 breaking change, and it lands deliberately
-unversioned: *which* number the finished port may carry is the execplan's open
-decision 2 (hub Q7) — the chunks deliver behaviour verified against
-metasalmon's post-0.3.0 `main`, which no R release contains, and nobody has
-ruled what a number may claim about that. The bump comes once, at the end of
-the S10 chunks, after that ruling. Bump on parity, not on calendar.
+**The bump the S10 chunks were saving.** This release closes the
+`0.2.2 → 0.4.0` catch-up window against metasalmon **v0.4.0**
+(`4e2bbb6c2a7cc578cb05f9f350c834c89796142c`, verified against a pristine
+`git archive` of that tag, never a working checkout).
+
+The version number is a parity claim, so it is worth saying exactly what it now
+claims and on what evidence. Every entry in metasalmon 0.4.0's `NEWS.md` was
+audited against this tree before anything was written: 25 entries, each
+resolved to present / absent / registered / not-applicable with the file and
+line that proves it. The S10 chunks (A–H, merged 2026-08-22) had made this
+package behaviourally complete through metasalmon **0.3.0** — but 0.4.0 is
+0.3.0 *plus* the post-0.3.0 fix stream, and its headline feature landed in R
+**after** every chunk was written. Bumping without porting it would have made
+the claim false, which is the exact condition the release was cut to end.
+
+Four gaps were found and ported; five differences were registered instead,
+each with the condition that would retire it.
+
+### New
+
+* **`publish_sdp_to_knb()` and `write_eml_from_sdp()` take a
+  `knb_environment`, so a deposit can finally be rehearsed** (roadmap S3, the
+  mirror of metasalmon 0.4.0's headline). The member node, coordinating node,
+  resolver, and Solr endpoints were module-level constants in
+  `knb_publication.py` pinned to production — this is the first state those
+  modules have ever had to vary. Two environments, matched exactly, with no
+  partial matching, no custom endpoints, and no fallback between them:
+
+  | Environment | DataONE network | Member node | Credential |
+  |---|---|---|---|
+  | `"test"` | `STAGING` | `urn:node:mnTestKNB` at `dev.nceas.ucsb.edu` | `set_dataone_test_token()` |
+  | `"production"` | `PROD` | `urn:node:KNB` at `knb.ecoinformatics.org` | `set_dataone_token()` |
+
+  Every value comes from the DataONE node documents themselves, read on
+  2026-08-22 for the R implementation and mirrored here unchanged.
+
+  **A dry run defaults to `"test"`; a live call has no default.** That is
+  Brett's 2026-08-22 ruling — develop against the test node first, post to
+  production once the package looks good there — and an unstated environment on
+  a live call raises rather than silently targeting production. Live
+  publication still demands `confirm=True` in both environments; naming an
+  environment is not a substitute for approving the plan, and a rehearsal does
+  not relax the gate.
+
+  Three properties are structural rather than advisory, and each is
+  revert-verified — the port was mutated four ways and each mutation was
+  confirmed to fail the test that covers it:
+
+  - **An environment switches whole.** Every derived URL is built in
+    `knb_environments.py` from that environment's own member-node and
+    coordinating-node base URLs, so no assignment in the package can pair a
+    test node with a production Solr endpoint. Reads re-derive the whole record
+    from the plan's fingerprinted `node_id` and refuse any plan whose network,
+    node, and environment name disagree — a hand-edited manifest cannot smuggle
+    a mixed pair through, and neither can the default REST adapter, which now
+    refuses a mismatched network/node pair and any unregistered node.
+  - **A test deposit cannot mint production identity.** The node identifier in
+    every SystemMetadata and OAI-ORE artifact is the selected environment's
+    own, and identifiers are scoped through `pid_preimage()` so a test PID can
+    never collide with or be mistaken for a production one. The SDP archive is
+    the sharpest case: its bytes are environment-independent, so without the
+    scope the same package would mint the same archive identifier in both.
+  - **The reviewed production EML is never replaced.** A test document has
+    different bytes, so test artifacts go to `publication/test/` while
+    production keeps `metadata/eml.xml` and `publication/knb-manifest.json`. A
+    rehearsal is publication-writer output that the base package writer
+    preserves, which is asserted by hashing the rehearsal before and after an
+    ordinary `write_salmon_datapackage()` rewrite.
+
+  Test deposits also request zero replicas, and a revision may not cross
+  environments. **Production behaviour is unchanged**, and that is pinned
+  rather than asserted: production identifier preimages are byte-identical to
+  those minted before this change, verified against R's own v0.1.8 manifest
+  fixture — every metadata and data PID, the package id and the series id.
+  `publish_sdp_to_knb()` and `write_eml_from_sdp()` now also return the
+  resolved `knb_environment`.
+
+  A test plan's manifest carries `knb_environment` immediately after `node_id`,
+  where R puts it. It is deliberately **not** fingerprinted, so every manifest
+  written before this field still validates; and a plan that has no
+  `knb_environment` omits the key rather than writing a null, mirroring R's
+  list semantics exactly, so era manifests stay byte-identical on both sides.
+
+  No live deposit has been performed in either environment; a test-node token
+  is still outstanding.
+
+### Fixed
+
+* **`statistical_modifier` reached ranking with no source preference at all.**
+  The seventh surface of the role contract, missing on *both* sides: the role
+  has had `ontology-preferences.csv` rows since sdp-0.3.0 and
+  `sources_for_role()` serves it from `smn` and `ols`, but `role_boost` had no
+  entry, so it was scored on base weight alone — a 0.1-0.2 spread across
+  sources, which is no source preference at all. It now carries
+  `smn = 1.5, ols = 0.4`. Measured: the smn-over-ols margin on two otherwise
+  identical candidates moves from **1.9 to 3.0** (`constraint`, the closest
+  comparable role, is 3.8).
+
+  **The guard that would have caught it is now able to.** `role_boost` and
+  `base_source_weight` were dict literals inside `_score_and_rank_terms`, with
+  nothing enumerable to assert against, and
+  `tests/test_role_contract_guard.py` said so — it covered six of seven
+  surfaces and named the seventh as out of reach. They are module constants
+  now (`term_search.ROLE_BOOST`, `.BASE_SOURCE_WEIGHT`), and that guard checks
+  what R's `test-smn-outranks-gcdfo.R` checks: every role with ranking
+  preferences has a boost entry, and `smn` leads `gcdfo` wherever both are
+  ranked. A second test pins the constants to the scorer that reads them, so
+  hoisting them cannot drift into a second copy. This does not deliver a
+  ranking-*profile* system (hub backlog #87); that tripwire stays.
+
+* **The accepted manifest-writer set has one owner.** `provenance.py` now owns
+  the pair of writer strings every manifest validator accepts, and
+  `sssom.py`, `measurement_decompositions.py` and `reproducibility.py` resolve
+  through it instead of each re-typing the pair. Re-typing is how the
+  honest-provenance ruling got applied twice out of three times on the R side,
+  leaving `validate_sdp_reproducibility_manifest()` rejecting Python-written
+  manifests — and blocking KNB publication of any Python-written SDP, since
+  publication validates the manifest while planning. A structural guard
+  (`tests/test_provenance.py`) fails if any validator re-types a writer
+  literal, reading the function body with the docstring stripped so a
+  validator that merely *documents* its accepted writers still passes.
+
+* **A reproducibility-manifest version that is not a string is refused.**
+  `_validate_manifest` coerced the value with `str()`, so a JSON number,
+  boolean or array passed as a version and the manifest claimed a version it
+  did not have. metasalmon 0.4.0's NEWS says "both Python readers already"
+  rejected those; that was true of `measurement_decompositions.py` and not of
+  this one. Both now demand one non-blank string, through the shared
+  `provenance.version_ok()`. The SSSOM validator deliberately keeps its weaker
+  presence-only check, because metasalmon's asks the same weaker question and
+  the two readers of one artifact must accept the same manifests.
+
+* **A whitespace-only metadata scalar is absent from the descriptor, as it is
+  in R.** Every scalar presence test in the descriptor builder now goes through
+  `package_io._meta_scalar_present()`, which renders the value to text and
+  **trims** it before deciding — the mirror of `.ms_meta_scalar_present()`.
+  `_has_value` did neither, so a whitespace-only `primary_key` passed the
+  presence test, split to nothing, and wrote `"primaryKey": []` into
+  `datapackage.json` — a key R cannot produce and the SDP publication
+  validator has no reading for. A whitespace-only scalar now produces a
+  descriptor byte-identical to an empty one.
+
+### Documentation
+
+* **Docs that were wrong, not merely absent, are corrected.**
+  `guides/semantic-review.qmd`, `guides/glossary.qmd`, `README.md` and
+  `guides/parity.qmd` all still described a dictionary **method** slot that
+  sdp-0.3.0 removed; the glossary named four I-ADOPT components instead of
+  five. `guides/parity.qmd` was the worst of it — it claimed 0.1.6 parity
+  against a 0.2.1 package and listed EML export, KNB publication, SSSOM,
+  measurement decompositions and observation structures under "Not yet in
+  Python", every one of which ships. Its "not yet" list now names what is
+  actually missing, each item pointing at its `PARITY.md` row. The checked-in
+  generated `reference/*.qmd` remain stale (regenerating them needs quartodoc
+  and a `quarto` binary); the source docstrings they were generated from were
+  already correct.
+
+### Registered rather than ported
+
+Five differences are recorded in [PARITY.md](PARITY.md) with retirement
+conditions instead of being changed here, and rows 11, 12, 16, 28, 29 and 32
+were updated where 0.4.0 moved what they describe:
+
+* **Row 54** — `write_salmon_datapackage()` accepts an existing *empty*
+  directory without `overwrite=True`; metasalmon refuses it. Pre-0.1.6 debt,
+  carried forward silently since `e33526d`, pinned by neither side's tests. No
+  0.4.0 entry calls for a change and which order is right is a ruling.
+* **Row 55** — the datetime-observation-dimension defect this package fixed on
+  2026-08-17, seven days before metasalmon released the same fix, having
+  deliberately mirrored the rejection before that. The window in which the two
+  sides knowingly differed had no register row at all.
+* **Row 56** — a `POSIXct`/`Timestamp` metadata scalar renders differently in
+  the descriptor and in the CSV, on both sides, in opposite directions. A
+  unilateral change would match neither R's output nor this package's own CSV;
+  the canonical lexical form for a metadata instant is a profile decision
+  (hub backlog #93).
+* **Row 57** — `create_sdp()`'s deterministic prefill is narrower here
+  (`variable`, `property`, `entity`, `unit`); metasalmon 0.4.0 also applies a
+  constraint or statistical modifier when the column text carries the
+  evidence. Each side's prose matched its own code while the code diverged.
+* **Row 58** — no counterparts to metasalmon 0.4.0's two new vignettes. A
+  prose gap, not a capability gap.
+
+Rows 54-58 are **one-sided** until the hub lands its twins; the register says
+so in as many words, and `check-parity-registers.py` reports them.
+
+### Verified, not assumed
+
+* Both dependency legs, import-probe confirmed against the tree under test:
+  **795 passed / 3 skipped** with `[test,eml,context]`, **682 / 116** with core
+  dependencies only, with the core leg asserted to have no extra importable.
+* Every fix above is revert-verified: the fix was undone and the covering test
+  confirmed to fail, then restored.
+* Production KNB output is pinned against R's own v0.1.8 manifest fixture, so
+  "production is unchanged" is a cross-implementation measurement rather than
+  an assertion about this package alone.
+
+---
+
+The S10 chunk work below shipped under `## Unreleased` and is part of this
+release. It was left unversioned deliberately: the chunks delivered behaviour
+verified against metasalmon's post-0.3.0 `main`, which no R release contained,
+and nobody had ruled what a number could claim about that. metasalmon v0.4.0 is
+that ruling.
 
 ### S10 chunk H — the abort-safe write path
 

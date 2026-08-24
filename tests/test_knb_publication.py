@@ -47,8 +47,15 @@ if pd is None:
     raise unittest.SkipTest("pandas not installed")
 
 import metasalmonpy.knb_archive as knb_archive
+import metasalmonpy.knb_environments as knb_env
 import metasalmonpy.knb_publication as knb
 from metasalmonpy import publish_sdp_to_knb
+
+# S3: the production pins that were module constants are registry records
+# now. These era fixtures describe production, so they name it explicitly
+# rather than taking the dry-run default, which is the test node.
+PRODUCTION = knb_env.knb_config("production")
+TEST_NODE = knb_env.knb_config("test")
 
 _DATA_DIR = os.path.join(os.path.dirname(__file__), "data", "knb")
 _R_DIR = os.path.join(_DATA_DIR, "r")
@@ -121,7 +128,7 @@ class FakeAdapter:
         anonymous_leak=False,
         checksum_override=None,
         fail_create=False,
-        node_id=knb.NODE_ID,
+        node_id=None,
     ):
         self.subject = subject
         self.public = public
@@ -129,14 +136,23 @@ class FakeAdapter:
         self.anonymous_leak = anonymous_leak
         self.checksum_override = checksum_override
         self.fail_create = fail_create
-        self.node_id = node_id
+        # ``None`` means "whatever node the plan connects to"; an explicit
+        # value is the node-mismatch fixture.
+        self.reported_node_id = node_id
+        self.config = PRODUCTION
         self.store = {}
         self.calls = []
+
+    @property
+    def node_id(self):
+        if self.reported_node_id is not None:
+            return self.reported_node_id
+        return self.config["node_id"]
 
     # -- helpers -----------------------------------------------------------
 
     def _sysmeta(self, spec, public):
-        policy = knb._replication_policy(public)
+        policy = knb._replication_policy(public, self.config)
         return {
             "serial_version": 1,
             "identifier": spec["pid"],
@@ -161,8 +177,8 @@ class FakeAdapter:
             "obsoleted_by": spec.get("obsoleted_by"),
             "date_uploaded": "2026-01-01T00:00:00.000+00:00",
             "date_sys_metadata_modified": "2026-01-01T00:00:00.000+00:00",
-            "origin_member_node": knb.NODE_ID,
-            "authoritative_member_node": knb.NODE_ID,
+            "origin_member_node": self.config["node_id"],
+            "authoritative_member_node": self.config["node_id"],
         }
 
     def _denied(self):
@@ -172,13 +188,16 @@ class FakeAdapter:
 
     def connect(self, environment, node_id):
         self.calls.append("connect")
+        # The environment a plan names is the one this fake answers as, so
+        # a test-node deposit is verified against test-node identity.
+        self.config = knb_env.config_for_node(node_id)
         return {"environment": environment, "node_id": node_id}
 
     def preflight(self, client):
         self.calls.append("preflight")
         return {
             "subject": self.subject,
-            "endpoint": knb.MN_ENDPOINT,
+            "endpoint": self.config["mn_endpoint"],
             "node_id": self.node_id,
         }
 
@@ -362,16 +381,34 @@ class KnbAdapterBoundaryTests(unittest.TestCase, _AdapterSeam):
         knb.set_knb_adapter(lambda: adapter)
         self.assertIs(knb._adapter(), adapter)
 
-    def test_default_adapter_only_supports_production_knb(self):
+    def test_default_adapter_connects_each_registered_environment(self):
+        # Superseded the S3 assertion that staging is refused outright:
+        # the test node is a supported target now, and what stays refused
+        # is a *mixed* network/node pair and any unregistered node.
         adapter = knb.DataOneRestAdapter()
+        test_client = adapter.connect("STAGING", TEST_NODE["node_id"])
+        self.assertEqual(
+            test_client.endpoint, "https://dev.nceas.ucsb.edu/knb/d1/mn/v2"
+        )
+        production_client = adapter.connect("PROD", PRODUCTION["node_id"])
+        self.assertEqual(
+            production_client.endpoint,
+            "https://knb.ecoinformatics.org/knb/d1/mn/v2",
+        )
+        for network, node in (
+            ("PROD", TEST_NODE["node_id"]),
+            ("STAGING", PRODUCTION["node_id"]),
+        ):
+            with self.assertRaises(ValueError):
+                adapter.connect(network, node)
         with self.assertRaises(ValueError):
-            adapter.connect("STAGING", knb.NODE_ID)
-        with self.assertRaises(ValueError):
-            adapter.connect(knb.ENVIRONMENT, "urn:node:mnTestKNB")
+            adapter.connect("PROD", "urn:node:UNREGISTERED")
 
     def test_rest_adapter_refuses_work_before_preflight(self):
         adapter = knb.DataOneRestAdapter()
-        client = adapter.connect(knb.ENVIRONMENT, knb.NODE_ID)
+        client = adapter.connect(
+            PRODUCTION["dataone_network"], PRODUCTION["node_id"]
+        )
         with self.assertRaises(ValueError):
             adapter.get_bytes(client, "urn:uuid:abc")
 
@@ -389,30 +426,40 @@ class KnbHelperParityTests(unittest.TestCase):
 
     def test_constants_match(self):
         self.assertEqual(knb.ORE_PROFILE, self.helpers["ore_profile"])
-        self.assertEqual(knb.MN_ENDPOINT, self.helpers["mn_endpoint"])
-        self.assertEqual(knb.RESOLVER, self.helpers["resolver"])
-        self.assertEqual(knb.ENVIRONMENT, "PROD")
-        self.assertEqual(knb.NODE_ID, "urn:node:KNB")
+        # The era values are unchanged; only their owner moved. Reading
+        # them off the registry record is what proves the production
+        # environment still mints exactly what v0.1.7 minted.
+        self.assertEqual(PRODUCTION["mn_endpoint"], self.helpers["mn_endpoint"])
+        self.assertEqual(PRODUCTION["resolver"], self.helpers["resolver"])
+        self.assertEqual(PRODUCTION["dataone_network"], "PROD")
+        self.assertEqual(PRODUCTION["node_id"], "urn:node:KNB")
 
     def test_replication_policy_matches(self):
         self.assertEqual(
-            knb._replication_policy(True), self.helpers["replication_public"]
+            knb._replication_policy(True, PRODUCTION),
+            self.helpers["replication_public"],
         )
         self.assertEqual(
-            knb._replication_policy(False), self.helpers["replication_private"]
+            knb._replication_policy(False, PRODUCTION),
+            self.helpers["replication_private"],
         )
         with self.assertRaises(ValueError):
-            knb._replication_policy(None)
+            knb._replication_policy(None, PRODUCTION)
 
     def test_require_replication_policy_is_fail_closed(self):
-        knb._require_replication_policy(knb._replication_policy(False), False)
+        knb._require_replication_policy(
+            knb._replication_policy(False, PRODUCTION), False, PRODUCTION
+        )
         with self.assertRaises(ValueError):
-            knb._require_replication_policy(knb._replication_policy(True), False)
+            knb._require_replication_policy(
+                knb._replication_policy(True, PRODUCTION), False, PRODUCTION
+            )
 
     def test_hash_and_url_helpers_match(self):
         self.assertEqual(knb._sha256_text("demo"), self.helpers["sha256_text_demo"])
         self.assertEqual(
-            knb._resolve_url("urn:uuid:abc"), self.helpers["resolve_url_demo"]
+            knb._resolve_url("urn:uuid:abc", PRODUCTION),
+            self.helpers["resolve_url_demo"],
         )
 
     def test_resource_map_pid_matches_r_for_a_synthetic_membership(self):
@@ -516,12 +563,44 @@ class KnbHelperParityTests(unittest.TestCase):
     def test_solr_quoting_and_catalog_url_match(self):
         self.assertEqual(knb._solr_quote('a"b\\c'), self.helpers["solr_quote"])
         manifest = _r_manifest()
+        # S3: the Solr endpoint is re-derived from the plan's own
+        # fingerprinted node identifier, so a plan must carry the two
+        # fields that identify its environment. R's plans always did.
         plan = {
             "objects": manifest["objects"],
             "resource_map_pid": manifest["resource_map_pid"],
             "metadata_pid": manifest["metadata_pid"],
+            "environment": manifest["environment"],
+            "node_id": manifest["node_id"],
         }
         self.assertEqual(knb._catalog_url(plan), self.helpers["catalog_url"])
+
+    def test_the_catalog_url_follows_the_environment(self):
+        # A test-node plan queries the staging coordinating node, and
+        # nothing in the URL can come from production.
+        manifest = _r_manifest()
+        plan = {
+            "objects": manifest["objects"],
+            "resource_map_pid": manifest["resource_map_pid"],
+            "metadata_pid": manifest["metadata_pid"],
+            "environment": TEST_NODE["dataone_network"],
+            "node_id": TEST_NODE["node_id"],
+        }
+        url = knb._catalog_url(plan)
+        self.assertTrue(url.startswith(TEST_NODE["solr_endpoint"]))
+        self.assertNotIn("cn.dataone.org", url)
+
+    def test_the_catalog_url_refuses_a_mixed_plan(self):
+        manifest = _r_manifest()
+        plan = {
+            "objects": manifest["objects"],
+            "resource_map_pid": manifest["resource_map_pid"],
+            "metadata_pid": manifest["metadata_pid"],
+            "environment": "PROD",
+            "node_id": TEST_NODE["node_id"],
+        }
+        with self.assertRaises(ValueError):
+            knb._catalog_url(plan)
 
     def test_access_policy_normalization_matches(self):
         expected = [
@@ -597,7 +676,10 @@ class KnbHelperParityTests(unittest.TestCase):
         sdp = os.path.join(_DATA_DIR, "sdp-public")
         for expected in self.extra["sdp_artifact_objects"]:
             actual = knb._sdp_artifact_object(
-                os.path.join(sdp, expected["path"]), sdp, "demo-salmon-2026"
+                os.path.join(sdp, expected["path"]),
+                sdp,
+                "demo-salmon-2026",
+                PRODUCTION,
             )
             for field in (
                 "role",
@@ -652,8 +734,11 @@ class KnbPlannerParityTests(unittest.TestCase):
             self.manifest["package_id"],
             "2026-01-01",
             self.members,
+            PRODUCTION,
         )
-        knb._validate_ore(ore, self.manifest["resource_map_pid"], self.members)
+        knb._validate_ore(
+            ore, self.manifest["resource_map_pid"], self.members, PRODUCTION
+        )
         self.assertEqual(
             _canonical_bytes(knb._xml_bytes(ore)),
             _canonical_file(os.path.join(_R_DIR, "public", "resource-map.rdf")),
@@ -665,13 +750,14 @@ class KnbPlannerParityTests(unittest.TestCase):
             self.manifest["package_id"],
             "2026-01-01",
             self.members,
+            PRODUCTION,
         )
         for node in knb._find_all_local(ore, "aggregates"):
-            node.set("rdf:resource", knb._resolve_url("urn:uuid:not-planned"))
+            node.set("rdf:resource", knb._resolve_url("urn:uuid:not-planned", PRODUCTION))
             break
         with self.assertRaises(ValueError):
             knb._validate_ore(
-                ore, self.manifest["resource_map_pid"], self.members
+                ore, self.manifest["resource_map_pid"], self.members, PRODUCTION
             )
 
     def test_fingerprint_payload_bytes_match_r(self):
@@ -725,7 +811,32 @@ class KnbPlannerParityTests(unittest.TestCase):
         ) as handle:
             payload = handle.read()
         built = knb._manifest(self.manifest, status="dry_run")
+        # The era plan predates ``knb_environment``, and R drops a NULL
+        # list element rather than writing a null -- so this fixture is
+        # still byte-exact on both sides, with no key to subtract.
+        self.assertNotIn("knb_environment", built)
         self.assertEqual(knb._json_bytes(built), payload)
+
+    def test_a_planned_environment_lands_after_the_node_id(self):
+        # Where R 0.4.0 puts it, and the position is what a reader of the
+        # JSON sees; nothing decides on the value, so only its placement
+        # and presence are asserted here.
+        plan = dict(self.manifest)
+        plan["knb_environment"] = "production"
+        built = knb._manifest(plan, status="dry_run")
+        self.assertEqual(built["knb_environment"], "production")
+        self.assertEqual(
+            list(built).index("knb_environment"),
+            list(built).index("node_id") + 1,
+        )
+        # Adding it does not move the fingerprint: every manifest
+        # written before this field still validates.
+        self.assertEqual(
+            knb._manifest_fingerprint(built),
+            knb._manifest_fingerprint(
+                knb._manifest(self.manifest, status="dry_run")
+            ),
+        )
 
     def test_manifest_carries_previous_object_state_and_status(self):
         previous = knb._manifest(self.manifest, status="dry_run")
@@ -755,8 +866,8 @@ class KnbPlannerParityTests(unittest.TestCase):
                     spec,
                     subject,
                     public,
-                    knb.NODE_ID,
-                    knb._replication_policy(public),
+                    PRODUCTION["node_id"],
+                    knb._replication_policy(public, PRODUCTION),
                 )
                 label = ("public-" if public else "private-") + obj["role"]
                 self.assertEqual(
@@ -778,8 +889,8 @@ class KnbPlannerParityTests(unittest.TestCase):
             spec,
             self.manifest["expected_subject"],
             False,
-            knb.NODE_ID,
-            knb._replication_policy(False),
+            PRODUCTION["node_id"],
+            knb._replication_policy(False, PRODUCTION),
         )
         self.assertEqual(
             _canonical_bytes(knb._xml_bytes(document)),
@@ -817,7 +928,8 @@ class KnbPlannerParityTests(unittest.TestCase):
                 data_object,
                 self.manifest["expected_subject"],
                 True,
-                knb._replication_policy(True),
+                knb._replication_policy(True, PRODUCTION),
+                PRODUCTION,
             )
         self.assertIn("archived", str(caught.exception))
 
@@ -827,7 +939,8 @@ class KnbPlannerParityTests(unittest.TestCase):
             data_object,
             self.manifest["expected_subject"],
             True,
-            knb._replication_policy(True),
+            knb._replication_policy(True, PRODUCTION),
+            PRODUCTION,
         )
         # The same document is a collision for a private plan: the access
         # policy and replication policy are part of the reviewed contract.
@@ -837,7 +950,8 @@ class KnbPlannerParityTests(unittest.TestCase):
                 data_object,
                 self.manifest["expected_subject"],
                 False,
-                knb._replication_policy(False),
+                knb._replication_policy(False, PRODUCTION),
+                PRODUCTION,
             )
 
     def test_system_metadata_validation_reports_the_colliding_field(self):
@@ -856,7 +970,8 @@ class KnbPlannerParityTests(unittest.TestCase):
                 data_object,
                 self.manifest["expected_subject"],
                 True,
-                knb._replication_policy(True),
+                knb._replication_policy(True, PRODUCTION),
+                PRODUCTION,
             )
         self.assertIn("checksum", str(caught.exception))
 
@@ -992,12 +1107,12 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
         # planning path is independent of DataONE credentials.
         self.install(_ExplodingAdapter())
         sdp = _fixture_sdp(self)
-        result = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        result = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         self.assertEqual(result["status"], "dry_run")
 
     def test_dry_run_writes_the_expected_plan_shape(self):
         sdp = _fixture_sdp(self)
-        result = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        result = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         expected = _expected()["public"]
 
         # Identifiers that do not depend on formatter or compressor bytes are
@@ -1012,7 +1127,8 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
         self.assertEqual(manifest["node_id"], "urn:node:KNB")
         self.assertEqual(manifest["representation"], "archive")
         self.assertEqual(
-            manifest["replication_policy"], knb._replication_policy(True)
+            manifest["replication_policy"],
+            knb._replication_policy(True, PRODUCTION),
         )
         self.assertEqual(
             [obj["role"] for obj in manifest["objects"]],
@@ -1032,7 +1148,7 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
         # Only the archive and EML checksums differ, so the graph shape,
         # ordering and predicates must match R's exactly.
         sdp = _fixture_sdp(self)
-        result = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        result = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         mine = ET.parse(result["resource_map_path"]).getroot()
         theirs = ET.parse(
             os.path.join(_R_DIR, "public", "resource-map.rdf")
@@ -1050,8 +1166,8 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
         self.assertEqual(shape(mine), shape(theirs))
 
     def test_dry_run_is_deterministic_across_runs(self):
-        first = publish_sdp_to_knb(_fixture_sdp(self), public=True, dry_run=True)
-        second = publish_sdp_to_knb(_fixture_sdp(self), public=True, dry_run=True)
+        first = publish_sdp_to_knb(_fixture_sdp(self), public=True, dry_run=True, knb_environment="production")
+        second = publish_sdp_to_knb(_fixture_sdp(self), public=True, dry_run=True, knb_environment="production")
         self.assertEqual(
             first["manifest"]["plan_sha256"],
             second["manifest"]["plan_sha256"],
@@ -1062,20 +1178,21 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
 
     def test_rerunning_a_dry_run_in_place_is_idempotent(self):
         sdp = _fixture_sdp(self)
-        first = publish_sdp_to_knb(sdp, public=True, dry_run=True)
-        again = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        first = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
+        again = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         self.assertEqual(
             first["manifest"]["plan_sha256"], again["manifest"]["plan_sha256"]
         )
 
     def test_private_plan_differs_from_the_public_plan(self):
-        public = publish_sdp_to_knb(_fixture_sdp(self), public=True, dry_run=True)
+        public = publish_sdp_to_knb(_fixture_sdp(self), public=True, dry_run=True, knb_environment="production")
         private = publish_sdp_to_knb(
-            _fixture_sdp(self, "sdp-private"), public=False, dry_run=True
+            _fixture_sdp(self, "sdp-private"), public=False, dry_run=True,
+            knb_environment="production",
         )
         self.assertEqual(
             private["manifest"]["replication_policy"],
-            knb._replication_policy(False),
+            knb._replication_policy(False, PRODUCTION),
         )
         self.assertNotEqual(
             public["manifest"]["plan_sha256"],
@@ -1085,24 +1202,24 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
     def test_access_must_be_explicit_and_match_the_reviewed_sidecar(self):
         sdp = _fixture_sdp(self)
         with self.assertRaises(ValueError):
-            publish_sdp_to_knb(sdp, dry_run=True)
+            publish_sdp_to_knb(sdp, dry_run=True, knb_environment="production")
         with self.assertRaises(ValueError):
-            publish_sdp_to_knb(sdp, public="yes", dry_run=True)
+            publish_sdp_to_knb(sdp, public="yes", dry_run=True, knb_environment="production")
         # The sidecar says public: yes; planning private must refuse.
         with self.assertRaises(ValueError):
-            publish_sdp_to_knb(sdp, public=False, dry_run=True)
+            publish_sdp_to_knb(sdp, public=False, dry_run=True, knb_environment="production")
 
     def test_missing_required_artifact_fails_closed(self):
         sdp = _fixture_sdp(self)
         os.remove(os.path.join(sdp, "metadata", "codes.csv"))
         with self.assertRaises(Exception):
-            publish_sdp_to_knb(sdp, public=True, dry_run=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
 
     def test_missing_semantic_review_ledger_fails_closed(self):
         sdp = _fixture_sdp(self)
         os.remove(os.path.join(sdp, "reviewed_semantic_selections.csv"))
         with self.assertRaises(Exception):
-            publish_sdp_to_knb(sdp, public=True, dry_run=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
 
     def test_review_candidate_annotations_are_refused(self):
         sdp = _fixture_sdp(self)
@@ -1113,18 +1230,18 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
         vocabulary.loc[0, "source"] = "review-candidate"
         vocabulary.to_csv(vocabulary_path, index=False)
         with self.assertRaises(ValueError) as caught:
-            publish_sdp_to_knb(sdp, public=True, dry_run=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         self.assertIn("review-candidate", str(caught.exception))
 
     def test_a_changed_plan_cannot_reuse_an_existing_manifest(self):
         # DataONE PIDs are immutable; a second plan at the same manifest path
         # must be refused rather than silently re-minted.
         sdp = _fixture_sdp(self)
-        publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         with open(os.path.join(sdp, "data", "counts.csv"), "a") as handle:
             handle.write("row-9,2026,9,,\n")
         with self.assertRaises(Exception):
-            publish_sdp_to_knb(sdp, public=True, dry_run=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
 
     def test_dot_segments_in_supplied_paths_are_refused(self):
         sdp = _fixture_sdp(self)
@@ -1134,6 +1251,7 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
                 public=True,
                 dry_run=True,
                 eml_path=os.path.join(sdp, "metadata", "..", "eml.xml"),
+                knb_environment="production",
             )
 
     def test_artifacts_outside_the_package_are_refused(self):
@@ -1141,7 +1259,8 @@ class KnbDryRunTests(unittest.TestCase, _AdapterSeam):
         outside = os.path.join(os.path.dirname(sdp), "knb-manifest.json")
         with self.assertRaises(ValueError):
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=True, manifest_path=outside
+                sdp, public=True, dry_run=True, manifest_path=outside,
+                knb_environment="production",
             )
 
 
@@ -1166,23 +1285,24 @@ class KnbDryRunOverwriteTests(unittest.TestCase, _AdapterSeam):
     def test_overwrite_must_be_one_explicit_logical(self):
         sdp = _fixture_sdp(self)
         with self.assertRaisesRegex(ValueError, "overwrite must be"):
-            publish_sdp_to_knb(sdp, public=True, dry_run=True, overwrite="yes")
+            publish_sdp_to_knb(sdp, public=True, dry_run=True, overwrite="yes", knb_environment="production")
 
     def test_replan_after_a_corrected_input_names_the_remedy(self):
         sdp = _fixture_sdp(self)
-        publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         self._correct_input(sdp)
         with self.assertRaises(ValueError) as caught:
-            publish_sdp_to_knb(sdp, public=True, dry_run=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         # The first gate (the archive writer) must now say the way forward.
         self.assertIn("overwrite=True", str(caught.exception))
 
     def test_overwrite_replans_a_dry_run_end_to_end(self):
         sdp = _fixture_sdp(self)
-        first = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        first = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         self._correct_input(sdp)
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=True, overwrite=True
+            sdp, public=True, dry_run=True, overwrite=True,
+            knb_environment="production",
         )
         self.assertEqual(result["status"], "dry_run")
         self.assertNotEqual(
@@ -1199,13 +1319,14 @@ class KnbDryRunOverwriteTests(unittest.TestCase, _AdapterSeam):
     def test_overwrite_with_no_previous_manifest_is_allowed(self):
         sdp = _fixture_sdp(self)
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=True, overwrite=True
+            sdp, public=True, dry_run=True, overwrite=True,
+            knb_environment="production",
         )
         self.assertEqual(result["status"], "dry_run")
 
     def test_overwrite_cannot_replace_a_published_manifest(self):
         sdp = _fixture_sdp(self)
-        first = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        first = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         manifest_path = first["manifest_path"]
         with open(manifest_path, encoding="utf-8") as handle:
             manifest = json.load(handle)
@@ -1218,7 +1339,8 @@ class KnbDryRunOverwriteTests(unittest.TestCase, _AdapterSeam):
             published_bytes = handle.read()
         with self.assertRaises(ValueError) as caught:
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=True, overwrite=True
+                sdp, public=True, dry_run=True, overwrite=True,
+                knb_environment="production",
             )
         message = str(caught.exception)
         self.assertIn("published manifest", message)
@@ -1241,7 +1363,8 @@ class KnbDryRunOverwriteTests(unittest.TestCase, _AdapterSeam):
             handle.write("<rdf/>")
         with self.assertRaises(ValueError) as caught:
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=True, overwrite=True
+                sdp, public=True, dry_run=True, overwrite=True,
+                knb_environment="production",
             )
         self.assertIn("not owned", str(caught.exception))
 
@@ -1255,24 +1378,25 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
 
     def _reviewed(self, name="sdp-public", public=True):
         sdp = _fixture_sdp(self, name)
-        publish_sdp_to_knb(sdp, public=public, dry_run=True)
+        publish_sdp_to_knb(sdp, public=public, dry_run=True, knb_environment="production")
         return sdp
 
     def test_live_requires_explicit_confirmation(self):
         sdp = self._reviewed()
         self.install(_ExplodingAdapter())
         with self.assertRaises(ValueError) as caught:
-            publish_sdp_to_knb(sdp, public=True, dry_run=False)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, knb_environment="production")
         self.assertIn("confirm=True", str(caught.exception))
         with self.assertRaises(ValueError):
-            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=False)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=False, knb_environment="production")
 
     def test_live_requires_a_pre_existing_reviewed_manifest(self):
         sdp = _fixture_sdp(self)
         self.install(_ExplodingAdapter())
         with self.assertRaises(ValueError) as caught:
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=False, confirm=True
+                sdp, public=True, dry_run=False, confirm=True,
+                knb_environment="production",
             )
         self.assertIn("pre-existing", str(caught.exception))
 
@@ -1280,7 +1404,8 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
         sdp = self._reviewed()
         adapter = self.install(FakeAdapter(public=True))
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=False, confirm=True
+            sdp, public=True, dry_run=False, confirm=True,
+            knb_environment="production",
         )
         self.assertEqual(result["status"], "published")
         manifest = result["manifest"]
@@ -1298,7 +1423,8 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
         sdp = self._reviewed("sdp-private", public=False)
         adapter = self.install(FakeAdapter(public=False))
         result = publish_sdp_to_knb(
-            sdp, public=False, dry_run=False, confirm=True
+            sdp, public=False, dry_run=False, confirm=True,
+            knb_environment="production",
         )
         self.assertEqual(result["status"], "published")
         self.assertTrue(result["manifest"]["catalog_verified"])
@@ -1308,14 +1434,14 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
         sdp = self._reviewed("sdp-private", public=False)
         self.install(FakeAdapter(public=False, anonymous_leak=True))
         with self.assertRaises(RuntimeError) as caught:
-            publish_sdp_to_knb(sdp, public=False, dry_run=False, confirm=True)
+            publish_sdp_to_knb(sdp, public=False, dry_run=False, confirm=True, knb_environment="production")
         self.assertIn("KNB publication failed", str(caught.exception))
 
     def test_checksum_mismatch_aborts_before_completion(self):
         sdp = self._reviewed()
         self.install(FakeAdapter(public=True, checksum_override="0" * 64))
         with self.assertRaises(RuntimeError) as caught:
-            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True, knb_environment="production")
         self.assertIn("checksum", str(caught.exception))
         with open(
             os.path.join(sdp, "publication", "knb-manifest.json"),
@@ -1327,7 +1453,8 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
         sdp = self._reviewed()
         self.install(FakeAdapter(public=True, catalog_verified=False))
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=False, confirm=True
+            sdp, public=True, dry_run=False, confirm=True,
+            knb_environment="production",
         )
         self.assertEqual(result["status"], "published_pending_catalog")
         self.assertFalse(result["manifest"]["catalog_verified"])
@@ -1343,14 +1470,14 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
             FakeAdapter(subject="https://orcid.org/0000-0002-1825-0097")
         )
         with self.assertRaises(RuntimeError) as caught:
-            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True, knb_environment="production")
         self.assertIn("KNB publication failed", str(caught.exception))
 
     def test_node_mismatch_aborts(self):
         sdp = self._reviewed()
         self.install(FakeAdapter(node_id="urn:node:mnTestKNB"))
         with self.assertRaises(RuntimeError):
-            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True, knb_environment="production")
 
     def test_missing_format_registration_aborts_before_any_create(self):
         sdp = self._reviewed()
@@ -1358,7 +1485,7 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
         adapter.list_formats = lambda client: ["text/csv"]
         self.install(adapter)
         with self.assertRaises(RuntimeError):
-            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True, knb_environment="production")
         self.assertEqual(adapter.store, {})
 
     def test_a_failed_create_is_resolved_by_an_authoritative_lookup(self):
@@ -1368,7 +1495,7 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
         adapter = FakeAdapter(public=True, fail_create=True)
         self.install(adapter)
         with self.assertRaises(RuntimeError) as caught:
-            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True, knb_environment="production")
         self.assertIn("upload timed out", str(caught.exception))
 
     def test_adapter_warnings_become_errors(self):
@@ -1385,7 +1512,7 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
         adapter.list_formats = noisy
         self.install(adapter)
         with self.assertRaises(RuntimeError) as caught:
-            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True, knb_environment="production")
         self.assertIn("Live KNB adapter warning", str(caught.exception))
 
     def test_failure_messages_are_redacted(self):
@@ -1400,7 +1527,7 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
         adapter.list_formats = leaky
         self.install(adapter)
         with self.assertRaises(RuntimeError) as caught:
-            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True)
+            publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True, knb_environment="production")
         message = str(caught.exception)
         self.assertNotIn("supersecrettoken", message)
         self.assertIn("[REDACTED]", message)
@@ -1408,9 +1535,10 @@ class KnbLivePublicationTests(unittest.TestCase, _AdapterSeam):
     def test_a_second_live_run_reports_already_published(self):
         sdp = self._reviewed()
         adapter = self.install(FakeAdapter(public=True))
-        publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True)
+        publish_sdp_to_knb(sdp, public=True, dry_run=False, confirm=True, knb_environment="production")
         again = publish_sdp_to_knb(
-            sdp, public=True, dry_run=False, confirm=True
+            sdp, public=True, dry_run=False, confirm=True,
+            knb_environment="production",
         )
         self.assertEqual(again["status"], "already_published")
         self.assertEqual(len(adapter.store), 4)
@@ -1424,7 +1552,7 @@ class KnbRevisionTests(unittest.TestCase, _AdapterSeam):
     """A revision mints new PIDs in a stable series, in a fresh directory."""
 
     def _verified_manifest(self, sdp: str) -> str:
-        publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         manifest_path = os.path.join(sdp, "publication", "knb-manifest.json")
         with open(manifest_path, encoding="utf-8") as handle:
             manifest = json.load(handle)
@@ -1460,6 +1588,7 @@ class KnbRevisionTests(unittest.TestCase, _AdapterSeam):
             public=True,
             dry_run=True,
             revision_manifest=prior_manifest_path,
+            knb_environment="production",
         )
 
         self.assertEqual(result["series_id"], prior["series_id"])
@@ -1484,7 +1613,8 @@ class KnbRevisionTests(unittest.TestCase, _AdapterSeam):
         manifest_path = self._verified_manifest(sdp)
         with self.assertRaises(ValueError) as caught:
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=True, revision_manifest=manifest_path
+                sdp, public=True, dry_run=True, revision_manifest=manifest_path,
+                knb_environment="production",
             )
         self.assertIn("fresh versioned SDP directory", str(caught.exception))
 
@@ -1498,14 +1628,15 @@ class KnbRevisionTests(unittest.TestCase, _AdapterSeam):
                 public=True,
                 dry_run=True,
                 revision_manifest=manifest_path,
+                knb_environment="production",
             )
 
     def test_revision_source_manifest_must_be_verified(self):
         sdp = _fixture_sdp(self)
-        publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         manifest_path = os.path.join(sdp, "publication", "knb-manifest.json")
         with self.assertRaises(ValueError) as caught:
-            knb._revision_manifest(manifest_path)
+            knb._revision_manifest(manifest_path, PRODUCTION)
         self.assertIn("verified", str(caught.exception))
 
     def test_revision_source_manifest_must_have_an_intact_fingerprint(self):
@@ -1517,7 +1648,7 @@ class KnbRevisionTests(unittest.TestCase, _AdapterSeam):
         with open(manifest_path, "w", encoding="utf-8") as handle:
             handle.write(knb._json_bytes(manifest).decode("utf-8"))
         with self.assertRaises(ValueError):
-            knb._revision_manifest(manifest_path)
+            knb._revision_manifest(manifest_path, PRODUCTION)
 
     def test_revision_cannot_change_access(self):
         prior = _r_manifest()
@@ -1573,7 +1704,8 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
         self.addCleanup(knb.set_knb_adapter, None)
 
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=True, representation="expanded"
+            sdp, public=True, dry_run=True, representation="expanded",
+            knb_environment="production",
         )
 
         self.assertEqual(result["manifest"]["representation"], "expanded")
@@ -1601,7 +1733,8 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
     def test_expanded_object_order_pids_and_bytes_match_r(self):
         sdp = _expanded_sdp(self)
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=True, representation="expanded"
+            sdp, public=True, dry_run=True, representation="expanded",
+            knb_environment="production",
         )
         planned = result["manifest"]["objects"]
 
@@ -1629,7 +1762,8 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
     def test_expanded_ore_is_structurally_identical_to_r(self):
         sdp = _expanded_sdp(self)
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=True, representation="expanded"
+            sdp, public=True, dry_run=True, representation="expanded",
+            knb_environment="production",
         )
         self.assertEqual(
             _canonical_file(str(result["resource_map_path"])),
@@ -1639,7 +1773,8 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
     def test_every_member_records_its_package_relative_location(self):
         sdp = _expanded_sdp(self)
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=True, representation="expanded"
+            sdp, public=True, dry_run=True, representation="expanded",
+            knb_environment="production",
         )
         ore = ET.parse(str(result["resource_map_path"])).getroot()
         locations = [
@@ -1659,7 +1794,8 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
     def test_expanded_artifacts_are_eml_documented_entities(self):
         sdp = _expanded_sdp(self)
         result = publish_sdp_to_knb(
-            sdp, public=True, dry_run=True, representation="expanded"
+            sdp, public=True, dry_run=True, representation="expanded",
+            knb_environment="production",
         )
         eml = ET.parse(os.path.join(sdp, "metadata", "eml.xml")).getroot()
         names = [
@@ -1691,7 +1827,8 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
             self.skipTest("Filesystem does not permit symlink creation")
         with self.assertRaises(ValueError) as caught:
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=True, representation="expanded"
+                sdp, public=True, dry_run=True, representation="expanded",
+                knb_environment="production",
             )
         self.assertIn("symlink", str(caught.exception))
 
@@ -1712,6 +1849,7 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
                         public=True,
                         dry_run=True,
                         representation="expanded",
+                        knb_environment="production",
                     )
                 self.assertIn("symbolic link", str(caught.exception))
         # The real root still works: on macOS the temporary directory is
@@ -1719,7 +1857,8 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
         # rejecting every symlinked ancestor would make the API unusable there.
         self.assertEqual(
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=True, representation="expanded"
+                sdp, public=True, dry_run=True, representation="expanded",
+                knb_environment="production",
             )["manifest"]["representation"],
             "expanded",
         )
@@ -1731,11 +1870,12 @@ class KnbExpandedRepresentationTests(unittest.TestCase):
                 public=True,
                 dry_run=True,
                 representation="zip",
+                knb_environment="production",
             )
 
     def test_the_archive_representation_stays_the_default(self):
         sdp = _expanded_sdp(self)
-        result = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+        result = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
         self.assertEqual(result["manifest"]["representation"], "archive")
         self.assertIsNotNone(result["sdp_archive_path"])
 
@@ -1879,7 +2019,8 @@ class KnbFullExpandedInventoryTests(unittest.TestCase):
     def _plan(self):
         sdp = _fixture_sdp(self, "sdp-full")
         return sdp, publish_sdp_to_knb(
-            sdp, public=True, dry_run=True, representation="expanded"
+            sdp, public=True, dry_run=True, representation="expanded",
+            knb_environment="production",
         )
 
     def test_the_whole_declared_inventory_is_published(self):
@@ -1979,7 +2120,8 @@ class KnbFullExpandedInventoryTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError) as caught:
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=True, representation="expanded"
+                sdp, public=True, dry_run=True, representation="expanded",
+                knb_environment="production",
             )
         self.assertIn("observation-structure", str(caught.exception))
 
@@ -1995,7 +2137,8 @@ class KnbFullExpandedInventoryTests(unittest.TestCase):
             yaml.safe_dump(mapping, handle)
         with self.assertRaises(ValueError) as caught:
             publish_sdp_to_knb(
-                sdp, public=True, dry_run=True, representation="expanded"
+                sdp, public=True, dry_run=True, representation="expanded",
+                knb_environment="production",
             )
         self.assertIn("reproducibility manifest", str(caught.exception))
 
@@ -2026,7 +2169,7 @@ class KnbPublicationFileModeTests(unittest.TestCase):
                 self.addCleanup(os.umask, previous)
                 try:
                     sdp = _fixture_sdp(self, "sdp-public")
-                    result = publish_sdp_to_knb(sdp, public=True, dry_run=True)
+                    result = publish_sdp_to_knb(sdp, public=True, dry_run=True, knb_environment="production")
                     expected = self._plain_write_mode(sdp)
                     for artifact in (
                         result["manifest_path"],

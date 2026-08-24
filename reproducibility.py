@@ -34,6 +34,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Union
 
 import pandas as pd
 
+from . import provenance as _provenance
 from .atomic_io import atomic_write
 
 SDP_REPRODUCIBILITY_PROFILE = "metasalmon-reproducibility-manifest/1.0"
@@ -52,13 +53,11 @@ _MEDIA_TYPE_CHARS = set(
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$&^_.+-"
 )
 
-# generated_by -> the provenance key that must carry a version. R's validator
-# accepts only R's writer; this one accepts either mirror implementation, the
-# same ruling recorded for SSSOM and decomposition manifests.
-_ACCEPTED_PROVENANCE = {
-    "metasalmon::write_sdp_reproducibility_manifest": "metasalmon_version",
-    "metasalmonpy.write_sdp_reproducibility_manifest": "metasalmonpy_version",
-}
+# The accepted writer set has one owner (``provenance.py``); re-typing the
+# pair of literals here is how the same ruling got applied twice out of
+# three times on the R side. ``tests/test_provenance.py`` fails if any
+# manifest validator re-types a writer literal.
+_MANIFEST_WRITER = "write_sdp_reproducibility_manifest"
 
 
 class ReproducibilityManifestError(ValueError):
@@ -317,9 +316,14 @@ def _validate_manifest(root: Path, manifest: object) -> None:
             "Reproducibility manifest has an unsupported profile or incomplete fields."
         )
     provenance = manifest["provenance"]
-    generated_by = provenance.get("generated_by") if isinstance(provenance, dict) else None
-    version_key = _ACCEPTED_PROVENANCE.get(generated_by) if generated_by else None
-    if version_key is None or not str(provenance.get(version_key, "")).strip():
+    version_key = _provenance.version_field(provenance, _MANIFEST_WRITER)
+    if version_key is None or not _provenance.version_ok(
+        provenance.get(version_key)
+    ):
+        # A version that is whitespace-only, or not a string at all, is
+        # rejected -- which is what the decomposition validator and both R
+        # readers already did. Before this the value was coerced with
+        # ``str()``, so a JSON number, boolean or array passed.
         raise ReproducibilityManifestError(
             "Reproducibility manifest writer provenance is incomplete."
         )

@@ -307,6 +307,143 @@ class EraInferenceTests(unittest.TestCase):
         )
 
 
+class DescriptorScalarPresenceTests(unittest.TestCase):
+    """A whitespace-only metadata scalar is absent, exactly as in R.
+
+    metasalmon 0.4.0 routed every scalar presence test in the descriptor
+    builder through ``.ms_meta_scalar_present()``, which renders the value to
+    character and **trims** it before deciding. This package's ``_has_value``
+    did neither, so a whitespace-only ``primary_key`` passed the presence
+    test, split to nothing, and wrote ``"primaryKey": []`` into the descriptor
+    -- a key R cannot produce and the SDP publication validator has no reading
+    for.
+    """
+
+    @staticmethod
+    def _descriptor(blank):
+        import json
+        import warnings
+
+        from metasalmonpy.package_io import write_salmon_datapackage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                target = write_salmon_datapackage(
+                    {"obs": pd.DataFrame({"note": ["a"]})},
+                    pd.DataFrame(
+                        [
+                            {
+                                "dataset_id": "demo",
+                                "title": "Demo",
+                                "creator": blank,
+                                "license": blank,
+                                "temporal_start": blank,
+                                "temporal_end": blank,
+                            }
+                        ]
+                    ),
+                    pd.DataFrame(
+                        [
+                            {
+                                "dataset_id": "demo",
+                                "table_id": "obs",
+                                "file_name": "obs.csv",
+                                "table_label": blank,
+                                "description": blank,
+                                "primary_key": blank,
+                            }
+                        ]
+                    ),
+                    pd.DataFrame(
+                        [
+                            {
+                                "dataset_id": "demo",
+                                "table_id": "obs",
+                                "column_name": "note",
+                                "column_label": "Note",
+                                "column_description": "A note.",
+                                "column_role": "attribute",
+                                "value_type": "string",
+                                "required": False,
+                            }
+                        ]
+                    ),
+                    path=tmpdir,
+                    overwrite=True,
+                )
+                return json.loads(
+                    (Path(target) / "datapackage.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+
+    def test_a_whitespace_only_scalar_is_absent_like_an_empty_one(self):
+        blank = self._descriptor("   ")
+        empty = self._descriptor("")
+        self.assertEqual(blank, empty)
+
+    def test_a_whitespace_only_primary_key_writes_no_primary_key(self):
+        import json
+
+        descriptor = self._descriptor("  ")
+        # Asserted on the serialized document: an empty ``primaryKey`` array is
+        # the exact artifact this fix removes, and it can hide inside any
+        # resource entry.
+        self.assertNotIn("primaryKey", json.dumps(descriptor))
+        self.assertNotIn("temporal", json.dumps(descriptor))
+
+    def test_a_real_value_still_reaches_the_descriptor(self):
+        # The fix must not make presence harder to achieve, only honest.
+        import json
+        import warnings
+
+        from metasalmonpy.package_io import write_salmon_datapackage
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                target = write_salmon_datapackage(
+                    {"obs": pd.DataFrame({"note": ["a"]})},
+                    pd.DataFrame(
+                        [{"dataset_id": "demo", "title": "Demo"}]
+                    ),
+                    pd.DataFrame(
+                        [
+                            {
+                                "dataset_id": "demo",
+                                "table_id": "obs",
+                                "file_name": "obs.csv",
+                                "table_label": "Obs",
+                                "primary_key": " note ",
+                            }
+                        ]
+                    ),
+                    pd.DataFrame(
+                        [
+                            {
+                                "dataset_id": "demo",
+                                "table_id": "obs",
+                                "column_name": "note",
+                                "column_label": "Note",
+                                "column_description": "A note.",
+                                "column_role": "attribute",
+                                "value_type": "string",
+                                "required": False,
+                            }
+                        ]
+                    ),
+                    path=tmpdir,
+                    overwrite=True,
+                )
+                descriptor = json.loads(
+                    (Path(target) / "datapackage.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+        self.assertIn("primaryKey", json.dumps(descriptor))
+
+
 class LegacyCodePrefillTests(unittest.TestCase):
     """The NuSEDS crosswalks are wired into the package path (chunk B).
 

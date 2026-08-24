@@ -1,32 +1,30 @@
-"""Static guard for the semantic-role contract — SIX of the seven surfaces.
+"""Static guard for the semantic-role contract — ALL SEVEN surfaces.
 
 metasalmon's AGENTS.md counts SEVEN surfaces a semantic role has to reach:
 the target/role maps, the bundle roles and slot fields, the role-hint
 vocabulary, the retrieval filters, the deterministic validators, the ranking
-preferences — and ``role_boost`` inside R's ``.ranking_profile_defaults()``.
-This guard covers the first six, which are the six that have Python
-counterparts.
+preferences — and ``role_boost``, the seventh.
 
-**The seventh surface is deliberately out of this guard's reach, and saying
-so is part of the contract.** Python has no ranking-profile system:
-``role_boost`` survives only as an inlined dict literal inside
-``term_search._score_and_rank_terms``, with no ``ranking_profile`` parameter,
-no defaults function to enumerate, and no override path (hub backlog **#87**,
-PARITY.md row 32). R can assert "every ranked role has a boost entry" because
-``.ranking_profile_defaults()`` is an enumerable table
-(``tests/testthat/test-smn-outranks-gcdfo.R``); there is nothing equivalent
-to enumerate here, so a guard claiming to check it would be asserting against
-a string literal it cannot prove is the one ranking actually uses. A guard
-whose claimed scope exceeds its real scope is worse than a missing guard,
-because green reads as "all seven verified" — that is how R shipped
-``statistical_modifier`` broken through CI and PR review at sdp-0.3.0.
+**This guard covered six until the 0.4.0 port.** ``role_boost`` was an
+inlined dict literal inside ``term_search._score_and_rank_terms``, with
+nothing enumerable to assert against, and this docstring said so rather
+than claiming a scope it did not have. metasalmon 0.4.0 then shipped
+``statistical_modifier`` reaching ranking with **no boost entry at all** —
+the second time that one role failed a silent layer — and this package had
+the identical gap. The fix was to make the table reachable: ``role_boost``
+and ``base_source_weight`` are now module-level constants
+(``term_search.ROLE_BOOST`` / ``.BASE_SOURCE_WEIGHT``), so
+``test_every_ranked_role_has_a_role_boost_entry`` below asserts exactly
+what R's ``tests/testthat/test-smn-outranks-gcdfo.R`` asserts, in the one
+file that is the answer to "did I reach every layer".
 
-*Retires / extends when:* #87 lands a Python ``ranking_profile_defaults()``
-and this guard grows the seventh check — or metasalmon consolidates its
-seventh check into ``test-role-contract-guard.R`` and this file mirrors the
-consolidated shape. ``test_the_seventh_surface_is_still_unreachable`` below
-is the tripwire that turns either event into a failure here instead of a
-silently narrower guard.
+What is still *not* here is the ranking-**profile** system: no
+``ranking_profile_defaults()`` function, no ``ranking_profile`` parameter,
+no override path (hub backlog **#87**, PARITY.md row 32). That is a
+capability gap, not a guard gap — the seventh surface is checked either
+way. ``test_the_ranking_profile_system_is_still_absent`` below is the
+tripwire that fails if #87 lands, so the guard is re-pointed at the profile
+table instead of silently checking a constant the profile has superseded.
 
 Two documented differences from R's guard, both structural rather than
 behavioural:
@@ -244,26 +242,64 @@ def test_the_role_field_maps_agree_with_the_dictionary_slot_fields():
     assert set(semantics.ROLE_MAP) == set(BUNDLE_SLOT_FIELDS.values())
 
 
-def test_the_seventh_surface_is_still_unreachable():
-    # The tripwire behind this guard's stated scope. The seventh role-contract
-    # surface — role_boost — lives in R's .ranking_profile_defaults(); Python
-    # has no profile system (hub backlog #87, PARITY.md row 32), so this guard
-    # covers six surfaces and SAYS so. The moment a profile system appears,
-    # this test fails and the fix is to EXTEND this guard with the seventh
-    # check (every ranked role has a role_boost entry), not to delete the
-    # test.
+def test_every_ranked_role_has_a_role_boost_entry():
+    # THE SEVENTH SURFACE. A role that reaches ranking with no ROLE_BOOST
+    # entry is scored on base weight alone — a 0.1-0.2 spread across
+    # sources, which is effectively no source preference at all. metasalmon
+    # 0.4.0 fixed exactly this for `statistical_modifier`, which had carried
+    # ontology-preferences.csv rows since sdp-0.3.0 while having no boost.
+    # Mirrors tests/testthat/test-smn-outranks-gcdfo.R.
+    prefs = term_search._load_role_preferences()
+    ranked_roles = {
+        str(role) for role in prefs["role"].unique() if str(role) != "wikidata"
+    }
+    assert ranked_roles, "ontology-preferences.csv did not load"
+    missing = sorted(ranked_roles - set(term_search.ROLE_BOOST))
+    assert not missing, (
+        "Roles in ontology-preferences.csv with no term_search.ROLE_BOOST "
+        "entry: " + ", ".join(missing)
+    )
+
+
+def test_the_role_boost_table_is_the_one_ranking_uses():
+    # The check above is only worth anything if the table it enumerates is
+    # the table the scorer reads. Pin that, so hoisting the constants can
+    # never drift into a second copy.
+    source = inspect.getsource(term_search._score_and_rank_terms)
+    assert "role_boost = ROLE_BOOST" in source
+    assert "base_source_weight = BASE_SOURCE_WEIGHT" in source
+
+
+def test_smn_leads_gcdfo_in_every_role_served_by_both():
+    # The margin the source preference depends on. R's 0.4.0 fix flattened
+    # gcdfo to 1.0 in every role after a 0.5 margin was overturned by the
+    # routine bonus stack; this asserts the property rather than the number.
+    assert (
+        term_search.BASE_SOURCE_WEIGHT["smn"]
+        > term_search.BASE_SOURCE_WEIGHT["gcdfo"]
+    )
+    for role, boosts in term_search.ROLE_BOOST.items():
+        if "gcdfo" not in boosts:
+            continue
+        assert "smn" in boosts, role
+        assert boosts["smn"] > boosts["gcdfo"], role
+
+
+def test_the_ranking_profile_system_is_still_absent():
+    # Not a guard gap — a capability gap (hub backlog #87, PARITY.md row
+    # 32). The seventh surface is checked above either way. This tripwire
+    # fires when #87 lands so the checks above are re-pointed at the profile
+    # table rather than silently asserting a constant it has superseded.
     assert not hasattr(term_search, "ranking_profile_defaults"), (
         "term_search has grown a ranking_profile_defaults(): backlog #87 has "
-        "landed. Extend this guard to the seventh surface (every ranked role "
-        "has a role_boost entry, as tests/testthat/test-smn-outranks-gcdfo.R "
-        "asserts in R) and update this file's docstring before removing this "
-        "tripwire."
+        "landed. Re-point test_every_ranked_role_has_a_role_boost_entry at "
+        "the profile table and update this file's docstring before removing "
+        "this tripwire."
     )
     rank_params = inspect.signature(
         term_search._score_and_rank_terms
     ).parameters
     assert "ranking_profile" not in rank_params, (
-        "_score_and_rank_terms has grown a ranking_profile parameter: extend "
-        "this guard to the seventh surface (see docstring) instead of "
-        "leaving it silently six-of-seven."
+        "_score_and_rank_terms has grown a ranking_profile parameter: see "
+        "this file's docstring."
     )

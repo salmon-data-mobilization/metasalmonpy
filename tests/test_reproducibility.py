@@ -264,3 +264,57 @@ def test_an_empty_declaration_set_is_refused(tmp_path):
             pd.DataFrame(columns=["path", "role", "media_type"]),
             overwrite=True,
         )
+
+
+def _rewrite_provenance(root, **changes):
+    """Rewrite the manifest's provenance block in place and return its path."""
+    manifest_path = root / "reproducibility" / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for key, value in changes.items():
+        if value is _DROP:
+            manifest["provenance"].pop(key, None)
+        else:
+            manifest["provenance"][key] = value
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return manifest_path
+
+
+_DROP = object()
+
+
+def test_a_version_that_is_not_a_string_is_refused(tmp_path):
+    # metasalmon 0.4.0: a ``metasalmon_version`` that is whitespace-only, or
+    # not a string at all, is rejected rather than accepted -- which is what
+    # the decomposition validator already did on both sides. This validator
+    # coerced the value with ``str()``, so a JSON number, boolean or array
+    # sailed through and the manifest claimed a version it did not have.
+    for value in (1.8, True, ["0.4.0"], {"v": "0.4.0"}, 0, "", "   ", "\t\n"):
+        root = _sdp(tmp_path / f"case-{abs(hash(repr(value)))}")
+        _rewrite_provenance(root, metasalmon_version=value)
+        with pytest.raises(ReproducibilityManifestError, match="provenance"):
+            validate_sdp_reproducibility_manifest(root)
+
+
+def test_a_python_written_manifest_validates(tmp_path):
+    # The reciprocal of metasalmon 0.4.0's fix: each implementation accepts the
+    # other's honestly-named provenance block.
+    root = _sdp(tmp_path)
+    _rewrite_provenance(
+        root,
+        generated_by="metasalmonpy.write_sdp_reproducibility_manifest",
+        metasalmon_version=_DROP,
+        metasalmonpy_version="0.4.0",
+    )
+    assert validate_sdp_reproducibility_manifest(root) is True
+
+
+def test_an_unknown_writer_is_still_refused(tmp_path):
+    root = _sdp(tmp_path)
+    _rewrite_provenance(
+        root, generated_by="someoneelse.write_sdp_reproducibility_manifest"
+    )
+    with pytest.raises(ReproducibilityManifestError, match="provenance"):
+        validate_sdp_reproducibility_manifest(root)

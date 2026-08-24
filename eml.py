@@ -49,6 +49,7 @@ from typing import Dict, List, Optional, Union
 
 import pandas as pd
 
+from . import knb_environments as _knb_env
 from .atomic_io import apply_default_file_mode
 from .metadata import R_CNTRL_CLASS, R_SPACE_CLASS, csv_na_token, read_sdp_csv
 
@@ -57,7 +58,9 @@ _EML_NAMESPACE = "https://eml.ecoinformatics.org/eml-2.2.0"
 _EML_FORMAT_ID = _EML_NAMESPACE
 _EML_SYSTEM = "knb"
 _XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance"
-_KNB_OBJECT_ENDPOINT = "https://knb.ecoinformatics.org/knb/d1/mn/v2/object/"
+# The member-node object endpoint is environment-derived; it comes from the
+# registry in ``knb_environments.py`` rather than from a constant pinned to
+# production.
 
 ET.register_namespace("eml", _EML_NAMESPACE)
 ET.register_namespace("xsi", _XSI_NAMESPACE)
@@ -291,7 +294,7 @@ def _attribute_id(dataset_id: str, table_id: str, column_name: str) -> str:
     )
 
 
-def _knb_object_url(pid: str) -> str:
+def _knb_object_url(pid: str, object_endpoint: str) -> str:
     """Mirror ``.ms_eml_knb_object_url``.
 
     Keep the URN colons literal: MetacatUI matches an EML distribution to
@@ -302,7 +305,7 @@ def _knb_object_url(pid: str) -> str:
 
     encoded = quote(pid, safe="")
     encoded = encoded.replace("%3A", ":")
-    return _KNB_OBJECT_ENDPOINT + encoded
+    return object_endpoint + encoded
 
 
 # --- XML node helpers ------------------------------------------------------------
@@ -1883,7 +1886,10 @@ def _resource_path(package_path: Union[str, Path], file_name: str) -> str:
 
 
 def _data_objects(
-    path: Union[str, Path], pkg: Dict[str, object], mapping: dict
+    path: Union[str, Path],
+    pkg: Dict[str, object],
+    mapping: dict,
+    config: Dict[str, object],
 ) -> pd.DataFrame:
     """Mirror ``.ms_eml_data_objects`` (deterministic content-bound PIDs)."""
     tables = pkg["tables"]
@@ -1894,14 +1900,13 @@ def _data_objects(
         file_path = _resource_path(path, file_name)
         checksum = _file_sha256(file_path)
         pid = "urn:uuid:" + _uuid5(
-            ":".join(
-                [
-                    "data",
-                    _as_character(mapping["dataset_id"]),
-                    table_id,
-                    os.path.basename(file_name),
-                    checksum,
-                ]
+            _knb_env.pid_preimage(
+                config["pid_scope"],
+                "data",
+                _as_character(mapping["dataset_id"]),
+                table_id,
+                os.path.basename(file_name),
+                checksum,
             )
         )
         rows.append(
@@ -1951,7 +1956,9 @@ def _empty_supplementary_objects() -> pd.DataFrame:
     return pd.DataFrame(columns=list(_SUPPLEMENTARY_COLUMNS))
 
 
-def _supplementary_objects(objects: object) -> pd.DataFrame:
+def _supplementary_objects(
+    objects: object, config: Dict[str, object]
+) -> pd.DataFrame:
     """Mirror ``.ms_eml_supplementary_objects``.
 
     Accepts ``None``, a DataFrame, or a dict of columns (the Pythonic
@@ -2170,7 +2177,10 @@ def _supplementary_objects(objects: object) -> pd.DataFrame:
             "description": values["description"],
             "compression_method": compression_method,
             "entity_type": entity_type,
-            "online_url": [_knb_object_url(pid) for pid in values["pid"]],
+            "online_url": [
+                _knb_object_url(pid, str(config["object_endpoint"]))
+                for pid in values["pid"]
+            ],
         },
         columns=list(_SUPPLEMENTARY_COLUMNS),
     )
@@ -3150,6 +3160,7 @@ def _build_document(
     supplementary_objects: pd.DataFrame,
     sdp_methods: pd.DataFrame,
     used_procedures: List[str],
+    config: Dict[str, object],
 ) -> Dict[str, object]:
     """Mirror ``.ms_eml_build_document``."""
     root = ET.Element("{" + _EML_NAMESPACE + "}eml")
@@ -3165,9 +3176,13 @@ def _build_document(
     ]
     if revision_key is not None:
         package_id_preimage.extend(["revision", revision_key])
-    package_id = "urn:uuid:" + _uuid5(":".join(package_id_preimage))
+    package_id = "urn:uuid:" + _uuid5(
+        _knb_env.pid_preimage(config["pid_scope"], package_id_preimage)
+    )
     series_id = "urn:uuid:" + _uuid5(
-        ":".join(["series", _as_character(mapping["series_key"])])
+        _knb_env.pid_preimage(
+            config["pid_scope"], "series", _as_character(mapping["series_key"])
+        )
     )
     root.set("packageId", package_id)
     root.set("system", _as_character(mapping["system"]))
@@ -3321,7 +3336,13 @@ def _build_document(
         _add_text(delimited, "quoteCharacter", '"')
         distribution = ET.SubElement(physical, "distribution")
         online = ET.SubElement(distribution, "online")
-        _add_text(online, "url", _knb_object_url(str(data_object["pid"])))
+        _add_text(
+            online,
+            "url",
+            _knb_object_url(
+                str(data_object["pid"]), str(config["object_endpoint"])
+            ),
+        )
 
         attribute_list = ET.SubElement(data_table, "attributeList")
         attribute_list.set(
@@ -3542,6 +3563,7 @@ def _export_reviewed(
     root: Path,
     pkg: Dict[str, object],
     mapping: dict,
+    config: Dict[str, object],
     supplementary_objects: object = None,
     require_revision_key: bool = False,
 ) -> Dict[str, object]:
@@ -3555,8 +3577,8 @@ def _export_reviewed(
     revision_key = _revision_key(mapping, required=require_revision_key)
     _read_semantic_review(root, pkg, mapping)
     vocabulary = _read_vocabulary(root, pkg, mapping)
-    data_objects = _data_objects(root, pkg, mapping)
-    supplementary = _supplementary_objects(supplementary_objects)
+    data_objects = _data_objects(root, pkg, mapping, config)
+    supplementary = _supplementary_objects(supplementary_objects, config)
 
     from .sdp_methods import SDP_METHODS_PATH
 
@@ -3579,6 +3601,7 @@ def _export_reviewed(
         supplementary,
         sdp_methods,
         used_procedures,
+        config,
     )
     _validate_document_links(
         built["document"], pkg["dictionary"], _as_character(mapping["dataset_id"])
@@ -3598,6 +3621,7 @@ def _export_reviewed(
         # ``write_eml_from_sdp()`` return value.
         "methods": sdp_methods,
         "used_methods": used_procedures,
+        "knb_environment": config["knb_environment"],
     }
 
 
@@ -3606,6 +3630,7 @@ def _export_from_mapping(
     mapping: dict,
     supplementary_objects: object = None,
     require_revision_key: bool = False,
+    knb_environment: str = "production",
 ) -> Dict[str, object]:
     """Validate the package strictly, then run the reviewed-export pipeline."""
     from .package_io import validate_salmon_datapackage
@@ -3619,6 +3644,7 @@ def _export_from_mapping(
         root,
         pkg,
         mapping,
+        _knb_env.knb_config(knb_environment),
         supplementary_objects=supplementary_objects,
         require_revision_key=require_revision_key,
     )
@@ -3695,6 +3721,7 @@ def write_eml_from_sdp(
     overwrite: bool = False,
     supplementary_objects: object = None,
     require_revision_key: bool = False,
+    knb_environment: str = "production",
 ) -> Dict[str, object]:
     """Write reviewed EML 2.2.0 metadata from a Salmon Data Package.
 
@@ -3744,16 +3771,29 @@ def write_eml_from_sdp(
         When ``True``, require a reviewed ``publication.revision_key`` in
         the EML mapping sidecar. The key creates a new deterministic
         metadata package ID without changing the series ID.
+    knb_environment:
+        KNB deposit environment the document is written for:
+        ``"production"`` (the default) or ``"test"``. It selects the
+        DataONE member node whose object URLs the EML distribution
+        elements point at, and is folded into the deterministic package
+        and series identifiers so a test identifier can never be mistaken
+        for a production one. Accepted exactly; there is no partial
+        matching and no custom endpoint. The default is ``"production"``
+        because this function writes the package's reviewed
+        ``metadata/eml.xml``; :func:`publish_sdp_to_knb` supplies its own
+        environment and writes a test document to a separate path,
+        leaving the reviewed production record untouched.
 
     Returns
     -------
     dict
-        The XML text, normalized output path, EML version, metadata package
-        ID, stable series ID, validation result, revision key, the
-        deterministic data and supplementary-object plans, the complete
-        method registry (``methods``), and the subset asserted in EML
-        (``used_methods``).
+        The XML text, normalized output path, the resolved
+        ``knb_environment``, EML version, metadata package ID, stable
+        series ID, validation result, revision key, the deterministic data
+        and supplementary-object plans, the complete method registry
+        (``methods``), and the subset asserted in EML (``used_methods``).
     """
+    config = _knb_env.knb_config(knb_environment)
     if not isinstance(require_revision_key, bool):
         raise ValueError("require_revision_key must be one logical value.")
     _require_eml_extra()
@@ -3803,6 +3843,7 @@ def write_eml_from_sdp(
         root,
         pkg,
         mapping,
+        config,
         supplementary_objects=supplementary_objects,
         require_revision_key=require_revision_key,
     )
@@ -3846,6 +3887,7 @@ def write_eml_from_sdp(
     return {
         "xml": xml_text,
         "path": os.path.realpath(output_path),
+        "knb_environment": config["knb_environment"],
         "eml_version": EML_VERSION,
         "format_id": _EML_FORMAT_ID,
         "package_id": exported["package_id"],

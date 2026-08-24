@@ -72,7 +72,7 @@ quartodoc:
   dir: reference
   title: "API reference"
   package: metasalmonpy
-  version: "0.1.6"
+  version: "0.4.0"
   parser: numpy
   css: reference/_styles-quartodoc.css
   options:

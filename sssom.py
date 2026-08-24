@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Sequence, Union
 
 import pandas as pd
 
+from . import provenance as _provenance
 from .atomic_io import atomic_write
 from .metadata import R_SPACE_CLASS
 
@@ -1184,11 +1185,9 @@ def _manifest_safe_path(value: object) -> bool:
     )
 
 
-_ACCEPTED_PROVENANCE = {
-    # generated_by -> the provenance key that must carry a version.
-    "metasalmon::write_sdp_sssom": "metasalmon_version",
-    "metasalmonpy.write_sdp_sssom": "metasalmonpy_version",
-}
+# The accepted writer set has one owner (``provenance.py``); see the note
+# there and ``tests/test_provenance.py``.
+_MANIFEST_WRITER = "write_sdp_sssom"
 
 
 def _validate_manifest(root: Path) -> None:
@@ -1220,14 +1219,12 @@ def _validate_manifest(root: Path) -> None:
             "SSSOM manifest declares an unsupported schema or SSSOM version."
         )
     provenance = manifest["provenance"]
-    version_key = _ACCEPTED_PROVENANCE.get(
-        provenance.get("generated_by") if isinstance(provenance, dict) else None
-    )
-    if (
-        not isinstance(provenance, dict)
-        or version_key is None
-        or provenance.get(version_key) is None
-    ):
+    version_key = _provenance.version_field(provenance, _MANIFEST_WRITER)
+    # Presence only, deliberately: metasalmon's SSSOM validator asks the
+    # same weaker question, and the two readers of one artifact must accept
+    # the same manifests. Both sides tighten together or neither does
+    # (``provenance.version_ok``'s retirement condition).
+    if version_key is None or provenance.get(version_key) is None:
         raise ValueError("SSSOM manifest provenance is incomplete.")
     if not isinstance(manifest["mapping_sets"], list) or not manifest["mapping_sets"]:
         raise ValueError("SSSOM manifest must contain at least one mapping set.")

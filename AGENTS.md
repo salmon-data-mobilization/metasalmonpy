@@ -28,11 +28,31 @@ violation like a failing test.
    matches the metasalmon version whose functionality it actually delivers.
    When a metasalmon release ships, mirror the work and bump this package to
    the same number.
-3. **Current honest state:** parity is at **metasalmon 0.2.1**. metasalmon is
-   at 0.3.0. The catch-up (0.2.2 → 0.3.0) is roadmap stream **S10** in the
-   hub; this package's version stays at the last delivered milestone until
-   the next one lands — do **not** bump the number ahead of the functionality
+3. **Current honest state:** parity is at **metasalmon 0.4.0**. metasalmon is
+   at 0.4.0 (tagged `v0.4.0`, `4e2bbb6`), so the catch-up window
+   0.2.2 → 0.4.0 — roadmap stream **S10** plus the S3 KNB-environment
+   feature 0.4.0 added after every S10 chunk was written — is closed. This
+   package's version stays at the last delivered milestone until the next
+   one lands — do **not** bump the number ahead of the functionality
    (Brett's decision, 2026-08-13: bump on parity, not on calendar).
+
+   **This number is stated in three places and all three must agree:** here,
+   metasalmon's own `AGENTS.md`, and the release index in the hub's
+   `knowledge/roadmap.md`. When they disagree, one of them is wrong about
+   the single fact the mirror contract turns on and nothing in either file
+   reveals which — this line read `0.2.1` / window `0.2.2 → 0.3.0` for two
+   days after metasalmon tagged 0.4.0 and said so in its own `AGENTS.md`,
+   corrected here 2026-08-24. Whenever either version moves, read the other
+   file in the same change.
+
+   **The mirror is not automatically the follower** (Brett, 2026-08-17):
+   *"Don't just make things match metasalmon. If the Python implementation
+   got it right, then update metasalmon."* A parity divergence opens the
+   question of which side is right rather than settling it. Applied twice
+   already: R adopted this package's `smn`-over-`gcdfo` ranking margin, and
+   R adopted its unconditional year padding. Changing R does **not** close a
+   `PARITY.md` row by itself — the row records the divergence, the ruling,
+   and which side moved.
 4. New metasalmon work started after 2026-08-13 must land its Python mirror
    as part of the same stream, so the gap never widens again.
 
@@ -77,11 +97,11 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 639
-passed / 3 skipped with the extras installed, 540 / 102 with core dependencies
-only (S10 chunk C, 2026-08-22). The 99-test gap is the extras-gated EML, KNB and
-context-reader tests; the 3 that skip either way are filesystem-symlink and
-R-availability guards.
+dependency configurations, and CI runs both (see *Dependency boundaries*): 795
+passed / 3 skipped with the extras installed, 682 / 116 with core dependencies
+only (0.4.0 parity port, 2026-08-24). The 113-test gap is the extras-gated EML,
+KNB and context-reader tests; the 3 that skip either way are filesystem-symlink
+and R-availability guards.
 
 **Run it from a directory named `metasalmonpy`.** The root `__init__.py` and
 `tests/__init__.py` make pytest infer the package name from the checkout

@@ -1112,31 +1112,72 @@ def _apply_cross_source_agreement(df: pd.DataFrame, iri_boost: float = 0.5, labe
     return out
 
 
+#: The ranking source weights, hoisted to module scope so the role-contract
+#: guard can enumerate them. R keeps the same two tables inside
+#: ``.ranking_profile_defaults()``; this package has no ranking-profile
+#: override system (hub backlog #87, PARITY.md row 32), so these are constants
+#: rather than a merged profile.
+BASE_SOURCE_WEIGHT = {
+    "smn": 1.2,
+    "gcdfo": 1.0,
+    "ols": 0.3,
+    "nvs": 0.6,
+    "zooma": 0.5,
+    "bioportal": 0.2,
+    "qudt": 0.7,
+    "gbif": 0.6,
+    "worms": 0.6,
+}
+
+#: ``gcdfo`` is the DFO fallback behind the shared ``smn`` namespace, which is
+#: what ontology-preferences.csv declares (smn priority 1, gcdfo 2 where it is
+#: listed at all). Keep gcdfo at a flat 1.0: a per-role boost of 1.3 puts it
+#: within 0.5 of smn, and routine per-candidate bonuses -- label overlap plus
+#: cross-source agreement reach 0.6 on their own -- then overturn the source
+#: preference entirely. metasalmon 0.4.0 adopted this package's margin after
+#: Brett's 2026-08-17 ruling.
+#:
+#: **Every role the retrieval layer ranks needs an entry here.** A role absent
+#: from this table is scored on base weight alone -- a 0.1-0.2 spread across
+#: sources, which is effectively no source preference at all. That is the
+#: seventh surface of the role contract, and it is what
+#: ``tests/test_role_contract_guard.py`` now checks.
+ROLE_BOOST = {
+    "unit": {"qudt": 1.5, "nvs": 1.2, "ols": 0.3},
+    "property": {"smn": 1.4, "gcdfo": 1.0, "nvs": 1.0, "ols": 0.4},
+    "variable": {
+        "smn": 1.5,
+        "gcdfo": 1.0,
+        "nvs": 0.6,
+        "ols": 0.2,
+        "bioportal": 0.4,
+    },
+    "entity": {
+        "smn": 1.5,
+        "gcdfo": 1.0,
+        "gbif": 1.3,
+        "worms": 1.3,
+        "bioportal": 0.4,
+        "ols": 0.4,
+    },
+    "constraint": {"smn": 1.3, "gcdfo": 1.0, "ols": 0.4, "bioportal": 0.4},
+    "method": {"smn": 1.3, "gcdfo": 1.0, "bioportal": 0.4, "ols": 0.4},
+    # sources_for_role() serves this role from smn and ols only, so there is
+    # no gcdfo entry to give it. Without the row the role reached ranking on
+    # base weight alone, which is the defect metasalmon 0.4.0 fixed on the R
+    # side and this entry fixes here.
+    "statistical_modifier": {"smn": 1.5, "ols": 0.4},
+}
+
+
 def _score_and_rank_terms(df: pd.DataFrame, role, vocab_tbl: pd.DataFrame, query: Optional[str] = None) -> pd.DataFrame:
     if df.empty:
         return df
 
     df = df.copy()
     role_prefs = _load_role_preferences()
-    base_source_weight = {
-        "smn": 1.2,
-        "gcdfo": 1.0,
-        "ols": 0.3,
-        "nvs": 0.6,
-        "zooma": 0.5,
-        "bioportal": 0.2,
-        "qudt": 0.7,
-        "gbif": 0.6,
-        "worms": 0.6,
-    }
-    role_boost = {
-        "unit": {"qudt": 1.5, "nvs": 1.2, "ols": 0.3},
-        "property": {"smn": 1.4, "gcdfo": 1.0, "nvs": 1.0, "ols": 0.4},
-        "variable": {"smn": 1.5, "gcdfo": 1.0, "nvs": 0.6, "ols": 0.2, "bioportal": 0.4},
-        "entity": {"smn": 1.5, "gcdfo": 1.0, "gbif": 1.3, "worms": 1.3, "bioportal": 0.4, "ols": 0.4},
-        "constraint": {"smn": 1.3, "gcdfo": 1.0, "ols": 0.4, "bioportal": 0.4},
-        "method": {"smn": 1.3, "gcdfo": 1.0, "bioportal": 0.4, "ols": 0.4},
-    }
+    base_source_weight = BASE_SOURCE_WEIGHT
+    role_boost = ROLE_BOOST
 
     df["score"] = df["source"].map(base_source_weight).fillna(0)
 

@@ -40,6 +40,7 @@ from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
+from . import provenance as _provenance
 from .atomic_io import atomic_write
 from .metadata import csv_na_token, normalize_dictionary, read_sdp_csv
 
@@ -98,13 +99,9 @@ _ABSOLUTE_IRI_RE = re.compile(
 )
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
-_ACCEPTED_PROVENANCE = {
-    # generated_by -> the provenance key that must carry a version. The
-    # validator accepts artifacts written by either mirror implementation
-    # (PARITY.md entry 12); R's validator accepts only R's writer.
-    "metasalmon::write_sdp_measurement_decompositions": "metasalmon_version",
-    "metasalmonpy.write_sdp_measurement_decompositions": "metasalmonpy_version",
-}
+# The accepted writer set has one owner (``provenance.py``); see the note
+# there and ``tests/test_provenance.py``.
+_MANIFEST_WRITER = "write_sdp_measurement_decompositions"
 
 _TRIM_CHARS = " \t\r\n"  # R trimws() default character class
 
@@ -702,15 +699,10 @@ def _validate_manifest(
         )
 
     provenance = manifest["provenance"]
-    version_key = (
-        _ACCEPTED_PROVENANCE.get(provenance.get("generated_by"))
-        if isinstance(provenance, dict)
-        else None
-    )
+    version_key = _provenance.version_field(provenance, _MANIFEST_WRITER)
     if (
         version_key is None
-        or not isinstance(provenance.get(version_key), str)
-        or not _trim(provenance[version_key])
+        or not _provenance.version_ok(provenance.get(version_key))
         or not isinstance(provenance.get("semantic_profile"), str)
         or not _trim(provenance["semantic_profile"])
     ):
