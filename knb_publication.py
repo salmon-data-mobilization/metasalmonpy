@@ -50,20 +50,20 @@ from typing import Dict, List, Optional, Sequence, Tuple, Union
 from urllib.parse import quote
 
 from . import eml as _eml
+from . import knb_environments as _knb_env
 from .atomic_io import atomic_write
 from .text_safety import redact_secrets
 
 # --- constants ----------------------------------------------------------------------
 
-ENVIRONMENT = "PROD"
-NODE_ID = "urn:node:KNB"
-MN_ENDPOINT = "https://knb.ecoinformatics.org/knb/d1/mn/v2"
-#: R resolves the Coordinating Node through ``dataone::D1Client``; the raw
-#: REST adapter needs the production CN base URL as an explicit constant.
-CN_ENDPOINT = "https://cn.dataone.org/cn/v2"
+# The DataONE network, node identifier, member-node endpoint, CN base and
+# resolver used to be module-level constants pinned to production. They now
+# come from the environment registry in ``knb_environments.py``, which is
+# what lets a deposit be rehearsed. The three below stay constant because
+# they are properties of metasalmon's OAI-ORE profile, not of any DataONE
+# environment.
 ORE_FORMAT_ID = "http://www.openarchives.org/ore/terms"
 ORE_MEDIA_TYPE = "application/rdf+xml"
-RESOLVER = "https://cn.dataone.org/cn/v2/resolve/"
 ORE_PROFILE = "metasalmon-dataone-ore-v2"
 
 _D1_V2_NAMESPACE = "http://ns.dataone.org/service/types/v2.0"
@@ -150,7 +150,6 @@ class KnbHttpError(RuntimeError):
 # --- process-local credentials and adapter seam ---------------------------------------
 
 _KNB_ADAPTER: object = None
-_DATAONE_TOKEN: Optional[str] = None
 
 
 def set_knb_adapter(adapter: object) -> None:
@@ -165,13 +164,26 @@ def set_knb_adapter(adapter: object) -> None:
 
 
 def set_dataone_token(token: Optional[str]) -> None:
-    """Supply a short-lived DataONE JWT for this process only.
+    """Supply a short-lived production DataONE JWT for this process only.
 
     The Pythonic form of R's supported ``dataone_token`` option. Credentials
     are never accepted as function arguments and never written to a manifest.
+
+    This is the **production** credential. The KNB Test Node is a separate
+    DataONE network with a separate account, so it has its own token and
+    its own setter: supplying this one never satisfies a test deposit.
     """
-    global _DATAONE_TOKEN
-    _DATAONE_TOKEN = token
+    _knb_env.set_token("dataone_token", token)
+
+
+def set_dataone_test_token(token: Optional[str]) -> None:
+    """Supply a short-lived KNB Test Node JWT for this process only.
+
+    The Pythonic form of R's ``dataone_test_token`` option, introduced with
+    the two-environment registry. It is a different credential from
+    :func:`set_dataone_token`, and neither one is a fallback for the other.
+    """
+    _knb_env.set_token("dataone_test_token", token)
 
 
 def _adapter() -> object:
@@ -719,9 +731,9 @@ def _sha256_text(value: object) -> str:
     return hashlib.sha256(str(value).encode("utf-8")).hexdigest()
 
 
-def _resolve_url(pid: str) -> str:
+def _resolve_url(pid: str, config: Dict[str, object]) -> str:
     """Mirror ``.ms_knb_resolve_url`` (R's ``URLencode(reserved = TRUE)``)."""
-    return RESOLVER + quote(str(pid), safe="")
+    return str(config["resolver"]) + quote(str(pid), safe="")
 
 
 def _resource_map_pid(
@@ -781,6 +793,7 @@ def _build_ore(
     package_id: str,
     publication_date: object,
     member_objects: Sequence[Dict[str, object]],
+    config: Dict[str, object],
 ) -> ET.Element:
     """Mirror ``.ms_knb_build_ore``.
 
@@ -792,10 +805,10 @@ def _build_ore(
     for name, uri in _ORE_NAMESPACES:
         root.set(name, uri)
 
-    resource_map_url = _resolve_url(resource_map_pid)
+    resource_map_url = _resolve_url(resource_map_pid, config)
     aggregation_pid = resource_map_pid + "#aggregation"
     aggregation_url = resource_map_url + "#aggregation"
-    metadata_url = _resolve_url(package_id)
+    metadata_url = _resolve_url(package_id, config)
 
     resource_map = ET.SubElement(root, "rdf:Description")
     resource_map.set("rdf:about", resource_map_url)
@@ -837,7 +850,9 @@ def _build_ore(
 
     for member in sorted(member_objects, key=role_rank):
         _add_resource(
-            aggregation, "ore:aggregates", _resolve_url(str(member["pid"]))
+            aggregation,
+            "ore:aggregates",
+            _resolve_url(str(member["pid"]), config),
         )
 
     metadata = ET.SubElement(root, "rdf:Description")
@@ -862,7 +877,7 @@ def _build_ore(
         if str(member["role"]) in ("data", "sdp_archive", "sdp_artifact")
     ]
     for member in documented:
-        object_url = _resolve_url(str(member["pid"]))
+        object_url = _resolve_url(str(member["pid"]), config)
         _add_resource(metadata, "cito:documents", object_url)
         description = ET.SubElement(root, "rdf:Description")
         description.set("rdf:about", object_url)
@@ -909,13 +924,16 @@ def _validate_ore(
     document: ET.Element,
     resource_map_pid: str,
     member_objects: Sequence[Dict[str, object]],
+    config: Dict[str, object],
 ) -> bool:
     """Mirror ``.ms_knb_validate_ore``: the emitted graph must be the plan."""
     aggregates = [
         _rdf_attr(node, "resource")
         for node in _find_all_local(document, "aggregates")
     ]
-    expected = [_resolve_url(str(member["pid"])) for member in member_objects]
+    expected = [
+        _resolve_url(str(member["pid"]), config) for member in member_objects
+    ]
     if (
         set(aggregates) != set(expected)
         or len(set(aggregates)) != len(aggregates)
@@ -926,7 +944,7 @@ def _validate_ore(
             "planned EML/data objects."
         )
 
-    resource_map_url = _resolve_url(resource_map_pid)
+    resource_map_url = _resolve_url(resource_map_pid, config)
     aggregation_url = resource_map_url + "#aggregation"
     descriptions = _find_all_local(document, "Description")
     expected_identifiers = [(resource_map_url, resource_map_pid)]
@@ -976,7 +994,7 @@ def _validate_ore(
         )
 
     documented_urls = [
-        _resolve_url(str(member["pid"]))
+        _resolve_url(str(member["pid"]), config)
         for member in member_objects
         if str(member["role"]) in ("data", "sdp_archive", "sdp_artifact")
     ]
@@ -985,7 +1003,7 @@ def _validate_ore(
         for member in member_objects
         if str(member["role"]) == "metadata"
     ][0]
-    metadata_url = _resolve_url(str(metadata_object["pid"]))
+    metadata_url = _resolve_url(str(metadata_object["pid"]), config)
     documents = [
         _rdf_attr(node, "resource")
         for node in _find_all_local(document, "documents")
@@ -1176,9 +1194,17 @@ def _manifest(
         if _status_rank(previous_status) > _status_rank(status)
         else status
     )
-    return {
+    record = {
         "schema_version": 3,
         "status": durable_status,
+        # ``environment`` is the DataONE network and ``node_id`` the member
+        # node; both are fingerprinted, and together they are the authority
+        # on which environment this manifest belongs to. ``knb_environment``
+        # is the human-readable name for the same fact and is deliberately
+        # NOT fingerprinted -- adding a field to the fingerprint would
+        # invalidate every production manifest written before this change.
+        # Nothing decides on it; ``knb_environments.plan_config()`` refuses
+        # any record where it disagrees with the node identifier.
         "environment": plan.get("environment"),
         "node_id": plan.get("node_id"),
         "public": plan.get("public"),
@@ -1202,6 +1228,27 @@ def _manifest(
             else previous.get("catalog_evidence")
         ),
     }
+    knb_environment = plan.get("knb_environment")
+    if knb_environment is None:
+        # R builds this record as a list, where ``knb_environment = NULL``
+        # drops the element rather than writing a null. A plan built
+        # before the field existed therefore still serializes to exactly
+        # the bytes it always did, on both sides.
+        return record
+    return {
+        key: (knb_environment if key == "knb_environment" else record[key])
+        for key in _manifest_key_order(record)
+    }
+
+
+def _manifest_key_order(record: Dict[str, object]) -> List[str]:
+    """The manifest key order, with ``knb_environment`` after ``node_id``."""
+    keys: List[str] = []
+    for key in record:
+        keys.append(key)
+        if key == "node_id":
+            keys.append("knb_environment")
+    return keys
 
 
 def _existing_manifest(path: str) -> Optional[Dict[str, object]]:
@@ -1269,7 +1316,9 @@ def _manifest_fingerprint(manifest: Dict[str, object]) -> Optional[str]:
     return None
 
 
-def _revision_manifest(path: Optional[str]) -> Optional[Dict[str, object]]:
+def _revision_manifest(
+    path: Optional[str], config: Dict[str, object]
+) -> Optional[Dict[str, object]]:
     """Mirror ``.ms_knb_revision_manifest``."""
     if path is None:
         return None
@@ -1290,8 +1339,16 @@ def _revision_manifest(path: Optional[str]) -> Optional[Dict[str, object]]:
         schema_version in (2, 3)
         and str(manifest.get("status"))
         in ("published_pending_catalog", "complete")
-        and str(manifest.get("environment")) == ENVIRONMENT
-        and str(manifest.get("node_id")) == NODE_ID
+        # A revision must continue the same environment it started in.
+        # Reading these against the selected environment is what refuses a
+        # cross-environment revision.
+        and str(manifest.get("environment")) == config["dataone_network"]
+        and str(manifest.get("node_id")) == config["node_id"]
+        and (
+            manifest.get("knb_environment") is None
+            or str(manifest.get("knb_environment"))
+            == config["knb_environment"]
+        )
         and len(objects) > 0
         and roles.count("metadata") == 1
         and roles.count("resource_map") == 1
@@ -1520,7 +1577,7 @@ def _reject_review_candidate_annotations(path: str) -> None:
 
 
 def _sdp_artifact_object(
-    local_path: str, path: str, dataset_id: str
+    local_path: str, path: str, dataset_id: str, config: Dict[str, object]
 ) -> Dict[str, object]:
     """Mirror ``.ms_knb_sdp_artifact_object`` (the legacy expanded shape)."""
     relative = _relative_path(path, local_path)
@@ -1533,7 +1590,9 @@ def _sdp_artifact_object(
         "local_path": local_path,
         "pid": "urn:uuid:"
         + _eml._uuid5(
-            ":".join(["sdp-artifact", dataset_id, relative, sha256])
+            _knb_env.pid_preimage(
+                config["pid_scope"], "sdp-artifact", dataset_id, relative, sha256
+            )
         ),
         "format_id": _ARTIFACT_FORMAT_IDS.get(
             extension, "application/octet-stream"
@@ -1548,7 +1607,10 @@ def _sdp_artifact_object(
 
 
 def _sdp_archive_object(
-    archive: Dict[str, object], path: str, dataset_id: str
+    archive: Dict[str, object],
+    path: str,
+    dataset_id: str,
+    config: Dict[str, object],
 ) -> Dict[str, object]:
     """Mirror ``.ms_knb_sdp_archive_object``."""
     relative = _relative_path(path, archive["path"])
@@ -1556,9 +1618,17 @@ def _sdp_archive_object(
         "role": "sdp_archive",
         "path": relative,
         "local_path": archive["path"],
+        # The archive's bytes are environment-independent, so without the
+        # environment scope the same package would mint the same archive
+        # identifier in test and in production.
         "pid": "urn:uuid:"
         + _eml._uuid5(
-            ":".join(["sdp-archive", dataset_id, str(archive["sha256"])])
+            _knb_env.pid_preimage(
+                config["pid_scope"],
+                "sdp-archive",
+                dataset_id,
+                str(archive["sha256"]),
+            )
         ),
         "format_id": archive["format_id"],
         "media_type": archive["media_type"],
@@ -1570,11 +1640,13 @@ def _sdp_archive_object(
     }
 
 
-def _sdp_artifact_objects(path: str, dataset_id: str) -> List[Dict[str, object]]:
+def _sdp_artifact_objects(
+    path: str, dataset_id: str, config: Dict[str, object]
+) -> List[Dict[str, object]]:
     """Mirror ``.ms_knb_sdp_artifact_objects``: the closed expanded inventory."""
     objects = []
     for local_path in _sdp_artifact_paths(path).values():
-        artifact = _sdp_artifact_object(local_path, path, dataset_id)
+        artifact = _sdp_artifact_object(local_path, path, dataset_id, config)
         artifact["obsoletes"] = None
         artifact["obsoleted_by"] = None
         objects.append(artifact)
@@ -1650,6 +1722,7 @@ def _build_plan(
     eml_path: str,
     manifest_path: str,
     public: bool,
+    config: Dict[str, object],
     representation: str = "archive",
     prior_manifest: Optional[Dict[str, object]] = None,
     resource_map_path: Optional[str] = None,
@@ -1680,11 +1753,13 @@ def _build_plan(
     if representation == "archive":
         archive = knb_archive._write_sdp_archive(path, overwrite=overwrite)
         package_objects = [
-            _sdp_archive_object(archive, path, str(mapping["dataset_id"]))
+            _sdp_archive_object(
+                archive, path, str(mapping["dataset_id"]), config
+            )
         ]
     else:
         package_objects = _sdp_artifact_objects(
-            path, str(mapping["dataset_id"])
+            path, str(mapping["dataset_id"]), config
         )
     supplementary_objects = _supplementary_object_plan(package_objects)
     # ``overwrite`` reaches both derived-artifact writers (the SDP archive
@@ -1697,6 +1772,7 @@ def _build_plan(
         overwrite=overwrite,
         supplementary_objects=supplementary_objects,
         require_revision_key=prior_manifest is not None,
+        knb_environment=str(config["knb_environment"]),
     )
     if eml["public"] is not public:
         raise ValueError(
@@ -1778,8 +1854,9 @@ def _build_plan(
         eml["package_id"],
         mapping["publication_date"],
         members,
+        config,
     )
-    _validate_ore(ore, resource_map_pid, members)
+    _validate_ore(ore, resource_map_pid, members, config)
 
     resource_map_path = _inside_path(path, resource_map_path, must_work=False)
     ore_bytes = _xml_bytes(ore)
@@ -1810,10 +1887,11 @@ def _build_plan(
 
     plan = {
         "package_path": path,
-        "environment": ENVIRONMENT,
-        "node_id": NODE_ID,
+        "environment": config["dataone_network"],
+        "node_id": config["node_id"],
+        "knb_environment": config["knb_environment"],
         "public": public,
-        "replication_policy": _replication_policy(public),
+        "replication_policy": _replication_policy(public, config),
         "expected_subject": expected_subject,
         "rights_authorization": mapping.get("rights_authorization")
         or {"status": "unconfirmed", "evidence": []},
@@ -1840,23 +1918,31 @@ def _build_plan(
 # --- replication policy ----------------------------------------------------------------
 
 
-def _replication_policy(public: bool) -> Dict[str, object]:
+def _replication_policy(
+    public: bool, config: Dict[str, object]
+) -> Dict[str, object]:
     """Mirror ``.ms_knb_replication_policy``."""
     _validate_flag(public, "public")
-    # Private review is deliberately KNB-only. Public deposits retain
-    # DataONE's three-replica preservation policy, made explicit so it is
-    # part of the exact reviewed plan instead of an unreviewed client default.
+    # Private review is deliberately KNB-only. Public production deposits
+    # retain DataONE's three-replica preservation policy, made explicit so
+    # it is part of the exact reviewed plan instead of an unreviewed client
+    # default. A rehearsal environment caps replicas at zero: asking peer
+    # nodes to preserve copies of a practice deposit would outlive the
+    # practice.
+    replicas = int(config["max_replicas"]) if public else 0
     return {
-        "replication_allowed": bool(public),
-        "number_replicas": 3 if public else 0,
+        "replication_allowed": bool(public) and replicas > 0,
+        "number_replicas": replicas,
         "preferred_member_nodes": [],
         "blocked_member_nodes": [],
     }
 
 
-def _require_replication_policy(policy: object, public: bool) -> Dict[str, object]:
+def _require_replication_policy(
+    policy: object, public: bool, config: Dict[str, object]
+) -> Dict[str, object]:
     """Mirror ``.ms_knb_require_replication_policy``."""
-    expected = _replication_policy(public)
+    expected = _replication_policy(public, config)
     if policy != expected:
         raise ValueError(
             "The publication plan has an invalid replication policy for the "
@@ -1968,6 +2054,7 @@ def _validate_system_metadata(
     subject: str,
     public: bool,
     replication_policy: Dict[str, object],
+    config: Dict[str, object],
 ) -> bool:
     """Mirror ``.ms_knb_validate_system_metadata``."""
     if not isinstance(remote, dict):
@@ -1975,7 +2062,7 @@ def _validate_system_metadata(
             f"Remote SystemMetadata for {obj.get('pid')} is missing or "
             "malformed."
         )
-    _require_replication_policy(replication_policy, public)
+    _require_replication_policy(replication_policy, public, config)
     expected = {
         "identifier": obj.get("pid"),
         "format_id": obj.get("format_id"),
@@ -1996,8 +2083,11 @@ def _validate_system_metadata(
         ),
         "obsoletes": _optional_scalar(obj.get("obsoletes")),
         "obsoleted_by": _optional_scalar(obj.get("obsoleted_by")),
-        "origin_member_node": NODE_ID,
-        "authoritative_member_node": NODE_ID,
+        # The node identifier every deposited object must carry is the
+        # selected environment's own. This is the read-back half of "a test
+        # publish never mints into production".
+        "origin_member_node": config["node_id"],
+        "authoritative_member_node": config["node_id"],
     }
 
     remote_checksum = _optional_scalar(remote.get("checksum"))
@@ -2110,7 +2200,9 @@ def _system_metadata_document(
     same field from its ``node_id`` argument (which R accepts and leaves
     unused) and the uploaded documents match.
     """
-    _require_replication_policy(replication_policy, public)
+    _require_replication_policy(
+        replication_policy, public, _knb_env.config_for_node(node_id)
+    )
     root = ET.Element("d1_v2.0:systemMetadata")
     root.set("xmlns:d1_v2.0", _D1_V2_NAMESPACE)
     root.set("xmlns:d1", _D1_V1_NAMESPACE)
@@ -2341,6 +2433,7 @@ def _verify_object(
     subject: str,
     public: bool,
     replication_policy: Dict[str, object],
+    config: Dict[str, object],
 ) -> bool:
     """Mirror ``.ms_knb_verify_object``."""
     remote_bytes = adapter.get_bytes(client, obj["pid"])
@@ -2352,7 +2445,7 @@ def _verify_object(
         )
     remote_metadata = adapter.get_system_metadata(client, obj["pid"])
     _validate_system_metadata(
-        remote_metadata, obj, subject, public, replication_policy
+        remote_metadata, obj, subject, public, replication_policy, config
     )
     remote_checksum = adapter.get_checksum(client, obj["pid"], "SHA-256")
     checksum = _optional_scalar(remote_checksum)
@@ -2373,7 +2466,7 @@ def _verify_object(
             endpoint, obj["pid"]
         )
         _validate_system_metadata(
-            anonymous_metadata, obj, subject, public, replication_policy
+            anonymous_metadata, obj, subject, public, replication_policy, config
         )
     else:
         _verify_anonymous_denial(adapter, endpoint, obj)
@@ -2584,6 +2677,7 @@ def _validate_revision_source(
         subject,
         plan["public"],
         plan["replication_policy"],
+        _knb_env.plan_config(plan),
     )
     return linked_to
 
@@ -2594,6 +2688,7 @@ def _validate_series_binding(
     subject: str,
     public: bool,
     replication_policy: Dict[str, object],
+    config: Dict[str, object],
     plan: Optional[Dict[str, object]] = None,
 ) -> bool:
     """Mirror ``.ms_knb_validate_series_binding``."""
@@ -2621,7 +2716,7 @@ def _validate_series_binding(
         )
         return True
     _validate_system_metadata(
-        remote, metadata_object, subject, public, replication_policy
+        remote, metadata_object, subject, public, replication_policy, config
     )
     return True
 
@@ -2673,7 +2768,13 @@ def _run_publication_body(
         specification = _local_object_spec(obj)
         specification["replication_policy"] = plan["replication_policy"]
         object_specs.append(specification)
-    _require_replication_policy(plan["replication_policy"], plan["public"])
+    # One environment record for the whole live call, re-derived from the
+    # plan's own node identifier and refusing any plan whose recorded
+    # network, node, and environment name do not agree.
+    config = _knb_env.plan_config(plan)
+    _require_replication_policy(
+        plan["replication_policy"], plan["public"], config
+    )
 
     _validate_adapter(adapter)
     client = adapter.connect(plan["environment"], plan["node_id"])
@@ -2712,7 +2813,12 @@ def _run_publication_body(
         remote = adapter.lookup_system_metadata(client, obj["pid"])
         if remote is not None:
             _validate_system_metadata(
-                remote, obj, subject, plan["public"], plan["replication_policy"]
+                remote,
+                obj,
+                subject,
+                plan["public"],
+                plan["replication_policy"],
+                config,
             )
             checksum = _optional_scalar(
                 adapter.get_checksum(client, obj["pid"], "SHA-256")
@@ -2767,6 +2873,7 @@ def _run_publication_body(
         subject,
         plan["public"],
         plan["replication_policy"],
+        config,
         plan=plan,
     )
     if remote_objects[metadata_index] is not None and series_remote is None:
@@ -2801,6 +2908,7 @@ def _run_publication_body(
                     subject,
                     plan["public"],
                     plan["replication_policy"],
+                    config,
                 )
 
         _verify_object(
@@ -2812,6 +2920,7 @@ def _run_publication_body(
             subject,
             plan["public"],
             plan["replication_policy"],
+            config,
         )
         update_of = _optional_scalar(obj.get("obsoletes"))
         if update_of is not None:
@@ -2874,6 +2983,7 @@ def _publication_result(
 ) -> Dict[str, object]:
     return {
         "status": status,
+        "knb_environment": plan["knb_environment"],
         "package_id": plan["package_id"],
         "series_id": plan["series_id"],
         "resource_map_pid": plan["resource_map_pid"],
@@ -3094,6 +3204,10 @@ def _solr_quote(value: object) -> str:
 
 def _catalog_url(plan: Dict[str, object]) -> str:
     """Mirror ``.ms_knb_catalog_url``."""
+    # Re-derived from the plan's fingerprinted node identifier, so the
+    # catalog queried is always the coordinating node of the environment the
+    # plan was actually built for.
+    config = _knb_env.plan_config(plan)
     pids = [str(obj["pid"]) for obj in plan["objects"]]
     query = " OR ".join('id:"' + _solr_quote(pid) + '"' for pid in pids)
     parameters = [
@@ -3105,7 +3219,7 @@ def _catalog_url(plan: Dict[str, object]) -> str:
     encoded = "&".join(
         name + "=" + quote(value, safe="") for name, value in parameters
     )
-    return CN_ENDPOINT + "/query/solr/?" + encoded
+    return str(config["solr_endpoint"]) + "?" + encoded
 
 
 def _catalog_docs(body: object) -> List[Dict[str, object]]:
@@ -3177,11 +3291,21 @@ def _require_transport() -> None:
 class KnbClient:
     """The connection state R keeps in its adapter's client environment."""
 
-    def __init__(self, environment: str, node_id: str, endpoint: str) -> None:
+    def __init__(
+        self,
+        environment: str,
+        node_id: str,
+        endpoint: str,
+        config: Dict[str, object],
+    ) -> None:
         self.environment = environment
         self.node_id = node_id
         self.endpoint = endpoint
-        self.cn_endpoint = CN_ENDPOINT
+        # One registry record, so the capabilities document, the token, the
+        # format registry and the node identity checked at preflight all
+        # come from the same environment rather than three constants.
+        self.config = config
+        self.cn_endpoint = str(config["cn_endpoint"])
         self.subject: Optional[str] = None
         self.authenticated = False
 
@@ -3205,13 +3329,11 @@ class DataOneRestAdapter:
 
         return requests.Session()
 
-    def _token(self) -> str:
-        if not _eml._nonempty(_DATAONE_TOKEN):
-            raise ValueError(
-                "A short-lived DataONE JWT is required; supply it with "
-                "metasalmonpy.knb_publication.set_dataone_token()."
-            )
-        return str(_DATAONE_TOKEN)
+    def _token(self, config: Optional[Dict[str, object]] = None) -> str:
+        """The JWT for one environment. Neither token falls back to the other."""
+        if config is None:
+            config = _knb_env.knb_config("production")
+        return _knb_env.require_token(config)
 
     def _request(
         self,
@@ -3222,9 +3344,10 @@ class DataOneRestAdapter:
     ):
         import requests
 
+        config = kwargs.pop("config", None)
         headers = dict(kwargs.pop("headers", {}) or {})
         if authenticated:
-            headers["Authorization"] = "Bearer " + self._token()
+            headers["Authorization"] = "Bearer " + self._token(config)
         try:
             response = requests.request(
                 method, url, headers=headers, timeout=self.timeout, **kwargs
@@ -3250,12 +3373,21 @@ class DataOneRestAdapter:
     # -- the fourteen adapter methods ---------------------------------------
 
     def connect(self, environment: str, node_id: str) -> KnbClient:
-        if environment != ENVIRONMENT or node_id != NODE_ID:
+        # Unknown nodes are refused, and so is a registered node paired with
+        # another environment's DataONE network -- the endpoint below is
+        # only ever the one belonging to ``node_id``.
+        config = _knb_env.config_for_node(node_id)
+        if environment != config["dataone_network"]:
             raise ValueError(
-                "The default publisher only supports production KNB."
+                "The requested DataONE network mixes KNB environments. Node "
+                f"{node_id!r} belongs to the "
+                f"{config['dataone_network']!r} network, but "
+                f"{environment!r} was requested."
             )
         _require_transport()
-        return KnbClient(environment, node_id, MN_ENDPOINT)
+        return KnbClient(
+            environment, node_id, str(config["mn_endpoint"]), config
+        )
 
     def preflight(self, client: KnbClient) -> Dict[str, object]:
         """Pin KNB's identity anonymously, then verify the subject server-side."""
@@ -3265,9 +3397,10 @@ class DataOneRestAdapter:
                 "GET", re.sub(r"/+$", "", endpoint) + "/node", False
             ).content
         )
-        _validate_live_capabilities(document, endpoint, NODE_ID)
+        config = client.config
+        _validate_live_capabilities(document, endpoint, str(config["node_id"]))
 
-        token = self._token()
+        token = self._token(config)
         token_subject = _token_subject(token)
 
         ping = self._request(
@@ -3287,7 +3420,7 @@ class DataOneRestAdapter:
         return {
             "subject": _nonempty_scalar(subject, "subject"),
             "endpoint": endpoint,
-            "node_id": NODE_ID,
+            "node_id": config["node_id"],
         }
 
     def list_formats(self, client: KnbClient) -> List[str]:
@@ -3333,6 +3466,7 @@ class DataOneRestAdapter:
             "POST",
             re.sub(r"/+$", "", client.endpoint) + "/object",
             True,
+            config=client.config,
             files={
                 "pid": (None, str(object_spec["pid"])),
                 "object": (
@@ -3367,6 +3501,7 @@ class DataOneRestAdapter:
             + "/object/"
             + quote(str(old_pid), safe=""),
             True,
+            config=client.config,
             files={
                 "newPid": (None, str(object_spec["pid"])),
                 "object": (
@@ -3387,6 +3522,7 @@ class DataOneRestAdapter:
             + "/object/"
             + quote(str(pid), safe=""),
             True,
+            config=client.config,
         ).content
 
     def get_system_metadata(
@@ -3400,6 +3536,7 @@ class DataOneRestAdapter:
                 + "/meta/"
                 + quote(str(pid), safe=""),
                 True,
+                config=client.config,
             ).content
         )
 
@@ -3415,6 +3552,7 @@ class DataOneRestAdapter:
             + "?checksumAlgorithm="
             + quote(str(algorithm), safe=""),
             True,
+            config=client.config,
         )
         document = ET.fromstring(response.content)
         return None if document.text is None else document.text.strip()
@@ -3445,7 +3583,9 @@ class DataOneRestAdapter:
         self, client: KnbClient, plan: Dict[str, object]
     ) -> List[Dict[str, object]]:
         self._require_authenticated(client)
-        response = self._request("GET", _catalog_url(plan), True)
+        response = self._request(
+            "GET", _catalog_url(plan), True, config=client.config
+        )
         if response.status_code != 200:
             raise ValueError(
                 "Authenticated DataONE catalog lookup failed after HTTP "
@@ -3473,6 +3613,7 @@ class DataOneRestAdapter:
             "GET",
             re.sub(r"/+$", "", client.cn_endpoint) + "/diag/subject",
             True,
+            config=client.config,
         )
         document = ET.fromstring(response.content)
         credentials: List[Tuple[str, object]] = []
@@ -3507,6 +3648,7 @@ class DataOneRestAdapter:
                 + "/meta/"
                 + quote(str(identifier), safe=""),
                 True,
+                config=client.config,
             )
             state = _lookup_http_status(
                 response.status_code, identifier, kind + " " + where
@@ -3577,8 +3719,9 @@ def publish_sdp_to_knb(
     revision_manifest: Optional[Union[str, Path]] = None,
     representation: str = "archive",
     overwrite: bool = False,
+    knb_environment: Optional[str] = None,
 ) -> Dict[str, object]:
-    """Publish a reviewed Salmon Data Package to production KNB.
+    """Publish a reviewed Salmon Data Package to KNB.
 
     Plans an immutable DataONE package containing the original data resources
     named by ``tables.csv``, one validated EML 2.2.0 metadata object, and a
@@ -3594,14 +3737,24 @@ def publish_sdp_to_knb(
     authority is recorded separately in the reviewed EML sidecar.
 
     DataONE credentials are read only inside the live adapter. Supply a
-    short-lived DataONE JWT through
-    :func:`metasalmonpy.knb_publication.set_dataone_token`; credentials are
-    never accepted as function arguments and never written to the manifest.
+    short-lived DataONE JWT through the setter belonging to the selected
+    environment -- :func:`set_dataone_token` for production,
+    :func:`set_dataone_test_token` for the test node. They are separate
+    credentials, and supplying one never satisfies the other. Credentials
+    are never accepted as function arguments and never written to the
+    manifest.
 
-    A live restricted deposit is the KNB review/staging mechanism; KNB does
-    not expose a separate server-side draft state. The persistent object
-    identifiers remain even while access is private. This function does not
-    call KNB's separate Publish action and never mints a DOI.
+    There are two deposit environments, selected with ``knb_environment``.
+    The KNB Test Node (``urn:node:mnTestKNB``, DataONE ``STAGING``) is the
+    rehearsal target and the default for a dry run; production KNB
+    (``urn:node:KNB``, DataONE ``PROD``) is the durable one and must always
+    be named explicitly. The golden path develops a package against the
+    test node first and posts to production once it looks good there.
+
+    Within production, a live restricted deposit is the review mechanism;
+    KNB does not expose a separate server-side draft state. The persistent
+    object identifiers remain even while access is private. This function
+    does not call KNB's separate Publish action and never mints a DOI.
 
     Revisions must be built in a fresh versioned SDP directory. Keep the prior
     package and its verified manifest unchanged, write the corrected SDP to a
@@ -3619,8 +3772,10 @@ def publish_sdp_to_knb(
     path:
         Directory containing the reviewed Salmon Data Package.
     eml_path:
-        Validated EML output path. Defaults to ``metadata/eml.xml`` inside
-        ``path``; it is rebuilt deterministically before planning.
+        Validated EML output path. Defaults to the selected environment's
+        own: ``metadata/eml.xml`` for production,
+        ``publication/test/eml.xml`` for the test node. It is rebuilt
+        deterministically before planning.
     public:
         Explicit access decision. ``True`` requests anonymous read access for
         every DataONE object and three DataONE preservation replicas.
@@ -3629,8 +3784,10 @@ def publish_sdp_to_knb(
         verification plus anonymous denial for every object and zero anonymous
         catalog matches. There is no implicit access default.
     manifest_path:
-        Recovery manifest path inside ``path``. Defaults to
-        ``publication/knb-manifest.json``.
+        Recovery manifest path inside ``path``. Defaults to the selected
+        environment's own: ``publication/knb-manifest.json`` for
+        production, ``publication/test/knb-manifest.json`` for the test
+        node.
     dry_run:
         When ``True`` (the default), write only local plan artifacts and never
         construct a DataONE adapter or read credentials.
@@ -3659,13 +3816,27 @@ def publish_sdp_to_knb(
         unaffected: a manifest whose status is not ``dry_run`` still requires
         a reviewed revision, because its DataONE PIDs are immutable, and live
         publication is still gated by ``confirm``.
+    knb_environment:
+        Deposit environment: ``"test"`` or ``"production"``. Selects the
+        DataONE network, member node, coordinating node, resolver, Solr
+        catalog endpoint, credential, and default artifact paths together --
+        these never vary independently. A dry run defaults to ``"test"``; a
+        live call has no default and must state the environment explicitly
+        alongside ``confirm=True``. Matched exactly: there is no partial
+        matching, no custom endpoint, and no fallback between environments.
+        Test deposits use the separate ``dataone_test_token`` credential,
+        mint identifiers that cannot collide with production ones, request
+        zero replicas, and write their artifacts under ``publication/test/``
+        so the reviewed production ``metadata/eml.xml`` is never replaced.
+        They are a rehearsal: non-durable, not promotable, and ineligible
+        for a DOI.
 
     Returns
     -------
     dict
-        Publication status, identifiers, normalized manifest and resource-map
-        paths, the optional SDP-archive path, the representation, and the
-        manifest itself.
+        Publication status, the resolved ``knb_environment``, identifiers,
+        normalized manifest and resource-map paths, the optional
+        SDP-archive path, the representation, and the manifest itself.
     """
     if representation not in ("archive", "expanded"):
         raise ValueError(
@@ -3674,16 +3845,30 @@ def publish_sdp_to_knb(
     _validate_flag(overwrite, "overwrite")
     _validate_flag(public, "public")
     _validate_flag(dry_run, "dry_run")
+    # The confirmation gate stays first and unchanged. Naming an environment
+    # is never a substitute for approving the plan, and a live call has to
+    # satisfy both this and the explicit-environment rule below.
     if not dry_run and confirm is not True:
         raise ValueError(
             "Live KNB publication requires an explicit confirm=True. This "
             "approves the pre-existing exact dry-run manifest; redistribution "
             "authority is recorded separately."
         )
+    config = _knb_env.resolve_environment(knb_environment, dry_run)
+    if not config["durable"]:
+        # Said at the call, not only in the documentation.
+        warnings.warn(
+            f"Planning against the {config['knb_environment']} KNB "
+            f"environment ({config['node_id']}): a rehearsal that is "
+            "non-durable, not promotable to production, unsuitable for "
+            "sensitive data, and cannot receive a DOI.",
+            stacklevel=2,
+        )
     _require_knb_extra()
     root = _package_root(path)
     prior_manifest = _revision_manifest(
-        None if revision_manifest is None else str(revision_manifest)
+        None if revision_manifest is None else str(revision_manifest),
+        config,
     )
     if prior_manifest is not None:
         prior_manifest_path = os.path.realpath(str(revision_manifest))
@@ -3695,10 +3880,19 @@ def publish_sdp_to_knb(
                 "directory."
             )
 
+    # Environment-specific defaults. A test EML document has different bytes
+    # from the reviewed production record, so it gets its own path rather
+    # than replacing ``metadata/eml.xml``; production keeps both of its
+    # existing defaults so a package published before this change still
+    # finds its manifest where it left it.
     if eml_path is None:
-        eml_path = os.path.join(root, "metadata", "eml.xml")
+        eml_path = os.path.join(
+            root, *str(config["default_eml_relpath"]).split("/")
+        )
     if manifest_path is None:
-        manifest_path = os.path.join(root, "publication", "knb-manifest.json")
+        manifest_path = os.path.join(
+            root, *str(config["default_manifest_relpath"]).split("/")
+        )
     publication_paths = _publication_paths(
         root, str(eml_path), str(manifest_path)
     )
@@ -3749,6 +3943,7 @@ def publish_sdp_to_knb(
         eml_path,
         manifest_path,
         public,
+        config,
         representation=representation,
         prior_manifest=prior_manifest,
         resource_map_path=resource_map_path,
@@ -3808,6 +4003,7 @@ __all__ = [
     "publish_sdp_to_knb",
     "DataOneRestAdapter",
     "KnbHttpError",
+    "set_dataone_test_token",
     "set_dataone_token",
     "set_knb_adapter",
 ]

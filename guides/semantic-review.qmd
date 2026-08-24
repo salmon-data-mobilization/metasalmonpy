@@ -7,7 +7,13 @@ description: "Retrieve, assess, and apply ontology candidates without weakening 
 
 `suggest_semantics()` searches for candidates for dictionary, code, table, and
 dataset targets. Measurement columns use six ordered semantic roles:
-variable, property, entity, unit, constraint, and method.
+variable, property, entity, unit, constraint, and statistical modifier.
+
+There is no dictionary *method* slot. sdp-0.3.0 removed it: a method is how
+a value was produced, not part of what the value **is**, so it moved to the
+three placements `migrate_sdp_methods()` relocates it to. The `method` role
+survives only for `codes.csv` term targets — a code value naming a
+procedure.
 
 ```python
 from metasalmonpy import infer_dictionary, suggest_semantics
@@ -103,8 +109,15 @@ updated = apply_semantic_suggestions(
 ```
 
 Only variable, property, entity, and unit roles are eligible for automatic
-prefill in the package workflow. Method and constraint decisions always remain
-for explicit review.
+prefill in `create_sdp()`. Constraint and statistical-modifier decisions
+remain for explicit review here.
+
+::: {.callout-note}
+metasalmon 0.4.0 differs: on its deterministic path a constraint or
+statistical modifier **is** applied when the column's own name, label or
+description carries the evidence. Which side is right is open; the
+difference is registered in [PARITY.md](https://github.com/salmon-data-mobilization/metasalmonpy/blob/main/PARITY.md).
+:::
 
 For an interactive, resumable whole-variable review, use
 `chat_decomposition()`. It persists structured state and never submits a term

@@ -83,7 +83,9 @@ assessments = reviewed.attrs["semantic_llm_assessments"]
 ```
 
 Measurement candidates are reviewed as six-slot bundles: variable, property,
-entity, unit, constraint, and method. The stable 30-column assessment schema
+entity, unit, constraint, and statistical modifier. (sdp-0.3.0 removed the
+dictionary method slot; the `method` role survives for `codes.csv` term
+targets.) The stable 30-column assessment schema
 records retries and escalation provenance. Provider failures preserve the
 deterministic shortlist, and conservative validators can downgrade unsupported
 acceptances without inventing or substituting terms.

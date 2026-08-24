@@ -30,9 +30,10 @@ description: "Terms used across metasalmonpy and Salmon Data Packages."
 
 **I-ADOPT**
 
-:   A framework for decomposing an observed variable into property, entity,
-    constraint, and related components. metasalmonpy also records a whole-variable
-    term, unit, and method.
+:   A framework for decomposing an observed variable into five components:
+    property, entity, constraint, statistical modifier, and the
+    whole-variable term itself. metasalmonpy also records a unit. There is
+    no dictionary method slot — sdp-0.3.0 removed it.
 
 **LLM assessment**
 

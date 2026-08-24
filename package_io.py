@@ -90,6 +90,36 @@ def _has_value(value) -> bool:
     return not (value is None or pd.isna(value) or value == "")
 
 
+def _meta_scalar_present(value) -> bool:
+    """Mirror ``.ms_meta_scalar_present``: the descriptor's presence test.
+
+    Every scalar presence test in the descriptor builder goes through this,
+    never a bare ``!= ""``. Two reasons, and the second is why it is not
+    just ``_has_value``:
+
+    * The value is rendered to text **before** presence is decided, so a
+      ``date``/``Timestamp`` in ``temporal_start`` is a present value rather
+      than a type comparison. (On the R side that comparison evaluated to
+      ``NA`` and aborted the writer mid-write; here it merely returns the
+      wrong answer, which is quieter and no more correct.)
+    * The rendered text is **trimmed**. A whitespace-only ``primary_key``
+      otherwise passed the presence test and then split to nothing, writing
+      ``"primaryKey": []`` into the descriptor -- a key R cannot produce and
+      the SDP publication validator has no reading for.
+    """
+    if value is None:
+        return False
+    try:
+        if pd.isna(value):
+            return False
+    except (TypeError, ValueError):
+        pass
+    rendered = _clean(value)
+    if rendered is None:
+        return False
+    return bool(str(rendered).strip())
+
+
 def _csv_value(value):
     cleaned = _clean(value)
     return "" if cleaned is None else cleaned
@@ -838,11 +868,11 @@ def write_salmon_datapackage(
             "profile": "tabular-data-resource",
             "schema": {"fields": fields},
         }
-        if _has_value(table_info["table_label"].iloc[0]):
+        if _meta_scalar_present(table_info["table_label"].iloc[0]):
             resource_entry["title"] = _clean(table_info["table_label"].iloc[0])
-        if "description" in table_info and _has_value(table_info["description"].iloc[0]):
+        if "description" in table_info and _meta_scalar_present(table_info["description"].iloc[0]):
             resource_entry["description"] = _clean(table_info["description"].iloc[0])
-        if "primary_key" in table_info and _has_value(table_info["primary_key"].iloc[0]):
+        if "primary_key" in table_info and _meta_scalar_present(table_info["primary_key"].iloc[0]):
             primary_key = [
                 value.strip()
                 for value in str(table_info["primary_key"].iloc[0]).split(",")
@@ -858,7 +888,7 @@ def write_salmon_datapackage(
     sdp_bundle = load_sdp_schema(quiet=True)
     declared_spec_version = (
         str(dataset_meta["spec_version"].iloc[0]).strip()
-        if "spec_version" in dataset_meta and _has_value(dataset_meta["spec_version"].iloc[0])
+        if "spec_version" in dataset_meta and _meta_scalar_present(dataset_meta["spec_version"].iloc[0])
         else ""
     )
     if declared_spec_version and declared_spec_version != sdp_bundle["version"]:
@@ -891,24 +921,24 @@ def write_salmon_datapackage(
     }
 
     # Optional metadata
-    if "creator" in dataset_meta and _has_value(dataset_meta["creator"].iloc[0]):
+    if "creator" in dataset_meta and _meta_scalar_present(dataset_meta["creator"].iloc[0]):
         datapackage["contributors"] = [
             {"title": _clean(dataset_meta["creator"].iloc[0]), "role": "creator"}
         ]
     # The contact contributor was simply missing here until the 0.2.0 rung; R
     # has emitted it since 0.1.x, so a Python-written descriptor silently
     # dropped the dataset contact.
-    if "contact_name" in dataset_meta and _has_value(dataset_meta["contact_name"].iloc[0]):
+    if "contact_name" in dataset_meta and _meta_scalar_present(dataset_meta["contact_name"].iloc[0]):
         contact = {
             "title": _clean(dataset_meta["contact_name"].iloc[0]),
             "role": "contact",
         }
-        if "contact_email" in dataset_meta and _has_value(dataset_meta["contact_email"].iloc[0]):
+        if "contact_email" in dataset_meta and _meta_scalar_present(dataset_meta["contact_email"].iloc[0]):
             contact["email"] = _clean(dataset_meta["contact_email"].iloc[0])
-        if "contact_org" in dataset_meta and _has_value(dataset_meta["contact_org"].iloc[0]):
+        if "contact_org" in dataset_meta and _meta_scalar_present(dataset_meta["contact_org"].iloc[0]):
             contact["organization"] = _clean(dataset_meta["contact_org"].iloc[0])
         datapackage["contributors"] = datapackage.get("contributors", []) + [contact]
-    if "license" in dataset_meta and _has_value(dataset_meta["license"].iloc[0]):
+    if "license" in dataset_meta and _meta_scalar_present(dataset_meta["license"].iloc[0]):
         license_value = dataset_meta["license"].iloc[0]
         # R gates on ``.ms_is_review_placeholder()`` — the three placeholder
         # spellings — not on the broader review-value test: a bare
@@ -919,9 +949,9 @@ def write_salmon_datapackage(
     # ``_has_value`` rather than ``pd.notna``: an empty ``temporal_start``
     # is not missing to pandas, so a descriptor carried ``"temporal": {"start":
     # "", "end": ""}``. R has always tested both conditions.
-    if "temporal_start" in dataset_meta and _has_value(dataset_meta["temporal_start"].iloc[0]):
+    if "temporal_start" in dataset_meta and _meta_scalar_present(dataset_meta["temporal_start"].iloc[0]):
         datapackage["temporal"] = {"start": _clean(dataset_meta["temporal_start"].iloc[0])}
-        if "temporal_end" in dataset_meta and _has_value(dataset_meta["temporal_end"].iloc[0]):
+        if "temporal_end" in dataset_meta and _meta_scalar_present(dataset_meta["temporal_end"].iloc[0]):
             datapackage["temporal"]["end"] = _clean(dataset_meta["temporal_end"].iloc[0])
 
     # Render canonical SDP metadata after any file_name defaults were resolved.

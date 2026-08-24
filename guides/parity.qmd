@@ -5,10 +5,17 @@ description: "Understand the shared metasalmon contract and Python-native differ
 
 ## Compatibility target
 
-metasalmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6. The
-R package remains the normative Salmon Data Package and ontology contract.
-Parity means equivalent workflows and safety behavior, not line-for-line
-implementations.
+metasalmonpy 0.4.0 aligns its core user-facing behavior with metasalmon
+0.4.0. The R package remains the normative Salmon Data Package and ontology
+contract. Parity means equivalent workflows and safety behavior, not
+line-for-line implementations.
+
+The version number is a **parity claim**: it names the metasalmon release
+whose functionality this package actually delivers, and it is bumped when
+the mirrored behaviour lands rather than on a calendar. Every deliberate
+difference is registered in
+[PARITY.md](https://github.com/salmon-data-mobilization/metasalmonpy/blob/main/PARITY.md)
+and in the hub's `knowledge/parity-deviations.md`.
 
 | Workflow | metasalmon | metasalmonpy |
 |---|---|---|
@@ -20,6 +27,12 @@ implementations.
 | Detect term gaps | `detect_semantic_term_gaps()` | `detect_semantic_term_gaps()` |
 | Validate a package | `validate_salmon_datapackage()` | `validate_salmon_datapackage()` |
 | Rebuild EDH XML | `write_edh_xml_from_sdp()` | `write_edh_xml_from_sdp()` |
+| Export reviewed EML | `write_eml_from_sdp()` | `write_eml_from_sdp()` |
+| Publish to KNB/DataONE | `publish_sdp_to_knb()` | `publish_sdp_to_knb()` |
+| Write SSSOM mapping sets | `write_sdp_sssom()` | `write_sdp_sssom()` |
+| Write measurement decompositions | `write_sdp_measurement_decompositions()` | `write_sdp_measurement_decompositions()` |
+| Write observation structures | `write_sdp_observation_structures()` | `write_sdp_observation_structures()` |
+| Migrate sdp-0.2.0 methods | `migrate_sdp_methods()` | `migrate_sdp_methods()` |
 
 ## Shared contracts
 
@@ -27,31 +40,42 @@ implementations.
 - Context alone never triggers a provider call.
 - Explicit retrieval sources form a strict allowlist.
 - Measurement review uses variable, property, entity, unit, constraint, and
-  method slots.
+  statistical-modifier slots. sdp-0.3.0 removed the dictionary method slot;
+  the `method` role survives for `codes.csv` term targets.
 - Suggested IRIs retain the `REVIEW:` marker until human approval.
-- Method and constraint suggestions are never automatically applied.
+- Deterministic prefill is limited to variable, property, entity and unit
+  here (a registered difference from metasalmon 0.4.0, which also applies a
+  constraint or statistical modifier when the column text carries the
+  evidence).
 - Provider failures preserve deterministic candidates.
 - Term requests require curator review and explicit submission.
 
 ## Not yet in Python
 
-metasalmonpy is at **metasalmon 0.1.6 parity**; metasalmon is at 0.2.6. The
-version number is a parity claim, so the honest list of what this package
-does **not** yet have matters as much as the table above (catch-up is hub
-roadmap stream S10):
+The honest list of what this package does **not** have matters as much as
+the table above. Everything the S10 catch-up stream covered — EML export,
+KNB/DataONE publication and the deterministic SDP archive, SSSOM mapping
+sets, measurement decompositions, observation structures, the empty-field
+missing-value token, declared primary-key validation and tidy-shape
+warnings, structural credential redaction — **has landed**. What remains:
 
-- **EML export and KNB/DataONE publication** — `write_eml_from_sdp()`,
-  `publish_sdp_to_knb()`, and the deterministic SDP archive have no Python
-  counterpart yet.
-- **SSSOM mapping sets, measurement decompositions, observation structures**
-  (metasalmon 0.1.7+).
-- **The 0.2.x contracts:** the empty-field missing-value token (0.2.4 —
-  Python's CSV reader still parses nothing as missing), declared
-  primary-key validation and tidy-shape warnings (0.2.6), structural
-  credential redaction (0.2.5), and the cli-safety/byte-reproducibility
-  guard machinery where applicable.
+- **No ranking-profile override system.** `role_boost` and the base source
+  weights are module constants (`term_search.ROLE_BOOST`), not a merged
+  profile with a `ranking_profile` argument (hub backlog #87).
+- **No live-provider evidence harness.** The versioned cryptographic
+  capture and cohort-publication machinery is a metasalmon maintainer
+  activity, deliberately not a metasalmonpy CI job.
+- **Only the 30-row Fraser coho example ships here**, not the 173-row
+  starter package.
+- **No migration or tidy-data guide.** metasalmon 0.4.0 added two
+  vignettes (`migrating-to-sdp-0-3-0`, `tidy-data-for-sdp`) whose behaviour
+  exists here but whose prose has no counterpart yet.
 - `ms_setup_github()` differs by design: Python cannot create or store a
   PAT for you — it verifies discovery only.
+
+Each of these carries a row in
+[PARITY.md](https://github.com/salmon-data-mobilization/metasalmonpy/blob/main/PARITY.md)
+with the condition that would retire it.
 
 ## Python-native differences
 
