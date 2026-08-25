@@ -702,6 +702,15 @@ def write_salmon_datapackage(
     ``prune=True`` restores the previous behaviour, deleting every entry in the
     directory first. It requires ``overwrite=True``.
 
+    **``overwrite`` is about destroying something, so an empty directory does
+    not need it.** An existing directory with nothing in it is written into
+    with ``overwrite=False``; "nothing in it" means ``list(path.iterdir())`` is
+    empty, so a dot-file, a stale ownership sentinel, or an empty ``data/``
+    subdirectory each make the directory non-empty and the ``overwrite`` gate
+    applies as before. Emptiness is never recursive. metasalmon adopted this
+    order on hub Q15 (2026-08-24) — see PARITY.md row 54; it had been the one
+    behaviour neither package's tests pinned.
+
     **The write is transactional over the files it owns.** The full write set —
     data resources, metadata CSVs, ``datapackage.json`` and the ownership
     sentinel — is rendered to bytes before anything on disk is touched, then
@@ -1557,7 +1566,34 @@ def _auto_apply_package_suggestions(artifacts: dict, llm_assess: bool) -> None:
     )
 
     strategy = "llm" if llm_assess else "top"
-    auto_roles = ["variable", "property", "entity", "unit"]
+
+    # WHICH ROLES `create_sdp()` MAY PREFILL, and it is not one list.
+    #
+    # Deterministic ("top") path: every role, with no role filter at all. The
+    # gate is per-suggestion rather than per-role -- `_filter_auto_apply_
+    # suggestions()` runs `_measurement_suggestion_is_compatible()`, which for
+    # `constraint_iri` and `statistical_modifier_iri` demands that the
+    # COLUMN'S OWN name, label or description name the qualifier or the
+    # aggregation. A `mean_wild_spawner_count` column earns both; a bare
+    # `count` column earns neither, whatever the retrieval returns.
+    #
+    # LLM path: the four core roles only. A reviewed accept is not a licence to
+    # auto-apply the two roles that change what the variable IS -- a mean
+    # weight and a maximum weight are different variables, which is why
+    # sdp-0.3.0 moved the modifier into the dictionary.
+    #
+    # This is metasalmon's split, adopted here on Brett's Q16 ruling
+    # (2026-08-24, "Yeah lets go the R way") -- PARITY.md row 57, which the
+    # ruling retires. R reaches it through two different filter helpers
+    # (`.ms_filter_auto_apply_suggestions()` for "top",
+    # `.ms_prepare_llm_auto_apply_suggestions()` with
+    # `.ms_create_sdp_llm_auto_apply_roles()` for "llm"); the shape differs,
+    # the role sets do not. Row 57 described R as calling
+    # `apply_semantic_suggestions()` with "no role restriction", which is true
+    # of the deterministic path only -- porting that unconditionally would have
+    # widened the LLM path past R and re-opened the divergence in the other
+    # direction.
+    auto_roles = ["variable", "property", "entity", "unit"] if llm_assess else None
     before = artifacts["dict"].copy()
     applied = apply_semantic_suggestions(
         artifacts["dict"],
@@ -1567,11 +1603,27 @@ def _auto_apply_package_suggestions(artifacts: dict, llm_assess: bool) -> None:
         overwrite=False,
         verbose=False,
     )
+    # Every slot the prefill can fill is marked, which is the property Brett's
+    # Q16 ruling turned on: a deterministic prefill has to be REVIEW-visible,
+    # or it is an unreviewed IRI in a slot the user never asked about. A port
+    # that filled `constraint_iri` without marking it would have taken the
+    # behaviour and dropped the reason for it.
+    #
+    # `constraint_iri` and `statistical_modifier_iri` join the four core roles
+    # here rather than being marked separately: the predicate below is
+    # "this apply filled a slot that was empty", which is exactly what
+    # `.ms_mark_reviewed_dictionary_iris()` marks in R (it re-checks the
+    # applied value against the suggestion IRI, equivalent here because "top"
+    # is single-winner per role -- the multi-constraint semicolon join in
+    # `apply_semantic_suggestions()` is reviewed/LLM-only, and the LLM path
+    # does not reach these two roles at all).
     role_fields = {
         "variable": "term_iri",
         "property": "property_iri",
         "entity": "entity_iri",
         "unit": "unit_iri",
+        "constraint": "constraint_iri",
+        "statistical_modifier": "statistical_modifier_iri",
     }
     for field in role_fields.values():
         was_missing = before[field].apply(lambda value: not _has_value(value))

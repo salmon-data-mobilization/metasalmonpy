@@ -43,10 +43,13 @@ and in the hub's `knowledge/parity-deviations.md`.
   statistical-modifier slots. sdp-0.3.0 removed the dictionary method slot;
   the `method` role survives for `codes.csv` term targets.
 - Suggested IRIs retain the `REVIEW:` marker until human approval.
-- Deterministic prefill is limited to variable, property, entity and unit
-  here (a registered difference from metasalmon 0.4.0, which also applies a
-  constraint or statistical modifier when the column text carries the
-  evidence).
+- Deterministic prefill applies every role the evidence allows, matching
+  metasalmon: variable, property, entity and unit whenever a compatible
+  candidate is found, plus a constraint or statistical modifier when the
+  column's own text carries the evidence for it. The LLM path stays limited to
+  the four core roles on both sides. Everything prefilled is marked `REVIEW:`.
+  (This bullet described a narrower prefill until 2026-08-24, when hub Q16
+  ruled the metasalmon behaviour correct and PARITY.md row 57 converged.)
 - Provider failures preserve deterministic candidates.
 - Term requests require curator review and explicit submission.
 

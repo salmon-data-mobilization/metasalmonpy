@@ -1,5 +1,86 @@
 # Changelog
 
+## Unreleased
+
+**No version bump.** Both packages are released at 0.4.0 and the two changes
+below converge two registered divergences rather than adding capability, so the
+parity claim the number carries is unchanged.
+
+### Changed
+
+* **`create_sdp()`'s deterministic prefill now applies every role the evidence
+  allows, and marks all of it.** `_auto_apply_package_suggestions()` passed
+  `roles=["variable", "property", "entity", "unit"]` on both of its paths; it
+  now passes `roles=None` on the deterministic (`"top"`) path, so
+  `constraint_iri` and `statistical_modifier_iri` fill when — and only when —
+  the column's own name, label or description carries the evidence for the
+  qualifier or the aggregation. The gates that decide this
+  (`semantics._measurement_suggestion_is_compatible()`) already existed and
+  were already faithful mirrors of metasalmon's; the role filter sat in front
+  of them and meant they never ran for these two slots.
+
+  **Both new slots are marked `REVIEW:` like the four core ones**, and that is
+  not a detail of the port. Review-visibility is the property Brett's ruling
+  turned on — an unmarked constraint IRI is an unreviewed assertion in a slot
+  the user never asked about — so a port that filled the same slots without
+  marking them would have taken the behaviour and dropped its justification.
+
+  Adopts metasalmon's behaviour on Brett's ruling of 2026-08-24 ("Yeah lets go
+  the R way"), retiring PARITY.md row 57. **Two things the port found that the
+  row did not describe.** First, metasalmon's "no role restriction" is true of
+  its **deterministic path only**: its LLM path restricts to the same four core
+  roles, so porting `roles=None` unconditionally would have widened this
+  package *past* metasalmon and re-opened the divergence in the other
+  direction. The split is now mirrored and pinned by
+  `test_llm_auto_apply_still_refuses_the_two_qualifier_roles`. Second,
+  **neither side pinned the positive case** — both suites asserted the slots
+  stay empty when the gate rejects and neither asserted they ever fill, which
+  is precisely how the divergence survived two green suites.
+
+  `guides/faq.qmd`, `guides/semantic-review.qmd` and `guides/parity.qmd` all
+  carried the "never auto-filled" claim, which was true of this package and
+  false of metasalmon. All three are corrected in the same change, and each
+  says so rather than quietly reading correctly.
+
+### Added
+
+* **The existing-empty-directory write is finally pinned.** This package has
+  always written into an existing directory that contains nothing without
+  `overwrite=True`, and **had no test for it** — which is half of why PARITY.md
+  row 54 survived from before the 0.1.6 parity claim through four minor
+  versions of green suites. `tests/test_current_workflow.py` now pins the write
+  itself, the `create_sdp()` path, and a parametrized trio of near misses: a
+  dot-file, a stale ownership sentinel, and an empty `data/` subdirectory each
+  make the directory **non-empty** and still require `overwrite=True`.
+  Emptiness is never recursive.
+
+  Brett ruled on 2026-08-24 ("Go with the python implementation"), so **this
+  package's behaviour is unchanged and metasalmon moved** to match it. Row 54
+  is retired as converged in both registers. `write_salmon_datapackage()`'s
+  docstring and `guides/faq.qmd` now state the rule instead of leaving it
+  implicit.
+
+### Registered
+
+* **PARITY.md row 60** — `create_sdp()` refuses a doomed write *after* running
+  inference here and *before* it in metasalmon. Measured, not read: a
+  `create_sdp()` into an existing non-empty directory with `overwrite=False`
+  runs `infer_salmon_datapackage_artifacts()` once here and zero times there.
+  The outcome is identical on both sides, so no assertion about the result
+  could ever have seen it; what differs is wasted work, and with
+  `llm_assess=True` that work is billable. Found while implementing the row 54
+  ruling and deliberately **not** fixed — direction is a ruling, not a
+  drive-by. Raised as hub Q17.
+
+* **PARITY.md row 61** — the `REVIEW:` marker is written without a trailing
+  space here and with one in metasalmon. Every detector on both sides matches
+  the no-space prefix, so each recognises the other and strict validation
+  refuses both; the difference is inert to behaviour and visible only in bytes.
+  Found by the row 57 differential, and it is invisible to every test either
+  side has, because both build the expected string from their own prefix.
+  Registered rather than converged: Brett was asked which slots a prefill may
+  fill, not what the marker's bytes should be. Raised as hub Q18.
+
 ## 0.4.0
 
 **The bump the S10 chunks were saving.** This release closes the

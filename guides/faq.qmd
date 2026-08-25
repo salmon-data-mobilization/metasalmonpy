@@ -20,14 +20,28 @@ Omitting `sources` uses role-aware defaults instead.
 
 ## Are semantic suggestions written into the dictionary automatically?
 
-The package workflow may prefill variable, property, entity, and unit IRIs, but
-it marks them with `REVIEW:`. Method and constraint fields are never
-automatically applied. Strict validation fails until review is complete.
+The package workflow may prefill them, and it marks everything it prefills with
+`REVIEW:`. Variable, property, entity and unit IRIs are prefilled whenever a
+compatible candidate is found. **Constraint and statistical modifier are held
+back unless the column's own name, label or description carries the evidence
+for them** — a `mean_wild_spawner_count` column earns both, a bare `count`
+column earns neither — and under LLM review (`llm_assess=True`) they are never
+prefilled at all. Strict validation fails until review is complete.
+
+(sdp-0.3.0 removed the dictionary `method` slot, so there is nothing to prefill
+there. This answer said "method and constraint fields are never automatically
+applied" until 2026-08-24; it was true of this package and false of metasalmon,
+and hub Q16 ruled that metasalmon was right.)
 
 ## Will `overwrite=True` delete any directory?
 
 No. metasalmonpy replaces only directories it recognizes as metasalmonpy or SDP package
 directories. It refuses to delete an unrelated non-empty directory.
+
+You do not need `overwrite=True` for an existing directory that is *empty* —
+there is nothing there to destroy. "Empty" is literal: a dot-file, a stale
+ownership sentinel, or an empty `data/` subdirectory all count as content and
+still require `overwrite=True`, and emptiness is never recursive.
 
 ## Does term-gap detection submit GitHub issues?
 
