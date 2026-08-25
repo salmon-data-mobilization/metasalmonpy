@@ -1194,8 +1194,14 @@ def apply_semantic_suggestions(
         semicolon-separated value. Other roles continue to select one value
         per column-role pair, and ``"top"`` stays single-winner for every role.
     roles
-        Optional semantic-role filter. Package auto-prefill should remain
-        limited to variable, property, entity, and unit roles.
+        Optional semantic-role filter; ``None`` applies every role, leaving
+        the per-suggestion gates in ``_filter_auto_apply_suggestions()`` as the
+        only restriction. ``create_sdp()``'s LLM path passes the four core
+        roles (variable, property, entity, unit); its deterministic path
+        passes ``None``, because for ``constraint_iri`` and
+        ``statistical_modifier_iri`` the gate that matters is evidence in the
+        column's own text, not the role name. See
+        ``package_io._auto_apply_package_suggestions()`` and PARITY.md row 57.
     overwrite
         Replace existing IRIs when ``True``. Existing values are preserved by
         default.

@@ -108,15 +108,33 @@ updated = apply_semantic_suggestions(
 )
 ```
 
-Only variable, property, entity, and unit roles are eligible for automatic
-prefill in `create_sdp()`. Constraint and statistical-modifier decisions
-remain for explicit review here.
+The four core roles — variable, property, entity, unit — are eligible for
+automatic prefill in `create_sdp()` whenever a compatible candidate is found.
+**Constraint and statistical modifier are eligible too, but only on the
+deterministic path and only when the column's own name, label or description
+carries the evidence** for the qualifier or the aggregation. The retrieval
+offering a hit is never enough on its own: a `mean_wild_spawner_count` column
+earns both slots, a bare `count` column earns neither, whatever comes back from
+search.
+
+Under LLM review (`llm_assess=True`) the two qualifier roles are excluded
+outright, as the `roles=` argument above shows. A reviewed accept is not a
+licence to auto-apply the roles that change what the variable *is*: a mean
+weight and a maximum weight are different variables, which is why sdp-0.3.0
+moved the modifier into the dictionary in the first place.
+
+Everything prefilled is marked `REVIEW:`, including the two qualifier slots.
+That marking is the point rather than a detail — an unmarked constraint IRI is
+an unreviewed assertion sitting in a slot you never asked about.
 
 ::: {.callout-note}
-metasalmon 0.4.0 differs: on its deterministic path a constraint or
-statistical modifier **is** applied when the column's own name, label or
-description carries the evidence. Which side is right is open; the
-difference is registered in [PARITY.md](https://github.com/salmon-data-mobilization/metasalmonpy/blob/main/PARITY.md).
+This page said the opposite until 2026-08-24: that only the four core roles
+were eligible and constraint and statistical modifier were left for explicit
+review. That was a true description of this package and a false one of
+metasalmon, whose deterministic path had always applied them under the same
+evidence gates — and each side's prose matched its own code, so no reader was
+positioned to catch it. Hub Q16 ruled metasalmon right ("Yeah lets go the R
+way") and this package moved. See PARITY.md row 57.
 :::
 
 For an interactive, resumable whole-variable review, use
