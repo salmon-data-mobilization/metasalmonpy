@@ -90,6 +90,36 @@ in `smn`, `gcdfo` or the PSC CV, with a note saying what a term would have to
 say and where it should be minted. That register feeds this ecosystem's
 term-request pipeline.
 
+## Releases
+
+Mirrored from metasalmon's own contract, because this repository had **no
+release procedure written down at all** until 2026-08-25 — which is why the
+0.4.0 release shipped with a stale `uv.lock`.
+
+Every release from **0.3.0 forward** is tagged (`vX.Y.Z`, annotated) **and**
+published as a GitHub Release with its `CHANGELOG.md` entry as the body. **Tag
+the commit that made the version current, not a later docs-only merge** — this
+repository has been following that rule without stating it (`v0.4.0` sits at
+`3b587e6`, with a docs-only merge after it), so the practice was real and only
+the contract was missing.
+
+**The version number lives in four places and they drift.** A bump moves all
+four in the same change:
+
+1. `pyproject.toml` — `version`
+2. `__init__.py` — `__version__`
+3. **`uv.lock`** — the `metasalmonpy` entry's own `version`. Refresh it with
+   `uv lock` and commit the result. Miss it and the next contributor's
+   `uv pip install -e .` silently rewrites the line, producing a spurious
+   `M uv.lock` in an unrelated PR. That happened after 0.4.0, was reverted as
+   out of scope, and is the reason this list is enumerated rather than
+   described. `uv lock --check` verifies it without writing.
+4. `AGENTS.md` — the parity-claim number in the mirror contract above.
+
+The version is a **parity claim**, so it moves only when the mirrored behaviour
+actually lands; the mirror contract above governs what makes the claim true.
+Verify with `uv lock --check` and both dependency legs before tagging.
+
 ## Build / test
 
 ```sh
