@@ -436,6 +436,47 @@ def _check_package_write_dir(
         )
 
 
+def _warn_pruning_recorded_decisions(target: Path, writes) -> None:
+    """Say what ``prune=True`` is about to destroy, when it is a review record.
+
+    ``prune=True`` wipes the directory before installing the new bytes, and
+    ``semantic_suggestions.csv`` is not among the files a rewrite produces
+    unless semantics were seeded again. When it holds recorded review decisions,
+    that wipe destroys the audit trail this package exists to keep -- silently,
+    and after the point where anything could be recovered. It is not an error (a
+    caller may genuinely want a clean rebuild), but it must never be invisible.
+
+    Retires when the write path preserves ``semantic_suggestions.csv`` across a
+    prune, at which point there is nothing left to warn about.
+    """
+    suggestions_path = target / "semantic_suggestions.csv"
+    if not suggestions_path.is_file() or suggestions_path in writes:
+        return
+    try:
+        rows = read_sdp_csv(suggestions_path)
+    except Exception:
+        return
+    if "decision" not in rows.columns:
+        return
+    decisions = [
+        value
+        for value in rows["decision"].map(
+            lambda entry: "" if pd.isna(entry) else str(entry).strip()
+        )
+        if value and value != "not_selected"
+    ]
+    if not decisions:
+        return
+    plural = "" if len(decisions) == 1 else "s"
+    warnings.warn(
+        "prune=True is about to delete semantic_suggestions.csv, which records "
+        f"{len(decisions)} review decision{plural}. Copy it first if you want "
+        "to keep the record of what was accepted and why.",
+        UserWarning,
+        stacklevel=2,
+    )
+
+
 def _commit_package_write(
     target: Path,
     writes: "Mapping[Path, bytes]",
@@ -481,6 +522,7 @@ def _commit_package_write(
     _assert_managed_paths_contained(target, managed_paths)
 
     if prune:
+        _warn_pruning_recorded_decisions(target, writes)
         for child in list(target.iterdir()):
             if child.is_dir() and not child.is_symlink():
                 shutil.rmtree(child)
@@ -649,6 +691,255 @@ def _license_descriptor(license_value) -> dict:
     if _is_canonical_rights_url(text):
         return {"path": text}
     raise ValueError(f"Unknown SDP publication license: {raw!r}.")
+
+
+# ---------------------------------------------------------------------------
+# The descriptor builders, shared by the full rebuild and the surgical patch
+# ---------------------------------------------------------------------------
+#
+# ``datapackage.json`` duplicates metadata that lives canonically in the CSVs,
+# so there are two producers of the same JSON: :func:`write_salmon_datapackage`,
+# which builds the whole descriptor, and the review write-back and field setters
+# in :mod:`metasalmonpy.metadata_write` / :mod:`metasalmonpy.sdp_field_setters`,
+# which change a few cells and must leave the descriptor in the state a rebuild
+# would have produced. Two producers of one shape is the defect class
+# ``AGENTS.md`` calls "one value, one rendering": they look correct separately
+# and disagree in ways nothing checks, because the rule that would catch
+# CSV/descriptor drift (``datapackage_consistent_with_csv_metadata``) is one of
+# the dead rules in ``sdp.rules.yaml``.
+#
+# So the three builders below are the ONE spelling, and both producers call
+# them. The writer calls them on the frames it is about to write; the setters
+# call them on the frames they just read and edited. That makes "the patch
+# produces the shape a rebuild would" true by construction rather than by a test
+# that has to imagine every field. Mirrors ``R/metadata-write.R``, which
+# extracted the same three for the same reason; this package had them inline
+# here until the S5 port.
+
+
+def _descriptor_field_keys() -> "dict[str, str]":
+    """Which descriptor field key mirrors a dictionary column.
+
+    The ORDER is the writer's emission order, not alphabetical and not the
+    schema's: a key that was absent and is now filled has to land where a
+    rebuild would have put it.
+    """
+    return {
+        "unit_iri": "unit_iri",
+        "term_iri": "term_iri",
+        "term_type": "term_type",
+        "property_iri": "property_iri",
+        "entity_iri": "entity_iri",
+        "constraint_iri": "constraint_iri",
+        "statistical_modifier_iri": "statistical_modifier_iri",
+    }
+
+
+def _descriptor_required_flag(value) -> bool:
+    """Mirror R's ``isTRUE()``: only a genuine true emits the constraints block.
+
+    ``bool(...)`` alone read a missing ``required`` as true -- ``iterrows()``
+    hands a boolean-dtype NA back as a truthy float nan -- so every blank
+    ``required`` claimed the column was required (found by the S10 chunk D
+    descriptor byte differential; the shipped example's RUN_TYPE and
+    ESTIMATE_STAGE rows hit it). ``required`` is boolean on the writer's
+    in-memory path and text on the read-from-CSV path, so a string is parsed
+    the same way the reader parses it.
+    """
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return False
+    if isinstance(value, str):
+        return value.strip().upper() in {"TRUE", "T", "YES", "1"}
+    try:
+        return bool(value) is True
+    except (TypeError, ValueError):
+        return False
+
+
+def _descriptor_field_entry(row) -> dict:
+    """One ``schema.fields[]`` entry, built from one dictionary row.
+
+    Key order and emission rules mirror the R field builder exactly. Three
+    differences were found by driving both writers over the same package at the
+    0.2.0 rung, and all three were accidental: the title was suppressed when it
+    equalled the column name (R emits it whenever ``column_label`` is
+    non-blank), ``constraints`` was emitted with ``required: false`` (R emits
+    the block only for a required column), and a single-column primary key was
+    written as a one-element array (R writes the scalar).
+    """
+    field = {
+        "name": _clean(row.get("column_name")),
+        # A blank column_label stays as an explicit null, exactly as R's
+        # builder leaves the NA in place and jsonlite renders it — popping the
+        # key made the two descriptors differ on any unlabeled column (S10
+        # chunk D byte differential).
+        "title": _clean(row.get("column_label")),
+        "type": _clean(row.get("value_type")),
+        "description": _clean(row.get("column_description")),
+    }
+    if _descriptor_required_flag(row.get("required")):
+        field["constraints"] = {"required": True}
+    for source_key, descriptor_key in _descriptor_field_keys().items():
+        value = row.get(source_key)
+        if value is not None and not pd.isna(value) and value != "":
+            field[descriptor_key] = _clean(value)
+    return field
+
+
+def _descriptor_apply_resource_meta(resource: dict, table_info) -> dict:
+    """The ``tables.csv``-derived keys of one data resource entry.
+
+    Each is dropped first and re-added in the writer's order, so a resource that
+    gains a title it did not have ends up with the key order a rebuild would
+    emit rather than whichever order the edits happened in.
+    """
+    resource.pop("title", None)
+    resource.pop("description", None)
+    if isinstance(resource.get("schema"), dict):
+        resource["schema"].pop("primaryKey", None)
+
+    if _meta_scalar_present(table_info.get("table_label")):
+        resource["title"] = _clean(table_info.get("table_label"))
+    if _meta_scalar_present(table_info.get("description")):
+        resource["description"] = _clean(table_info.get("description"))
+    if _meta_scalar_present(table_info.get("primary_key")):
+        primary_key = [
+            value.strip()
+            for value in str(table_info.get("primary_key")).split(",")
+            if value.strip()
+        ]
+        if primary_key:
+            # A one-column key is a JSON string, a composite key a JSON array.
+            # This is not incidental: smn-data-pkg's strict publication
+            # validator derives the expected value with
+            # ``descriptor_primary_key()``, which returns ``parts[0]`` for a
+            # single column, and reports "primaryKey must be 'pop_id'; found
+            # ['pop_id']" for the array form. Frictionless v1, which SDP targets
+            # via its top-level ``profile`` key, permits either shape, so only
+            # the SDP validator settles it.
+            if not isinstance(resource.get("schema"), dict):
+                resource["schema"] = {}
+            resource["schema"]["primaryKey"] = (
+                primary_key[0] if len(primary_key) == 1 else primary_key
+            )
+    return resource
+
+
+def _descriptor_apply_dataset_meta(datapackage: dict, dataset_meta) -> dict:
+    """The ``dataset.csv``-derived keys of the descriptor.
+
+    ``title``/``description`` are assigned unconditionally, and deliberately as
+    an explicit null for an absent value: dropping the key would make an
+    unfilled title differ from what a rebuild emits.
+    """
+    datapackage["title"] = _clean(dataset_meta.get("title"))
+    datapackage["description"] = _clean(dataset_meta.get("description"))
+    datapackage.pop("contributors", None)
+    datapackage.pop("licenses", None)
+    datapackage.pop("temporal", None)
+
+    if _meta_scalar_present(dataset_meta.get("creator")):
+        datapackage["contributors"] = [
+            {"title": _clean(dataset_meta.get("creator")), "role": "creator"}
+        ]
+    # The contact contributor was simply missing from this package until the
+    # 0.2.0 rung; R has emitted it since 0.1.x, so a Python-written descriptor
+    # silently dropped the dataset contact.
+    if _meta_scalar_present(dataset_meta.get("contact_name")):
+        contact = {
+            "title": _clean(dataset_meta.get("contact_name")),
+            "role": "contact",
+        }
+        if _meta_scalar_present(dataset_meta.get("contact_email")):
+            contact["email"] = _clean(dataset_meta.get("contact_email"))
+        if _meta_scalar_present(dataset_meta.get("contact_org")):
+            contact["organization"] = _clean(dataset_meta.get("contact_org"))
+        datapackage["contributors"] = (
+            datapackage.get("contributors", []) + [contact]
+        )
+    if _meta_scalar_present(dataset_meta.get("license")):
+        # R gates on ``.ms_is_review_placeholder()`` — the three placeholder
+        # spellings — not on the broader review-value test: a bare ``REVIEW:``
+        # licence reaches the descriptor and aborts there, in both
+        # implementations.
+        if not is_review_placeholder(dataset_meta.get("license")):
+            datapackage["licenses"] = [
+                _license_descriptor(dataset_meta.get("license"))
+            ]
+    # ``_meta_scalar_present`` rather than ``pd.notna``: an empty
+    # ``temporal_start`` is not missing to pandas, so a descriptor carried
+    # ``"temporal": {"start": "", "end": ""}``. R has always tested both.
+    if _meta_scalar_present(dataset_meta.get("temporal_start")):
+        datapackage["temporal"] = {
+            "start": _clean(dataset_meta.get("temporal_start"))
+        }
+        if _meta_scalar_present(dataset_meta.get("temporal_end")):
+            datapackage["temporal"]["end"] = _clean(
+                dataset_meta.get("temporal_end")
+            )
+    return datapackage
+
+
+def _descriptor_sync_fields(descriptor, dictionary, changed) -> object:
+    """Update each resource's schema fields from the updated dictionary.
+
+    Only touches the IRI keys, and only for columns the review changed, so a
+    descriptor a user hand-edited elsewhere survives untouched.
+    """
+    if (
+        not isinstance(descriptor, dict)
+        or not isinstance(descriptor.get("resources"), list)
+        or changed is None
+        or len(changed) == 0
+    ):
+        return descriptor
+    keys = _descriptor_field_keys()
+    changed_pairs = {
+        (str(row["table_id"]), str(row["column_name"]))
+        for _, row in changed.iterrows()
+    }
+
+    for resource in descriptor["resources"]:
+        if not isinstance(resource, dict):
+            continue
+        resource_name = str(resource.get("name") or "")
+        schema = resource.get("schema")
+        if not isinstance(schema, dict) or not isinstance(
+            schema.get("fields"), list
+        ):
+            continue
+        for field in schema["fields"]:
+            if not isinstance(field, dict):
+                continue
+            column = str(field.get("name") or "")
+            if (resource_name, column) not in changed_pairs:
+                continue
+            matches = dictionary["table_id"].map(
+                lambda value: str(value) if value is not None else ""
+            ) == resource_name
+            matches &= dictionary["column_name"].map(
+                lambda value: str(value) if value is not None else ""
+            ) == column
+            hits = list(dictionary.index[matches])
+            if len(hits) != 1:
+                continue
+            dict_row = dictionary.loc[hits[0]]
+            for source_key, descriptor_key in keys.items():
+                if source_key not in dictionary.columns:
+                    continue
+                value = dict_row[source_key]
+                text = (
+                    ""
+                    if value is None or pd.isna(value)
+                    else str(value).strip()
+                )
+                # Present when non-empty, absent when empty — exactly the
+                # emission rule the writer applies.
+                if text:
+                    field[descriptor_key] = text
+                else:
+                    field.pop(descriptor_key, None)
+    return descriptor
 
 
 def _fill_review_placeholders(
@@ -828,68 +1119,22 @@ def write_salmon_datapackage(
         table_dict = dict_valid[
             (dict_valid["dataset_id"] == dataset_id) & (dict_valid["table_id"] == resource_name)
         ]
-        fields = []
-        for _, row in table_dict.iterrows():
-            # Key order and emission rules mirror the R field builder exactly.
-            # Three differences were found by driving both writers over the
-            # same package at the 0.2.0 rung, and all three were accidental:
-            # the title was suppressed when it equalled the column name (R
-            # emits it whenever ``column_label`` is non-blank), ``constraints``
-            # was emitted with ``required: false`` (R emits the block only for
-            # a required column), and a single-column primary key was written
-            # as a one-element array (R writes the scalar).
-            field = {
-                "name": _clean(row["column_name"]),
-                # A blank column_label stays as an explicit null, exactly as
-                # R's builder leaves the NA in place and jsonlite renders it —
-                # popping the key made the two descriptors differ on any
-                # unlabeled column (S10 chunk D byte differential).
-                "title": _clean(row.get("column_label")),
-                "type": _clean(row["value_type"]),
-                "description": _clean(row["column_description"]),
-            }
-            # Mirror R's isTRUE(): only a genuine True emits the constraints
-            # block. ``bool(...)`` alone read a missing ``required`` as true —
-            # iterrows() hands a boolean-dtype NA back as a truthy float nan —
-            # so every blank ``required`` claimed the column was required
-            # (found by the S10 chunk D descriptor byte differential; the
-            # shipped example's RUN_TYPE and ESTIMATE_STAGE rows hit it).
-            required_flag = row.get("required")
-            if not pd.isna(required_flag) and bool(required_flag) is True:
-                field["constraints"] = {"required": True}
-            for optional_key in [
-                "unit_iri",
-                "term_iri",
-                "term_type",
-                "property_iri",
-                "entity_iri",
-                "constraint_iri",
-                "statistical_modifier_iri",
-            ]:
-                value = row.get(optional_key)
-                if pd.notna(value) and value not in ("", None):
-                    field[optional_key] = _clean(value)
-            fields.append(field)
+        # ``_descriptor_field_entry()`` and ``_descriptor_apply_resource_meta()``
+        # are the shared builders the setters also call, so a surgical patch
+        # produces the shape this rebuild does by construction.
+        fields = [
+            _descriptor_field_entry(row) for _, row in table_dict.iterrows()
+        ]
 
-        resource_entry = {
-            "name": resource_name,
-            "path": file_name,
-            "profile": "tabular-data-resource",
-            "schema": {"fields": fields},
-        }
-        if _meta_scalar_present(table_info["table_label"].iloc[0]):
-            resource_entry["title"] = _clean(table_info["table_label"].iloc[0])
-        if "description" in table_info and _meta_scalar_present(table_info["description"].iloc[0]):
-            resource_entry["description"] = _clean(table_info["description"].iloc[0])
-        if "primary_key" in table_info and _meta_scalar_present(table_info["primary_key"].iloc[0]):
-            primary_key = [
-                value.strip()
-                for value in str(table_info["primary_key"].iloc[0]).split(",")
-                if value.strip()
-            ]
-            resource_entry["schema"]["primaryKey"] = (
-                primary_key[0] if len(primary_key) == 1 else primary_key
-            )
+        resource_entry = _descriptor_apply_resource_meta(
+            {
+                "name": resource_name,
+                "path": file_name,
+                "profile": "tabular-data-resource",
+                "schema": {"fields": fields},
+            },
+            table_info.iloc[0],
+        )
         resource_entries.append(resource_entry)
 
     # Every URI written here comes from the one loaded, self-consistent bundle,
@@ -929,39 +1174,10 @@ def write_salmon_datapackage(
         "resources": _metadata_resource_entries(codes is not None) + resource_entries,
     }
 
-    # Optional metadata
-    if "creator" in dataset_meta and _meta_scalar_present(dataset_meta["creator"].iloc[0]):
-        datapackage["contributors"] = [
-            {"title": _clean(dataset_meta["creator"].iloc[0]), "role": "creator"}
-        ]
-    # The contact contributor was simply missing here until the 0.2.0 rung; R
-    # has emitted it since 0.1.x, so a Python-written descriptor silently
-    # dropped the dataset contact.
-    if "contact_name" in dataset_meta and _meta_scalar_present(dataset_meta["contact_name"].iloc[0]):
-        contact = {
-            "title": _clean(dataset_meta["contact_name"].iloc[0]),
-            "role": "contact",
-        }
-        if "contact_email" in dataset_meta and _meta_scalar_present(dataset_meta["contact_email"].iloc[0]):
-            contact["email"] = _clean(dataset_meta["contact_email"].iloc[0])
-        if "contact_org" in dataset_meta and _meta_scalar_present(dataset_meta["contact_org"].iloc[0]):
-            contact["organization"] = _clean(dataset_meta["contact_org"].iloc[0])
-        datapackage["contributors"] = datapackage.get("contributors", []) + [contact]
-    if "license" in dataset_meta and _meta_scalar_present(dataset_meta["license"].iloc[0]):
-        license_value = dataset_meta["license"].iloc[0]
-        # R gates on ``.ms_is_review_placeholder()`` — the three placeholder
-        # spellings — not on the broader review-value test: a bare
-        # ``REVIEW:`` licence reaches the descriptor and aborts there, in
-        # both implementations.
-        if not is_review_placeholder(license_value):
-            datapackage["licenses"] = [_license_descriptor(license_value)]
-    # ``_has_value`` rather than ``pd.notna``: an empty ``temporal_start``
-    # is not missing to pandas, so a descriptor carried ``"temporal": {"start":
-    # "", "end": ""}``. R has always tested both conditions.
-    if "temporal_start" in dataset_meta and _meta_scalar_present(dataset_meta["temporal_start"].iloc[0]):
-        datapackage["temporal"] = {"start": _clean(dataset_meta["temporal_start"].iloc[0])}
-        if "temporal_end" in dataset_meta and _meta_scalar_present(dataset_meta["temporal_end"].iloc[0]):
-            datapackage["temporal"]["end"] = _clean(dataset_meta["temporal_end"].iloc[0])
+    # Optional metadata, through the shared builder the setters also call.
+    datapackage = _descriptor_apply_dataset_meta(
+        datapackage, dataset_meta.iloc[0]
+    )
 
     # Render canonical SDP metadata after any file_name defaults were resolved.
     metadata_dir = target / "metadata"
@@ -1522,25 +1738,82 @@ def infer_salmon_datapackage_artifacts(
 
 
 def _write_review_readme(package_path: Path, has_suggestions: bool) -> None:
-    suggestion_line = (
-        "Use semantic_suggestions.csv only as a fallback shortlist after "
-        "reviewing the authoritative metadata files."
-        if has_suggestions
-        else "No semantic_suggestions.csv was written for this package."
+    """The checklist ``create_sdp()`` writes into every package.
+
+    Until the S5 port this told users to open the CSVs, which is the path the
+    whole stream exists to replace: a spreadsheet edit leaves no record of *why*
+    a term was chosen. It now hands over the Python calls in order, each of
+    which prints the call for the next step. The spreadsheet path is still
+    supported and still described -- as the fallback, with the reason it is the
+    fallback.
+    """
+    if has_suggestions:
+        steps = [
+            "Decide the semantic IRIs:  review = review_semantics(pkg_path)",
+            "   Print `review` to see each unfilled slot with its ranked "
+            "candidates and their definitions. Each candidate prints the exact "
+            "accept_suggestion() call that takes it -- paste the one you want. "
+            'If none fits, paste the printed reject_suggestion(..., reason="...") '
+            "call; the reason is recorded in the package.",
+            "Write those decisions into the package:  "
+            "apply_sdp_semantics(pkg_path, review)",
+        ]
+    else:
+        steps = [
+            "No semantic_suggestions.csv was written for this package, so there "
+            "is no shortlist to review. Set an IRI you already know with "
+            'set_sdp_column(pkg_path, "<column>", term_iri="..."), or request a '
+            "new term rather than forcing a bad match.",
+        ]
+    steps.extend(
+        [
+            "Fill in the free text and any remaining gaps:  "
+            "review_metadata(pkg_path)",
+            "   It lists every field that still blocks validation -- "
+            "placeholders, blank required fields, and required IRIs no "
+            "candidate was ever found for -- and prints the set_sdp_*() call "
+            "that fills each one. Replace the <...> in the printed call with "
+            "the real value and paste it.",
+            "Validate:  validate_salmon_datapackage(pkg_path, require_iris=True). "
+            "It passes only once every placeholder and REVIEW: marker is gone.",
+            "Rebuild EDH XML from the finalized package with "
+            "write_edh_xml_from_sdp(pkg_path), if you need it.",
+        ]
     )
     lines = [
         "SALMON DATA PACKAGE REVIEW",
         "",
-        "1. Review metadata/dataset.csv and metadata/tables.csv.",
-        "2. Review metadata/column_dictionary.csv and metadata/codes.csv.",
-        "3. Replace every MISSING placeholder and REVIEW: IRI.",
-        "4. Run validate_salmon_datapackage(path, require_iris=True).",
-        "5. Rebuild EDH XML with write_edh_xml_from_sdp(path), if needed.",
+        "Do this review in Python. Every step below prints the exact call for",
+        "the next one, so pasting those calls into a script leaves a record of",
+        "what you decided and why -- which is the one thing editing the CSVs in",
+        "a spreadsheet cannot give you.",
         "",
-        suggestion_line,
+        'Throughout, pkg_path is the folder this file is in:  pkg_path = "..."',
         "",
-        "Share the complete package directory or a zip of that directory.",
     ]
+    number = 0
+    for step in steps:
+        if step.startswith("   "):
+            # A continuation of the step above it, so it keeps no number.
+            lines.append(step)
+            continue
+        number += 1
+        lines.append(f"{number}. {step}")
+    lines.extend(
+        [
+            "",
+            "The authoritative files are metadata/column_dictionary.csv and",
+            "metadata/tables.csv; semantic_suggestions.csv is the evidence",
+            "trail, including the decision and reason once you apply them.",
+            "",
+            "Editing metadata/*.csv in a spreadsheet still works and is still",
+            "supported. It is the fallback, not the recommended path: a",
+            "spreadsheet edit leaves no record of why a term was chosen. If you",
+            "do use one, save the files back as CSV before re-validating.",
+            "",
+            "Share the complete package directory or a zip of that directory.",
+        ]
+    )
     readme_path = package_path / "README-review.txt"
     _replace_create_output(readme_path)
     readme_path.write_text(

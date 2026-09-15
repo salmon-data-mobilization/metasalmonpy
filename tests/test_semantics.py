@@ -765,5 +765,89 @@ class StatisticalModifierRetargetTests(unittest.TestCase):
             )
 
 
+class ReviewedExemptFromAutoApplyGateTests(unittest.TestCase):
+    """``strategy="reviewed"`` is exempt from the unattended auto-apply gate.
+
+    metasalmon backlog **#118**, ported from R 0.5.0.
+    ``_filter_auto_apply_suggestions()`` is the *unattended* gate: a lexical
+    compatibility heuristic deciding whether a seeded top-1 hit is safe to
+    write into a dictionary nobody has looked at. On the reviewed path a human
+    has read the definition and said yes, so running the heuristic there means
+    a regex silently overrules the decision and the caller is told only that
+    some rows "did not meet the requested filters".
+
+    The fixture is the shape the defect actually takes: an ``attribute``
+    column whose accepted term label shares no token with the column name, so
+    ``_non_measurement_suggestion_is_compatible()`` refuses it.
+    """
+
+    WATERCOURSE = "https://w3id.org/smn/WatercourseDesignation"
+
+    def setUp(self):
+        self.dictionary = pd.DataFrame(
+            [
+                {
+                    "dataset_id": "d1",
+                    "table_id": "t1",
+                    "column_name": "stream_name",
+                    "column_label": "Stream name",
+                    "column_description": "Name of the stream surveyed",
+                    "column_role": "attribute",
+                    "value_type": "string",
+                    "required": False,
+                }
+            ]
+        )
+        self.suggestions = pd.DataFrame(
+            [
+                {
+                    "dataset_id": "d1",
+                    "table_id": "t1",
+                    "column_name": "stream_name",
+                    "dictionary_role": "variable",
+                    "target_scope": "column",
+                    "target_sdp_file": "column_dictionary.csv",
+                    "target_sdp_field": "term_iri",
+                    "search_query": "stream name",
+                    "label": "Watercourse Designation",
+                    "iri": self.WATERCOURSE,
+                    "decision": "accepted",
+                }
+            ]
+        )
+
+    def _apply(self, strategy):
+        value = apply_semantic_suggestions(
+            self.dictionary,
+            suggestions=self.suggestions,
+            strategy=strategy,
+            verbose=False,
+        )["term_iri"].iloc[0]
+        # Normalised to text so a dropped row fails as "" rather than as
+        # pandas' "boolean value of NA is ambiguous", which says nothing about
+        # what went wrong.
+        return "" if pd.isna(value) else str(value)
+
+    def test_the_gate_would_drop_this_candidate(self):
+        # The premise of the test below: the heuristic genuinely refuses this
+        # candidate, so the exemption is what carries it through rather than
+        # the fixture being trivially compatible.
+        from metasalmonpy.semantics import _filter_auto_apply_suggestions
+
+        self.assertTrue(
+            _filter_auto_apply_suggestions(
+                self.dictionary, self.suggestions
+            ).empty
+        )
+
+    def test_reviewed_applies_an_accepted_term_the_gate_would_drop(self):
+        self.assertEqual(self._apply("reviewed"), self.WATERCOURSE)
+
+    def test_top_keeps_the_gate(self):
+        # The unattended path is the whole reason the gate exists, so it must
+        # keep dropping the same row. A blank cell, not the IRI.
+        self.assertEqual(self._apply("top"), "")
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

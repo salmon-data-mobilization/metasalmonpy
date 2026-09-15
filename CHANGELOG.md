@@ -2,11 +2,184 @@
 
 ## Unreleased
 
-**No version bump.** Both packages are released at 0.4.0 and the two changes
-below converge two registered divergences rather than adding capability, so the
-parity claim the number carries is unchanged.
+**No version bump, and the reason changed.** This section previously said "both
+packages are released at 0.4.0"; that stopped being true on 2026-08-25, when
+metasalmon released `v0.5.0` and opened a `0.4.0 → 0.5.0` catch-up window
+(roadmap S5). The S5 port below closes the behavioural half of that window. The
+number stays at 0.4.0 anyway, because 0.5.0's documentation half is not done —
+`guides/semantic-review.qmd` still presents the spreadsheet as the workflow
+rather than as the fallback, which is the change 0.5.0's own NEWS entry leads
+with. The version is a parity claim; claiming 0.5.0 while a documented 0.5.0
+behaviour is missing is the false claim the lockstep rule exists to prevent.
+See `AGENTS.md`'s *Current honest state*.
+
+### Added
+
+* **The semantic review and the metadata editing no longer have to leave
+  Python.** Nine new public functions plus two accessors, porting roadmap
+  stream **S5** from metasalmon 0.5.0 (hub queue **B-126**). A salmon data
+  package can now be taken from `create_sdp()` to
+  `validate_salmon_datapackage(require_iris=True)` **without opening a single
+  file in a spreadsheet**, and that whole sequence is asserted end to end in
+  `tests/test_sdp_field_setters.py`.
+
+  ```python
+  review = review_semantics(pkg_path)
+  review                                   # prints each slot and its shortlist
+  review = accept_suggestion(review, "spawner_count", "variable", rank=1)
+  apply_sdp_semantics(pkg_path, review)
+  review_metadata(pkg_path)                # prints the set_sdp_*() call per gap
+  set_sdp_dataset(pkg_path, creator="Fisheries and Oceans Canada")
+  ```
+
+  - `review_semantics()` builds a re-runnable queue from suggestions that
+    already exist, in `review_console.py`. **It never contacts a network or an
+    LLM**; a `find_terms` binding that raises is the sentinel that pins this.
+  - `accept_suggestion()` / `reject_suggestion()` record a decision and return a
+    **new** review, so a whole review is an ordinary re-runnable script.
+    `reject_suggestion(reason=...)` records *why* no candidate fitted.
+  - `apply_sdp_semantics()` is surgical and re-runnable, in `metadata_write.py`:
+    it strips `REVIEW:` from decided fields, clears rejected ones, leaves
+    undecided slots untouched, and **does not touch the data CSV bytes**.
+    Applying the same review twice produces identical bytes. The metadata CSVs,
+    `semantic_suggestions.csv` and the `datapackage.json` field entries are
+    installed as **one** transactional set, because per-file atomicity is not
+    enough when the rule that would catch a CSV/descriptor drift
+    (`datapackage_consistent_with_csv_metadata`) is one of the dead rules in
+    `sdp.rules.yaml`.
+  - `review_metadata()` and the `set_sdp_dataset()` / `set_sdp_table()` /
+    `set_sdp_column()` / `set_sdp_code()` setters, in `sdp_field_setters.py`,
+    close what the semantic review structurally cannot see: **a slot with no
+    candidates at all**, and free-text `MISSING …:` placeholders. It does not
+    read a suggestion list — it reads the package against the rules that decide
+    strict validation.
+  - `semantic_suggestions()` / `semantic_llm_assessments()` are the supported
+    way to read what was previously only reachable through `df.attrs[...]`, and
+    `semantic_suggestions(path)` reads `semantic_suggestions.csv` back out of a
+    written package, which nothing here did before.
+
+  **The printed call is the contract, not decoration.** The console prints the
+  exact call and the user pastes it; there is no prompt loop and no TUI, because
+  an interactive prompt would make the decision as unreproducible as the
+  spreadsheet it replaces. So the argument set is computed by *resolving* it —
+  `table=` and `code_value=` appear only when they are needed to address one
+  slot — and the tests `exec()` every printed line and assert it produces the
+  decision it claims. A printed call that names a column the package does not
+  have passes every substring assertion ever written.
+
+  **The printed call is Python, not R.** R prints
+  `review <- accept_suggestion(review, "x", "variable", rank = 1)`; this prints
+  `review = accept_suggestion(review, "x", "variable", rank=1)`. Likewise R's
+  `NA`-clears-a-field / `NULL`-means-not-passed pair is spelled `pd.NA` and
+  `None` here. These are the mirror contract's "simple language differences that
+  do not materially change behaviour" and are **not** registered as deviations:
+  a Python package that printed R syntax would print a line its own user cannot
+  paste, which is the one property the feature exists to have.
+
+* **The SDP schema's `constraints.required` has a consumer.**
+  `sdp_schema.sdp_schema_required_field_names()`,
+  `sdp_schema_fields()` and `sdp_schema_field_description()`. The Frictionless
+  metadata schemas have carried the constraint since the schema bundle landed
+  and **nothing in this package read it**, so a field the spec calls required
+  and one it calls optional were indistinguishable here and the only
+  requirement checks were the hand-enumerated ones in `package_io`.
+  `review_metadata()` is built on it.
+
+* **The three descriptor builders are extracted and shared.**
+  `package_io._descriptor_field_entry()`,
+  `_descriptor_apply_resource_meta()` and `_descriptor_apply_dataset_meta()`
+  were inline in `write_salmon_datapackage()`; the setters and the review
+  write-back now call the same three, so "the surgical patch produces the shape
+  a rebuild would" is true by construction rather than by a test that has to
+  imagine every field. Measured anyway, over seven field/setter combinations,
+  by `test_a_setter_patch_produces_the_descriptor_a_rebuild_would`. No
+  descriptor bytes changed: the existing byte-level descriptor tests are
+  unchanged and green.
+
+* **The existing-empty-directory write is finally pinned.** This package has
+  always written into an existing directory that contains nothing without
+  `overwrite=True`, and **had no test for it** — which is half of why PARITY.md
+  row 54 survived from before the 0.1.6 parity claim through four minor
+  versions of green suites. `tests/test_current_workflow.py` now pins the write
+  itself, the `create_sdp()` path, and a parametrized trio of near misses: a
+  dot-file, a stale ownership sentinel, and an empty `data/` subdirectory each
+  make the directory **non-empty** and still require `overwrite=True`.
+  Emptiness is never recursive.
+
+  Brett ruled on 2026-08-24 ("Go with the python implementation"), so **this
+  package's behaviour is unchanged and metasalmon moved** to match it. Row 54
+  is retired as converged in both registers. `write_salmon_datapackage()`'s
+  docstring and `guides/faq.qmd` now state the rule instead of leaving it
+  implicit.
+
+### Fixed
+
+* **A reviewed semantic decision is no longer overruled by the unattended
+  auto-apply heuristic.** `apply_semantic_suggestions(strategy="reviewed")` ran
+  every accepted row through `_filter_auto_apply_suggestions()` at
+  `semantics.py:1294` — the lexical compatibility gate that decides whether a
+  *seeded* top-1 hit is safe to write into a dictionary nobody has looked at. On
+  the reviewed path a human has read the definition and said yes, so the effect
+  was that a regex silently overruled the decision and the caller was told only
+  that some rows "did not meet the requested filters". The unattended `"top"`
+  and `"llm"` paths keep the gate, which is the whole reason the gate exists.
+  metasalmon backlog **#118**, which this package carried in the same shape.
+
+  Reproduced before the fix and pinned after it by
+  `ReviewedExemptFromAutoApplyGateTests`, whose fixture is the shape the defect
+  actually takes: an `attribute` column whose accepted term label shares no
+  token with the column name. Before: `term_iri` stayed blank. After: the
+  accepted IRI is written, and `"top"` still drops it.
+
+* **A review decision now survives being put down and picked up again.**
+  `semantic_suggestions.csv` gains a **`decision_reason`** column, and
+  `review_semantics()` replays the recorded `decision` on queue rebuild. Until
+  now nothing read the `decision` column back: a reject *clears* the field, a
+  cleared field reads as undecided, and so a reviewer who worked through
+  sixteen slots, rejected four and came back the next day was asked the same
+  four questions with no sign they had ever answered them. Decided slots are now
+  kept out of the default queue and shown under `include_filled=True`.
+  `review_metadata()` reads the reason back onto the gap the rejection left —
+  otherwise that gap comes back looking exactly like one nobody ever considered.
+  Applying a review also **preserves** decisions it does not itself carry, so
+  Monday's four rejections are not erased by Tuesday's acceptance.
+
+* **An empty queue under a bad `columns` filter no longer reads as success.**
+  `review_semantics(pkg, columns=["TYPO"])` would have reported an empty queue,
+  telling a user who mistyped a column name that their package was finished. A
+  `columns` value matching no column is an error that names the columns that do
+  exist.
+
+* **`prune=True` warns before it destroys recorded review decisions.** Pruning
+  wipes the package directory, and `semantic_suggestions.csv` is not among the
+  files a rewrite produces, so a user reaching for `prune` mid-review silently
+  lost the audit trail. The prune still happens — a clean rebuild is a
+  legitimate thing to want — but it now says what it is about to take, and only
+  when there is a recorded decision to lose. *Retires when* the write path
+  preserves `semantic_suggestions.csv` across a prune.
 
 ### Changed
+
+* **The review checklist stops sending users to a spreadsheet.**
+  `README-review.txt`, which `create_sdp()` writes into every package, told
+  users to review the CSVs; it now hands over the Python calls in order, each of
+  which prints the call for the next step. The spreadsheet path is still
+  supported and still described — as the fallback, with the reason it is the
+  fallback: a spreadsheet edit leaves no record of *why* a value was chosen.
+
+* **`PARITY.md` row 31's final clause is amended in place**, not appended to. It
+  closed with "verified identical to R's output for all three strategies", which
+  was true when written and went false at metasalmon 0.5.0. It now records that
+  the identity was broken at 0.5.0 and holds again as of this port,
+  **re-measured** against metasalmon `main` @ `4cd085c` (`DESCRIPTION` 0.5.0):
+  the three strategies over the `expected-apply-strategies.json` frame plus the
+  #118 case under `reviewed` and `top` — five values, byte-identical in both
+  implementations. A new row saying the two differ, sitting under an older row
+  saying they were verified identical, would leave a reader to guess which
+  sentence is current.
+
+* **The `_quarto.yml` API reference gains a "Review and edit (in Python)"
+  group** for the nine functions and the two accessors.
 
 * **`create_sdp()`'s deterministic prefill now applies every role the evidence
   allows, and marks all of it.** `_auto_apply_package_suggestions()` passed
@@ -41,24 +214,6 @@ parity claim the number carries is unchanged.
   carried the "never auto-filled" claim, which was true of this package and
   false of metasalmon. All three are corrected in the same change, and each
   says so rather than quietly reading correctly.
-
-### Added
-
-* **The existing-empty-directory write is finally pinned.** This package has
-  always written into an existing directory that contains nothing without
-  `overwrite=True`, and **had no test for it** — which is half of why PARITY.md
-  row 54 survived from before the 0.1.6 parity claim through four minor
-  versions of green suites. `tests/test_current_workflow.py` now pins the write
-  itself, the `create_sdp()` path, and a parametrized trio of near misses: a
-  dot-file, a stale ownership sentinel, and an empty `data/` subdirectory each
-  make the directory **non-empty** and still require `overwrite=True`.
-  Emptiness is never recursive.
-
-  Brett ruled on 2026-08-24 ("Go with the python implementation"), so **this
-  package's behaviour is unchanged and metasalmon moved** to match it. Row 54
-  is retired as converged in both registers. `write_salmon_datapackage()`'s
-  docstring and `guides/faq.qmd` now state the rule instead of leaving it
-  implicit.
 
 ### Registered
 

@@ -523,11 +523,58 @@ def sdp_schema_field_names(table_name: str) -> List[str]:
     which is how a spec/implementation drift becomes a failing test instead of
     a package that writes columns the profile does not define.
     """
+    return [str(field["name"]) for field in sdp_schema_fields(table_name)]
+
+
+def sdp_schema_fields(table_name: str) -> List[Dict[str, Any]]:
+    """The declared field definitions for one metadata table, in schema order.
+
+    Mirrors ``.ms_metadata_schema_fields()``. The raw Frictionless field
+    objects, so a caller can read ``description``, ``type`` or
+    ``constraints`` without re-loading the bundle.
+    """
     schema = load_sdp_schema(quiet=True)
     document = schema["metadata_schemas"].get(table_name)
     if document is None:
         raise KeyError(f"Unknown SDP metadata table {table_name!r}.")
-    return [str(field["name"]) for field in document.get("fields", [])]
+    return list(document.get("fields", []))
+
+
+def sdp_schema_required_field_names(table_name: str) -> List[str]:
+    """The fields one metadata table schema declares ``constraints.required``.
+
+    **The first consumer of ``constraints.required`` in this package.** The
+    Frictionless metadata schemas have carried the constraint since the schema
+    bundle landed and nothing read it, so a field the spec calls required and a
+    field it calls optional were indistinguishable here: the only requirement
+    checks were the hand-enumerated ones in ``package_io``. Mirrors
+    ``.ms_schema_required_metadata_fields()``, which R added for the same
+    reason and in the same stream (S5). ``review_metadata()`` is built on this.
+
+    Keys are included; :func:`metasalmonpy.sdp_field_setters.settable_required_fields`
+    is the set with the addressing keys removed, because a blank key is a
+    structural defect ``validate_salmon_datapackage()`` reports rather than
+    incomplete metadata a setter can fill.
+    """
+    required = []
+    for field in sdp_schema_fields(table_name):
+        constraints = field.get("constraints")
+        if isinstance(constraints, dict) and constraints.get("required") is True:
+            required.append(str(field["name"]))
+    return required
+
+
+def sdp_schema_field_description(table_name: str, field_name: str) -> str:
+    """One field's schema ``description``, or ``""``.
+
+    It becomes the prompt in the call :func:`review_metadata` prints, so the
+    hint a user sees is the spec's own wording rather than one re-invented here.
+    """
+    for field in sdp_schema_fields(table_name):
+        if str(field.get("name")) == str(field_name):
+            value = field.get("description")
+            return "" if value is None else str(value).strip()
+    return ""
 
 
 def sdp_schema_url(schema_file: str) -> str:

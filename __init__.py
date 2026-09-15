@@ -57,6 +57,23 @@ from .sdp_methods import (
     validate_sdp_methods,
     write_sdp_methods,
 )
+from .metadata_write import apply_sdp_semantics
+from .review_console import (
+    SemanticReview,
+    accept_suggestion,
+    reject_suggestion,
+    review_semantics,
+    semantic_llm_assessments,
+    semantic_suggestions,
+)
+from .sdp_field_setters import (
+    MetadataReview,
+    review_metadata,
+    set_sdp_code,
+    set_sdp_column,
+    set_sdp_dataset,
+    set_sdp_table,
+)
 from .semantics import apply_semantic_suggestions, suggest_semantics
 from .sssom import (
     SssomMappingSet,
@@ -79,8 +96,12 @@ from .chat_decomposition import chat_decomposition
 
 __all__ = [
     "__version__",
+    "MetadataReview",
+    "SemanticReview",
     "SssomMappingSet",
+    "accept_suggestion",
     "apply_salmon_dictionary",
+    "apply_sdp_semantics",
     "apply_semantic_suggestions",
     "benchmark_term_ranking_fixtures",
     "chat_decomposition",
@@ -119,7 +140,16 @@ __all__ = [
     "read_sdp_observation_structures",
     "read_sdp_reproducibility_manifest",
     "read_sssom_mapping_set",
+    "reject_suggestion",
     "render_ontology_term_request",
+    "review_metadata",
+    "review_semantics",
+    "semantic_llm_assessments",
+    "semantic_suggestions",
+    "set_sdp_code",
+    "set_sdp_column",
+    "set_sdp_dataset",
+    "set_sdp_table",
     "sources_for_role",
     "submit_term_request_issues",
     "suggest_dwc_mappings",

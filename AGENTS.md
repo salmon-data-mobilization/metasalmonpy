@@ -28,22 +28,49 @@ violation like a failing test.
    matches the metasalmon version whose functionality it actually delivers.
    When a metasalmon release ships, mirror the work and bump this package to
    the same number.
-3. **Current honest state:** parity is at **metasalmon 0.4.0**. metasalmon is
-   at 0.4.0 (tagged `v0.4.0`, `4e2bbb6`), so the catch-up window
-   0.2.2 → 0.4.0 — roadmap stream **S10** plus the S3 KNB-environment
-   feature 0.4.0 added after every S10 chunk was written — is closed. This
-   package's version stays at the last delivered milestone until the next
-   one lands — do **not** bump the number ahead of the functionality
-   (Brett's decision, 2026-08-13: bump on parity, not on calendar).
+3. **Current honest state:** this package is at **0.4.0** and metasalmon is at
+   **0.5.0** (tagged `v0.5.0`, released 2026-08-25), so the catch-up window
+   **0.4.0 → 0.5.0 — roadmap stream S5 — is OPEN.** The earlier
+   0.2.2 → 0.4.0 window (S10 plus the S3 KNB-environment feature 0.4.0 added
+   after every S10 chunk was written) is closed. This package's version stays
+   at the last delivered milestone until the next one lands — do **not** bump
+   the number ahead of the functionality (Brett's decision, 2026-08-13: bump on
+   parity, not on calendar).
+
+   **What the open window owes, and what has landed** (hub queue **B-126**,
+   2026-09-14): the S5 review-and-edit surface is ported — the nine functions
+   (`review_semantics`, `accept_suggestion`, `reject_suggestion`,
+   `apply_sdp_semantics`, `review_metadata` and the four `set_sdp_*()` setters)
+   plus the `semantic_suggestions()` / `semantic_llm_assessments()` accessors,
+   the `decision_reason` column and decision replay on queue rebuild, the first
+   consumer of the schema's `constraints.required`, the backlog **#118**
+   auto-apply exemption, the `prune=True` warning, and the review checklist that
+   now hands over the Python calls. **The number is still 0.4.0** because
+   0.5.0's documentation half is not done: `guides/semantic-review.qmd` still
+   presents the spreadsheet as the workflow rather than as the fallback, which
+   is the change 0.5.0's own NEWS entry leads with. Bump all four places (see
+   *Releases*) in the change that closes that, and not before — the version is a
+   parity claim, and claiming 0.5.0 while a documented 0.5.0 behaviour is
+   missing is exactly the false claim this rule exists to prevent.
 
    **This number is stated in three places and all three must agree:** here,
    metasalmon's own `AGENTS.md`, and the release index in the hub's
    `knowledge/roadmap.md`. When they disagree, one of them is wrong about
    the single fact the mirror contract turns on and nothing in either file
-   reveals which — this line read `0.2.1` / window `0.2.2 → 0.3.0` for two
-   days after metasalmon tagged 0.4.0 and said so in its own `AGENTS.md`,
-   corrected here 2026-08-24. Whenever either version moves, read the other
-   file in the same change.
+   reveals which. **It has now gone wrong three times, once in each direction
+   and once here again**, which is the argument for reading any parity sentence
+   as a dated measurement and checking the other file rather than trusting the
+   one in front of you: metasalmon's line read 0.1.8 for three days after this
+   package tagged 0.2.1 (corrected there 2026-08-21); this line read `0.2.1` /
+   window `0.2.2 → 0.3.0` for two days after metasalmon tagged 0.4.0 and said so
+   in its own `AGENTS.md` (corrected here 2026-08-24); and **this line read
+   "both at 0.4.0, no window open" for twenty days after metasalmon tagged
+   `v0.5.0`** — 2026-08-25 to 2026-09-14 — while metasalmon's own `AGENTS.md`
+   said the window was open and said *this file* was the one that was wrong.
+   Editing the mirror was out of scope for the release that opened the window,
+   which is how the gap lasted twenty days rather than two; corrected here
+   2026-09-14 by B-126. Whenever either version moves, read the other file in
+   the same change.
 
    **The mirror is not automatically the follower** (Brett, 2026-08-17):
    *"Don't just make things match metasalmon. If the Python implementation
@@ -127,11 +154,13 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 795
-passed / 3 skipped with the extras installed, 682 / 116 with core dependencies
-only (0.4.0 parity port, 2026-08-24). The 113-test gap is the extras-gated EML,
-KNB and context-reader tests; the 3 that skip either way are filesystem-symlink
-and R-availability guards.
+dependency configurations, and CI runs both (see *Dependency boundaries*): 896
+passed / 3 skipped with the extras installed, 783 / 116 with core dependencies
+only (S5 parity port, 2026-09-14; 803 / 3 and 690 / 116 before it). The
+113-test gap is the extras-gated EML, KNB and context-reader tests; the 3 that
+skip either way are filesystem-symlink and R-availability guards. These counts
+are a dated measurement, not a target — update them when you add tests rather
+than treating a mismatch as a failure.
 
 **Run it from a directory named `metasalmonpy`.** The root `__init__.py` and
 `tests/__init__.py` make pytest infer the package name from the checkout
