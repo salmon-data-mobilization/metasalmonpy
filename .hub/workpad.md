@@ -259,3 +259,169 @@ Python package printing R syntax would print a line its own user cannot paste;
 and `pd.NA` / `None` spell R's `NA` / `NULL` in the setters. Both fall under the
 contract's "simple language differences that do not materially change behaviour
 or capability are fine".
+
+---
+
+# Follow-up: the three Codex P2 findings on PR #28 (2026-09-15)
+
+Same claim, same branch (`agent/B-126/a-88b7c77b74107ea6`), follow-up on the
+hand-back. Fresh worktree; no new claim taken, and `hub beat` reports the tip is
+this agent's own `handoff`, so there is no lease to extend. **No reply to and no
+resolution of the review threads** — the writes register denies an agent any
+review or comment write, and Brett handles those.
+
+## What changed, and where
+
+- **`sdp_field_setters.py`** — finding 1. `_is_unresolved_iri()` is a new,
+  SECOND predicate for the `REVIEW:` IRI marker, used from the gap scan's
+  per-field loop for every schema-declared `*_iri` field of the three files
+  whose markers block (`_REVIEW_IRI_FILES`). `is_review_placeholder()` is
+  untouched. `_IRI_FIELD_HINTS` / `_iri_hint()` give the marker branch and the
+  blank branches one spelling of each field's prompt. Finding 2: `_SCHEMA_SOURCE
+  = "vendored"` and all five schema reads in the module pass it.
+- **`sdp_schema.py`** — finding 2. `source` argument on `sdp_schema_fields()`,
+  `sdp_schema_field_names()`, `sdp_schema_required_field_names()` and
+  `sdp_schema_field_description()`; `"vendored"` reads
+  `_vendored_schema_document()` directly. That function existed and had **no
+  caller at all** before this change, which is the shape of the defect: the
+  offline reader was written and never wired up.
+- **`metadata_write.py`** — finding 3. `_with_hand_picked_accept()` records an
+  accepted IRI no candidate row carries, inserted at the head of its slot;
+  `_SLOT_ADDRESS_COLUMNS` and `_HAND_PICKED_SOURCE` name what it copies and what
+  it says about itself. The decision loop recomputes `_review_slot_id()` per
+  decision because an insert invalidates every earlier mask.
+- **`tests/test_sdp_field_setters.py`**, **`tests/test_review_console.py`** — six
+  new tests; `test_a_review_marked_iri_belongs_to_review_semantics_not_here` was
+  replaced by `test_a_review_marked_iri_is_reported_by_both_reviews`, because it
+  pinned the defect as intended behaviour.
+- **`CHANGELOG.md`** — one Fixed entry per finding, plus the dated R measurement
+  showing all three are owed in metasalmon.
+
+## Failing before, passing after
+
+Three separate reproductions, run on `05be2a17f7` before any fix:
+
+```
+FAILED tests/test_sdp_field_setters.py::test_a_review_marked_iri_is_reported_by_both_reviews
+  E  assert 0 == 1  (the REVIEW:-marked property_iri produced no gap row)
+FAILED tests/test_sdp_field_setters.py::test_an_empty_review_says_nothing_is_outstanding
+  E  ValueError: Validation cannot pass while REVIEW-prefixed IRI values remain.
+     term_iri: spawner_count (rows 2); property_iri: ...   <- while the review was empty
+FAILED tests/test_sdp_field_setters.py::test_review_metadata_makes_no_http_request_on_the_default_schema_source
+  E  _NetworkReached: review_metadata() made an HTTP request
+FAILED tests/test_review_console.py::test_an_accept_outside_the_shortlist_reaches_the_decision_record
+  E  assert 0 == 1  (no row marked "accepted")
+FAILED tests/test_review_console.py::test_a_hand_picked_accept_replays_on_rebuild
+  E  assert 0 == 1  (nothing replayed on rebuild)
+FAILED tests/test_review_console.py::test_a_hand_picked_accept_is_visible_inside_max_candidates
+FAILED tests/test_review_console.py::test_applying_a_hand_picked_accept_twice_produces_identical_bytes
+7 failed, 89 deselected
+```
+
+After: `8 passed, 88 deselected` for the same selection.
+
+Both dependency legs CI runs, measured on this machine against the branch head
+before and after:
+
+| leg | before | after |
+|---|---|---|
+| `.[test,eml,context]` (R available) | 898 passed / 1 skipped | 904 / 1 |
+| `.[test]`, core deps only | 785 / 114 | 791 / 114 |
+
+Each leg asserts its own configuration: the core leg confirms `yaml`, `lxml`,
+`openpyxl`, `pypdf` and `xlrd` are all unimportable; the extras leg confirms all
+five import. Also green: `python -m pytest tests/test_roundtrip.py` (2 passed,
+the R↔Python round trip, `/tmp/metasalmon-lib` present), `python tests/smoke.py`,
+`uv lock --check`, `python -m build`, `git diff --check`.
+
+**The PR body's "896/3 and 783/116" does not reproduce here.** Measured on the
+unmodified branch head this machine gives 898/1 and 785/114. The 3-vs-1 skip
+difference is R availability (`/tmp/metasalmon-lib` exists here), and 785-vs-783
+is a real two-test difference I did not chase because it is outside these three
+findings. CI's own numbers are the ones to read on the PR.
+
+## Does R have the same defect?
+
+All three, yes, measured 2026-09-15 against installed metasalmon 0.5.0 under
+R 4.3.3 (probe scripts were run outside the repository and are not committed):
+
+1. `.ms_is_unfilled_metadata()` (`R/sdp-field-setters.R`) answers `FALSE` for
+   `REVIEW:https://w3id.org/smn/SpawnerAbundance` and `TRUE` for a prose
+   placeholder and for `""`. End to end, R's `review_metadata()` printed
+   `No outstanding metadata.` for a package `validate_salmon_datapackage(pkg,
+   require_iris = TRUE)` then refused with `Validation cannot pass while
+   REVIEW-prefixed IRI values remain`.
+2. With `metasalmon.sdp_schema_source` at its default and `.ms_schema_env`
+   cleared, a mocked `httr2::req_perform` sentinel **fired** inside
+   `review_metadata(pkg)`, whose own roxygen says "It never contacts a network or
+   an LLM". Path: `.ms_metadata_schema_fields()` → `.ms_load_sdp_schema(quiet =
+   TRUE)` → `.ms_fetch_remote_sdp_schema()` → `httr2::req_perform()`.
+3. R's `accept_suggestion(review, "spawner_count", "variable", iri =
+   "https://example.org/Handpicked")` + `apply_sdp_semantics()` wrote the IRI
+   into `column_dictionary.csv` and left `semantic_suggestions.csv` with one
+   `not_selected` row, no `accepted` row, no row carrying the hand-picked IRI,
+   and zero decisions replayed by `review_semantics(pkg, include_filled = TRUE)`.
+
+So all three are **ports**, not deviations: no `PARITY.md` row, and nothing was
+written to metasalmon. Each needs its own queue item; they are described in the
+section below.
+
+## Guards and decisions added, with their retirement conditions
+
+1. **`_is_unresolved_iri()` as a second predicate rather than a wider
+   `is_review_placeholder()`** (`sdp_field_setters.py`). *Retires when:* nothing.
+   The two answer different questions about different kinds of field. Widening
+   the prose predicate would have moved the marker into three channels built to
+   exclude it — the `license` gate (`package_io.py`), the placeholder sweep in
+   `validate_salmon_datapackage()`, and `_gap_row()`'s "is the value's own text a
+   usable hint" test. `test_a_prose_placeholder_is_not_reclassified_as_an_iri_gap`
+   pins that it was not widened.
+2. **`_REVIEW_IRI_FILES`** (`sdp_field_setters.py`). *Retires when:*
+   `_collect_review_issues()` changes which files it sweeps; the two lists move
+   together. It excludes `dataset.csv` on purpose: a marker there is not swept by
+   strict validation, so reporting one would be this scan claiming a block that
+   does not exist — the same class of error as missing one, pointing the other
+   way. See candidate item 3 below.
+3. **`_SCHEMA_SOURCE = "vendored"`** (`sdp_field_setters.py`) and the `source`
+   argument (`sdp_schema.py`). *Retires when:* `load_sdp_schema()` stops fetching
+   on its default source, at which point the default is already offline and both
+   have nothing left to say.
+4. **`_NetworkReached(BaseException)`** (`tests/test_sdp_field_setters.py`).
+   *Retires when:* `load_sdp_schema()` stops catching bare `Exception` around the
+   fetch, at which point an ordinary exception is a sufficient sentinel. Until
+   then a sentinel that derives from `Exception` is swallowed by the fallback and
+   the test passes whether or not the path is offline.
+5. **The recorded hand-picked row is inserted at the head of its slot, not
+   appended** (`metadata_write.py`). *Retires when:* `review_semantics()` stops
+   deriving `rank` from file position, or stops applying `max_candidates` to a
+   row carrying a decision. Appended after a full shortlist the record would rank
+   6 and be filtered out, losing the same decision one layer on;
+   `test_a_hand_picked_accept_is_visible_inside_max_candidates` is what fails if
+   the placement regresses.
+
+## Found, not mine — candidate new items
+
+1. **Candidate (metasalmon, R): `review_metadata()` reports a clean package that
+   strict validation refuses.** The R half of finding 1. Evidence above. The
+   Python fix in this PR is the shape to mirror, including keeping
+   `.ms_is_review_placeholder()` narrow.
+2. **Candidate (metasalmon, R): `review_metadata()` contacts the network on the
+   default schema source.** The R half of finding 2. R needs the same treatment
+   plus its own sentinel; note that `.ms_load_sdp_schema()` wraps the fetch in
+   `tryCatch(error = ...)`, so an R sentinel must signal a **non-error**
+   condition or it is swallowed exactly as a Python `Exception` would be.
+3. **Candidate (both): a `REVIEW:` marker on `dataset.csv`'s `*_iri` fields is
+   not swept by strict validation.** `_collect_review_issues()` sweeps
+   `tables.csv`, `column_dictionary.csv` and `codes.csv` only, and
+   `_collect_placement_iri_issues()` explicitly *skips* `REVIEW:` values. No
+   producer writes a marker there today (`_mark_review_iri()` is reached only for
+   the dictionary's six role fields and `tables.csv$observation_unit_iri`), so
+   this is latent rather than live — which is why `_REVIEW_IRI_FILES` excludes
+   `dataset.csv` rather than over-reporting. R's `R/edh-xml-export.R` *does*
+   sweep `dataset.csv` while its `validate_salmon_datapackage()` does not, so
+   there may be a second question here about which of the two is right.
+4. **Candidate (metasalmon, R): `apply_sdp_semantics()` loses a hand-picked
+   accept.** The R half of finding 3. Evidence above.
+5. **Unrelated to these findings: the PR body's test counts.** 896/3 and 783/116
+   do not reproduce on this machine (898/1 and 785/114 on the unmodified head).
+   Worth one look at whether the PR body was measured on a different tree.

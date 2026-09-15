@@ -514,7 +514,9 @@ def _vendored_schema_document(table_name: str) -> dict:
         return json.load(stream)
 
 
-def sdp_schema_field_names(table_name: str) -> List[str]:
+def sdp_schema_field_names(
+    table_name: str, source: Optional[str] = None
+) -> List[str]:
     """Field names, in order, from one metadata table schema.
 
     Mirrors ``.ms_sdp_schema_field_names()``. The writers and readers in
@@ -522,25 +524,55 @@ def sdp_schema_field_names(table_name: str) -> List[str]:
     tuples for clarity; a test asserts those tuples equal what this returns,
     which is how a spec/implementation drift becomes a failing test instead of
     a package that writes columns the profile does not define.
+
+    ``source`` is as :func:`sdp_schema_fields` documents it.
     """
-    return [str(field["name"]) for field in sdp_schema_fields(table_name)]
+    return [
+        str(field["name"])
+        for field in sdp_schema_fields(table_name, source=source)
+    ]
 
 
-def sdp_schema_fields(table_name: str) -> List[Dict[str, Any]]:
+def sdp_schema_fields(
+    table_name: str, source: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """The declared field definitions for one metadata table, in schema order.
 
     Mirrors ``.ms_metadata_schema_fields()``. The raw Frictionless field
     objects, so a caller can read ``description``, ``type`` or
     ``constraints`` without re-loading the bundle.
+
+    ``source="vendored"`` reads the bundled schema document and **makes no
+    network call of any kind**. That is not a performance hint: a caller with a
+    documented no-network contract cannot use the default, because the default
+    ``"auto"`` source fetches six documents over HTTP before falling back to the
+    same bundled copy, so on a fresh process a "local" scan reached the network
+    and waited out a timeout per document when there was none.
+    :func:`metasalmonpy.sdp_field_setters.review_metadata` is that caller.
+
+    It reads the document directly rather than through
+    ``load_sdp_schema(source="vendored")`` on purpose: that loader's cache is a
+    single slot keyed by source, so alternating between ``"auto"`` and
+    ``"vendored"`` in one process would evict the bundle each time and make the
+    *next* ``"auto"`` read re-fetch -- turning one avoided request into many.
+
+    Retires when: ``load_sdp_schema()`` no longer performs a blocking fetch on
+    its default source, at which point every caller can use the default and this
+    parameter goes with the reason for it.
     """
-    schema = load_sdp_schema(quiet=True)
-    document = schema["metadata_schemas"].get(table_name)
+    if source == "vendored":
+        document = _vendored_schema_document(table_name)
+    else:
+        schema = load_sdp_schema(source=source, quiet=True)
+        document = schema["metadata_schemas"].get(table_name)
     if document is None:
         raise KeyError(f"Unknown SDP metadata table {table_name!r}.")
     return list(document.get("fields", []))
 
 
-def sdp_schema_required_field_names(table_name: str) -> List[str]:
+def sdp_schema_required_field_names(
+    table_name: str, source: Optional[str] = None
+) -> List[str]:
     """The fields one metadata table schema declares ``constraints.required``.
 
     **The first consumer of ``constraints.required`` in this package.** The
@@ -555,22 +587,28 @@ def sdp_schema_required_field_names(table_name: str) -> List[str]:
     is the set with the addressing keys removed, because a blank key is a
     structural defect ``validate_salmon_datapackage()`` reports rather than
     incomplete metadata a setter can fill.
+
+    ``source`` is as :func:`sdp_schema_fields` documents it.
     """
     required = []
-    for field in sdp_schema_fields(table_name):
+    for field in sdp_schema_fields(table_name, source=source):
         constraints = field.get("constraints")
         if isinstance(constraints, dict) and constraints.get("required") is True:
             required.append(str(field["name"]))
     return required
 
 
-def sdp_schema_field_description(table_name: str, field_name: str) -> str:
+def sdp_schema_field_description(
+    table_name: str, field_name: str, source: Optional[str] = None
+) -> str:
     """One field's schema ``description``, or ``""``.
 
     It becomes the prompt in the call :func:`review_metadata` prints, so the
     hint a user sees is the spec's own wording rather than one re-invented here.
+
+    ``source`` is as :func:`sdp_schema_fields` documents it.
     """
-    for field in sdp_schema_fields(table_name):
+    for field in sdp_schema_fields(table_name, source=source):
         if str(field.get("name")) == str(field_name):
             value = field.get("description")
             return "" if value is None else str(value).strip()

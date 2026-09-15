@@ -783,6 +783,131 @@ def test_an_accept_records_the_chosen_row_and_its_siblings(seeded_package):
     assert "accepted" in set(slot["decision"])
 
 
+HANDPICKED_IRI = "https://example.org/Handpicked"
+
+
+def _handpicked_slot(package: Path) -> pd.DataFrame:
+    written = _suggestions_csv(package)
+    return written[
+        (written["column_name"] == "spawner_count")
+        & (written["dictionary_role"] == "variable")
+    ]
+
+
+def test_an_accept_outside_the_shortlist_reaches_the_decision_record(
+    seeded_package,
+):
+    """``accept_suggestion(iri=...)`` is a supported escape hatch, so its
+    decision has to survive in the package like any other.
+
+    The shortlist match was the only way an ``accepted`` row was ever written, so
+    a hand-picked IRI produced an empty mask: every candidate was marked
+    ``not_selected``, nothing was marked ``accepted``, and the acceptance existed
+    only in the user's script. ``semantic_suggestions.csv`` is documented as the
+    evidence trail, and this is the one decision it lost.
+    """
+    review = accept_suggestion(
+        review_semantics(str(seeded_package)),
+        "spawner_count",
+        "variable",
+        iri=HANDPICKED_IRI,
+    )
+    apply_sdp_semantics(str(seeded_package), review, quiet=True)
+
+    # The metadata CSV always received it; that half was never broken.
+    dictionary = _dictionary_csv(seeded_package)
+    assert (
+        dictionary.loc[
+            dictionary["column_name"] == "spawner_count", "term_iri"
+        ].iloc[0]
+        == HANDPICKED_IRI
+    )
+
+    slot = _handpicked_slot(seeded_package)
+    accepted = slot[slot["decision"] == "accepted"]
+    assert len(accepted) == 1
+    assert accepted["iri"].iloc[0] == HANDPICKED_IRI
+    # The retrieved candidates are still recorded, and still say they were not
+    # the one chosen.
+    retrieved = slot[slot["iri"] == SPAWNER_IRI]
+    assert set(retrieved["decision"]) == {"not_selected"}
+    # And the row says the term came from the user rather than from retrieval,
+    # so nobody reads it as a candidate some source returned.
+    assert accepted["source"].iloc[0] == "user"
+
+
+def test_a_hand_picked_accept_replays_on_rebuild(seeded_package):
+    """The replay is what ``include_filled=True`` is for, and it is the half a
+    lost ``accepted`` row takes with it."""
+    review = accept_suggestion(
+        review_semantics(str(seeded_package)),
+        "spawner_count",
+        "variable",
+        iri=HANDPICKED_IRI,
+    )
+    apply_sdp_semantics(str(seeded_package), review, quiet=True)
+
+    decided_slot = "column_dictionary.csv|demo-1/spawners/spawner_count|term_iri"
+    rebuilt = review_semantics(str(seeded_package), include_filled=True)
+    replayed = rebuilt.rows[
+        (rebuilt.rows["slot_id"] == decided_slot)
+        & (rebuilt.rows["decision"].notna())
+    ]
+    assert len(replayed) == 1
+    assert replayed["decision"].iloc[0] == "accept"
+    assert replayed["decision_iri"].iloc[0] == HANDPICKED_IRI
+    assert f"DECIDED: accept → {HANDPICKED_IRI}" in str(rebuilt)
+
+    # A decided slot stays out of the default queue, hand-picked or not.
+    assert decided_slot not in set(review_semantics(str(seeded_package))["slot_id"])
+
+
+def test_a_hand_picked_accept_is_visible_inside_max_candidates(seeded_package):
+    """Position is the whole reason the recorded row is not simply appended.
+
+    ``review_semantics()`` derives ``rank`` from file position and then drops
+    everything past ``max_candidates``, so a recorded accept written after a full
+    shortlist would be filtered straight back out -- the same decision lost
+    again, one layer further on.
+    """
+    review = accept_suggestion(
+        review_semantics(str(seeded_package)),
+        "spawner_count",
+        "variable",
+        iri=HANDPICKED_IRI,
+    )
+    apply_sdp_semantics(str(seeded_package), review, quiet=True)
+
+    rebuilt = review_semantics(
+        str(seeded_package), include_filled=True, max_candidates=1
+    )
+    slot = rebuilt.rows[
+        rebuilt.rows["slot_id"]
+        == "column_dictionary.csv|demo-1/spawners/spawner_count|term_iri"
+    ]
+    assert len(slot) == 1
+    assert slot["iri"].iloc[0] == HANDPICKED_IRI
+    assert slot["rank"].iloc[0] == 1
+
+
+def test_applying_a_hand_picked_accept_twice_produces_identical_bytes(
+    seeded_package,
+):
+    """Re-runnable, like every other decision: the second pass finds the row the
+    first pass recorded and matches it rather than recording a second one."""
+    review = accept_suggestion(
+        review_semantics(str(seeded_package)),
+        "spawner_count",
+        "variable",
+        iri=HANDPICKED_IRI,
+    )
+    apply_sdp_semantics(str(seeded_package), review, quiet=True)
+    once = (seeded_package / "semantic_suggestions.csv").read_bytes()
+    apply_sdp_semantics(str(seeded_package), review, quiet=True)
+    assert (seeded_package / "semantic_suggestions.csv").read_bytes() == once
+    assert len(_handpicked_slot(seeded_package)) == 2
+
+
 def test_a_decision_survives_being_put_down_and_picked_up_again(seeded_package):
     """The round trip is the point of persisting the decision at all.
 

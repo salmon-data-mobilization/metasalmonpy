@@ -265,6 +265,71 @@ def _read_descriptor(descriptor_path: Path) -> dict:
         ) from None
 
 
+#: The columns that say WHICH metadata cell a suggestion row is about. A
+#: recorded hand-picked accept copies exactly these from the shortlist it
+#: replaces, so ``review_semantics()`` addresses and displays it the same way it
+#: addresses a retrieved candidate. Everything else describes the *candidate* and
+#: is left empty, because nothing is known about a term the user typed.
+_SLOT_ADDRESS_COLUMNS = (
+    "dataset_id",
+    "table_id",
+    "column_name",
+    "code_value",
+    "dictionary_role",
+    "target_scope",
+    "target_sdp_file",
+    "target_sdp_field",
+    "target_row_key",
+)
+
+#: What ``source`` says on a recorded hand-picked accept. ``source`` otherwise
+#: names the vocabulary a candidate was retrieved from, and leaving it empty
+#: would let the row read as a candidate from an unnamed source rather than as
+#: one the user supplied.
+_HAND_PICKED_SOURCE = "user"
+
+
+def _with_hand_picked_accept(
+    suggestions: pd.DataFrame, in_slot, accepted_iri: str
+) -> pd.DataFrame:
+    """Record an accepted IRI that no candidate row carries.
+
+    The slot gains a NEW row rather than an existing candidate being relabelled.
+    Marking a candidate ``accepted`` when its own ``iri`` was not the one accepted
+    would be a worse record than the missing one: the shortlist rows are accurate
+    as they stand -- none of them was selected -- and the thing with no row is the
+    term the user supplied. So it gets one.
+
+    It is inserted at the HEAD of its slot, not at the end of the file, because
+    ``review_semantics()`` derives ``rank`` from file position and then drops
+    everything past ``max_candidates`` (5 by default). Appended after a full
+    shortlist the recorded accept would rank 6 and be filtered straight back out,
+    losing the same decision one layer further on. At the head it ranks 1, which
+    is also what makes a replayed ``accept_suggestion(..., rank=1)`` re-accept the
+    term that was actually chosen. The retrieved candidates keep their relative
+    order, so this is a position and not a re-ranking.
+    """
+    head = suggestions[in_slot].iloc[0]
+    record = {name: pd.NA for name in suggestions.columns}
+    for name in _SLOT_ADDRESS_COLUMNS:
+        if name in suggestions.columns:
+            record[name] = head[name]
+    record["iri"] = accepted_iri
+    record["source"] = _HAND_PICKED_SOURCE
+    record["decision"] = "accepted"
+    record["decision_reason"] = pd.NA
+
+    at = suggestions.index.get_loc(suggestions.index[in_slot][0])
+    return pd.concat(
+        [
+            suggestions.iloc[:at],
+            pd.DataFrame([record], columns=suggestions.columns),
+            suggestions.iloc[at:],
+        ],
+        ignore_index=True,
+    )
+
+
 def _record_decisions(target: Path, decisions: pd.DataFrame) -> Optional[bytes]:
     """The decision record on disk, rendered to bytes.
 
@@ -300,9 +365,11 @@ def _record_decisions(target: Path, decisions: pd.DataFrame) -> Optional[bytes]:
     if "decision_reason" not in suggestions.columns:
         suggestions["decision_reason"] = pd.NA
 
-    slots = _review_slot_id(suggestions)
     for position in range(len(decisions)):
         row = decisions.iloc[position]
+        # Recomputed per decision because a hand-picked accept INSERTS a row
+        # below, which invalidates every earlier mask and index.
+        slots = _review_slot_id(suggestions)
         in_slot = slots == _text(row["slot_id"])
         if not in_slot.any():
             continue
@@ -312,13 +379,26 @@ def _record_decisions(target: Path, decisions: pd.DataFrame) -> Optional[bytes]:
                 row["decision_reason"]
             )
             continue
+        accepted_iri = _text(row["decision_iri"])
         accepted = in_slot & (
-            suggestions["iri"].map(_strip_review_iri)
-            == _text(row["decision_iri"])
+            suggestions["iri"].map(_strip_review_iri) == accepted_iri
         )
         suggestions.loc[in_slot, "decision"] = "not_selected"
-        suggestions.loc[accepted, "decision"] = "accepted"
         suggestions.loc[in_slot, "decision_reason"] = pd.NA
+        if accepted.any():
+            suggestions.loc[accepted, "decision"] = "accepted"
+        else:
+            # ``accept_suggestion(iri=...)`` is the supported escape hatch for a
+            # term retrieval never surfaced, and the shortlist match was the only
+            # way an ``accepted`` row was ever written. So a hand-picked IRI left
+            # the mask empty: every candidate was marked ``not_selected``, nothing
+            # was marked ``accepted``, and the acceptance survived only in the
+            # user's script -- while the metadata CSV had it. That is the audit
+            # trail this file exists to be, and the decision that cannot be
+            # replayed by ``review_semantics(include_filled=True)``.
+            suggestions = _with_hand_picked_accept(
+                suggestions, in_slot, accepted_iri
+            )
 
     # ``""`` and a missing value share the empty CSV field, so a reason that was
     # never given round-trips as absent rather than as an empty string.

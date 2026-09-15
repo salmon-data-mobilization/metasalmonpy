@@ -168,15 +168,22 @@ def test_review_metadata_reports_a_blank_measurement_iri(raw_package):
     assert hit["reason"].iloc[0] == "iri"
 
 
-def test_a_review_marked_iri_belongs_to_review_semantics_not_here(raw_package):
+def test_a_review_marked_iri_is_reported_by_both_reviews(raw_package):
     """The division of labour between the two reviews, pinned.
 
-    A ``REVIEW:``-marked IRI has a draft value and a shortlist, so
-    ``review_semantics()`` queues it and this scan does not -- ``_is_unfilled_metadata``
-    tests for the three ``MISSING …``/``REVIEW REQUIRED:`` placeholder spellings
-    and for blankness, never for the bare ``REVIEW:`` marker, which has its own
-    dedicated reporting path in ``validate_salmon_datapackage()``. R's
-    ``.ms_is_unfilled_metadata()`` draws the line in the same place.
+    An unresolved ``REVIEW:`` IRI belongs to ``review_semantics()`` -- it has a
+    draft value and a shortlist, which this scan has neither of -- and it still
+    blocks strict validation, so this scan has to report it too. Reporting it in
+    both places is a duplicate; reporting it in neither is the defect, because
+    ``review_metadata()`` is the scan that promises to list everything blocking
+    ``validate_salmon_datapackage(require_iris=True)`` and a user who leaves part
+    of the semantic queue undecided reaches exactly this state.
+
+    The two predicates stay separate. ``is_review_placeholder()`` keeps naming
+    only the three prose spellings, because the license gate and the
+    placeholder-reporting path in ``validate_salmon_datapackage()`` are built on
+    that narrowness; ``_is_unfilled_iri()`` is the IRI-field predicate and adds
+    the marker.
     """
     dict_csv = raw_package / "metadata" / "column_dictionary.csv"
     marked = pd.read_csv(dict_csv)
@@ -184,13 +191,41 @@ def test_a_review_marked_iri_belongs_to_review_semantics_not_here(raw_package):
     assert str(marked["property_iri"].iloc[0]).startswith("REVIEW:")
 
     rows = review_metadata(str(raw_package)).rows
-    assert rows[
+    hit = rows[
         (rows["column_name"] == "spawner_count") & (rows["field"] == "property_iri")
-    ].empty
+    ]
+    assert len(hit) == 1
+    assert hit["reason"].iloc[0] == "iri"
+    # The draft value is shown rather than hidden, so the reader can see there
+    # is something to decide rather than something to invent.
+    assert hit["current_value"].iloc[0].startswith("REVIEW:")
+
     queued = review_semantics(str(raw_package))
     assert (
         (queued["column_name"] == "spawner_count") & (queued["role"] == "property")
     ).any()
+    # And the console footer points at the review that has the candidates.
+    assert "review_semantics()" in str(review_metadata(str(raw_package)))
+
+
+def test_a_prose_placeholder_is_not_reclassified_as_an_iri_gap(raw_package):
+    """The narrow predicate stays narrow.
+
+    ``is_review_placeholder()`` is mirrored from R's
+    ``.ms_is_review_placeholder()`` and five other callers depend on it naming
+    only the three prose spellings -- above all the license gate, which must not
+    treat a bare ``REVIEW:`` IRI as prose. Widening it would have been the
+    smaller diff and the wrong fix, so this pins that it was not widened.
+    """
+    from metasalmonpy.metadata import is_review_placeholder
+
+    assert is_review_placeholder("MISSING METADATA: add a creator")
+    assert is_review_placeholder("REVIEW REQUIRED: check this")
+    assert not is_review_placeholder("REVIEW:https://w3id.org/smn/Anything")
+
+    rows = review_metadata(str(raw_package)).rows
+    creator = rows[(rows["file"] == "dataset.csv") & (rows["field"] == "creator")]
+    assert creator["reason"].iloc[0] == "placeholder"
 
 
 def test_review_metadata_sees_a_required_column_the_file_does_not_have(
@@ -242,6 +277,59 @@ def test_review_metadata_never_calls_retrieval(raw_package, monkeypatch):
     assert len(review_metadata(str(raw_package))) > 0
 
 
+class _NetworkReached(BaseException):
+    """A sentinel that ``load_sdp_schema()`` cannot swallow.
+
+    Deliberately NOT an ``Exception``: the loader catches ``Exception`` and falls
+    back to the vendored bundle, so an ordinary raising stub would be absorbed
+    and the test would pass whether or not the path is offline. This is the same
+    reason the R side proves LLM opt-in with an injected function nothing
+    catches.
+    """
+
+
+def test_review_metadata_makes_no_http_request_on_the_default_schema_source(
+    raw_package, monkeypatch
+):
+    """The no-network contract, proved by a sentinel rather than by reading.
+
+    ``review_metadata()`` documents that it never contacts a network, and the
+    scan is built on the schema's ``constraints.required`` -- so it reads the
+    schema bundle. On the shipped default source (``"auto"``) ``load_sdp_schema()``
+    performs an HTTP fetch of six documents before falling back to the vendored
+    copy, which makes a documented-local path network-dependent and costs a
+    timeout per document when there is no network.
+
+    ``tests/conftest.py`` pins ``sdp_schema_source="vendored"`` for the whole
+    suite, which is why nothing caught this: that pin is a fact about the test
+    environment, not evidence about the default. This test therefore un-pins it
+    and clears the caches, so it runs in the fresh-process, default-source
+    configuration a user gets.
+    """
+    import requests
+
+    from metasalmonpy import sdp_schema
+
+    def explode(*args, **kwargs):  # pragma: no cover - must never run
+        raise _NetworkReached("review_metadata() made an HTTP request")
+
+    # The package is built first, under the suite's vendored pin: create_sdp()
+    # has no offline contract and is not what is under test here.
+    assert raw_package.is_dir()
+
+    monkeypatch.delenv("METASALMONPY_SDP_SCHEMA_SOURCE", raising=False)
+    sdp_schema.set_sdp_schema_source(None)
+    sdp_schema.reset_schema_cache()
+    sdp_schema._vendored_schema_document.cache_clear()
+    assert sdp_schema.default_sdp_schema_source() == "auto"
+    monkeypatch.setattr(requests, "get", explode)
+
+    try:
+        assert len(review_metadata(str(raw_package))) > 0
+    finally:
+        sdp_schema.reset_schema_cache()
+
+
 def test_review_metadata_refuses_a_path_that_is_not_a_directory(tmp_path):
     with pytest.raises(NotADirectoryError):
         review_metadata(str(tmp_path / "nope"))
@@ -272,6 +360,12 @@ def test_an_empty_review_says_nothing_is_outstanding(filled_package):
     review = review_metadata(str(filled_package))
     assert review.empty
     assert "No outstanding metadata." in str(review)
+    # The handoff this scan exists to provide: "nothing outstanding" and a
+    # package strict validation refuses cannot both be true. They were, for a
+    # measurement IRI still holding its seeded ``REVIEW:`` marker -- non-blank,
+    # not one of the three prose placeholder spellings, so the scan passed over
+    # it while strict validation refused the package for it.
+    validate_salmon_datapackage(str(filled_package), require_iris=True)
 
 
 # ---------------------------------------------------------------------------

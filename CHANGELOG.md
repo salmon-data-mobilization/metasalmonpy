@@ -144,6 +144,94 @@ See `AGENTS.md`'s *Current honest state*.
   Applying a review also **preserves** decisions it does not itself carry, so
   Monday's four rejections are not erased by Tuesday's acceptance.
 
+* **`review_metadata()` no longer reports a clean package that strict
+  validation refuses.** An unresolved `REVIEW:` IRI is non-blank and is not one
+  of the three `MISSING …` / `REVIEW REQUIRED:` prose spellings, so the gap scan
+  passed straight over it while `_collect_review_iri_issues()` refused the
+  package for it. The visible failure was `review_metadata()` printing "No
+  outstanding metadata." for a package
+  `validate_salmon_datapackage(path, require_iris=True)` then rejected — which
+  breaks the one handoff the scan exists to provide, and is the state a user
+  reaches by leaving any part of the semantic queue undecided. Every
+  schema-declared `*_iri` field of `tables.csv`, `column_dictionary.csv` and
+  `codes.csv` still carrying a marker is now reported, with the draft value shown
+  and the console footer pointing at `review_semantics()`, which has the
+  candidates. Such a slot now appears in **both** reviews; a duplicate report is
+  the right answer where reporting it in neither was the defect.
+
+  `is_review_placeholder()` was **not** widened. It mirrors R's
+  `.ms_is_review_placeholder()` and its narrowness is load-bearing for five other
+  callers — the `license` gate reads it precisely *because* a bare `REVIEW:` IRI
+  is not prose, and the placeholder sweep in `validate_salmon_datapackage()`
+  excludes the marker because it has its own reporting path. The IRI-field test is
+  a second predicate, `_is_unresolved_iri()`, and a test pins that the prose one
+  still answers `False` for a `REVIEW:` IRI.
+
+* **`review_metadata()` keeps its documented no-network promise.** The scan is
+  built on the schema's `constraints.required`, and it read the schema through
+  `load_sdp_schema()`, whose default `"auto"` source fetches six documents over
+  HTTP before falling back to the copy bundled with the package. So on a fresh
+  process a function documented as never contacting a network contacted one, and
+  waited out a timeout per document when there was none. `sdp_schema_fields()`,
+  `sdp_schema_field_names()`, `sdp_schema_required_field_names()` and
+  `sdp_schema_field_description()` gain a `source` argument, and
+  `sdp_field_setters` passes `source="vendored"` throughout — the setters too,
+  because a call `review_metadata()` prints must be one `_set_sdp_metadata()`
+  accepts, and it would not be if one read the remote schema and the other the
+  bundled one. The vendored read goes straight to the bundled document rather
+  than through `load_sdp_schema(source="vendored")`, whose cache is a single slot
+  keyed by source: alternating sources in one process would evict the bundle each
+  time and make the *next* `"auto"` read re-fetch.
+
+  Proved with a sentinel rather than by reading, the way the R side proves LLM
+  opt-in: an injected `requests.get` that raises. It derives from `BaseException`
+  on purpose, because `load_sdp_schema()` catches `Exception` and falls back, so
+  an ordinary raising stub would be swallowed and the test would pass either way.
+  The test also un-pins `tests/conftest.py`'s suite-wide
+  `sdp_schema_source="vendored"` and clears the caches — that pin is why nothing
+  caught this, and it is a fact about the test environment rather than evidence
+  about the default.
+
+* **A hand-picked accept now reaches the decision record.**
+  `accept_suggestion(..., iri="...")` is the supported escape hatch for a term
+  retrieval never surfaced, and a shortlist match was the only way an `accepted`
+  row was ever written to `semantic_suggestions.csv`. So a hand-picked IRI left
+  the mask empty: every candidate was marked `not_selected`, nothing was marked
+  `accepted`, and the acceptance survived only in the user's script while the
+  metadata CSV had it — the one decision the documented evidence trail lost, and
+  the one `review_semantics(include_filled=True)` could not replay. The accepted
+  IRI now gets its own row, carrying the slot's addressing columns and
+  `source="user"`, rather than an existing candidate being relabelled: the
+  shortlist rows are accurate as they stand — none of them was selected — and the
+  thing with no row is the term the user supplied.
+
+  The row is inserted at the **head** of its slot, not appended to the file.
+  `review_semantics()` derives `rank` from file position and then drops everything
+  past `max_candidates` (5 by default), so an appended record would rank 6 behind
+  a full shortlist and be filtered straight back out — the same decision lost one
+  layer further on. At the head it ranks 1, which is also what makes a replayed
+  `accept_suggestion(..., rank=1)` re-accept the term that was actually chosen.
+  Re-applying is still byte-identical: the second pass finds the row the first
+  recorded and matches it.
+
+  **All three of the fixes above are owed in metasalmon, and none of them is a
+  `PARITY.md` row.** Each was measured against metasalmon 0.5.0 and found in the
+  same shape, so they are ports rather than deliberate differences and the
+  register would be the wrong place for them (hub queue **B-126** says so
+  explicitly). Measured 2026-09-15 against metasalmon 0.5.0 under R 4.3.3:
+  `.ms_is_unfilled_metadata()` (`R/sdp-field-setters.R`) answers `FALSE` for
+  `REVIEW:https://…`, and R's `review_metadata()` prints "No outstanding
+  metadata." for a package `validate_salmon_datapackage(require_iris = TRUE)`
+  refuses; R's `review_metadata()` reaches `httr2::req_perform` on the default
+  `metasalmon.sdp_schema_source` through `.ms_metadata_schema_fields()` →
+  `.ms_load_sdp_schema(quiet = TRUE)`; and R's `apply_sdp_semantics()` writes the
+  hand-picked IRI into `column_dictionary.csv` while leaving
+  `semantic_suggestions.csv` with a lone `not_selected` row and replaying zero
+  decisions on rebuild (`R/metadata-write.R`, the `accepted <- in_slot & …` mask).
+  Until the R half lands, these three are temporary divergences that go the
+  direction the mirror contract's "the mirror is not automatically the follower"
+  clause allows: Python got it right here, and R changes.
+
 * **An empty queue under a bad `columns` filter no longer reads as success.**
   `review_semantics(pkg, columns=["TYPO"])` would have reported an empty queue,
   telling a user who mistyped a column name that their package was finished. A

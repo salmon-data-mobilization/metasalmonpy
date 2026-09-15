@@ -16,10 +16,21 @@ causes, and one mechanism closes both.
 :func:`review_metadata` closes both because it does not read a suggestion list.
 It reads the package against the rules that actually decide strict validation:
 the Frictionless schema's ``constraints.required`` (which this package parsed
-nowhere and consumed nowhere before the S5 port), the placeholder markers, the
-measurement-column IRI requirement, and the table observation-unit IRI
-requirement. A field that no retrieval ever touched is as visible to it as one
-with five candidates.
+nowhere and consumed nowhere before the S5 port), the prose placeholder markers,
+the unresolved ``REVIEW:`` IRI marker, the measurement-column IRI requirement,
+and the table observation-unit IRI requirement. A field that no retrieval ever
+touched is as visible to it as one with five candidates.
+
+"The rules that actually decide strict validation" is the whole claim, so every
+rule it omits is a defect and not a scoping choice: the scan reported a clean
+package for an unresolved ``REVIEW:`` IRI until 2026-09-15, because the prose
+test cannot see the marker. ``_is_unresolved_iri()`` records why that needed a
+second test rather than a wider first one.
+
+It reads the schema from the BUNDLED bundle rather than the remote one
+(``_SCHEMA_SOURCE``), because a function documented as never contacting a network
+cannot reach one, and ``load_sdp_schema()``'s default source fetches before it
+falls back.
 
 THE CONTRACT IT IS JUDGED AGAINST: every row :func:`review_metadata` reports
 prints a runnable ``set_sdp_*()`` call that fixes it, and when the last row is
@@ -56,6 +67,7 @@ from .metadata import (
 )
 from .review_console import (
     _binding_name_for,
+    _is_review_iri,
     _quote,
     _review_rule,
     _review_wrap,
@@ -121,6 +133,25 @@ _ALIGN_COLUMNS = {
     "codes.csv": CODES_COLUMNS,
 }
 
+#: Every schema read in this module comes from the BUNDLED copy, never the
+#: remote one. :func:`review_metadata` documents that it never contacts a
+#: network, and ``load_sdp_schema()``'s default ``"auto"`` source fetches six
+#: documents over HTTP before falling back to that same bundled copy -- so on a
+#: fresh process a documented-local scan reached the network, and waited out a
+#: timeout per document when there was none.
+#:
+#: The setters read the same source deliberately. They are local edits to local
+#: files with no reason to reach a network either, and the gap scan and the
+#: printed call have to agree about which fields exist: a call
+#: :func:`review_metadata` prints must be one ``_set_sdp_metadata()`` accepts,
+#: and it would not be if one read the remote schema and the other the bundled
+#: one.
+#:
+#: Retires when ``load_sdp_schema()`` stops fetching on its default source, at
+#: which point the default is already offline and this constant has nothing left
+#: to say.
+_SCHEMA_SOURCE = "vendored"
+
 _PLACEHOLDER_PREFIX = re.compile(
     r"^\s*(MISSING METADATA|MISSING DESCRIPTION|REVIEW REQUIRED)\s*:\s*",
     re.IGNORECASE,
@@ -147,8 +178,66 @@ def _is_unfilled_metadata(value) -> bool:
     blankness test is not enough -- a ``MISSING METADATA:`` placeholder is a
     non-empty string, and strict validation refuses it precisely because it is
     not a value.
+
+    This is the PROSE test, and it is deliberately blind to the ``REVIEW:`` IRI
+    marker: ``_is_unresolved_iri()`` is the fourth way an IRI field can be
+    unfilled, and it needs its own test for the reason recorded there.
     """
     return not _text(value) or is_review_placeholder(value)
+
+
+def _is_unresolved_iri(value) -> bool:
+    """An IRI field still carrying the ``REVIEW:`` marker.
+
+    The marker is the fill helpers' "inferred, not confirmed" value, and it is a
+    FOURTH way to be unfilled that the prose test cannot see: it is non-blank,
+    and it is not one of the three ``MISSING …`` / ``REVIEW REQUIRED:``
+    spellings, so :func:`_is_unfilled_metadata` passes straight over it. Strict
+    validation does not -- ``_collect_review_iri_issues()`` refuses a marker in
+    any ``*_iri`` column, and ``validate_dictionary(require_iris=True)`` refuses
+    one in any of the dictionary's six. Without this test the scan could report
+    "No outstanding metadata." for a package
+    ``validate_salmon_datapackage(require_iris=True)`` then rejected, which
+    breaks the one handoff :func:`review_metadata` exists to provide. A user who
+    leaves part of the semantic queue undecided reaches exactly that state.
+
+    A SECOND test rather than a wider ``is_review_placeholder()``. That one
+    mirrors R's ``.ms_is_review_placeholder()``, and its narrowness is
+    load-bearing for five other callers: the license gate in ``package_io``
+    reads it *because* a bare ``REVIEW:`` IRI is not prose, the placeholder
+    sweep in ``validate_salmon_datapackage()`` excludes the marker because it has
+    its own dedicated reporting path, and :func:`_gap_row` uses it to decide
+    whether a value's own text is a usable hint -- an IRI's is not. Widening it
+    would have been the smaller diff and would have pushed the marker into three
+    channels built to exclude it.
+
+    Retires when: nothing. The two tests answer different questions about
+    different kinds of field, which is why they are two.
+    """
+    return _is_review_iri(value)
+
+
+#: The metadata files whose ``*_iri`` markers BLOCK strict validation, which is
+#: the only thing this scan reports. ``_collect_review_issues()`` sweeps exactly
+#: these three, and ``_mark_review_iri()`` only ever writes into them; a marker
+#: on ``dataset.csv$protocol_iri`` is not swept there, so reporting one would be
+#: this scan claiming a block that does not exist -- the same class of error as
+#: missing one, pointing the other way.
+#:
+#: Retires when ``_collect_review_issues()`` changes which files it sweeps. The
+#: two lists have to move together, and ``test_a_review_marked_iri_is_reported_by_both_reviews``
+#: is what fails if only one of them does.
+_REVIEW_IRI_FILES = ("tables.csv", "column_dictionary.csv", "codes.csv")
+
+#: The prompt a printed call carries for one IRI field. ``observation_unit_iri``
+#: reads better as prose than as its own column name; every other field is
+#: literal. One spelling, so the blank branch and the unresolved-marker branch
+#: cannot print two different hints for one field.
+_IRI_FIELD_HINTS = {"observation_unit_iri": "IRI for what one row represents"}
+
+
+def _iri_hint(field: str) -> str:
+    return _IRI_FIELD_HINTS.get(field, "IRI for " + field)
 
 
 def _strip_placeholder_prefix(value) -> str:
@@ -174,7 +263,9 @@ def settable_required_fields(file_name: str) -> Sequence[str]:
     keys = set(METADATA_KEY_FIELDS.get(file_name, ()))
     return [
         name
-        for name in sdp_schema_required_field_names(table_name)
+        for name in sdp_schema_required_field_names(
+            table_name, source=_SCHEMA_SOURCE
+        )
         if name not in keys
     ]
 
@@ -201,7 +292,7 @@ def _gap_row(
             hint = placeholder_hint
         else:
             hint = sdp_schema_field_description(
-                METADATA_SCHEMA_TABLES[file_name], field
+                METADATA_SCHEMA_TABLES[file_name], field, source=_SCHEMA_SOURCE
             )
     hint = _text(hint) or field
     return {
@@ -293,7 +384,9 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
     # run.
     scan_fields = [
         name
-        for name in sdp_schema_field_names(METADATA_SCHEMA_TABLES[file_name])
+        for name in sdp_schema_field_names(
+            METADATA_SCHEMA_TABLES[file_name], source=_SCHEMA_SOURCE
+        )
         if name in frame.columns
     ]
 
@@ -325,21 +418,41 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
             if is_review_placeholder(value):
                 add(field, "placeholder")
                 continue
+            # An unresolved ``REVIEW:`` marker in a declared ``*_iri`` field is
+            # refused too, by ``_collect_review_iri_issues()``. Handled HERE
+            # rather than in the two branches below so it reaches
+            # ``constraint_iri``, ``statistical_modifier_iri`` and a code's
+            # ``term_iri`` as well -- the validator sweeps every ``*_iri`` column
+            # of these files, and the two have to keep agreeing about what
+            # blocks. Scoped to the SCHEMA-DECLARED fields because every row here
+            # must print a runnable call and ``_set_sdp_metadata()`` refuses an
+            # undeclared field; an undeclared ``*_iri`` column was never in this
+            # scan at all and stays the validator's to report.
+            if (
+                file_name in _REVIEW_IRI_FILES
+                and str(field).endswith("_iri")
+                and _is_unresolved_iri(value)
+            ):
+                add(field, "iri", hint=_iri_hint(field))
+                continue
             if field in keys:
                 continue
             if field in required and _is_unfilled_metadata(value):
                 add(field, "required")
 
         if file_name == "tables.csv" and "observation_unit_iri" in frame.columns:
-            # Blank OR still marked: the schema calls this ``recommended``, and
-            # strict validation refuses a blank one anyway
+            # Blank or a prose placeholder: the schema calls this
+            # ``recommended``, and strict validation refuses a blank one anyway
             # (``_collect_missing_table_observation_unit_iri_issues()``). The
-            # schema is not the authority on what blocks; the validator is.
+            # schema is not the authority on what blocks; the validator is. A
+            # value still carrying ``REVIEW:`` was already reported above, so
+            # the prose test is what belongs here -- using the marker test in
+            # both places would report one field twice.
             if _is_unfilled_metadata(row.get("observation_unit_iri")):
                 add(
                     "observation_unit_iri",
                     "iri",
-                    hint="IRI for what one row represents",
+                    hint=_iri_hint("observation_unit_iri"),
                 )
 
         if (
@@ -350,7 +463,7 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
                 if field not in frame.columns:
                     continue
                 if _is_unfilled_metadata(row.get(field)):
-                    add(field, "iri", hint="IRI for " + field)
+                    add(field, "iri", hint=_iri_hint(field))
     return gaps
 
 
@@ -439,11 +552,18 @@ def review_metadata(path) -> MetadataReview:
       ``REVIEW REQUIRED:`` placeholders in any metadata field;
     * schema-required fields (``constraints.required``) that are blank -- a
       column the file does not have counts as blank in every row;
+    * any declared ``*_iri`` field still carrying an unresolved ``REVIEW:``
+      marker, which strict validation refuses. These also appear in
+      :func:`review_semantics`, which has their candidates; they are listed here
+      too because this is the scan that promises to name everything blocking
+      strict validation, and a package left part-decided is the common case;
     * measurement columns missing ``term_iri``, ``property_iri``,
       ``entity_iri`` or ``unit_iri``;
     * ``tables.csv`` rows with a blank ``observation_unit_iri``.
 
-    It never contacts a network or an LLM.
+    It never contacts a network or an LLM. The schema it reads
+    ``constraints.required`` from is the bundled copy, never the remote one, so
+    that guarantee holds on the default schema source.
 
     Returns
     -------
@@ -469,7 +589,8 @@ def review_metadata(path) -> MetadataReview:
         # absent required column is a gap whose printed call fills it:
         # ``_set_sdp_metadata()`` adds the column it is asked to write.
         frame = align_columns(
-            read_sdp_csv(located), sdp_schema_field_names(table_name)
+            read_sdp_csv(located),
+            sdp_schema_field_names(table_name, source=_SCHEMA_SOURCE),
         )
         gaps.extend(_gaps_for_file(frame, file_name))
 
@@ -861,7 +982,7 @@ def _set_sdp_metadata(
         )
 
     table_name = METADATA_SCHEMA_TABLES[file_name]
-    declared = sdp_schema_field_names(table_name)
+    declared = sdp_schema_field_names(table_name, source=_SCHEMA_SOURCE)
     unknown = [name for name in values if name not in declared]
     if unknown:
         raise ValueError(
