@@ -102,23 +102,34 @@ class DictionaryTests(unittest.TestCase):
 
 
 class EraColumnRoleTests(unittest.TestCase):
-    """Column-role and required inference, node for node with metasalmon 0.1.7.
+    """Column-role and required inference, node for node with metasalmon.
 
-    Every expectation below is the answer era R gives. They were produced by
-    calling ``infer_column_role()`` and ``.ms_infer_required_flag()`` on a
-    v0.1.7 extraction (``git archive v0.1.7``) under R 4.5.2 with the same
-    thirty name/value pairs; before this port thirteen of the thirty differed.
+    Every expectation below is the answer R gives. The thirty pairs were
+    produced by calling ``infer_column_role()`` and ``.ms_infer_required_flag()``
+    on a ``git archive v0.1.7`` extraction under R 4.5.2; before that port
+    thirteen of the thirty differed.
+
+    **Re-measured 2026-09-16 against an installed metasalmon 0.5.0** (R 4.3.3)
+    for hub queue **B-125**, the port of metasalmon backlog #95: an enumerable
+    string column is ``categorical`` where three branches of
+    ``infer_column_role()`` answered ``attribute``. Eleven rows moved, each
+    marked ``#95`` below, and **each moved in R first** — R and Python were run
+    over the same thirty-one name/value pairs and agree on every row, role and
+    required flag alike. No row here was edited to fit the Python change.
     """
 
     # (column name, values, R's column_role, R's required)
     CASES = (
         # 0.1.7's terminal-ID-qualifier fix: a qualifier token after the last
         # ID/key token means the column describes an identification's quality.
-        ("stock_ID_quality", ["high", "low", "high"], "attribute", None),
-        ("id_quality", ["a", "b", "c"], "attribute", None),
-        ("key_confidence", ["a", "b", "c"], "attribute", None),
-        ("sample_id_score", ["a", "b", "c"], "attribute", None),
-        ("sampleIdQuality", ["a", "b", "c"], "attribute", None),
+        # #95: all five carry an enumerable code list, so the qualifier branch
+        # answers categorical. What the 0.1.7 fix asserts -- that none of them
+        # is an *identifier* -- is untouched.
+        ("stock_ID_quality", ["high", "low", "high"], "categorical", None),
+        ("id_quality", ["a", "b", "c"], "categorical", None),
+        ("key_confidence", ["a", "b", "c"], "categorical", None),
+        ("sample_id_score", ["a", "b", "c"], "categorical", None),
+        ("sampleIdQuality", ["a", "b", "c"], "categorical", None),
         # 0.1.7's nullable-identifier fix: an identifier carrying a missing or
         # blank-after-trim value is undecided, not required.
         ("fish_id", ["a", "b", "c"], "identifier", True),
@@ -126,11 +137,14 @@ class EraColumnRoleTests(unittest.TestCase):
         ("sample_id", ["a", " ", "c"], "identifier", None),
         ("dup_id", ["x", "x", "y"], "identifier", True),
         ("key", ["a", "b", "c"], "identifier", True),
-        # The rest of the 0.1.7 role heuristic.
+        # The rest of the role heuristic.
         ("station_number", ["1", "2", "3"], "identifier", True),
         ("release_no", ["1", "2", "3"], "identifier", True),
-        ("counting_method", ["visual", "weir", "visual"], "attribute", None),
-        ("gear", ["net", "trap", "net"], "attribute", None),
+        # #95: a method column whose values enumerate is a code list, and its
+        # procedures resolve through codes.csv$term_iri. The point of these two
+        # has always been that neither is a *measurement*.
+        ("counting_method", ["visual", "weir", "visual"], "categorical", None),
+        ("gear", ["net", "trap", "net"], "categorical", None),
         ("sample_size", [10, 20, 30], "measurement", None),
         ("survey_year", ["2001", "2002", "2003"], "temporal", None),
         ("run_year", [2001, 2002, 2003], "temporal", None),
@@ -139,13 +153,19 @@ class EraColumnRoleTests(unittest.TestCase):
         ("total_length_mm", [10.5, 20.5, 30.5], "measurement", None),
         ("water_temp", ["8.1", "9.2", "10.3"], "measurement", None),
         ("discharge (m3/s)", ["1.2", "2.3", "3.4"], "measurement", None),
-        ("comment", ["a", "b", "c"], "attribute", None),
-        ("abundance", ["n/a", "n/a", "n/a"], "attribute", None),
+        # #95: the final default. Three distinct strings are a code list the
+        # seeder would write rows for, so the dictionary must say categorical
+        # or the specification's validator rejects those rows.
+        ("comment", ["a", "b", "c"], "categorical", None),
+        ("abundance", ["n/a", "n/a", "n/a"], "categorical", None),
+        # Unchanged, and the reason is the ordering: the measurement check runs
+        # ahead of the code-list check, so a percent-like text column keeps its
+        # role even though its values would enumerate.
         ("count", ["5%", "10%", "15%"], "measurement", None),
         ("survey_date", ["2020-01-01", "2020-02-01", "2020-03-01"], "temporal", None),
-        ("region", ["N", "S", "N"], "attribute", None),
+        ("region", ["N", "S", "N"], "categorical", None),  # #95
         ("proportion_female", [0.4, 0.5, 0.6], "measurement", None),
-        ("mortality", ["low", "high", "low"], "attribute", None),
+        ("mortality", ["low", "high", "low"], "categorical", None),  # #95
         ("recruit_abundance", [1, 2, 3], "measurement", None),
     )
 
