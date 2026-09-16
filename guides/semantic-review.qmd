@@ -40,6 +40,8 @@ review
 
        review = reject_suggestion(review, "spawner_count", "variable")   # no candidate fits
 
+                      … one block per unfilled slot, elided here …
+
 ── spawners · entity ─────────────────────────────────────────────────────────
    field:   tables.csv · observation_unit_iri
    current: <blank>
@@ -145,6 +147,8 @@ review_metadata(package_path)
      description="<describe the contents and purpose of dataset 'demo-1'>",
      creator="<add creator, team, or originating program>"
    )
+
+              … one block per file and row with outstanding fields …
 
 ── next ──────────────────────────────────────────────────────────────────────
    13 fields still block strict validation.
