@@ -76,8 +76,10 @@ violation like a failing test.
    metasalmon's own `AGENTS.md`, and the release index in the hub's
    `knowledge/roadmap.md`. When they disagree, one of them is wrong about
    the single fact the mirror contract turns on and nothing in either file
-   reveals which. **It has now gone wrong three times, once in each direction
-   and once here again**, which is the argument for reading any parity sentence
+   reveals which. **It has now gone wrong four times — once in each direction,
+   once here again, and once in a shape none of the first three had** (the fourth
+   is the paragraph after this one), which is the argument for reading any parity
+   sentence
    as a dated measurement and checking the other file rather than trusting the
    one in front of you: metasalmon's line read 0.1.8 for three days after this
    package tagged 0.2.1 (corrected there 2026-08-21); this line read `0.2.1` /
@@ -91,16 +93,19 @@ violation like a failing test.
    2026-09-14 by B-126. Whenever either version moves, read the other file in
    the same change.
 
-   **The 2026-09-16 closure moved all three in one change, on purpose, and what
-   it had to check first is the durable part.** All three were read against each
-   other before anything was written, and all three already agreed — 0.5.0 /
-   0.4.0, window open. That is not what the two items describing the work said:
-   both **B-126** and **B-153** recorded that this file "still reads 0.4.0/0.4.0
-   with no window open", which had been true when they were written and stopped
-   being true when #28 merged, hours earlier. So the queue's account of which
-   copy was wrong was itself the stale copy. **Read the three files, not a
-   description of them** — including this paragraph, which is a dated
-   measurement like every other one here.
+   **The fourth time is the one worth reading, because it is a shape the rule
+   above does not catch.** The 2026-09-16 closure moved all three copies in one
+   change, and read all three against each other first. **All three already
+   agreed** — 0.5.0 / 0.4.0, window open. What was wrong was every *description*
+   of them: metasalmon's `AGENTS.md` said this file "still reads 0.4.0/0.4.0 with
+   no window open", the roadmap release index said the same, and both **B-126**'s
+   and **B-153**'s retirement conditions said it too. All four had been true when
+   written and stopped being true hours earlier, when #28 merged. So the failure
+   was not two files disagreeing about the number — it was four places agreeing
+   about *which file was wrong* and all four being wrong about it, which checking
+   that the three numbers match cannot catch. **Read the three files, not a
+   description of them** — including this paragraph, which is a dated measurement
+   like every other one here.
 
    **The mirror is not automatically the follower** (Brett, 2026-08-17):
    *"Don't just make things match metasalmon. If the Python implementation
