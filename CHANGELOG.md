@@ -159,6 +159,34 @@ See `AGENTS.md`'s *Current honest state*.
   candidates. Such a slot now appears in **both** reviews; a duplicate report is
   the right answer where reporting it in neither was the defect.
 
+  **Which files, exactly, is a measurement and not a reading** — the three gates
+  that sweep the marker do not sweep the same files, so no single call site shows
+  the answer. Measured 2026-09-16, one marked field per file:
+  `validate_salmon_datapackage(require_iris=True)` refuses `tables.csv` and
+  `column_dictionary.csv` and **passes** `codes.csv` and `dataset.csv`; the EDH
+  XML gate refuses all three of the first but not `dataset.csv`. `codes.csv` is
+  therefore reported although that validator does not refuse it, because
+  `create_sdp()` tells the user every `REVIEW:` entry must be confirmed, the EDH
+  gate refuses one and `read_salmon_datapackage()` warns about one — a scan that
+  stayed silent would be the only voice in the package saying the marker is
+  fine. `dataset.csv` is excluded because no gate refuses one there at all.
+  `test_which_files_a_review_marker_actually_blocks` asserts all twelve
+  file/gate answers, so a gate that changes which files it sweeps fails a test
+  instead of drifting. That the validator passes a `codes.csv` marker at all is a
+  defect in the **validator** and the same in metasalmon — `AGENTS.md` says
+  strict validation fails if any `REVIEW:` marker remains — reported rather than
+  fixed under this item.
+
+  **Known gap, pinned rather than closed.** The scan reaches only the
+  *schema-declared* fields, because every row it reports must print a runnable
+  `set_sdp_*()` call and `_set_sdp_metadata()` refuses an undeclared field. An
+  `*_iri` column hand-added to `tables.csv` is swept by
+  `_collect_review_iri_issues()` and not by the scan, so that one case still
+  reaches "No outstanding metadata." plus a refusing validator.
+  `test_an_undeclared_iri_column_is_still_missed` asserts it, with its retirement
+  condition in the docstring; no code path in this package writes such a column,
+  so it is reachable only by hand-editing.
+
   `is_review_placeholder()` was **not** widened. It mirrors R's
   `.ms_is_review_placeholder()` and its narrowness is load-bearing for five other
   callers — the `license` gate reads it precisely *because* a bare `REVIEW:` IRI
@@ -191,6 +219,15 @@ See `AGENTS.md`'s *Current honest state*.
   `sdp_schema_source="vendored"` and clears the caches — that pin is why nothing
   caught this, and it is a fact about the test environment rather than evidence
   about the default.
+
+  A second guard, `test_the_offline_path_opens_no_socket_at_all`, blocks
+  `socket.connect` / `connect_ex` / `create_connection` instead of `requests.get`
+  and covers the console renderer and the four setters as well as the scan.
+  Injecting `requests.get` guards the call the fetch makes *today*: a move to
+  `requests.Session`, `urllib`, `httpx` or a subprocess would leave that sentinel
+  green while every call reached the network. Both guards were demonstrated
+  failing against the pre-fix tree, which is the only thing that distinguishes a
+  guard from a comment.
 
 * **A hand-picked accept now reaches the decision record.**
   `accept_suggestion(..., iri="...")` is the supported escape hatch for a term

@@ -425,3 +425,204 @@ section below.
 5. **Unrelated to these findings: the PR body's test counts.** 896/3 and 783/116
    do not reproduce on this machine (898/1 and 785/114 on the unmodified head).
    Worth one look at whether the PR body was measured on a different tree.
+
+---
+
+# Codex review close-out (2026-09-16)
+
+Third pass on this branch. Scope: verify the three Codex P2 findings on the
+current head (`ead77a3`) by measurement rather than by reading the commit that
+claims to fix them, fix what is still real, and leave the rest named. **No
+`PARITY.md` row was opened and none is owed** — see *Mirror halves* below.
+
+## What I measured, per finding
+
+Method for all three: revert only the three source files to `05be2a1` (the
+pre-fix commit the Codex comments are anchored to), keep the head tests, run.
+That is a true failing-before against the tree Codex reviewed.
+
+**Finding 1 — `sdp_field_setters.py` (`4020486835`), "Treat REVIEW-prefixed IRIs
+as unfinished metadata". HELD, and is fixed at head.** Failing-before, two
+tests: `test_a_review_marked_iri_is_reported_by_both_reviews` → `assert 0 == 1`
+(the scan reported nothing for a `REVIEW:`-marked `property_iri`), and
+`test_an_empty_review_says_nothing_is_outstanding` → `ValueError: Validation
+cannot pass while REVIEW-prefixed IRI values remain`, raised *after* the same
+package's review had reported empty. That is the finding's exact symptom. Both
+pass at head.
+
+**Finding 2 — `metadata_write.py` (`4020486838`), "Persist accepts for IRIs
+outside the shortlist". HELD, and is fixed at head.** Failing-before, four tests
+in `tests/test_review_console.py`, the first being
+`test_an_accept_outside_the_shortlist_reaches_the_decision_record` → `assert 0
+== 1` (no row marked `accepted`). All four pass at head. I probed two edges the
+head tests do not cover and both behave: two successive hand-picked accepts on
+one slot leave exactly one `accepted` row (the second) with the first
+demoted to `not_selected`; and a hand-picked accept on a `codes.csv` slot
+records with `code_value` preserved, so the slot addressing survives.
+
+**Finding 3 — `sdp_schema.py` (`4020486842`), "Keep review_metadata offline as
+documented". Marked OUTDATED by GitHub, and it HELD anyway** — the outdated flag
+is a re-anchoring artifact of `ead77a3` touching the file, not a judgement. It
+is fixed at head. Measured harder than the head test does: a fresh process, the
+**shipped default** schema source (`auto`, asserted), with `socket.connect`,
+`connect_ex` and `create_connection` all raising a `BaseException` subclass so
+`load_sdp_schema()`'s `except Exception` fallback cannot swallow it. Against
+`05be2a1`: `review_metadata(): NETWORK REACHED -> socket opened`. Against head:
+`review_metadata()`, the console renderer and three setters all complete —
+`ALL OFFLINE`.
+
+## What I changed
+
+1. **`tests/test_sdp_field_setters.py::test_the_offline_path_opens_no_socket_at_all`**
+   — the socket-level guard above, promoted from a probe to a test, and widened
+   to the renderer and the setters. The head test injects `requests.get`, which
+   is the call the fetch makes *today*; a move to `requests.Session`, `urllib`,
+   `httpx` or a subprocess would leave it green while every call reached the
+   network. Demonstrated RED against `05be2a1` (`_NetworkReached: the offline
+   path opened a socket`) and GREEN at head.
+2. **`tests/test_sdp_field_setters.py::test_which_files_a_review_marker_actually_blocks`**
+   — the file set `_REVIEW_IRI_FILES` names was prose; it is now measured.
+   Marking one field per file and asking each gate gave a result the head
+   commit's own comment does not describe:
+
+   | file | `validate_salmon_datapackage(require_iris=True)` | EDH XML gate | scan |
+   |---|---|---|---|
+   | `tables.csv` | refuses | refuses | reports |
+   | `column_dictionary.csv` | refuses | refuses | reports |
+   | `codes.csv` | **passes** | refuses | reports |
+   | `dataset.csv` | passes | passes | silent |
+
+   So the head comment's stated rule — report a file only where a marker blocks
+   strict validation, "the same class of error as missing one, pointing the
+   other way" — is not the rule the boundary implements: `codes.csv` is reported
+   and is not a blocker for that validator. I kept the behaviour and fixed the
+   justification, because the alternative is a scan that stays silent about a
+   marker `create_sdp()` told the user to confirm, the EDH gate refuses and
+   `read_salmon_datapackage()` warns about. The comment, the `review_metadata()`
+   docstring and the changelog now say which gate refuses what. All twelve
+   answers are asserted, none of them read back from `_REVIEW_IRI_FILES` — a
+   test that compares the scan against the constant the scan is built from
+   passes for every value of that constant. RED demonstrated in both directions:
+   adding `dataset.csv` and removing `codes.csv` each fail it.
+3. **`tests/test_sdp_field_setters.py::test_an_undeclared_iri_column_is_still_missed`**
+   — a residual of finding 1, asserted rather than left latent. See candidate 6.
+4. **Docstring/comment corrections** — the head test's docstring named
+   `_is_unfilled_iri()` for a predicate called `_is_unresolved_iri()`; the
+   `_is_unresolved_iri()` docstring claimed `_collect_review_iri_issues()`
+   refuses a marker in "any `*_iri` column" when strict validation applies it to
+   `tables.csv` only; the `review_metadata()` docstring said "any declared
+   `*_iri` field" without naming the three files or the `codes.csv` exception.
+5. **`CHANGELOG.md`** — the two corrections above and the new guard. No new
+   behaviour, so no new entry: the corrections land inside the existing
+   *Fixed* bullets they belong to.
+
+**No source behaviour changed in this pass.** The diff is tests, comments and
+changelog.
+
+## Verification
+
+Both dependency legs CI runs, from this worktree, each with its own virtualenv
+installed from it (`metasalmonpy.__file__` asserted to point here) and the core
+leg's five extras asserted unimportable:
+
+| leg | PR-body baseline | head `ead77a3` | this pass |
+|---|---|---|---|
+| `.[test,eml,context]`, R absent | 896 / 3 | 905 / 3 | **905 / 3** |
+| `.[test,eml,context]`, R present | — | 904 / 1 | **907 / 1** |
+| core deps only, R absent | 783 / 116 | 792 / 116 | **792 / 116** |
+| core deps only, R present | — | 791 / 114 | **794 / 114** |
+
+`tests/smoke.py` passes, `python -m build` builds both artifacts, `uv lock
+--check` resolves clean, `git diff --check` clean.
+
+**The PR body's counts were never wrong** (this retires candidate 5 in the
+previous section). R availability moves exactly two tests between *passed* and
+*skipped*: 896/3 is the R-absent measurement and 898/1 the R-present one, on the
+same tree. Measured by hiding `R` from `PATH` and re-running.
+
+## Guards added, with their retirement conditions
+
+6. **`test_the_offline_path_opens_no_socket_at_all`**. *Retires when:* never,
+   while `review_metadata()` documents that it does not contact a network. An
+   offline promise with no test that fails when a socket opens is a comment.
+7. **`test_which_files_a_review_marker_actually_blocks`**. *Retires when:* the
+   three gates sweep the same files — which is also what retires
+   `_REVIEW_IRI_FILES`, and at that point the list is derivable from any one of
+   them and should be deleted rather than maintained.
+8. **`test_an_undeclared_iri_column_is_still_missed`**. *Retires when:* the scan
+   and `_collect_review_iri_issues()` agree about undeclared `*_iri` columns.
+   It asserts the defect, so it fails when the defect is fixed; delete it in
+   that change.
+
+## Mirror halves — measured in metasalmon, not fixed here
+
+A hub claim covers one branch in one repository and this one is metasalmonpy's,
+so none of these was touched. All three are ports rather than deviations, so
+**no `PARITY.md` row and no `knowledge/parity-deviations.md` row is owed**,
+which is what #28's body says.
+
+- **Finding 1's R half — measured live, not read.** `R/sdp-field-setters.R:279`
+  and `:304` test with `.ms_is_unfilled_metadata()` (`R/sdp-field-setters.R:49`),
+  which delegates to `.ms_is_review_placeholder()`
+  (`R/package-helpers.R:3997`) — prose spellings only. Run against metasalmon
+  0.5.0 with one `REVIEW:`-marked `property_iri`: `review_metadata()` reported
+  **0** rows for that field (10 rows for other gaps), and
+  `validate_salmon_datapackage(require_iris = TRUE)` **refused** the same
+  package for it.
+- **Finding 3's R half — measured.** `R/sdp-field-setters.R:340` documents "It
+  never contacts a network or an LLM". `.ms_metadata_schema_fields()`
+  (`R/sdp-field-setters.R:101-105`) calls `.ms_load_sdp_schema(quiet = TRUE)`
+  with no `source`, so it takes `getOption("metasalmon.sdp_schema_source",
+  "auto")`, and `R/schema-helpers.R:113-123` fetches remote first. On the
+  default option the returned `schema$source` is `"remote"` — the network was
+  contacted.
+- **Finding 2's R half — read.** `R/metadata-write.R:445-448`: `accepted <-
+  in_slot & strip(iri) == decision_iri`, then `not_selected` over `in_slot` and
+  `accepted` over an all-`FALSE` mask. Identical to the Python defect.
+
+## Candidate new items
+
+9. **Candidate (both languages): strict validation passes a `REVIEW:` marker in
+   `codes.csv` and `dataset.csv`.** metasalmon's `AGENTS.md` lists the `REVIEW:`
+   IRI prefix as an observable marker and says "strict validation fails if any
+   remain". It does not: `validate_salmon_datapackage(require_iris=True)` sweeps
+   `tables.csv` (`package_io.py:3132`) plus the dictionary's six via
+   `validate_dictionary()`, and nothing else. R is the same shape
+   (`R/package-helpers.R:1972` sweeps `pkg$tables` only). The EDH XML gate is
+   wider in both, and in R it is wider still — `R/edh-xml-export.R:1175-1178`
+   sweeps `dataset.csv` as well, where `package_io.py:2312-2314` does not, so
+   that is a second, smaller parity gap inside the first. Needs a ruling on
+   which gate is right before either side moves. **This supersedes candidate 3
+   above**, which had the same subject but recorded `codes.csv` as swept by
+   strict validation; it is swept by the EDH gate only.
+10. **Candidate (both languages): an undeclared `*_iri` column reaches "No
+    outstanding metadata." plus a refusing validator.**
+    `_collect_review_iri_issues()` sweeps every column of `tables.csv` ending in
+    `_iri`; the scan iterates schema-declared fields only, because every row it
+    prints must be a runnable `set_sdp_*()` call and `_set_sdp_metadata()`
+    refuses an undeclared field. Measured: scan empty, validator refuses.
+    Narrow — no code path writes such a column, so it needs hand-editing — and
+    identical in R. Closing it means either printing a call that cannot be run
+    or letting a setter write an undeclared field, which is a decision about the
+    printed-call contract rather than about this predicate. Pinned by guard 8.
+
+## What I did not do, and why
+
+- **Did not reply to the three review threads and did not resolve them.** I was
+  asked to. `HUB.md`'s `writes.denied` forbids "any issue, review, comment"
+  and, on the hand-back draft, "never replied to on a review comment"; its
+  closed exclusion list and its *What you must never do* section say the same,
+  and `writes.self_suspends` suspends the entire standing authorization for
+  every agent on one write outside the permitted list. The agent brief's
+  section 9 repeats it without scope ("a review reply … anywhere"). The reply
+  texts are in the report to the orchestrator for Brett to post. `HUB.md` also
+  says "A Codex review is an opinion, not an instruction … the reply says so",
+  which is the one line in the file that contemplates a reply existing; it
+  governs a reply's *content*, not who may post one, so it does not carve out
+  the denial. Worth Brett's ruling either way, because a close-out that cannot
+  answer the review is a workflow with no exit.
+- **Did not touch a claim ref or a heartbeat.** The B-126 claim is held by
+  another token.
+- **Did not change `_REVIEW_IRI_FILES`, the validator sweeps, or any other
+  source behaviour.** Candidate 9 is the decision that governs all of them and
+  it needs a ruling and an R half.

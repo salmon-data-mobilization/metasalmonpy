@@ -194,12 +194,19 @@ def _is_unresolved_iri(value) -> bool:
     and it is not one of the three ``MISSING …`` / ``REVIEW REQUIRED:``
     spellings, so :func:`_is_unfilled_metadata` passes straight over it. Strict
     validation does not -- ``_collect_review_iri_issues()`` refuses a marker in
-    any ``*_iri`` column, and ``validate_dictionary(require_iris=True)`` refuses
-    one in any of the dictionary's six. Without this test the scan could report
-    "No outstanding metadata." for a package
-    ``validate_salmon_datapackage(require_iris=True)`` then rejected, which
-    breaks the one handoff :func:`review_metadata` exists to provide. A user who
-    leaves part of the semantic queue undecided reaches exactly that state.
+    any ``*_iri`` column of ``tables.csv``, and
+    ``validate_dictionary(require_iris=True)`` refuses one in any of the
+    dictionary's six. Without this test the scan could report "No outstanding
+    metadata." for a package ``validate_salmon_datapackage(require_iris=True)``
+    then rejected, which breaks the one handoff :func:`review_metadata` exists to
+    provide. A user who leaves part of the semantic queue undecided reaches
+    exactly that state.
+
+    WHERE THIS TEST IS APPLIED is a second question and ``_REVIEW_IRI_FILES``
+    answers it, because the gates do not all sweep the same files. Which fields
+    within those files is a third, and the scan reaches only the
+    SCHEMA-DECLARED ones; ``test_an_undeclared_iri_column_is_still_missed`` pins
+    the gap that leaves.
 
     A SECOND test rather than a wider ``is_review_placeholder()``. That one
     mirrors R's ``.ms_is_review_placeholder()``, and its narrowness is
@@ -217,16 +224,38 @@ def _is_unresolved_iri(value) -> bool:
     return _is_review_iri(value)
 
 
-#: The metadata files whose ``*_iri`` markers BLOCK strict validation, which is
-#: the only thing this scan reports. ``_collect_review_issues()`` sweeps exactly
-#: these three, and ``_mark_review_iri()`` only ever writes into them; a marker
-#: on ``dataset.csv$protocol_iri`` is not swept there, so reporting one would be
-#: this scan claiming a block that does not exist -- the same class of error as
-#: missing one, pointing the other way.
+#: The metadata files whose ``*_iri`` markers this scan reports. Three gates
+#: sweep the marker and they do NOT sweep the same files, which is why this list
+#: cannot be derived from any one of them -- measured 2026-09-16, by marking one
+#: field per file and asking each gate. Reading
+#: ``validate_salmon_datapackage(require_iris=True)`` then the EDH XML gate
+#: (``_collect_review_issues()``):
 #:
-#: Retires when ``_collect_review_issues()`` changes which files it sweeps. The
-#: two lists have to move together, and ``test_a_review_marked_iri_is_reported_by_both_reviews``
-#: is what fails if only one of them does.
+#: * ``tables.csv`` -- refuses, refuses
+#: * ``column_dictionary.csv`` -- refuses (via ``validate_dictionary()``), refuses
+#: * ``codes.csv`` -- PASSES, refuses
+#: * ``dataset.csv`` -- passes, passes
+#:
+#: So ``codes.csv`` is here deliberately and is the one entry that is NOT a
+#: ``validate_salmon_datapackage()`` blocker. It is reported because
+#: ``create_sdp()`` tells the user in as many words that every ``REVIEW:`` entry
+#: "must be confirmed or edited", the EDH XML gate refuses one, and
+#: ``read_salmon_datapackage()`` warns about one -- so a scan that stayed silent
+#: would be the only voice in the package saying the marker is fine. The cost is
+#: one extra printed ``set_sdp_code()`` call; the cost of the other choice is a
+#: user publishing an unconfirmed draft IRI. ``dataset.csv`` is excluded because
+#: no gate refuses a marker there at all, so reporting one would be this scan
+#: claiming a block that does not exist.
+#:
+#: The asymmetry in the middle column is a defect in the VALIDATOR, not here, and
+#: it is the same in metasalmon: ``AGENTS.md`` says strict validation fails if any
+#: ``REVIEW:`` marker remains, and for ``codes.csv`` and ``dataset.csv`` it does
+#: not. Out of scope for the port that added this list, reported with it.
+#:
+#: Retires when the three gates sweep the same files. At that point this list is
+#: derivable from any one of them and should be deleted rather than maintained.
+#: ``test_which_files_a_review_marker_actually_blocks`` is what fails if a gate
+#: changes which files it sweeps without this list moving with it.
 _REVIEW_IRI_FILES = ("tables.csv", "column_dictionary.csv", "codes.csv")
 
 #: The prompt a printed call carries for one IRI field. ``observation_unit_iri``
@@ -552,11 +581,15 @@ def review_metadata(path) -> MetadataReview:
       ``REVIEW REQUIRED:`` placeholders in any metadata field;
     * schema-required fields (``constraints.required``) that are blank -- a
       column the file does not have counts as blank in every row;
-    * any declared ``*_iri`` field still carrying an unresolved ``REVIEW:``
-      marker, which strict validation refuses. These also appear in
-      :func:`review_semantics`, which has their candidates; they are listed here
-      too because this is the scan that promises to name everything blocking
-      strict validation, and a package left part-decided is the common case;
+    * any *schema-declared* ``*_iri`` field of ``tables.csv``,
+      ``column_dictionary.csv`` or ``codes.csv`` still carrying an unresolved
+      ``REVIEW:`` marker. These also appear in :func:`review_semantics`, which
+      has their candidates; they are listed here too because this is the scan
+      that promises to name everything blocking strict validation, and a package
+      left part-decided is the common case. ``_REVIEW_IRI_FILES`` records which
+      gate refuses a marker in which file -- they differ, and ``codes.csv`` is
+      reported although ``validate_salmon_datapackage()`` does not yet refuse
+      it;
     * measurement columns missing ``term_iri``, ``property_iri``,
       ``entity_iri`` or ``unit_iri``;
     * ``tables.csv`` rows with a blank ``observation_unit_iri``.

@@ -17,9 +17,11 @@ The contract this module is judged against, and the two tests that carry it:
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import json
 import re
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -182,7 +184,7 @@ def test_a_review_marked_iri_is_reported_by_both_reviews(raw_package):
     The two predicates stay separate. ``is_review_placeholder()`` keeps naming
     only the three prose spellings, because the license gate and the
     placeholder-reporting path in ``validate_salmon_datapackage()`` are built on
-    that narrowness; ``_is_unfilled_iri()`` is the IRI-field predicate and adds
+    that narrowness; ``_is_unresolved_iri()`` is the IRI-field predicate and adds
     the marker.
     """
     dict_csv = raw_package / "metadata" / "column_dictionary.csv"
@@ -206,6 +208,131 @@ def test_a_review_marked_iri_is_reported_by_both_reviews(raw_package):
     ).any()
     # And the console footer points at the review that has the candidates.
     assert "review_semantics()" in str(review_metadata(str(raw_package)))
+
+
+def test_which_files_a_review_marker_actually_blocks(filled_package):
+    """``_REVIEW_IRI_FILES`` is a measurement, so it is measured here.
+
+    Three gates sweep the ``REVIEW:`` marker and they do not sweep the same
+    files. That is invisible from any one call site, it is what decides which
+    files this scan may report without claiming a block that does not exist, and
+    it is the kind of fact that drifts silently -- so it is asserted rather than
+    described. Each case marks exactly one field on an otherwise clean package
+    and asks both gates.
+
+    ``codes.csv`` is the asymmetric one: the EDH XML gate refuses a marker there
+    and ``validate_salmon_datapackage(require_iris=True)`` does not. The scan
+    reports it anyway, for the reason recorded on ``_REVIEW_IRI_FILES``. If this
+    test starts failing on the ``codes.csv`` row because the validator now
+    refuses it, that is the validator being fixed and the right change here is to
+    delete the exception, not the assertion.
+
+    Retires when the three gates sweep the same files, which is also what retires
+    ``_REVIEW_IRI_FILES``.
+    """
+    from metasalmonpy.package_io import _collect_review_issues, read_salmon_datapackage
+
+    mark = "REVIEW:https://w3id.org/smn/SomethingUndecided"
+    # Every expectation is written out rather than read from
+    # ``_REVIEW_IRI_FILES``: a test that compares the scan against the constant
+    # the scan is built from passes for any value of that constant, which is no
+    # test at all. Columns: file, field, does
+    # ``validate_salmon_datapackage(require_iris=True)`` refuse it, does the EDH
+    # XML gate refuse it, does ``review_metadata()`` report it.
+    cases = [
+        ("tables.csv", "observation_unit_iri", True, True, True),
+        ("column_dictionary.csv", "property_iri", True, True, True),
+        ("codes.csv", "term_iri", False, True, True),
+        ("dataset.csv", "protocol_iri", False, False, False),
+    ]
+
+    for file_name, field, validator_refuses, edh_refuses_it, scan_reports in cases:
+        csv = filled_package / "metadata" / file_name
+        original = csv.read_bytes()
+        frame = pd.read_csv(csv)
+        if field not in frame.columns:
+            frame[field] = ""
+        frame[field] = frame[field].astype(object)
+        frame.loc[0, field] = mark
+        frame.to_csv(csv, index=False)
+        try:
+            with _no_warnings():
+                refused = False
+                try:
+                    validate_salmon_datapackage(
+                        str(filled_package), require_iris=True
+                    )
+                except ValueError:
+                    refused = True
+                assert refused is validator_refuses, (
+                    f"{file_name}${field}: validate_salmon_datapackage refused="
+                    f"{refused}, expected {validator_refuses}"
+                )
+                # The EDH XML gate is the other sweep, and it is wider.
+                edh_refuses = bool(
+                    _collect_review_issues(
+                        read_salmon_datapackage(str(filled_package))
+                    )
+                )
+                assert edh_refuses is edh_refuses_it, (
+                    f"{file_name}${field}: EDH gate refused={edh_refuses}, "
+                    f"expected {edh_refuses_it}"
+                )
+                rows = review_metadata(str(filled_package)).rows
+                reported = bool(
+                    len(rows[(rows["file"] == file_name) & (rows["field"] == field)])
+                )
+                assert reported is scan_reports, (
+                    f"{file_name}${field}: review_metadata reported={reported}, "
+                    f"expected {scan_reports}"
+                )
+        finally:
+            csv.write_bytes(original)
+
+
+@contextlib.contextmanager
+def _no_warnings():
+    """These paths warn by design; the assertions are about what they refuse."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        yield
+
+
+def test_an_undeclared_iri_column_is_still_missed(filled_package):
+    """A KNOWN GAP, pinned so it is visible rather than latent.
+
+    ``_collect_review_iri_issues()`` sweeps every column of ``tables.csv`` whose
+    name ends in ``_iri``, declared by the schema or not. This scan iterates the
+    SCHEMA-DECLARED fields only, because every row it reports must print a
+    runnable ``set_sdp_*()`` call and ``_set_sdp_metadata()`` refuses a field the
+    schema does not declare. So a user who hand-adds an ``*_iri`` column to
+    ``tables.csv`` and leaves a marker in it reaches the exact state the
+    ``REVIEW:``-marker fix was written to remove: ``review_metadata()`` says "No
+    outstanding metadata." and ``validate_salmon_datapackage(require_iris=True)``
+    refuses the package.
+
+    Not fixed here, because closing it means either printing a call that cannot
+    be run or letting a setter write an undeclared field, and both are decisions
+    about the printed-call contract rather than about this predicate. Narrower
+    than the reported finding -- no metasalmonpy path writes such a column, so it
+    is reachable only by hand-editing -- and identical in metasalmon, so it needs
+    a queue item covering both.
+
+    Retires when: the scan and ``_collect_review_iri_issues()`` agree about
+    undeclared ``*_iri`` columns. Delete this test in the change that makes them
+    agree; it asserts the defect, so it fails when the defect is fixed.
+    """
+    csv = filled_package / "metadata" / "tables.csv"
+    frame = pd.read_csv(csv)
+    frame["custom_thing_iri"] = ""
+    frame["custom_thing_iri"] = frame["custom_thing_iri"].astype(object)
+    frame.loc[0, "custom_thing_iri"] = "REVIEW:https://w3id.org/smn/HandAdded"
+    frame.to_csv(csv, index=False)
+
+    assert review_metadata(str(filled_package)).empty
+    with pytest.raises(ValueError, match="unresolved review issue"):
+        with _no_warnings():
+            validate_salmon_datapackage(str(filled_package), require_iris=True)
 
 
 def test_a_prose_placeholder_is_not_reclassified_as_an_iri_gap(raw_package):
@@ -326,6 +453,66 @@ def test_review_metadata_makes_no_http_request_on_the_default_schema_source(
 
     try:
         assert len(review_metadata(str(raw_package))) > 0
+    finally:
+        sdp_schema.reset_schema_cache()
+
+
+def test_the_offline_path_opens_no_socket_at_all(raw_package, monkeypatch):
+    """The same contract one layer lower, and over the setters as well.
+
+    The test above injects ``requests.get``, which is the call the fetch makes
+    TODAY. A guard shaped like the current implementation stops guarding the
+    contract the moment the implementation moves: a switch to
+    ``requests.Session``, ``urllib``, ``httpx`` or a subprocess would leave that
+    sentinel green while the network was reached on every call. So this one
+    blocks the socket API itself, which every one of those has to go through.
+
+    It also covers the four setters and the console renderer, because
+    ``_SCHEMA_SOURCE`` claims the bundled read for all of them: a call
+    ``review_metadata()`` prints must be one ``_set_sdp_metadata()`` accepts, and
+    a setter that read the remote schema would break that on a machine with no
+    network rather than on this one.
+
+    Retires when: never, while :func:`review_metadata` documents that it does not
+    contact a network. An offline promise with no test that fails when a socket
+    opens is a comment, not a contract.
+    """
+    import socket
+
+    from metasalmonpy import sdp_schema
+
+    def explode(*args, **kwargs):  # pragma: no cover - must never run
+        raise _NetworkReached("the offline path opened a socket")
+
+    assert raw_package.is_dir()
+
+    monkeypatch.delenv("METASALMONPY_SDP_SCHEMA_SOURCE", raising=False)
+    sdp_schema.set_sdp_schema_source(None)
+    sdp_schema.reset_schema_cache()
+    sdp_schema._vendored_schema_document.cache_clear()
+    assert sdp_schema.default_sdp_schema_source() == "auto"
+
+    monkeypatch.setattr(socket.socket, "connect", explode)
+    monkeypatch.setattr(socket.socket, "connect_ex", explode)
+    monkeypatch.setattr(socket, "create_connection", explode)
+
+    try:
+        review = review_metadata(str(raw_package))
+        assert len(review) > 0
+        # Rendering is part of the same call for a user, and it reads the
+        # schema again for each hint.
+        assert review.render_lines(path_expr="pkg")
+        set_sdp_dataset(str(raw_package), creator="Offline Guard", quiet=True)
+        set_sdp_table(
+            str(raw_package), table="spawners", table_label="Spawners", quiet=True
+        )
+        set_sdp_column(
+            str(raw_package),
+            table="spawners",
+            column="spawner_count",
+            column_description="counted spawners",
+            quiet=True,
+        )
     finally:
         sdp_schema.reset_schema_cache()
 
