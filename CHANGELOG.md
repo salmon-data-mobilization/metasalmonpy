@@ -53,6 +53,47 @@ outward act.
   `pk-missing-values` gains a second expected row, because the example's
   `POP_ID` is declared required — R reports the same pair.
 
+* **`migrate_sdp_methods()`'s nothing-to-migrate report carries the same three
+  columns as every other exit.** Its early return built
+  `pd.DataFrame(columns=["table_id", "method_iri"])`, so
+  `report["tables"]["columns"]` raised `KeyError` in exactly the case where the
+  package was already clean — the branch least likely to be exercised — while
+  the populated build and the no-placement return both named all three.
+  Brett ruled the three-column shape on **2026-09-14, for both
+  implementations**; hub queue item **B-144**, the mirror half of metasalmon
+  backlog **#112** (hub **B-112**, metasalmon pull request #117).
+
+  **This runs backwards, and the direction is the point.** This package carried
+  the internally consistent three-column frame *first* and gave it up at S10
+  chunk A (pull request 14, 2026-08-22) to mirror R's two-column early return —
+  but R's other two exits had three columns all along, so what chunk A mirrored
+  was an inconsistency rather than a shape. Under the amended mirror contract
+  (Brett, 2026-08-17) which side is right is a ruling and not an implementer's
+  call, so **R was the side that moved** and this restores what was here before
+  chunk A. It is catch-up to a ruling rather than a chosen difference, so it
+  opens no `PARITY.md` row; row **9** is amended in place instead, which is
+  where that row's `1:1` claim lived.
+
+  The comment above the frame moved with it. It read *"Two columns, not three:
+  R's nothing-to-migrate report frame has no `columns` column … and the
+  differential run showed it"* — an accurate report of what the differential
+  saw and a wrong conclusion about what the shape should be, and a fix that left
+  it standing would leave the next reader an explanation for a behaviour that no
+  longer exists.
+
+  Reproduced before the fix and pinned after it by
+  `test_every_migration_exit_reports_the_same_three_table_columns`, which pins
+  **all three** exits — the no-op early return, the populated build and the
+  no-placement empty frame — rather than only the one that was wrong, because
+  pinning one leaves the others free to drift away from it and the failure would
+  look identical. Its R counterpart pins the same three. Measured by running
+  both implementations rather than by reading either: on metasalmon `main`
+  (`9eec204`) all three R exits return `table_id`, `method_iri`, `columns`, all
+  `character`, with `report$tables$columns` empty rather than `NULL` at the
+  no-op exit; here all three now return the same three names at `object` dtype,
+  the type the populated build renders because it joins the bound column names
+  into one string.
+
 ## 0.5.0
 
 **The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue
@@ -253,47 +294,6 @@ are not part of this change.
   implicit.
 
 ### Fixed
-
-* **`migrate_sdp_methods()`'s nothing-to-migrate report carries the same three
-  columns as every other exit.** Its early return built
-  `pd.DataFrame(columns=["table_id", "method_iri"])`, so
-  `report["tables"]["columns"]` raised `KeyError` in exactly the case where the
-  package was already clean — the branch least likely to be exercised — while
-  the populated build and the no-placement return both named all three.
-  Brett ruled the three-column shape on **2026-09-14, for both
-  implementations**; hub queue item **B-144**, the mirror half of metasalmon
-  backlog **#112** (hub **B-112**, metasalmon pull request #117).
-
-  **This runs backwards, and the direction is the point.** This package carried
-  the internally consistent three-column frame *first* and gave it up at S10
-  chunk A (pull request 14, 2026-08-22) to mirror R's two-column early return —
-  but R's other two exits had three columns all along, so what chunk A mirrored
-  was an inconsistency rather than a shape. Under the amended mirror contract
-  (Brett, 2026-08-17) which side is right is a ruling and not an implementer's
-  call, so **R was the side that moved** and this restores what was here before
-  chunk A. It is catch-up to a ruling rather than a chosen difference, so it
-  opens no `PARITY.md` row; row **9** is amended in place instead, which is
-  where that row's `1:1` claim lived.
-
-  The comment above the frame moved with it. It read *"Two columns, not three:
-  R's nothing-to-migrate report frame has no `columns` column … and the
-  differential run showed it"* — an accurate report of what the differential
-  saw and a wrong conclusion about what the shape should be, and a fix that left
-  it standing would leave the next reader an explanation for a behaviour that no
-  longer exists.
-
-  Reproduced before the fix and pinned after it by
-  `test_every_migration_exit_reports_the_same_three_table_columns`, which pins
-  **all three** exits — the no-op early return, the populated build and the
-  no-placement empty frame — rather than only the one that was wrong, because
-  pinning one leaves the others free to drift away from it and the failure would
-  look identical. Its R counterpart pins the same three. Measured by running
-  both implementations rather than by reading either: on metasalmon `main`
-  (`9eec204`) all three R exits return `table_id`, `method_iri`, `columns`, all
-  `character`, with `report$tables$columns` empty rather than `NULL` at the
-  no-op exit; here all three now return the same three names at `object` dtype,
-  the type the populated build renders because it joins the bound column names
-  into one string.
 
 * **An enumerable string column is typed `categorical`, not `attribute`.**
   Ported from metasalmon pull request #112 (backlog **#95**), ruled **Q29** on
