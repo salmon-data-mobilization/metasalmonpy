@@ -18,6 +18,7 @@ from .metadata import (
     infer_table_metadata_from_resources,
     normalize_dictionary,
     parse_logical,
+    values_form_code_list,
 )
 
 VALID_VALUE_TYPES = {"string", "integer", "number", "boolean", "date", "datetime"}
@@ -233,11 +234,21 @@ def _name_has_sample_size_hint(name_tokens: Sequence[str]) -> bool:
 def infer_column_role(col_name: str, series: pd.Series) -> str:
     """Infer ``column_role`` from a column's name and contents.
 
-    A node-for-node port of metasalmon v0.1.7's ``infer_column_role()``,
-    including that release's terminal-ID-qualifier fix: a name whose last
-    ID/key token is followed by a qualifier token (``quality``, ``confidence``,
-    ``accuracy``, ``grade``, ``score``) describes the *quality of an
-    identification*, not an identifier, so ``id_quality`` is an attribute.
+    A node-for-node port of metasalmon's ``infer_column_role()``, including
+    0.1.7's terminal-ID-qualifier fix: a name whose last ID/key token is
+    followed by a qualifier token (``quality``, ``confidence``, ``accuracy``,
+    ``grade``, ``score``) describes the *quality of an identification*, not an
+    identifier, so ``id_quality`` is a qualifier rather than a key.
+
+    **An enumerable string column is ``categorical``, not ``attribute``**
+    (metasalmon backlog #95, ruled Q29 on 2026-09-05; hub queue B-125). Three
+    branches answered ``attribute`` for a column the code-row seeder would then
+    write a ``codes.csv`` row for -- the identifier-qualifier branch, the
+    method-token branch and the final default -- and the specification's
+    ``codes_required_for_categorical_columns`` rule rejects a code row whose
+    column is anything else. All three now read
+    :func:`~metasalmonpy.metadata.values_form_code_list`, which is the seeder's
+    own criterion, so the dictionary row and the code rows cannot disagree.
     """
     name_lower = str(col_name).lower()
     name_tokens = _name_tokens(col_name)
@@ -255,7 +266,11 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
         and qualifier_positions
         and max(qualifier_positions) > max(identifier_positions)
     ):
-        return "categorical" if _is_categorical(series) else "attribute"
+        # The identifier-qualifier branch reads the same code-list predicate as
+        # the two below and as the seeder (metasalmon backlog #95).
+        if _is_categorical(series) or values_form_code_list(series):
+            return "categorical"
+        return "attribute"
 
     if re.search(r"^id$|_id$|^id_", name_lower):
         return "identifier"
@@ -281,7 +296,11 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
     # Method/protocol-like fields are metadata, not measurements, even when
     # their names contain count/measure substrings (for example counting_method).
     if any(token in _METHOD_TOKENS for token in name_tokens):
-        return "attribute"
+        # A method column whose values enumerate (ESTIMATE_METHOD,
+        # ENUMERATION_METHODS) is a code list, and its procedures resolve
+        # through ``codes.csv$term_iri``; a free-text method note stays an
+        # attribute.
+        return "categorical" if values_form_code_list(series) else "attribute"
 
     if _name_has_sample_size_hint(name_tokens) and _values_look_numericish(series):
         return "measurement"
@@ -290,6 +309,15 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
         series
     ):
         return "measurement"
+
+    # A string column whose non-missing values enumerate is a code list: the
+    # seeder writes one ``codes.csv`` row per value, and the specification then
+    # requires the column to be categorical (metasalmon backlog #95). The
+    # identifier, temporal and measurement checks above deliberately run first,
+    # so a key, a date, or a unit-bearing or percent-like text column keeps its
+    # role even when its values happen to repeat.
+    if values_form_code_list(series):
+        return "categorical"
 
     return "attribute"
 

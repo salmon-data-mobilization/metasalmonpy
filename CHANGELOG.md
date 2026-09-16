@@ -151,6 +151,45 @@ See `AGENTS.md`'s *Current honest state*.
   `pk-missing-values` gains a second expected row, because the example's
   `POP_ID` is declared required — R reports the same pair.
 
+* **An enumerable string column is typed `categorical`, not `attribute`.**
+  Ported from metasalmon pull request #112 (backlog **#95**), ruled **Q29** on
+  2026-09-05; hub queue item **B-125**. R-shipped-first lag, so it opens no
+  `PARITY.md` row.
+
+  A column that has a code list is categorical by the specification's own
+  definition. `infer_codes_from_resources()` seeds one `codes.csv` row per
+  distinct value of an enumerable string column, and the specification's
+  `codes_required_for_categorical_columns` rule binds a code list to
+  `column_role = "categorical"` — so `create_sdp()` was writing a dictionary
+  row and code rows that contradicted each other in a single call, and
+  `scripts/validate_package.py` in `smn-data-pkg` rejects every such row as
+  "targets a non-categorical or unknown column". Measured on the bundled 30-row
+  example: **twelve** columns were typed `attribute` while carrying seeded code
+  rows — `AREA`, `POPULATION`, `SPECIES`, `RUN_TYPE`, `WATERBODY`,
+  `WATERSHED_CDE`, `RELIABILITY`, `FULL_CU_IN`, `ENUMERATION_METHODS`,
+  `ESTIMATE_METHOD`, `ESTIMATE_CLASSIFICATION`, `ESTIMATE_STAGE` — and now none
+  is.
+
+  The correction is in role inference with the seeder downstream of it, per the
+  ruling, and the two now read **one** predicate:
+  `metadata.values_form_code_list()`, built on `metadata.code_list_values()`,
+  which *is* the seeder's criterion (a string or categorical column with 1 to
+  `CODE_LIST_LIMIT` distinct non-missing values). Three branches of
+  `infer_column_role()` answered `attribute` and now consult it — the
+  identifier-qualifier branch, the method-token branch and the final default.
+  The identifier, temporal and measurement checks deliberately still run first,
+  so a key, a date, or a unit-bearing or percent-like text column keeps its role
+  even when its values happen to repeat.
+
+  A method-named column whose values enumerate (`ESTIMATE_METHOD`,
+  `ENUMERATION_METHODS`) is a code list too, and its procedures resolve through
+  `codes.csv$term_iri`; a free-text method note stays an attribute.
+
+  Eleven rows of the `EraColumnRoleTests` differential fixture move with this.
+  **Each moved in R first**: R and Python were run over the same thirty-one
+  name/value pairs and agree on every row, so no expectation was edited to fit
+  the Python change.
+
 * **A reviewed semantic decision is no longer overruled by the unattended
   auto-apply heuristic.** `apply_semantic_suggestions(strategy="reviewed")` ran
   every accepted row through `_filter_auto_apply_suggestions()` at
