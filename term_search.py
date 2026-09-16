@@ -1294,6 +1294,54 @@ def sources_for_role(role: Optional[str]) -> List[str]:
     return ["smn", "gcdfo", "ols", "nvs"]
 
 
+# The per-source diagnostic statuses that mean a source did NOT ANSWER, and the
+# sources one result's diagnostics report that way.
+#
+# ONE COPY, ON PURPOSE. A lookup that failed and a lookup that found nothing
+# arrive in the same shape -- an empty frame -- and the ``diagnostics`` attribute
+# is the only thing that tells them apart. ``find_terms()`` reads this for its
+# own warning below, and so must every caller that would otherwise treat an
+# outage as an ontology gap (``write_sdp_semantic_closure()`` is one). A second
+# copy of the status list would let one caller keep manufacturing gaps after the
+# other stopped, and nothing in either copy would say which was current. Mirrors
+# ``.ms_search_degraded_statuses()`` / ``.ms_search_failed_sources()``
+# (R/term_search.R), hoisted out of ``find_terms()`` for the same reason.
+#
+# *Retires when:* a failed lookup stops being representable as an empty result --
+# if ``find_terms()`` ever raises or returns a typed failure for a degraded
+# source, there is nothing left to distinguish and this goes with the warning.
+_DEGRADED_STATUSES = ("error", "http_error")
+
+
+def _search_failed_sources(diagnostics: object) -> List[str]:
+    """The sources a ``find_terms()`` diagnostics frame says did not answer.
+
+    Accepts whatever ``result.attrs.get("diagnostics")`` yields, including
+    ``None`` and a frame missing the two columns, because a caller reading that
+    attribute off an arbitrary (possibly injected) search result cannot promise
+    its shape. Returns codepoint-sorted names: the list is displayed and is
+    compared by callers that decide whether to abort.
+    """
+    if not isinstance(diagnostics, pd.DataFrame) or diagnostics.empty:
+        return []
+    if not {"source", "status"}.issubset(diagnostics.columns):
+        return []
+    failed = set()
+    for source, status in zip(diagnostics["source"], diagnostics["status"]):
+        if _is_missing_status(status) or str(status) not in _DEGRADED_STATUSES:
+            continue
+        failed.add(str(source).strip())
+    return sorted(failed)
+
+
+def _is_missing_status(value: object) -> bool:
+    """``pd.isna`` for a scalar, without raising on a list-like cell."""
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):  # pragma: no cover - list-like cell
+        return False
+
+
 def _normalize_explicit_sources(sources: Sequence[str]) -> tuple[str, ...]:
     values = (sources,) if isinstance(sources, str) else sources
     return tuple(
@@ -1425,11 +1473,11 @@ def find_terms(
     diag_df = pd.DataFrame(diagnostics)
     ranked.attrs["diagnostics"] = diag_df
 
-    degraded = [
-        entry for entry in diagnostics if entry["status"] in ("error", "http_error")
-    ]
-    if degraded:
-        failed_sources = sorted({entry["source"] for entry in degraded})
+    # The degraded-status test is `_search_failed_sources`, read rather than
+    # restated, so this warning and `write_sdp_semantic_closure()`'s abort
+    # cannot drift apart about what "did not answer" means.
+    failed_sources = _search_failed_sources(diag_df)
+    if failed_sources:
         warnings.warn(
             "Vocabulary lookup was incomplete: "
             f"{', '.join(repr(source) for source in failed_sources)} did not "
@@ -1443,7 +1491,7 @@ def find_terms(
     # A degraded lookup is never cached. Caching it would freeze an outage's
     # empty result for the rest of the session, so every later column would
     # inherit the same manufactured gap (metasalmon 0.2.2).
-    if _cache_enabled() and not degraded:
+    if _cache_enabled() and not failed_sources:
         _term_cache[cache_key] = ranked.copy()
     return ranked
 

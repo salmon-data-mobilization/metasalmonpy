@@ -81,6 +81,37 @@ def _first_non_empty(*values, default=""):
     return default
 
 
+def _namespace_scope(value) -> Optional[str]:
+    """Which register a namespace or IRI names, or ``None`` when it names none.
+
+    ONE COPY, ON PURPOSE. This was a closure inside
+    :func:`render_ontology_term_request` until ``write_sdp_semantic_closure()``
+    needed the same test to say where an unresolvable IRI would have to be
+    minted. Two copies would let the renderer and the producer disagree about
+    the namespace of one IRI, and the disagreement would be invisible: each
+    call site would look right on its own. Mirrors
+    ``.ms_term_request_namespace_scope()`` (R/term-request-helpers.R), which is
+    module-level in R for exactly this reason.
+
+    *Retires when:* namespace resolution moves into the ontology registry this
+    hard-codes, at which point both callers read it from there.
+    """
+    text = _first_non_empty(value).lower()
+    if not text:
+        return None
+    if (
+        text in {"gcdfo", "dfo", "dfo-salmon-ontology"}
+        or "w3id.org/gcdfo" in text
+        or "dfo-salmon-ontology" in text
+    ):
+        return "gcdfo"
+    if re.search(r"(^|[^a-z])smn([^a-z]|$)", text) or "w3id.org/smn" in text:
+        return "smn"
+    if text in {"profile", "local", "program", "organization"}:
+        return "profile"
+    return None
+
+
 def _has_local_term_signals(query, dictionary_role, sources) -> bool:
     q = str(query or "").lower()
     if not q:
@@ -666,29 +697,13 @@ def render_ontology_term_request(
             "'uncertain', or 'skip'."
         )
 
-    def namespace_scope(value):
-        text = _first_non_empty(value).lower()
-        if not text:
-            return None
-        if (
-            text in {"gcdfo", "dfo", "dfo-salmon-ontology"}
-            or "w3id.org/gcdfo" in text
-            or "dfo-salmon-ontology" in text
-        ):
-            return "gcdfo"
-        if re.search(r"(^|[^a-z])smn([^a-z]|$)", text) or "w3id.org/smn" in text:
-            return "smn"
-        if text in {"profile", "local", "program", "organization"}:
-            return "profile"
-        return None
-
     if scope == "auto":
         df["request_scope"] = (
             df["placement_recommendation"].fillna("uncertain").astype(str).str.lower().str.strip()
         )
         if "llm_new_term_namespace" in df:
             namespace_evidence = df["llm_new_term_namespace"].map(
-                namespace_scope
+                _namespace_scope
             )
             use_namespace = namespace_evidence.notna()
             df.loc[use_namespace, "request_scope"] = namespace_evidence.loc[
