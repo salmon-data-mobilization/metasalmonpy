@@ -28,30 +28,49 @@ violation like a failing test.
    matches the metasalmon version whose functionality it actually delivers.
    When a metasalmon release ships, mirror the work and bump this package to
    the same number.
-3. **Current honest state:** this package is at **0.4.0** and metasalmon is at
-   **0.5.0** (tagged `v0.5.0`, released 2026-08-25), so the catch-up window
-   **0.4.0 → 0.5.0 — roadmap stream S5 — is OPEN.** The earlier
-   0.2.2 → 0.4.0 window (S10 plus the S3 KNB-environment feature 0.4.0 added
-   after every S10 chunk was written) is closed. This package's version stays
-   at the last delivered milestone until the next one lands — do **not** bump
-   the number ahead of the functionality (Brett's decision, 2026-08-13: bump on
-   parity, not on calendar).
+3. **Current honest state:** this package is at **0.5.0** and metasalmon is at
+   **0.5.0** (tagged `v0.5.0`, released 2026-08-25), so **no catch-up window is
+   open.** The `0.4.0 → 0.5.0` window (roadmap stream S5) closed 2026-09-16, by
+   hub queue **B-153**; the earlier `0.2.2 → 0.4.0` one (S10 plus the S3
+   KNB-environment feature 0.4.0 added after every S10 chunk was written) closed
+   2026-08-24. This package's version stays at the last delivered milestone
+   until the next one lands — do **not** bump the number ahead of the
+   functionality (Brett's decision, 2026-08-13: bump on parity, not on calendar).
+   The tree now reads 0.5.0; **tagging `v0.5.0` and publishing the GitHub
+   Release are separate outward acts and are Brett's**, so until he makes them
+   the newest tag here is still `v0.4.0`.
 
-   **What the open window owes, and what has landed** (hub queue **B-126**,
-   2026-09-14): the S5 review-and-edit surface is ported — the nine functions
-   (`review_semantics`, `accept_suggestion`, `reject_suggestion`,
-   `apply_sdp_semantics`, `review_metadata` and the four `set_sdp_*()` setters)
-   plus the `semantic_suggestions()` / `semantic_llm_assessments()` accessors,
-   the `decision_reason` column and decision replay on queue rebuild, the first
+   **That window was closed in two halves, and recording both is the point,
+   because the second half is the one that gets skipped.** The behavioural half
+   (hub **B-126**, pull request #28, merged 2026-09-16) ported the S5
+   review-and-edit surface: the nine functions (`review_semantics`,
+   `accept_suggestion`, `reject_suggestion`, `apply_sdp_semantics`,
+   `review_metadata` and the four `set_sdp_*()` setters) plus the
+   `semantic_suggestions()` / `semantic_llm_assessments()` accessors, the
+   `decision_reason` column and decision replay on queue rebuild, the first
    consumer of the schema's `constraints.required`, the backlog **#118**
    auto-apply exemption, the `prune=True` warning, and the review checklist that
-   now hands over the Python calls. **The number is still 0.4.0** because
-   0.5.0's documentation half is not done: `guides/semantic-review.qmd` still
-   presents the spreadsheet as the workflow rather than as the fallback, which
-   is the change 0.5.0's own NEWS entry leads with. Bump all four places (see
-   *Releases*) in the change that closes that, and not before — the version is a
-   parity claim, and claiming 0.5.0 while a documented 0.5.0 behaviour is
-   missing is exactly the false claim this rule exists to prevent.
+   hands over the Python calls. It deliberately left the number at 0.4.0,
+   because a version is a parity claim and metasalmon 0.5.0's own NEWS entry
+   leads with a **documentation** claim — that a package reaches
+   `validate_salmon_datapackage(require_iris=True)` "without opening a single
+   file in a spreadsheet" — which a reference index cannot deliver on its own.
+   The documentation half (**B-153**) rewrote `guides/semantic-review.qmd`
+   around that path and moved the number.
+
+   **What the documentation half actually found, recorded because the standing
+   description of the defect was wrong in both directions.** That description
+   said the guide "presents the spreadsheet as the workflow rather than as the
+   fallback". Measured against this tree on 2026-09-16: the word *spreadsheet*
+   appeared **nowhere** in that file, nor in any `.qmd` in the repository, so
+   there was no spreadsheet workflow to demote. And the guide named **none** of
+   the nine functions except one passing mention of `apply_sdp_semantics()`
+   inside the closure section, and neither accessor as a call — it offered no
+   in-Python review path at all, which is worse than an outdated one: an
+   outdated path can be followed and then corrected, while a missing one leaves
+   the reader to assemble the sequence from the reference index. Distrust a
+   defect description that errs toward the defect being *smaller* than it is,
+   and re-measure before quoting one.
 
    **This number is stated in three places and all three must agree:** here,
    metasalmon's own `AGENTS.md`, and the release index in the hub's
@@ -71,6 +90,17 @@ violation like a failing test.
    which is how the gap lasted twenty days rather than two; corrected here
    2026-09-14 by B-126. Whenever either version moves, read the other file in
    the same change.
+
+   **The 2026-09-16 closure moved all three in one change, on purpose, and what
+   it had to check first is the durable part.** All three were read against each
+   other before anything was written, and all three already agreed — 0.5.0 /
+   0.4.0, window open. That is not what the two items describing the work said:
+   both **B-126** and **B-153** recorded that this file "still reads 0.4.0/0.4.0
+   with no window open", which had been true when they were written and stopped
+   being true when #28 merged, hours earlier. So the queue's account of which
+   copy was wrong was itself the stale copy. **Read the three files, not a
+   description of them** — including this paragraph, which is a dated
+   measurement like every other one here.
 
    **The mirror is not automatically the follower** (Brett, 2026-08-17):
    *"Don't just make things match metasalmon. If the Python implementation
@@ -130,8 +160,8 @@ repository has been following that rule without stating it (`v0.4.0` sits at
 `3b587e6`, with a docs-only merge after it), so the practice was real and only
 the contract was missing.
 
-**The version number lives in four places and they drift.** A bump moves all
-four in the same change:
+**The version number lives in five places and they drift.** A bump moves all
+five in the same change:
 
 1. `pyproject.toml` — `version`
 2. `__init__.py` — `__version__`
@@ -142,6 +172,31 @@ four in the same change:
    out of scope, and is the reason this list is enumerated rather than
    described. `uv lock --check` verifies it without writing.
 4. `AGENTS.md` — the parity-claim number in the mirror contract above.
+5. **`_quarto.yml`** — `quartodoc.version`, which is the number the published
+   documentation site shows. **This entry was missing from the list until
+   2026-09-16**, while the list said in as many words that it was enumerated
+   rather than described *because* a missed place drifts silently. It had been
+   moved in lockstep once (`0.1.6 → 0.4.0`, in the 0.4.0 parity commit) and was
+   found still reading `0.4.0` while B-153 was bumping the other four, so the
+   list's own argument was proved by the list's own gap.
+
+**Three more copies of the number were deleted rather than added to this list**,
+in the same change, and that is the preferred fix for a copy nothing reads
+programmatically: `index.qmd` and `README.md` each asserted parity with
+metasalmon **0.1.6** — three releases stale, and stale precisely because they
+were prose nobody thought of as a version place — and both now point at the
+parity guide instead of restating a number. `guides/parity.qmd` keeps its
+number, because stating the current release *is* that page's subject; it is the
+one prose copy worth maintaining, and it is listed here so the next bump finds
+it. **Prefer deleting a restatement to enumerating it.** A sixth list entry is a
+sixth thing to remember; a deleted copy cannot go stale.
+
+Two further mentions of `0.1.6` are deliberately left alone, because they are
+about **tags** rather than about this claim: the install instructions in
+`README.md` and `getting-started.qmd` both say the `v0.1.6` tag is what a user
+can install. That is wrong — `v0.4.0` exists at `3b587e6` — but fixing it is a
+statement about which tag to install, so it waits on the tagging decision rather
+than riding along with a version bump.
 
 The version is a **parity claim**, so it moves only when the mirrored behaviour
 actually lands; the mirror contract above governs what makes the claim true.
@@ -154,13 +209,13 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 896
-passed / 3 skipped with the extras installed, 783 / 116 with core dependencies
-only (S5 parity port, 2026-09-14; 803 / 3 and 690 / 116 before it). The
-113-test gap is the extras-gated EML, KNB and context-reader tests; the 3 that
-skip either way are filesystem-symlink and R-availability guards. These counts
-are a dated measurement, not a target — update them when you add tests rather
-than treating a mismatch as a failure.
+dependency configurations, and CI runs both (see *Dependency boundaries*): 950
+passed / 1 skipped with the extras installed, 809 / 142 with core dependencies
+only (0.5.0, 2026-09-16; 896 / 3 and 783 / 116 at the S5 parity port on
+2026-09-14, and 803 / 3 and 690 / 116 before that). The gap is the extras-gated
+EML, KNB and context-reader tests; the one that skips either way is a
+filesystem-symlink guard. These counts are a dated measurement, not a target —
+update them when you add tests rather than treating a mismatch as a failure.
 
 **Run it from a directory named `metasalmonpy`.** The root `__init__.py` and
 `tests/__init__.py` make pytest infer the package name from the checkout

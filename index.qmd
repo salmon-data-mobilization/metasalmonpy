@@ -7,10 +7,13 @@ toc: false
 ---
 
 `metasalmonpy` provides the Python implementation of the
-[metasalmon](https://salmon-data-mobilization.github.io/metasalmon/) workflows.
-Version 0.1.6 aligns the core package lifecycle, semantic review, ontology term
-governance, validation, and Enterprise Data Hub (EDH) metadata behavior with
-metasalmon 0.1.6.
+[metasalmon](https://salmon-data-mobilization.github.io/metasalmon/) workflows:
+the core package lifecycle, semantic review, ontology term governance,
+validation, and Enterprise Data Hub (EDH) metadata behaviour. The version number
+is a parity claim naming the metasalmon release whose functionality this package
+actually delivers, and [R and Python parity](guides/parity.qmd) is where that
+number lives — this page deliberately does not carry a second copy of it, having
+read `0.1.6` for the three releases after 0.1.6.
 
 ```python
 import pandas as pd
@@ -57,7 +60,7 @@ flowchart LR
 |---|---|---|
 | Create a package from raw tables | [Get started](getting-started.qmd) | `create_sdp()` |
 | Control inference and package assembly | [Package lifecycle](guides/package-lifecycle.qmd) | `infer_salmon_datapackage_artifacts()`, `write_salmon_datapackage()` |
-| Review ontology candidates | [Semantic review](guides/semantic-review.qmd) | `suggest_semantics()`, `apply_semantic_suggestions()` |
+| Decide ontology IRIs and fill in metadata | [Semantic review](guides/semantic-review.qmd) | `review_semantics()`, `accept_suggestion()`, `apply_sdp_semantics()`, `review_metadata()`, `set_sdp_*()` |
 | Record missing ontology concepts | [Term requests](guides/term-requests.qmd) | `detect_semantic_term_gaps()`, `render_ontology_term_request()` |
 | Validate and export EDH metadata | [EDH and validation](guides/edh-validation.qmd) | `validate_salmon_datapackage()`, `write_edh_xml_from_sdp()` |
 | Look up function signatures | [API reference](reference/index.qmd) | All exported functions |

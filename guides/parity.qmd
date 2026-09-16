@@ -5,8 +5,8 @@ description: "Understand the shared metasalmon contract and Python-native differ
 
 ## Compatibility target
 
-metasalmonpy 0.4.0 aligns its core user-facing behavior with metasalmon
-0.4.0. The R package remains the normative Salmon Data Package and ontology
+metasalmonpy 0.5.0 aligns its core user-facing behavior with metasalmon
+0.5.0. The R package remains the normative Salmon Data Package and ontology
 contract. Parity means equivalent workflows and safety behavior, not
 line-for-line implementations.
 
@@ -24,6 +24,12 @@ and in the hub's `knowledge/parity-deviations.md`.
 | Infer a dictionary | `infer_dictionary()` | `infer_dictionary()` |
 | Suggest semantics | `suggest_semantics()` | `suggest_semantics()` |
 | Apply suggestions | `apply_semantic_suggestions()` | `apply_semantic_suggestions()` |
+| Review semantic slots | `review_semantics()` | `review_semantics()` |
+| Decide one slot | `accept_suggestion()` / `reject_suggestion()` | `accept_suggestion()` / `reject_suggestion()` |
+| Write review decisions | `apply_sdp_semantics()` | `apply_sdp_semantics()` |
+| Report outstanding metadata | `review_metadata()` | `review_metadata()` |
+| Fill one metadata row | `set_sdp_dataset()` / `set_sdp_table()` / `set_sdp_column()` / `set_sdp_code()` | `set_sdp_dataset()` / `set_sdp_table()` / `set_sdp_column()` / `set_sdp_code()` |
+| Read attached suggestions | `semantic_suggestions()` / `semantic_llm_assessments()` | `semantic_suggestions()` / `semantic_llm_assessments()` |
 | Detect term gaps | `detect_semantic_term_gaps()` | `detect_semantic_term_gaps()` |
 | Validate a package | `validate_salmon_datapackage()` | `validate_salmon_datapackage()` |
 | Rebuild EDH XML | `write_edh_xml_from_sdp()` | `write_edh_xml_from_sdp()` |

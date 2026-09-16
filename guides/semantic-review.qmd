@@ -1,7 +1,234 @@
 ---
 title: "Semantic review"
-description: "Retrieve, assess, and apply ontology candidates without weakening curator control."
+description: "Decide the ontology IRIs and fill in the free-text metadata from Python, without opening a CSV in a spreadsheet."
 ---
+
+`create_sdp()` gives you a package that is **review-ready, not finished**. Two
+calls take it the rest of the way, and both print the exact call for the next
+step — you paste it, and the script you end up with is the record of what you
+decided.
+
+**A package can reach `validate_salmon_datapackage(require_iris=True)` without
+opening a single file in a spreadsheet.** Editing `metadata/*.csv` by hand still
+works and is still supported; it is the [fallback](#the-spreadsheet-fallback)
+rather than the recommended path, because a spreadsheet edit leaves no record of
+*why* a term was chosen, and that record is the most valuable thing the review
+produces.
+
+## Decide the semantic IRIs
+
+`review_semantics()` builds a re-runnable queue from suggestions that already
+exist: one entry per unfilled semantic slot, each with its ranked shortlist and
+the exact call that decides it.
+
+```python
+from metasalmonpy import review_semantics
+
+review = review_semantics(package_path)
+review
+```
+
+```
+── spawners · spawner_count · variable ───────────────────────────────────────
+   field:   column_dictionary.csv · term_iri
+   current: REVIEW:https://w3id.org/smn/SpawnerAbundance
+
+   [1] Spawner Abundance   smn   score 4.9
+       The number of mature salmon returning to spawn in a stream.
+       https://w3id.org/smn/SpawnerAbundance
+       review = accept_suggestion(review, "spawner_count", "variable", rank=1)
+
+       review = reject_suggestion(review, "spawner_count", "variable")   # no candidate fits
+
+── spawners · entity ─────────────────────────────────────────────────────────
+   field:   tables.csv · observation_unit_iri
+   current: <blank>
+
+   [1] Spawner Abundance   smn   score 4.9
+       The number of mature salmon returning to spawn in a stream.
+       https://w3id.org/smn/SpawnerAbundance
+       review = accept_suggestion(review, role="entity", rank=1, table="spawners")
+
+       review = reject_suggestion(review, role="entity", table="spawners")   # no candidate fits
+
+── next ──────────────────────────────────────────────────────────────────────
+   0 of 9 slots decided.
+   Paste the calls above into your script, then write the decisions:
+   apply_sdp_semantics("catch-sdp", review)
+```
+
+**This never contacts a network or an LLM.** It reads the
+`semantic_suggestions` attribute, or `semantic_suggestions.csv`, that
+`suggest_semantics()` / `create_sdp()` already produced. Where those suggestions
+carry LLM review — only possible if they were generated with `llm_assess=True` —
+it surfaces it; it never generates it.
+
+`review_semantics()` accepts a written package path, a dictionary carrying the
+attribute, or the mapping `infer_salmon_datapackage_artifacts()` returns.
+`include_filled=True` also queues slots that already hold a final IRI or already
+carry a decision, `max_candidates=` bounds the shortlist per slot (`None` shows
+all), and `columns=` restricts the queue — a name matching no column is an error
+naming the columns that do exist, because filtering first and reporting an empty
+queue told a user who mistyped a column name that their package was finished.
+
+### Accept, or reject with a reason
+
+Both take a review and return a new one, so a whole review is an ordinary,
+re-runnable script. Nothing is written until `apply_sdp_semantics()` runs.
+
+```python
+from metasalmonpy import accept_suggestion, apply_sdp_semantics, reject_suggestion
+
+review = accept_suggestion(review, "spawner_count", "variable", rank=1)
+review = reject_suggestion(
+    review,
+    "spawner_count",
+    "unit",
+    reason="Counts of fish are dimensionless; no QUDT unit applies.",
+)
+
+apply_sdp_semantics(package_path, review)
+```
+
+The address arguments follow the slot, and `review_semantics()` always prints
+the right spelling: omit `column` for a table-level slot and pass `table=`
+instead; pass `table=` as well when a column name appears in more than one
+table; pass `code_value=` for a `codes.csv` slot. Where the right term exists
+but retrieval never surfaced it, accept it directly with
+`accept_suggestion(review, "spawner_count", "variable", iri="…")`.
+
+**`reason=` is written into the package**, as `semantic_suggestions.csv`'s
+`decision_reason` column, and `review_metadata()` reads it back onto the gap the
+rejection left:
+
+```
+   unit_iri: required IRI and not yet decided
+      you rejected every candidate here: Counts of fish are dimensionless; no
+      QUDT unit applies.
+```
+
+Without it that gap comes back looking exactly like one nobody ever considered.
+
+`apply_sdp_semantics()` is surgical and safe to re-run: it strips the `REVIEW:`
+prefix from the fields you decided, leaves undecided slots and their markers
+alone, and does not touch a byte of your data CSVs. The metadata CSVs,
+`semantic_suggestions.csv` and `datapackage.json` install as one transactional
+set, because the descriptor duplicates the dictionary's IRI fields and a
+half-applied edit would leave the package quietly self-inconsistent. Decisions
+persist, so you can stop and pick the review up tomorrow without being asked the
+same questions again.
+
+## Fill in the free text, and the slots with no candidates
+
+`review_metadata()` reads the package against the rules that actually decide
+strict validation rather than against a shortlist, so it sees something the
+semantic review structurally cannot: **a required field that no candidate was
+ever found for**. `review_semantics()` builds its queue from retrieved
+suggestions, so a slot nothing was found for never appears there; an empty
+shortlist and a full one look the same to `review_metadata()`.
+
+```python
+from metasalmonpy import review_metadata, set_sdp_dataset
+
+review_metadata(package_path)
+```
+
+```
+── dataset.csv ───────────────────────────────────────────────────────────────
+   description: placeholder text, refused by strict validation
+      MISSING DESCRIPTION: describe the contents and purpose of dataset
+      'demo-1'.
+   creator: placeholder text, refused by strict validation
+      MISSING METADATA: add creator, team, or originating program.
+
+   set_sdp_dataset("catch-sdp",
+     description="<describe the contents and purpose of dataset 'demo-1'>",
+     creator="<add creator, team, or originating program>"
+   )
+
+── next ──────────────────────────────────────────────────────────────────────
+   13 fields still block strict validation.
+   Replace each <...> with the real value, then paste the calls above.
+   4 of them are IRIs -- review_semantics() shows candidates for any that have them.
+   Then: validate_salmon_datapackage("catch-sdp", require_iris=True)
+```
+
+What it reports: unresolved `MISSING DESCRIPTION:` / `MISSING METADATA:` /
+`REVIEW REQUIRED:` placeholders; schema-required fields
+(`constraints.required`) that are blank, where a column the file does not have
+counts as blank in every row; any schema-declared `*_iri` field of
+`tables.csv`, `column_dictionary.csv` or `codes.csv` still carrying an
+unresolved `REVIEW:` marker; measurement columns missing `term_iri`,
+`property_iri`, `entity_iri` or `unit_iri`; and `tables.csv` rows with a blank
+`observation_unit_iri`. It never contacts a network or an LLM, and the schema it
+reads `constraints.required` from is the bundled copy rather than the remote
+one.
+
+### The four setters
+
+```python
+from metasalmonpy import set_sdp_code, set_sdp_column, set_sdp_dataset, set_sdp_table
+
+set_sdp_dataset(
+    package_path,
+    description="Spawner counts for two Vancouver Island streams, 2024.",
+    creator="Salmon Data Mobilization",
+    contact_name="Data steward",
+    contact_email="steward@example.org",
+    license="CC-BY-4.0",
+)
+set_sdp_table(
+    package_path,
+    "spawners",
+    description="One row per stream per survey year.",
+    observation_unit="A stream-year spawner count.",
+    observation_unit_iri="https://w3id.org/smn/Observation",
+)
+set_sdp_column(
+    package_path,
+    "spawner_count",
+    table="spawners",
+    column_description="Count of mature spawners observed in the stream.",
+    unit_iri="https://qudt.org/vocab/unit/INDIV",
+)
+set_sdp_code(
+    package_path,
+    "stream_name",
+    "Goldstream",
+    table="spawners",
+    code_description="Goldstream River, Vancouver Island.",
+)
+```
+
+Each addresses one row, writes the named fields into it, and keeps
+`datapackage.json` in step in the same transactional write. Every field the SDP
+schema declares for the file can be set: the ones most often unfilled are named
+arguments for discoverability, and the rest pass through `**extras` and are
+checked against the schema, so a misspelled `licence=` is an error rather than a
+silent no-op. Pass `None` for a field you are not setting, `pandas.NA` to clear
+one deliberately; a blank string is refused as ambiguous.
+
+**Pasting a printed call unedited is refused.** A package whose `creator` reads
+`<add creator, team, or originating program>` would pass strict validation while
+saying nothing, which is worse than the placeholder it replaced, because the
+marker is gone.
+
+Use `set_sdp_column(..., term_iri="…")` for a slot retrieval found no candidate
+for, and `accept_suggestion()` when there is a shortlist to choose from.
+
+### Then strict validation passes
+
+When `review_metadata()` reports nothing outstanding:
+
+```python
+from metasalmonpy import validate_salmon_datapackage
+
+validate_salmon_datapackage(package_path, require_iris=True)
+```
+
+For an interactive, resumable whole-variable review, use
+`chat_decomposition()`. It persists structured state and never submits a term
+request automatically.
 
 ## Deterministic suggestions
 
@@ -16,7 +243,7 @@ survives only for `codes.csv` term targets — a code value naming a
 procedure.
 
 ```python
-from metasalmonpy import infer_dictionary, suggest_semantics
+from metasalmonpy import infer_dictionary, semantic_suggestions, suggest_semantics
 
 dictionary = infer_dictionary(
     observations,
@@ -31,12 +258,21 @@ reviewed = suggest_semantics(
     max_per_role=3,
 )
 
-suggestions = reviewed.attrs["semantic_suggestions"]
+suggestions = semantic_suggestions(reviewed)
 ```
 
 When `sources` is omitted, metasalmonpy chooses role-aware defaults. An explicitly
 supplied source list is a strict allowlist for initial and retry retrieval.
 For example, `sources="smn"` cannot introduce QUDT candidates.
+
+`semantic_suggestions()` and its companion `semantic_llm_assessments()` are the
+supported way to read what a stage attached, so review tooling never reaches
+into `df.attrs` itself. Both accept a dictionary, an artifact mapping, or a
+written package path, and both return `None` rather than an empty frame when
+nothing is attached — they replace a raw `attrs` lookup and must answer an
+`is None` test the same way it did. A package path always returns `None` from
+`semantic_llm_assessments()`: assessments are not written into the package, so a
+package on disk cannot carry them.
 
 ## LLM review is opt-in
 
@@ -55,7 +291,7 @@ reviewed = suggest_semantics(
     llm_context_files=["data_dictionary.csv"],
 )
 
-assessments = reviewed.attrs["semantic_llm_assessments"]
+assessments = semantic_llm_assessments(reviewed)
 ```
 
 Supplying `llm_context_files` or `llm_context_text` while
@@ -95,7 +331,11 @@ A downgrade clears the selected candidate but preserves model confidence and
 rationale as provenance. Validators never retrieve, substitute, or invent
 terms.
 
-## Apply reviewed choices
+## Applying a whole batch at once
+
+`review_semantics()` decides one slot at a time and is the recommended path.
+`apply_semantic_suggestions()` is the batch alternative, for a dictionary you
+have not written yet:
 
 ```python
 from metasalmonpy import apply_semantic_suggestions
@@ -107,6 +347,18 @@ updated = apply_semantic_suggestions(
     min_llm_confidence=0.8,
 )
 ```
+
+`strategy="top"` keeps the original lexical ranking and takes the first
+candidate that passes the filters, `strategy="llm"` takes the LLM-selected
+accepts, and `strategy="reviewed"` takes only rows whose `decision` column says
+`accepted` — the shape `apply_sdp_semantics()` writes. **`"reviewed"` is exempt
+from the unattended auto-apply gate**, and deliberately: that gate is a lexical
+compatibility
+heuristic for deciding whether a seeded top-1 hit is safe to write into a
+dictionary nobody has looked at, and a human who read the definition and said
+yes is the opposite situation. Running it there let a regex silently overrule an
+explicit decision, with nothing said beyond a count of rows that "did not meet
+the requested filters" (metasalmon backlog #118).
 
 The four core roles — variable, property, entity, unit — are eligible for
 automatic prefill in `create_sdp()` whenever a compatible candidate is found.
@@ -137,9 +389,24 @@ positioned to catch it. Hub Q16 ruled metasalmon right ("Yeah lets go the R
 way") and this package moved. See PARITY.md row 57.
 :::
 
-For an interactive, resumable whole-variable review, use
-`chat_decomposition()`. It persists structured state and never submits a term
-request automatically.
+## The spreadsheet fallback {#the-spreadsheet-fallback}
+
+Editing `metadata/*.csv` in a spreadsheet still works and is still supported.
+Save the files back as CSV and reload with `read_salmon_datapackage()`.
+
+It is the fallback for one reason: the only record of a decision made that way
+is the mutated CSV. There is nothing saying which candidates were considered, on
+what evidence the chosen one won, or that a slot was left blank deliberately —
+which makes it the one unreproducible link in a chain that is otherwise
+byte-reproducible, C-collated, hash-verified and guarded. `apply_sdp_semantics()`
+and the `set_sdp_*()` setters write straight into the package, so with them there
+is nothing to save or reload either.
+
+`README-review.txt` in the package folder carries the same checklist, and
+`metadata/column_dictionary.csv` is a reasonable `llm_context_files` input when
+you want the LLM review step to reason from the package itself rather than a
+separate methods note — pass the path string, not a DataFrame read from it, and
+set `llm_assess=True`; context alone does not enable a provider call.
 
 ## Assemble the reviewed closure
 
@@ -203,6 +470,8 @@ Two kinds of value it cannot derive, and both go in `evidence`:
   read from `semantic_suggestions.csv` where `apply_sdp_semantics()` recorded a
   decision reason, and otherwise written as a `REVIEW REQUIRED:` marker with a
   warning naming each target that got one. Replace those before publishing.
+  A `reject_suggestion(..., reason=…)` you wrote during the review is what ends
+  up there, which is the second thing that reason buys you.
 
 ```python
 import pandas as pd
