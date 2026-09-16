@@ -114,6 +114,43 @@ See `AGENTS.md`'s *Current honest state*.
 
 ### Fixed
 
+* **`validate_salmon_datapackage()` now checks three things it had been
+  claiming and not doing.** Ported from metasalmon pull request #111 (backlog
+  **#49**), hub queue item **B-124**. This is R-shipped-first lag being closed,
+  not a deliberate difference, so it opens no `PARITY.md` row.
+
+  1. **A column the dictionary declares `required` must not ship missing
+     values.** The flag was inferred, written to `column_dictionary.csv`,
+     parsed back to boolean, exported as Frictionless `constraints.required`
+     and read by nothing that compared it to the data — so a package could
+     state a column is required and ship blanks in it. Only columns present in
+     the data are checked; an absent one was already reported.
+  2. **A schema-required metadata field must not be blank.** The Frictionless
+     schemas have carried `constraints.required` since the schema bundle
+     landed, `review_metadata()` reports a blank one as blocking strict
+     validation, and strict validation let it through — the placeholder scan
+     only sees a field that *says* it is missing, not one that is. A blank
+     **key** field is structural in every mode, because a row without its key
+     cannot be addressed; a blank **non-key** required field takes the
+     placeholder channel, warning by default and erroring under
+     `require_iris=True`, so a freshly created package stays valid until the
+     user asks for the strict answer. A column the file does not have counts as
+     blank in every row, in all four metadata files.
+  3. **A corrupt SSSOM mapping set or measurement decomposition is refused.**
+     Both artifacts have had their own validator since they shipped and only
+     the KNB publication and archive paths called them, so end-to-end
+     validation reported success over a manifest whose SHA-256 no longer
+     matched its bytes. Presence is detected by the managed file names and
+     never by scanning `metadata/semantic/`, so an editor backup or an
+     unapproved draft there stays local and unread.
+
+  Each class has a failing-before test in `tests/test_validation_hardening.py`,
+  and every expected message was measured by running metasalmon 0.5.0 over the
+  same package directory on disk: for the two issue classes R and Python emit
+  byte-identical messages, pluralisation included. The differential fixture
+  `pk-missing-values` gains a second expected row, because the example's
+  `POP_ID` is declared required — R reports the same pair.
+
 * **A reviewed semantic decision is no longer overruled by the unattended
   auto-apply heuristic.** `apply_semantic_suggestions(strategy="reviewed")` ran
   every accepted row through `_filter_auto_apply_suggestions()` at
