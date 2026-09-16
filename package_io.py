@@ -43,6 +43,8 @@ from .resource_types import (
     VALUE_TYPES,
     canonical_value_tokens,
     convert_declared_tokens,
+    is_instant,
+    iso_instant_text,
     render_resource_frame,
     typed_series,
     value_type_mismatch_record,
@@ -84,6 +86,35 @@ def _clean(value):
     if isinstance(value, (pd.Timestamp, _dt.date, _dt.datetime)):
         return value.isoformat()
     return value
+
+
+def _descriptor_temporal_text(value):
+    """The descriptor's rendering of one temporal scalar.
+
+    Mirrors ``.ms_descriptor_temporal_text()`` (metasalmon, hub item B-115),
+    including its narrowness: an **instant** moves onto the ruled spelling and
+    **every other type keeps ``_clean()`` unchanged**. Widening this to "render
+    whatever the CSV writer would" would move a ``date`` and a character value
+    too, which is a different question from the one Brett ruled on 2026-09-14.
+
+    The defect this closes (hub item **B-145**) is that one value --
+    ``dataset_meta["temporal_start"]`` -- landed in two files through two
+    renderers. Measured 2026-09-16 on pandas 3.0.5 for
+    ``datetime(999, 6, 5, 13, 45, 30)``: the descriptor wrote
+    ``0999-06-05T13:45:30`` (``isoformat()``: ``T``, padded, **no** ``Z``) and
+    ``metadata/dataset.csv`` wrote ``999-06-05 13:45:30`` (``to_csv`` on a
+    ``datetime64`` column: space, **unpadded**). Both now read
+    ``iso_instant_text()``.
+
+    A ``datetime.date`` is deliberately **not** an instant here:
+    ``datetime.datetime`` is a subclass of ``date``, not the other way round,
+    so a plain date falls through to ``_clean()`` and keeps
+    ``date.isoformat()`` -- which is pure Python, padded, and already agrees
+    with what ``to_csv`` writes for an object column of dates.
+    """
+    if is_instant(value):
+        return iso_instant_text(value)
+    return _clean(value)
 
 
 def _has_value(value) -> bool:
@@ -145,6 +176,19 @@ def _metadata_csv_bytes(df: pd.DataFrame) -> bytes:
     # implementations and read back by both, and the two spellings made every
     # Python-written dictionary differ from R's byte-for-byte. Found by driving
     # both writers over the same package at the 0.2.0 rung.
+    #
+    # An **instant** is rendered here rather than left to ``to_csv`` for the
+    # same class of reason, and it is hub item **B-145**. ``to_csv`` renders a
+    # ``datetime64`` column through pandas' own column-wise formatter, which
+    # (measured 2026-09-16, pandas 3.0.5) writes an **unpadded** year below
+    # 1000, a space separator, no zone marker, and -- because the formatter is
+    # vector-wise -- **drops the time entirely when every value in the column
+    # is midnight**, so ``datetime(2024, 12, 31, 0, 0, 0)`` became the bare
+    # ``2024-12-31``. That is one cell's bytes depending on the other rows in
+    # its column, which is the exact shape ``AGENTS.md``'s "one value, one
+    # rendering" contract names. ``metasalmon`` has no equivalent branch
+    # because ``readr::write_csv()`` already writes the ruled ISO instant form;
+    # this is what it costs to reach the same bytes without readr.
     out = df.copy()
     for column in out.columns:
         series = out[column]
@@ -153,6 +197,21 @@ def _metadata_csv_bytes(df: pd.DataFrame) -> bytes:
                 csv_na_token()
                 if value is pd.NA or value is None
                 else ("TRUE" if value else "FALSE")
+                for value in series
+            ]
+        elif pd.api.types.is_datetime64_any_dtype(series.dtype):
+            out[column] = [
+                csv_na_token() if pd.isna(value) else iso_instant_text(value)
+                for value in series
+            ]
+        elif series.dtype == object and any(is_instant(value) for value in series):
+            # A ``datetime.date`` is left alone deliberately: ``to_csv``
+            # renders it with ``str()``, which is ``date.isoformat()`` -- pure
+            # Python, padded, and the spelling the SDP profile already rules
+            # for a date. ``is_instant`` rather than a bare ``isinstance``
+            # because ``pd.NaT`` subclasses ``datetime``; see its docstring.
+            out[column] = [
+                iso_instant_text(value) if is_instant(value) else value
                 for value in series
             ]
     # ``csv_na_token()`` is the one authority for the missing-value token
@@ -871,10 +930,10 @@ def _descriptor_apply_dataset_meta(datapackage: dict, dataset_meta) -> dict:
     # ``"temporal": {"start": "", "end": ""}``. R has always tested both.
     if _meta_scalar_present(dataset_meta.get("temporal_start")):
         datapackage["temporal"] = {
-            "start": _clean(dataset_meta.get("temporal_start"))
+            "start": _descriptor_temporal_text(dataset_meta.get("temporal_start"))
         }
         if _meta_scalar_present(dataset_meta.get("temporal_end")):
-            datapackage["temporal"]["end"] = _clean(
+            datapackage["temporal"]["end"] = _descriptor_temporal_text(
                 dataset_meta.get("temporal_end")
             )
     return datapackage
