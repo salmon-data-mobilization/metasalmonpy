@@ -816,7 +816,31 @@ def _mapping_file(path: Union[str, Path]) -> Optional[str]:
 
     Checked for the read as well: the declared ``path`` values this producer
     obeys come out of that file, so a linked sidecar chooses where the closure
-    gets written.
+    gets written. The symlink check therefore has to happen before the file is
+    read, not only before it is written.
+
+    ``.yml`` AND ONLY ``.yml``, ON PURPOSE, and this is the measured answer to a
+    question worth not re-deriving. ``eml._default_mapping_path()`` and R's
+    ``.ms_eml_default_mapping_path()`` both *name* ``metadata/eml-mapping.yaml``,
+    but neither returns it: they raise when both spellings exist and otherwise
+    return the ``.yml`` path unconditionally. So ``.yaml`` is not a sidecar name
+    this toolchain reads — measured 2026-09-16, `write_eml_from_sdp()` on a
+    package carrying only ``eml-mapping.yaml`` fails with "EML mapping sidecar
+    ... does not exist" naming the ``.yml`` path, in **both** implementations.
+    Treating such a package as having no sidecar is therefore the same answer the
+    EML writer gives, not a disagreement with it, and no digest can go stale
+    because nothing ever reads the ``.yaml``.
+
+    What *is* a real gap, and is shared rather than ours: with **both** files
+    present, ``write_eml_from_sdp()`` refuses the package while this producer
+    quietly uses the ``.yml``. Measured identical in R, whose closure producer
+    also hard-codes the ``.yml`` path rather than routing through
+    ``.ms_eml_default_mapping_path()``. Fixing it on one side only would be a
+    deliberate divergence needing a register row, so it is filed for both sides
+    instead of changed here.
+
+    *Retires when:* the two sidecar spellings are resolved in one place both
+    implementations call, at which point this reads that instead.
     """
     candidate = Path(path) / "metadata" / "eml-mapping.yml"
     if not candidate.exists() and not candidate.is_symlink():
@@ -1422,7 +1446,14 @@ def write_sdp_semantic_closure(
             stacklevel=2,
         )
 
-    placeholders = review[placeholder_flags] if len(review) else review
+    # ``reset_index`` so every frame this function returns is positionally
+    # indexed. Boolean filtering keeps the source positions, which would make
+    # ``placeholders`` the one returned frame where ``.loc[0]`` can raise while
+    # the other four are fine -- an inconsistency with no upside, and one R does
+    # not have because a tibble has no index to carry.
+    placeholders = (
+        review[placeholder_flags].reset_index(drop=True) if len(review) else review
+    )
     if len(placeholders) > 0:
         warnings.warn(
             f"{len(placeholders)} review target(s) got a `REVIEW REQUIRED:` "

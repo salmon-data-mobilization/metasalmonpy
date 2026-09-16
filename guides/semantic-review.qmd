@@ -165,11 +165,25 @@ are yours.
 plus any `tables.csv` `method_iri` and any procedure IRIs reached through
 `codes.csv` from an observation-structures binding.
 
-**The canonical review target set** is that same set *plus* each table's
-`observation_unit_iri`. The two differ, deliberately: the observation unit is a
-reviewed selection but not a measurement term, so it belongs in the ledger and
-not in the vocabulary. Neither set can be reasoned from the other, which is why
-both are derived from the package rather than one from the other.
+**The canonical review target set** is derived independently, and it is *not*
+the measurement set plus anything. It is every slot a reviewer decided: the same
+six semantic fields on your `measurement` dictionary rows, plus each table's
+`observation_unit_iri` **and** its `method_iri`.
+
+**The two sets differ in both directions**, which is why neither can be reasoned
+from the other:
+
+* an `observation_unit_iri` is a **review target and not a vocabulary term** — a
+  reviewed selection, but not something the EML measurement path emits; and
+* a `sosa:usedProcedure` reached through a code value is a **vocabulary term and
+  not a review target** — the EML method path emits it, but no reviewer ever
+  selected it as a slot, because it comes from the data rather than from a
+  metadata field.
+
+Getting that second direction backwards is worth avoiding rather than
+discovering: the ledger gate accepts **exactly** the canonical target set, so a
+row added for a code-resolved procedure is refused as unexpected, and the
+package stops validating because of a row you added to make it validate.
 
 ### Produce both files
 

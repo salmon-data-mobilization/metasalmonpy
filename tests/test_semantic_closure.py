@@ -590,6 +590,8 @@ def test_a_target_with_no_recorded_rationale_gets_a_review_required_marker(tmp_p
         value.startswith("REVIEW REQUIRED:")
         for value in closure["placeholders"]["review_rationale"]
     )
+    # Positionally indexed, like every other frame this function returns.
+    assert list(closure["placeholders"].index) == list(range(5))
     assert list(closure["review"]["confidence"]) == ["unassessed"] * 5
 
 
@@ -1142,3 +1144,147 @@ def test_a_sidecar_with_no_pyyaml_raises_an_error_naming_the_extra(tmp_path):
     # like success here.
     assert not (Path(path) / "metadata" / "semantic_vocabulary.csv").exists()
     assert not (Path(path) / "reviewed_semantic_selections.csv").exists()
+
+
+# ---------------------------------------------------------------------------
+# NO WRITE FOLLOWS A LINK — the whole class, not one case of it.
+#
+# The symlink test above covers the three FINAL ENTRIES. These cover the rest of
+# what R's security review on pull request #121 found: a linked package root, a
+# linked intermediate directory component, and a sidecar whose declared path
+# escapes the package. Codex runs a code review but **no security review** on
+# this repository (measured 2026-09-16: metasalmon 7 of 7 pull requests have one,
+# metasalmonpy 0 of 3, filed as hub B-190), so the review that found this class
+# on the R half is not going to look for a regression on the port. These tests
+# are what stands in for it.
+#
+# *Retires when:* a security review runs on this repository too, and even then
+# these stay -- a review finds a class once, a test keeps it found.
+# ---------------------------------------------------------------------------
+
+
+@_REQUIRES_YAML
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink semantics")
+def test_a_symlinked_package_root_is_refused(tmp_path):
+    real = _sdp(tmp_path)
+    link = tmp_path / "link-root"
+    link.symlink_to(real)
+
+    with pytest.raises(SdpExtensionError, match="must not be a symlink"):
+        write_sdp_semantic_closure(
+            str(link),
+            evidence=_reviewed_evidence(),
+            search_fn=_search_stub(),
+            quiet=True,
+        )
+    assert not (Path(real) / "metadata" / "semantic_vocabulary.csv").exists()
+    assert not (Path(real) / "reviewed_semantic_selections.csv").exists()
+
+
+@_REQUIRES_YAML
+@pytest.mark.skipif(os.name == "nt", reason="POSIX symlink semantics")
+def test_a_symlinked_intermediate_component_is_refused(tmp_path):
+    path = _sdp(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    # `metadata/` itself is the link: every closure path under it would be
+    # written through it, and the final entry check alone would not see this.
+    stolen = outside / "stolen-metadata"
+    shutil.move(str(Path(path) / "metadata"), str(stolen))
+    (Path(path) / "metadata").symlink_to(stolen)
+
+    with pytest.raises(SdpExtensionError, match="refuses to write"):
+        write_sdp_semantic_closure(
+            path,
+            evidence=_reviewed_evidence(),
+            search_fn=_search_stub(),
+            quiet=True,
+        )
+    assert not (stolen / "semantic_vocabulary.csv").exists()
+
+
+@_REQUIRES_YAML
+def test_a_sidecar_declaring_an_escaping_path_is_refused(tmp_path):
+    path = _sdp(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(
+        mapping_path.read_text(encoding="utf-8").replace(
+            "  path: metadata/semantic_vocabulary.csv",
+            "  path: ../../outside/escaped.csv",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SdpExtensionError, match="refuses to write"):
+        write_sdp_semantic_closure(
+            path,
+            evidence=_reviewed_evidence(),
+            search_fn=_search_stub(),
+            quiet=True,
+        )
+    assert not (outside / "escaped.csv").exists()
+    assert list(outside.iterdir()) == []
+
+
+@_REQUIRES_YAML
+def test_a_sidecar_declaring_an_absolute_path_is_refused(tmp_path):
+    path = _sdp(tmp_path)
+    escape = tmp_path / "absolute.csv"
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(
+        mapping_path.read_text(encoding="utf-8").replace(
+            "  path: metadata/semantic_vocabulary.csv", f"  path: {escape}"
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SdpExtensionError, match="absolute closure path"):
+        write_sdp_semantic_closure(
+            path,
+            evidence=_reviewed_evidence(),
+            search_fn=_search_stub(),
+            quiet=True,
+        )
+    assert not escape.exists()
+
+
+# ---------------------------------------------------------------------------
+# WHICH SIDECAR SPELLING IS A SIDECAR. Measured, because a Codex review on
+# pull request #31 read `eml._default_mapping_path()` as supporting `.yaml` and
+# it does not: it names `.yaml` only to refuse a package carrying both, and
+# otherwise returns the `.yml` path unconditionally. R is identical.
+# ---------------------------------------------------------------------------
+
+
+def test_a_yaml_only_sidecar_is_not_a_sidecar_for_anything(tmp_path):
+    """`.yaml` alone is invisible to the EML writer, so it is invisible here too.
+
+    The two answers agreeing is the point: treating the package as having no
+    sidecar cannot strand a digest, because nothing in the toolchain ever reads
+    the `.yaml` to check one.
+    """
+    path = _sdp(tmp_path)
+    mapping = Path(path) / "metadata" / "eml-mapping.yml"
+    renamed = Path(path) / "metadata" / "eml-mapping.yaml"
+    shutil.move(str(mapping), str(renamed))
+    before = renamed.read_bytes()
+
+    closure = write_sdp_semantic_closure(
+        path,
+        evidence=_reviewed_evidence(),
+        search_fn=_search_stub(),
+        quiet=True,
+    )
+
+    # No sidecar, default paths, and the `.yaml` left exactly as it was.
+    assert closure["files"]["mapping"] is None
+    assert closure["files"]["vocabulary"].endswith("metadata/semantic_vocabulary.csv")
+    assert renamed.read_bytes() == before
+
+    # And the reason that is correct rather than merely consistent: the EML
+    # writer does not read the `.yaml` either, so there is no digest to strand.
+    from metasalmonpy import eml as _eml
+
+    assert str(_eml._default_mapping_path(path)).endswith("eml-mapping.yml")
