@@ -109,6 +109,40 @@ def test_the_documentation_site_declares_the_same_version():
     assert declared == [metasalmonpy.__version__]
 
 
+def test_the_parity_guide_declares_the_same_version():
+    """``guides/parity.qmd`` names the metasalmon release this package delivers.
+
+    The sixth version place, and the only prose copy deliberately kept -- naming
+    the current release is that page's subject, where `index.qmd` and `README.md`
+    only mentioned it in passing and had their copies deleted instead. Added on a
+    Codex finding against B-153, which caught `AGENTS.md` claiming this page was
+    listed in its bump checklist while the checklist ran to five entries and no
+    test read it: a bump could have moved every enumerated and guarded copy and
+    left the public parity page stale.
+
+    Both numbers on that line have to match, because the sentence is a parity
+    claim in both halves -- this package's version, and the metasalmon release it
+    aligns with. They are the same number by the lockstep rule; the day they are
+    not, this test is the thing that has to change and the rule is what decides
+    how.
+
+    Retires when: the page derives the number from package metadata, or stops
+    naming it.
+    """
+    guide = _repo_file("guides/parity.qmd").read_text(encoding="utf-8")
+    claim = re.search(
+        r"metasalmonpy ([0-9]+\.[0-9]+\.[0-9]+) aligns its core user-facing\s+"
+        r"behavior with metasalmon\s+([0-9]+\.[0-9]+\.[0-9]+)",
+        guide,
+    )
+    assert claim is not None, (
+        "guides/parity.qmd has no 'metasalmonpy X aligns ... with metasalmon X' "
+        "sentence; if the wording moved, move this guard with it"
+    )
+    assert claim.group(1) == metasalmonpy.__version__
+    assert claim.group(2) == metasalmonpy.__version__
+
+
 def test_the_semantic_review_guide_documents_the_review_surface():
     """The guide has to name the calls, not only the reference index.
 

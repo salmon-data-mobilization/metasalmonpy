@@ -165,8 +165,13 @@ repository has been following that rule without stating it (`v0.4.0` sits at
 `3b587e6`, with a docs-only merge after it), so the practice was real and only
 the contract was missing.
 
-**The version number lives in five places and they drift.** A bump moves all
-five in the same change:
+**The version number lives in six places and they drift.** A bump moves all
+six in the same change, and **every one of them is pinned by a test in
+`tests/test_public_api.py`**, so a bump that misses one turns the suite red
+rather than shipping a stale claim. That pairing is the rule: an entry is added
+to this list *and* to that file, or the number is deleted from that place
+instead. An enumerated place with no guard is the shape entries 3, 5 and 6 each
+drifted in.
 
 1. `pyproject.toml` — `version`
 2. `__init__.py` — `__version__`
@@ -184,17 +189,24 @@ five in the same change:
    moved in lockstep once (`0.1.6 → 0.4.0`, in the 0.4.0 parity commit) and was
    found still reading `0.4.0` while B-153 was bumping the other four, so the
    list's own argument was proved by the list's own gap.
+6. **`guides/parity.qmd`** — the *"metasalmonpy X aligns its core user-facing
+   behavior with metasalmon X"* sentence under *Compatibility target*. The one
+   prose copy kept, because naming the current release **is** that page's
+   subject. **Added 2026-09-16 on a Codex finding against B-153**, which caught
+   the paragraph below claiming this page was "listed here" while the list ran to
+   five entries and no test read it — so the next bump could have moved every
+   enumerated and guarded copy and left the public parity page stale, by exactly
+   the mechanism entry 5 exists to record.
 
-**Three more copies of the number were deleted rather than added to this list**,
-in the same change, and that is the preferred fix for a copy nothing reads
-programmatically: `index.qmd` and `README.md` each asserted parity with
-metasalmon **0.1.6** — three releases stale, and stale precisely because they
-were prose nobody thought of as a version place — and both now point at the
-parity guide instead of restating a number. `guides/parity.qmd` keeps its
-number, because stating the current release *is* that page's subject; it is the
-one prose copy worth maintaining, and it is listed here so the next bump finds
-it. **Prefer deleting a restatement to enumerating it.** A sixth list entry is a
-sixth thing to remember; a deleted copy cannot go stale.
+**Two more copies of the number were deleted rather than added to this list**,
+and deletion is the preferred fix whenever the number is incidental to what the
+text says: `index.qmd` and `README.md` each asserted parity with metasalmon
+**0.1.6** — three releases stale, and stale precisely because they were prose
+nobody thought of as a version place — and both now point at the parity guide
+instead of restating a number. **Prefer deleting a restatement to enumerating
+it**, and when a place must be enumerated because the number is the point, give
+it a guard in the same change. An unguarded entry is a thing to remember; a
+guarded one is a thing the suite remembers; a deleted one cannot go stale at all.
 
 Two further mentions of `0.1.6` are deliberately left alone, because they are
 about **tags** rather than about this claim: the install instructions in
@@ -214,8 +226,8 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 950
-passed / 1 skipped with the extras installed, 809 / 142 with core dependencies
+dependency configurations, and CI runs both (see *Dependency boundaries*): 951
+passed / 1 skipped with the extras installed, 810 / 142 with core dependencies
 only (0.5.0, 2026-09-16; 896 / 3 and 783 / 116 at the S5 parity port on
 2026-09-14, and 803 / 3 and 690 / 116 before that). The gap is the extras-gated
 EML, KNB and context-reader tests; the one that skips either way is a

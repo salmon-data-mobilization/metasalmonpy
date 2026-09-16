@@ -471,11 +471,18 @@ Two kinds of value it cannot derive, and both go in `evidence`:
   `source_url`, which describe the ontology *artifact* rather than the term;
   those are derived from the resolved source and can be overridden.
 * **`confidence` and `review_rationale`**, which are your judgement. They are
-  read from `semantic_suggestions.csv` where `apply_sdp_semantics()` recorded a
-  decision reason, and otherwise written as a `REVIEW REQUIRED:` marker with a
-  warning naming each target that got one. Replace those before publishing.
-  A `reject_suggestion(..., reason=…)` you wrote during the review is what ends
-  up there, which is the second thing that reason buys you.
+  read from `semantic_suggestions.csv` where a decision reason was recorded
+  against an **accepted** IRI, and otherwise written as a `REVIEW REQUIRED:`
+  marker with a warning naming each target that got one. Replace those before
+  publishing.
+  **A rejection reason is not one of them.** `reject_suggestion(reason=…)`
+  writes `decision_reason` on a row whose `decision` is `rejected`, and the
+  producer keeps only blank and `accepted` rows, so that text never becomes a
+  `review_rationale` — which is right, since it says why a candidate was *not*
+  the term rather than why the IRI you then supplied is. Its reader is
+  `review_metadata()`, as above. And because `accept_suggestion()` records no
+  reason at all today, in practice **expect the marker** and supply
+  `review_rationale` through `evidence`.
 
 ```python
 import pandas as pd
