@@ -124,6 +124,24 @@ quartodoc:
         - apply_semantic_suggestions
         - infer_column_role
         - infer_value_type
+    - title: "Review and edit (in Python)"
+      desc: >-
+        Decide the semantic IRIs and fill in the free-text metadata without
+        opening a CSV in a spreadsheet. Each step prints the exact call for the
+        next one, and pasting those calls is what makes the decision
+        reproducible.
+      contents:
+        - review_semantics
+        - accept_suggestion
+        - reject_suggestion
+        - apply_sdp_semantics
+        - review_metadata
+        - set_sdp_dataset
+        - set_sdp_table
+        - set_sdp_column
+        - set_sdp_code
+        - semantic_suggestions
+        - semantic_llm_assessments
     - title: "Semantic helpers"
       desc: "Search vocabularies, rank candidates, and review semantic decompositions."
       contents:

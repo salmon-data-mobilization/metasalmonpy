@@ -1188,6 +1188,12 @@ def apply_semantic_suggestions(
         is ``accepted`` (or the equivalent ``accept``). ``"llm"`` requires a
         reviewed candidate with decision ``accept``.
 
+        ``"reviewed"`` is **exempt from the unattended auto-apply gate**
+        (``_filter_auto_apply_suggestions()``): on that path a human has read
+        the definition and said yes, so a lexical heuristic must not overrule
+        it. ``"top"`` and ``"llm"`` keep the gate, which is the whole reason it
+        exists. metasalmon backlog #118.
+
         When reviewed or LLM-reviewed selections contain multiple constraints
         for one measurement, their IRIs are deduplicated in first-occurrence
         order and written to ``constraint_iri`` as the SDP-compatible
@@ -1291,7 +1297,21 @@ def apply_semantic_suggestions(
                 )
                 >= min_llm_confidence
             ]
-    suggestions_df = _filter_auto_apply_suggestions(out, suggestions_df)
+    # ``_filter_auto_apply_suggestions()`` is the *unattended* auto-apply gate:
+    # a lexical compatibility heuristic that decides whether a seeded top-1 hit
+    # is safe to write into a dictionary nobody has looked at.
+    # ``strategy="reviewed"`` is the opposite situation -- a human read the
+    # definition and said yes -- so running the heuristic there means a regex
+    # silently overrules the decision, and the caller is told nothing beyond a
+    # count of rows that "did not meet the requested filters". metasalmon
+    # backlog #118, found while building ``apply_sdp_semantics()`` (S5):
+    # ``review_semantics()`` shows a candidate, the user accepts it, and the
+    # write-back drops it because the label does not lexically match the column
+    # name. Retires when: never -- this is the intended split. If a future
+    # strategy also represents an explicit human decision, add it to this
+    # exemption.
+    if strategy != "reviewed":
+        suggestions_df = _filter_auto_apply_suggestions(out, suggestions_df)
     suggestions_df = suggestions_df[suggestions_df["dictionary_role"].isin(role_to_field)]
     if suggestions_df.empty:
         if verbose:
