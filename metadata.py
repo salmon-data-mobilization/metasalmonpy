@@ -593,19 +593,73 @@ def infer_table_metadata_from_resources(resources: Mapping[str, pd.DataFrame], d
     )
 
 
+#: The most distinct values a column may have and still get a seeded code list.
+#:
+#: This was an inline ``30`` in :func:`infer_codes_from_resources` and is now
+#: named because a second consumer reads it. Mirrors ``.ms_code_list_limit()``.
+#: The value is the seeder's original limit, unchanged, because the
+#: ``code_value`` bytes of shipped packages depend on it.
+CODE_LIST_LIMIT = 30
+
+
+def code_list_values(series, code_limit: int = CODE_LIST_LIMIT) -> list:
+    """The code list one column would seed, or ``[]`` when it has none.
+
+    **One decision, two consumers** (metasalmon backlog #95, ruled Q29 on
+    2026-09-05; hub queue B-125). :func:`infer_codes_from_resources` seeds one
+    ``codes.csv`` row per distinct value of every column this returns values
+    for, and the specification's ``codes_required_for_categorical_columns``
+    rule binds a code list to ``column_role = "categorical"``:
+    ``scripts/validate_package.py`` in ``smn-data-pkg`` rejects every code row
+    whose column is anything else. :func:`~metasalmonpy.dictionary.infer_column_role`
+    therefore reads this SAME predicate instead of re-deriving "enumerable" on
+    its own. The ruling put the correction in role inference with the seeder
+    downstream of it, so the seeder's criterion is the definition and this
+    helper is its only home: the two cannot drift unless one of them stops
+    calling it.
+
+    Values come back exactly as the seeder has always written them -- the
+    ``str()`` of the non-missing cells, in first-occurrence order, **untrimmed**
+    -- because the ``code_value`` bytes of shipped packages depend on them.
+    ``_character_values()`` in ``dictionary.py`` trims and drops empties and is
+    deliberately not reused here.
+
+    Mirrors ``.ms_code_list_values()``. R's guard is
+    ``inherits(col, "factor") || inherits(col, "character")``; the pandas
+    counterpart is the seeder's own dtype test, kept verbatim so the definition
+    stays the seeder's.
+    """
+    values = pd.Series(series) if not isinstance(series, pd.Series) else series
+    if not (
+        pd.api.types.is_object_dtype(values)
+        or pd.api.types.is_string_dtype(values)
+        or isinstance(values.dtype, pd.CategoricalDtype)
+    ):
+        return []
+    distinct = list(pd.Series(values.dropna().astype(str).unique()))
+    if len(distinct) == 0 or len(distinct) > code_limit:
+        return []
+    return distinct
+
+
+def values_form_code_list(series, code_limit: int = CODE_LIST_LIMIT) -> bool:
+    """Whether :func:`code_list_values` would return anything.
+
+    Mirrors ``.ms_values_form_code_list()``. This is the predicate
+    :func:`~metasalmonpy.dictionary.infer_column_role` reads.
+    """
+    return len(code_list_values(series, code_limit=code_limit)) > 0
+
+
 def infer_codes_from_resources(resources: Mapping[str, pd.DataFrame], dataset_id: str = "dataset-1") -> pd.DataFrame:
     rows = []
     for table_id, df in resources.items():
         for col in df.columns:
-            series = df[col]
-            if not (
-                pd.api.types.is_object_dtype(series)
-                or pd.api.types.is_string_dtype(series)
-                or isinstance(series.dtype, pd.CategoricalDtype)
-            ):
-                continue
-            values = pd.Series(series.dropna().astype(str).unique())
-            if len(values) == 0 or len(values) > 30:
+            # The one code-list decision this package makes; ``infer_column_role()``
+            # reads the same helper so the dictionary row it types and the code
+            # rows seeded here cannot disagree (metasalmon backlog #95).
+            values = code_list_values(df[col])
+            if len(values) == 0:
                 continue
             for value in values:
                 rows.append(
