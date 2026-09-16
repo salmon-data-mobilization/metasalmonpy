@@ -2237,15 +2237,21 @@ def _collect_missing_table_observation_unit_iri_issues(
     table_meta: object, source_name: str = "metadata/tables.csv"
 ) -> list[str]:
     """Mirror ``.ms_collect_missing_table_observation_unit_iri_issues``."""
-    if (
-        not isinstance(table_meta, pd.DataFrame)
-        or len(table_meta) == 0
-        or "observation_unit_iri" not in table_meta.columns
-    ):
+    if not isinstance(table_meta, pd.DataFrame) or len(table_meta) == 0:
         return []
+
+    # A ``tables.csv`` without the column is blank in every row, which is the
+    # rule :func:`_collect_blank_required_metadata_fields` applies to the
+    # schema-required fields. This used to return nothing for an absent
+    # column, so strict validation refused a blank IRI and passed a file that
+    # never declared the field (Codex review of metasalmon #111; ported here
+    # as hub B-124).
+    declared = "observation_unit_iri" in table_meta.columns
     messages = []
     for position in range(len(table_meta)):
-        if scalar_text(table_meta["observation_unit_iri"].iloc[position]):
+        if declared and scalar_text(
+            table_meta["observation_unit_iri"].iloc[position]
+        ):
             continue
         context = _validation_row_context(
             table_meta, position, ("table_id", "file_name")
@@ -2255,6 +2261,181 @@ def _collect_missing_table_observation_unit_iri_issues(
             "Final validation requires a resolved table observation-unit IRI."
         )
     return messages
+
+
+def _package_metadata_frames(
+    package: Dict[str, object]
+) -> Dict[str, Dict[str, object]]:
+    """The four metadata frames a loaded package carries, keyed by file name.
+
+    Mirrors ``.ms_package_metadata_frames()``: each entry carries the issue
+    category, the source name validation messages use, and the fields that
+    identify a row in that file. One spelling, shared by the metasalmon #49
+    collectors, so a message and its issue row cannot name different files.
+    """
+    return {
+        "dataset.csv": {
+            "frame": package.get("dataset"),
+            "issue_type": "dataset",
+            "source": "metadata/dataset.csv",
+            "id_fields": ("dataset_id",),
+        },
+        "tables.csv": {
+            "frame": package.get("tables"),
+            "issue_type": "tables",
+            "source": "metadata/tables.csv",
+            "id_fields": ("table_id", "file_name"),
+        },
+        "column_dictionary.csv": {
+            "frame": package.get("dictionary"),
+            "issue_type": "dictionary",
+            "source": "metadata/column_dictionary.csv",
+            "id_fields": ("table_id", "column_name"),
+        },
+        "codes.csv": {
+            "frame": package.get("codes"),
+            "issue_type": "codes",
+            "source": "metadata/codes.csv",
+            "id_fields": ("table_id", "column_name", "code_value"),
+        },
+    }
+
+
+BLANK_REQUIRED_COLUMNS = (
+    "file",
+    "issue_type",
+    "field",
+    "table_id",
+    "column_name",
+    "message",
+)
+
+
+def _blank_required_row_text(frame: pd.DataFrame, field: str, position: int):
+    """One identifying cell of a blank-required row, or ``None``."""
+    if field not in frame.columns:
+        return None
+    text = scalar_text(frame[field].iloc[position])
+    return text if text else None
+
+
+def _collect_blank_required_metadata_fields(
+    package: Dict[str, object], keys: bool = False
+) -> pd.DataFrame:
+    """Rows whose schema-required fields are blank (metasalmon #49).
+
+    Mirrors ``.ms_collect_blank_required_metadata_fields()``. ``keys=True``
+    scans the fields that address a row (``METADATA_KEY_FIELDS``);
+    ``False`` scans the other ``constraints.required`` fields -- the same set
+    :func:`~metasalmonpy.sdp_field_setters.review_metadata` reports, read from
+    the same schema parse, so the two cannot disagree about which fields
+    block. Blank means missing or whitespace: a ``MISSING ...:`` placeholder is
+    not blank and has its own collector, so no field is reported twice. Rows
+    come back in schema order, then file order; nothing here sorts.
+
+    The schema read is the bundled copy (``_SCHEMA_SOURCE``), never the remote
+    one, because ``validate_salmon_datapackage()`` makes no network call.
+    """
+    # Deferred so that ``package_io`` keeps no module-level dependency on
+    # ``sdp_field_setters``; that module already reaches back into this one
+    # the same way.
+    from .sdp_field_setters import (
+        METADATA_KEY_FIELDS,
+        METADATA_SCHEMA_TABLES,
+        _SCHEMA_SOURCE,
+    )
+    from .sdp_schema import sdp_schema_required_field_names
+
+    found: list[dict] = []
+    for file_name, spec in _package_metadata_frames(package).items():
+        frame = spec["frame"]
+        if not isinstance(frame, pd.DataFrame) or len(frame) == 0:
+            continue
+
+        key_fields = set(METADATA_KEY_FIELDS.get(file_name, ()))
+        required = sdp_schema_required_field_names(
+            METADATA_SCHEMA_TABLES[file_name], source=_SCHEMA_SOURCE
+        )
+        if keys:
+            fields = [name for name in required if name in key_fields]
+        else:
+            fields = [name for name in required if name not in key_fields]
+        for field in fields:
+            # A column the file does not have is blank in every row. The
+            # canonical reader adds a missing column as NA for the dictionary
+            # and codes and reads dataset.csv and tables.csv as written, so
+            # scanning only the columns present reported an absent required
+            # column in two files and passed it in the other two (Codex review
+            # of metasalmon #111). One rule for all four, and the same rule
+            # ``review_metadata()`` applies by aligning each frame before it
+            # scans.
+            declared = field in frame.columns
+            for position in range(len(frame)):
+                if declared and scalar_text(frame[field].iloc[position]):
+                    continue
+                context = _validation_row_context(
+                    frame, position, spec["id_fields"]
+                )
+                found.append(
+                    {
+                        "file": file_name,
+                        "issue_type": spec["issue_type"],
+                        "field": field,
+                        "table_id": _blank_required_row_text(
+                            frame, "table_id", position
+                        ),
+                        "column_name": _blank_required_row_text(
+                            frame, "column_name", position
+                        ),
+                        "message": (
+                            f"{spec['source']} {context} field {field} is "
+                            "required by the SDP schema and blank. "
+                            + (
+                                "A row without its key cannot be addressed."
+                                if keys
+                                else "Fill it before final validation."
+                            )
+                        ),
+                    }
+                )
+    return pd.DataFrame(found, columns=list(BLANK_REQUIRED_COLUMNS))
+
+
+def _validate_optional_sdp_semantic_artifacts(path: Union[str, Path]) -> bool:
+    """Mirror ``.ms_validate_optional_sdp_semantic_artifacts`` (metasalmon #49).
+
+    The optional artifacts under ``metadata/semantic/``: SSSOM mapping sets and
+    ordered measurement decompositions. Each has had its own validator since it
+    shipped, and until #49 only the KNB publication and archive paths called
+    them -- so ``validate_salmon_datapackage()`` reported success over a
+    manifest whose SHA-256 no longer matched its bytes. Presence is detected as
+    those two paths detect it, by the managed file names and never by scanning
+    the directory, so an editor backup or an unapproved draft there stays local
+    and unread. A dangling symlink counts as present, as it does for
+    observation structures: a package that points at an artifact it cannot read
+    is refused, not passed.
+    """
+    from .measurement_decompositions import (
+        SDP_DECOMPOSITION_CSV_PATH,
+        SDP_DECOMPOSITION_MANIFEST_PATH,
+        validate_sdp_measurement_decompositions,
+    )
+    from .sdp_methods import _is_symlink
+    from .sssom import validate_sdp_sssom
+
+    root = Path(path)
+
+    def present(relative: str) -> bool:
+        candidate = root / relative
+        return candidate.exists() or _is_symlink(candidate)
+
+    if present("metadata/semantic/mapping-sets.json"):
+        validate_sdp_sssom(root)
+    if present(SDP_DECOMPOSITION_MANIFEST_PATH) or present(
+        SDP_DECOMPOSITION_CSV_PATH
+    ):
+        validate_sdp_measurement_decompositions(root)
+    return True
 
 
 _REVIEW_IRI_RE = re.compile(r"^\s*REVIEW\s*:", re.IGNORECASE)
@@ -2652,6 +2833,50 @@ def _collect_package_validation_issues(
                 UserWarning,
                 stacklevel=3,
             )
+
+    # metasalmon #49 (hub B-124): schema-required metadata fields. A blank
+    # *key* field is structural in every mode -- the row cannot be addressed,
+    # and the per-table loop below skipped a tables.csv row with no
+    # ``table_id`` rather than naming it. A blank *non-key* required field is
+    # the same state as a ``MISSING ...:`` placeholder minus the marker, so it
+    # takes the placeholder channel above: a warning here, an error under
+    # ``require_iris=True``, and a freshly created package stays valid until
+    # the user asks for the strict answer.
+    blank_keys = _collect_blank_required_metadata_fields(package, keys=True)
+    for position in range(len(blank_keys)):
+        add_issue(
+            blank_keys["issue_type"].iloc[position],
+            blank_keys["message"].iloc[position],
+            table_id=blank_keys["table_id"].iloc[position],
+            column_name=blank_keys["column_name"].iloc[position],
+        )
+    if not require_iris:
+        blank_required = _collect_blank_required_metadata_fields(package)
+        if len(blank_required) > 0:
+            count = len(blank_required)
+            # C collation, as R's `sort(method = "radix")` here: this text is
+            # asserted by a test and compared against R's, so it must not
+            # depend on a locale. Python's `sorted()` on `str` is already
+            # code-point order.
+            field_refs = sorted(
+                {
+                    f"{file}${field}"
+                    for file, field in zip(
+                        blank_required["file"], blank_required["field"]
+                    )
+                }
+            )
+            warnings.warn(
+                f"{count} schema-required metadata field"
+                f"{'' if count == 1 else 's'} {'is' if count == 1 else 'are'} "
+                "blank: " + ", ".join(field_refs[:6]) + ". Fill "
+                f"{'it' if count == 1 else 'them'} before publication; "
+                "require_iris=True reports "
+                f"{'it' if count == 1 else 'these'} as "
+                f"{'an error' if count == 1 else 'errors'}.",
+                UserWarning,
+                stacklevel=3,
+            )
     if not isinstance(dictionary, pd.DataFrame) or len(dictionary) == 0:
         add_issue("dictionary", "No rows found in column_dictionary.csv.")
 
@@ -2873,6 +3098,44 @@ def _collect_package_validation_issues(
                 column_name=", ".join(extra_in_data),
             )
 
+        # Tidy check 4 (metasalmon #49, hub B-124): a column the dictionary
+        # declares ``required`` must not ship missing values. The flag was
+        # inferred, written, parsed back to boolean and exported as
+        # Frictionless ``constraints.required``, and read by nothing that
+        # compared it to the data. Only columns present in the data are
+        # checked; an absent one is already reported above. Blank means
+        # missing or whitespace, exactly as the primary-key check reads it.
+        if "required" in table_dict.columns:
+            required_flags = parse_logical(table_dict["required"])
+        else:
+            required_flags = pd.Series(
+                [pd.NA] * len(table_dict), dtype="boolean"
+            )
+        required_cols = []
+        for name, flag in zip(table_dict["column_name"], required_flags):
+            if pd.isna(flag) or not bool(flag):
+                continue
+            required_cols.append(str(name).strip(READR_TRIM_CHARS))
+        for column_name in dict.fromkeys(required_cols):
+            if column_name not in data_cols:
+                continue
+            column = data_df[column_name]
+            missing_n = sum(
+                1
+                for value in column
+                if pd.isna(value) or not str(value).strip(READR_TRIM_CHARS)
+            )
+            if missing_n > 0:
+                add_issue(
+                    "columns",
+                    f"Table '{table_id}' column '{column_name}' is declared "
+                    f"required in column_dictionary.csv but {missing_n} "
+                    f"row{' is' if missing_n == 1 else 's are'} missing a "
+                    "value.",
+                    table_id=table_id,
+                    column_name=column_name,
+                )
+
         primary_key = (
             scalar_text(matching["primary_key"].iloc[0])
             if "primary_key" in matching.columns and len(matching)
@@ -3052,6 +3315,21 @@ def validate_salmon_datapackage(
 ) -> Dict[str, object]:
     """Validate package structure, ID alignment, and semantic review state.
 
+    Reads a package from disk and checks, in order: that ``dataset.csv``,
+    ``tables.csv``, ``column_dictionary.csv`` and ``codes.csv`` stay aligned
+    with each other and with the data files, and that no schema-required key
+    field is blank; that a declared primary key identifies each row and that a
+    column the dictionary declares ``required`` has no missing values; that
+    coded values appear in ``codes.csv`` when present; that the optional
+    observation-structure, SSSOM mapping-set and measurement-decomposition
+    artifacts validate when present; and then runs :func:`validate_dictionary`
+    plus :func:`~metasalmonpy.validation.validate_semantics`. Under
+    ``require_iris=True`` it additionally refuses ``REVIEW:`` markers,
+    unresolved ``MISSING ...:`` placeholders, blank schema-required metadata
+    fields and blank table ``observation_unit_iri`` values (a column a metadata
+    file does not have counts as blank in every row); in the default mode those
+    are reported as warnings.
+
     Mirrors ``validate_salmon_datapackage()`` in metasalmon: every structural
     finding is collected into one typed issue frame (eight ``issue_type``
     categories, five columns) and reported in a single raise whose ``.issues``
@@ -3093,6 +3371,7 @@ def validate_salmon_datapackage(
     from .observation_structures import validate_optional_sdp_observation_metadata
 
     validate_optional_sdp_observation_metadata(target)
+    _validate_optional_sdp_semantic_artifacts(target)
 
     if require_iris:
         final_review_issues = (
@@ -3112,6 +3391,12 @@ def validate_salmon_datapackage(
                 codes,
                 "metadata/codes.csv",
                 ("table_id", "column_name", "code_value"),
+            )
+            # metasalmon #49 (hub B-124): a blank schema-required field is the
+            # placeholder state minus the marker, so it is refused here and
+            # only here; keys are structural in the collector above.
+            + list(
+                _collect_blank_required_metadata_fields(package)["message"]
             )
         )
     else:
@@ -3168,8 +3453,9 @@ def validate_salmon_datapackage(
             ]
             lines.extend(preview)
             lines.append(
-                "Resolve placeholder metadata, blank table observation-unit "
-                "IRIs, and any REVIEW-prefixed IRIs before strict validation."
+                "Resolve placeholder metadata, blank schema-required fields, "
+                "blank table observation-unit IRIs, and any REVIEW-prefixed "
+                "IRIs before strict validation."
             )
             if total > len(preview):
                 remaining = total - len(preview)

@@ -1,5 +1,58 @@
 # Changelog
 
+## Unreleased
+
+**Work that landed after the `0.5.0` number moved, and the reason it is not
+under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
+closed when it set `__version__` to `0.5.0`. Measured 2026-09-16: `v0.5.0` is
+not tagged and no GitHub Release exists for it, so that section describes a
+number that has been *claimed* rather than a release that has shipped. Anything
+merged after that claim belongs here, because filing it under `## 0.5.0` would
+make this file say a version contains a change that the commit making the
+version current does not. metasalmon's `NEWS.md` keeps the same shape with its
+*(development version)* heading, which is what this heading mirrors. **The
+number does not move here**: it is a parity claim, and moving it is a separate
+outward act.
+
+### Fixed
+
+* **`validate_salmon_datapackage()` now checks three things it had been
+  claiming and not doing.** Ported from metasalmon pull request #111 (backlog
+  **#49**), hub queue item **B-124**. This is R-shipped-first lag being closed,
+  not a deliberate difference, so it opens no `PARITY.md` row.
+
+  1. **A column the dictionary declares `required` must not ship missing
+     values.** The flag was inferred, written to `column_dictionary.csv`,
+     parsed back to boolean, exported as Frictionless `constraints.required`
+     and read by nothing that compared it to the data — so a package could
+     state a column is required and ship blanks in it. Only columns present in
+     the data are checked; an absent one was already reported.
+  2. **A schema-required metadata field must not be blank.** The Frictionless
+     schemas have carried `constraints.required` since the schema bundle
+     landed, `review_metadata()` reports a blank one as blocking strict
+     validation, and strict validation let it through — the placeholder scan
+     only sees a field that *says* it is missing, not one that is. A blank
+     **key** field is structural in every mode, because a row without its key
+     cannot be addressed; a blank **non-key** required field takes the
+     placeholder channel, warning by default and erroring under
+     `require_iris=True`, so a freshly created package stays valid until the
+     user asks for the strict answer. A column the file does not have counts as
+     blank in every row, in all four metadata files.
+  3. **A corrupt SSSOM mapping set or measurement decomposition is refused.**
+     Both artifacts have had their own validator since they shipped and only
+     the KNB publication and archive paths called them, so end-to-end
+     validation reported success over a manifest whose SHA-256 no longer
+     matched its bytes. Presence is detected by the managed file names and
+     never by scanning `metadata/semantic/`, so an editor backup or an
+     unapproved draft there stays local and unread.
+
+  Each class has a failing-before test in `tests/test_validation_hardening.py`,
+  and every expected message was measured by running metasalmon 0.5.0 over the
+  same package directory on disk: for the two issue classes R and Python emit
+  byte-identical messages, pluralisation included. The differential fixture
+  `pk-missing-values` gains a second expected row, because the example's
+  `POP_ID` is declared required — R reports the same pair.
+
 ## 0.5.0
 
 **The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue

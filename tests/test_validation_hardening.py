@@ -167,6 +167,17 @@ def _corrupt_pk_missing_values(root):
     _edit_csv(root / "data" / "nuseds-fraser-coho-sample.csv", editor)
 
 
+def _corrupt_required_column_blank(root):
+    # ``SPECIES`` is declared ``required`` in the shipped dictionary and is not
+    # part of the primary key, so this isolates metasalmon #49's required-column
+    # nullability check from the primary-key checks that share its shape.
+    def editor(df):
+        df.loc[0, "SPECIES"] = ""
+        return df
+
+    _edit_csv(root / "data" / "nuseds-fraser-coho-sample.csv", editor)
+
+
 def _corrupt_value_type_date(root):
     def editor(df):
         # Backlog #98's Oracle DD-MON-YY bytes under a declared value_type of
@@ -337,6 +348,32 @@ CATEGORY_CASES = {
                 f"Table '{TABLE}' declares primary key 'POP_ID' but column "
                 "POP_ID contains missing values.",
                 table_id=TABLE,
+            ),
+            # The second row arrived with metasalmon #49 (hub B-124): the
+            # example's dictionary declares ``POP_ID`` required, so blanking it
+            # is now two findings rather than one. This is not the fixture
+            # being relaxed to fit the new code — R reports the identical pair,
+            # measured 2026-09-16 by running metasalmon 0.5.0's
+            # ``.ms_collect_package_validation_issues()`` over this very
+            # package directory after this same corruption.
+            _row(
+                "columns",
+                f"Table '{TABLE}' column 'POP_ID' is declared required in "
+                "column_dictionary.csv but 1 row is missing a value.",
+                table_id=TABLE,
+                column_name="POP_ID",
+            ),
+        ],
+    ),
+    "required-column-blank": (
+        _corrupt_required_column_blank,
+        [
+            _row(
+                "columns",
+                f"Table '{TABLE}' column 'SPECIES' is declared required in "
+                "column_dictionary.csv but 1 row is missing a value.",
+                table_id=TABLE,
+                column_name="SPECIES",
             )
         ],
     ),
@@ -942,3 +979,487 @@ def test_descriptor_blank_required_and_blank_label_match_r(tmp_path):
     field = descriptor["resources"][-1]["schema"]["fields"][0]
     assert "constraints" not in field
     assert "title" in field and field["title"] is None
+
+
+# --- metasalmon #49 / hub B-124: what the validator claimed and did not check ---
+#
+# Every expected message below was measured by running metasalmon 0.5.0's
+# ``validate_salmon_datapackage()`` over the same package directory this file
+# builds, on 2026-09-16, and transcribed verbatim. The R-side originals are
+# ``tests/testthat/test-package-helpers.R`` ("a column declared required must
+# not ship missing values", "a blank schema-required metadata field ...", "a
+# blank metadata key field ...", "an absent schema-required metadata column
+# ...", "an absent observation_unit_iri column ...", "a blank dataset_id ...").
+
+
+def _drop_column(path: Path, column: str) -> None:
+    def editor(frame):
+        return frame.drop(columns=[column])
+
+    _edit_csv(path, editor)
+
+
+def test_a_required_column_must_not_ship_missing_values(tmp_path):
+    """metasalmon #49 (hub B-124), class 1 of 3.
+
+    ``required`` was inferred, written to ``column_dictionary.csv``, parsed
+    back to boolean, exported as Frictionless ``constraints.required`` and read
+    by nothing that compared it to the data -- so a package could state a
+    column is required and ship blanks in it. The clean build is asserted first
+    so the only defect in play is the one injected here.
+    """
+    root = _build_example(tmp_path / "required-column")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        validate_salmon_datapackage(str(root))
+
+    _corrupt_required_column_blank(root)
+    with pytest.raises(ValueError, match="declared required"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root))
+
+    # The check reads the declaration, not the data's opinion of itself: the
+    # same blank under ``required = FALSE`` passes.
+    def clear_flag(frame):
+        frame.loc[frame["column_name"] == "SPECIES", "required"] = "FALSE"
+        return frame
+
+    _edit_csv(root / "metadata" / "column_dictionary.csv", clear_flag)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        validate_salmon_datapackage(str(root))
+
+
+def test_a_blank_schema_required_field_warns_by_default_and_fails_strict(tmp_path):
+    """metasalmon #49 (hub B-124), class 2 of 3.
+
+    The Frictionless schemas declare ``constraints.required`` on seven
+    ``dataset.csv`` fields, five ``tables.csv`` fields and seven dictionary
+    fields. ``review_metadata()`` has reported a blank one as blocking strict
+    validation since 0.4.0, and strict validation let it through -- the
+    placeholder scan only sees a field that *says* it is missing, not one that
+    is. Same channel as the placeholders: a warning in the default mode, an
+    error under ``require_iris=True``, so a freshly created package stays valid
+    until the user asks for the strict answer.
+    """
+    root = _build_example(tmp_path / "blank-required")
+
+    def blank_contact(frame):
+        frame.loc[0, "contact_email"] = ""
+        return frame
+
+    _edit_csv(root / "metadata" / "dataset.csv", blank_contact)
+
+    with pytest.warns(UserWarning, match="schema-required"):
+        validate_salmon_datapackage(str(root), require_iris=False)
+    with pytest.raises(
+        ValueError, match="contact_email is required by the SDP schema and blank"
+    ):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root), require_iris=True)
+
+
+def test_a_blank_metadata_key_field_is_structural_in_every_mode(tmp_path):
+    """metasalmon #49 (hub B-124), the key half of class 2.
+
+    ``METADATA_KEY_FIELDS`` excludes the keys from what ``review_metadata()``
+    reports, on the stated ground that the validator is the channel for a blank
+    key. It was not: a ``tables.csv`` row with no ``table_id`` was skipped by
+    the per-table loop and never named.
+    """
+    root = _build_example(tmp_path / "blank-key")
+
+    def blank_table_id(frame):
+        frame["table_id"] = ""
+        return frame
+
+    _edit_csv(root / "metadata" / "tables.csv", blank_table_id)
+
+    with pytest.raises(
+        ValueError, match="table_id is required by the SDP schema and blank"
+    ):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root), require_iris=False)
+
+
+def test_an_absent_schema_required_column_is_reported_like_a_blank_one(tmp_path):
+    """Codex review of metasalmon #111, ported with hub B-124.
+
+    The collector used to scan only the columns a file actually has, so a
+    required column the file did not carry was skipped rather than reported.
+    The canonical reader normalises the dictionary and codes and reads
+    ``dataset.csv`` and ``tables.csv`` as written, so the same defect was
+    reported in two files and passed in the other two. One rule now, for all
+    four: a column the file does not have is blank in every row.
+    """
+    root = _build_example(tmp_path / "absent-required")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        validate_salmon_datapackage(str(root), require_iris=True)
+
+    _drop_column(root / "metadata" / "dataset.csv", "contact_email")
+    _drop_column(root / "metadata" / "tables.csv", "table_label")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        validate_salmon_datapackage(str(root))
+    blank = [
+        " ".join(str(item.message).split())
+        for item in caught
+        if "schema-required" in str(item.message)
+    ]
+    assert len(blank) == 1
+    assert "dataset.csv$contact_email" in blank[0]
+    assert "tables.csv$table_label" in blank[0]
+
+    with pytest.raises(ValueError) as strict:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root), require_iris=True)
+    message = " ".join(str(strict.value).split())
+    assert (
+        "metadata/dataset.csv row 1 (dataset_id=nuseds_fraser_coho_sample) "
+        "field contact_email is required by the SDP schema and blank" in message
+    )
+    assert (
+        "metadata/tables.csv row 1 (table_id=nuseds_fraser_coho, "
+        "file_name=data/nuseds-fraser-coho-sample.csv) field table_label is "
+        "required by the SDP schema and blank" in message
+    )
+
+    # An absent key column is structural in every mode, exactly as a blank key
+    # is -- and it is the diagnostic the user sees rather than a crash inside
+    # the dataset-id alignment that has nothing left to align against.
+    _drop_column(root / "metadata" / "dataset.csv", "dataset_id")
+    with pytest.raises(ValueError) as blank_key:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root))
+    assert (
+        "metadata/dataset.csv row 1 field dataset_id is required by the SDP "
+        "schema and blank" in " ".join(str(blank_key.value).split())
+    )
+
+
+def test_an_absent_observation_unit_iri_column_is_refused_like_a_blank_one(tmp_path):
+    """The same rule one collector up (Codex review of metasalmon #111).
+
+    In R, ``.ms_collect_missing_table_observation_unit_iri_issues()`` returned
+    nothing when ``tables.csv`` had no ``observation_unit_iri`` column, so
+    strict validation refused a blank IRI and passed a file that never declared
+    the field. **This test passed here before the collector was changed**, and
+    it is kept rather than dropped because of why it passed:
+    ``read_salmon_datapackage()`` aligns ``tables.csv`` to the full column set,
+    so the absent column came back as NA and the old collector never met the
+    case R met. The collector no longer leans on that -- a column the file does
+    not have is blank in every row, whatever the reader did first -- and this
+    pins the outcome so a change to the reader's alignment cannot silently
+    reopen R's hole here.
+    """
+    root = _build_example(tmp_path / "absent-ou-iri")
+    _drop_column(root / "metadata" / "tables.csv", "observation_unit_iri")
+
+    with pytest.raises(ValueError) as strict:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root), require_iris=True)
+    assert "field observation_unit_iri is blank" in " ".join(
+        str(strict.value).split()
+    )
+
+
+def test_a_blank_dataset_id_is_a_structural_issue_not_a_crash(tmp_path):
+    """Codex review of metasalmon #111, ported with hub B-124.
+
+    In R the id-alignment check ran before the #49 key collector and compared
+    every table and dictionary id with a root id the reader had turned into NA,
+    which died with "missing value where TRUE/FALSE needed" instead of naming
+    the blank key. Python's alignment is a set of non-blank ids and never had
+    that failure, so this pins the *reported* outcome rather than the fix: the
+    schema-required diagnostic is what the user sees, in both modes.
+    """
+    root = _build_example(tmp_path / "blank-root-id")
+
+    def blank_id(frame):
+        frame.loc[0, "dataset_id"] = ""
+        return frame
+
+    _edit_csv(root / "metadata" / "dataset.csv", blank_id)
+    # The other files keep the id, which is the state that made R's comparison
+    # return NA.
+    assert (
+        read_sdp_csv(root / "metadata" / "tables.csv")["dataset_id"].iloc[0]
+        == "nuseds_fraser_coho_sample"
+    )
+
+    for strict in (False, True):
+        with pytest.raises(ValueError) as caught:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                validate_salmon_datapackage(str(root), require_iris=strict)
+        message = " ".join(str(caught.value).split())
+        assert (
+            "metadata/dataset.csv row 1 field dataset_id is required by the "
+            "SDP schema and blank" in message
+        )
+
+
+# --- class 3: the optional semantic artifacts the validator never reached -------
+#
+# R keeps these two in ``tests/testthat/test-sssom.R`` and
+# ``tests/testthat/test-measurement-decompositions.R``. They live here instead
+# because the subject is ``validate_salmon_datapackage()`` reaching the artifact
+# validators at all, and this file already owns the one fully valid package
+# fixture (``_build_example``) that such a check needs; the artifact test files
+# build dictionary-only directories that no end-to-end validation can run over.
+# That is a test-layout difference, not a behavioural one.
+
+
+def _decomposition_rows() -> pd.DataFrame:
+    """A decomposition of the example's one measurement column.
+
+    Every matched component has to be the I-ADOPT IRI the dictionary already
+    declares for ``NATURAL_SPAWNERS_TOTAL``, which is what the writer checks;
+    the trailing gap row is what the byte tamper below edits.
+    """
+    base = {
+        "dataset_id": "nuseds_fraser_coho_sample",
+        "table_id": TABLE,
+        "column_name": "NATURAL_SPAWNERS_TOTAL",
+        "measurement_concept_iri": "https://w3id.org/gcdfo/salmon#SpawnerAbundance",
+        "component_relation": "",
+        "related_component_order": "",
+        "rationale": "",
+        "source": "SMN",
+        "source_version": "2026-07-31",
+        "source_url": "https://w3id.org/smn/",
+        "provenance": "Reviewed against the pinned Salmon Domain Ontology source.",
+    }
+
+    def row(order, role, status, iri, label, **extra):
+        out = dict(base)
+        out.update(
+            component_order=str(order),
+            component_role=role,
+            component_status=status,
+            component_iri=iri,
+            component_label=label,
+        )
+        out.update(extra)
+        return out
+
+    return pd.DataFrame(
+        [
+            row(1, "property", "matched", "https://w3id.org/smn/Abundance", "Abundance"),
+            row(
+                2,
+                "entity",
+                "matched",
+                "https://w3id.org/gcdfo/salmon#ConservationUnit",
+                "Conservation unit",
+            ),
+            row(
+                3,
+                "constraint",
+                "matched",
+                "https://w3id.org/smn/NaturalOrigin",
+                "Natural origin",
+            ),
+            row(4, "unit", "matched", "https://qudt.org/vocab/unit/INDIV", "Individual"),
+            row(
+                5,
+                "statistical_modifier",
+                "gap",
+                "",
+                "Aggregation modifier",
+                rationale=(
+                    "The source data do not identify one stable governed "
+                    "statistical-modifier term."
+                ),
+            ),
+        ]
+    )
+
+
+def test_validate_salmon_datapackage_refuses_a_corrupt_sssom_artifact(tmp_path):
+    """metasalmon #49 (hub B-124), class 3 of 3.
+
+    The end-to-end validator reported success over a mapping-set manifest whose
+    SHA-256 no longer matched its bytes; only the KNB publication and archive
+    paths ran ``validate_sdp_sssom()``. Presence is detected the way those two
+    paths detect it -- by the manifest, never by scanning
+    ``metadata/semantic`` -- so an unapproved draft there stays local.
+    """
+    import json
+
+    from metasalmonpy.sssom import write_sdp_sssom
+
+    from .test_sssom import sssom_text, write_raw
+
+    root = _build_example(tmp_path / "sssom")
+    source = write_raw(tmp_path / "approved.sssom.tsv", sssom_text())
+    manifest_path = Path(write_sdp_sssom(root, mapping_sets=source))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        validate_salmon_datapackage(str(root))
+
+    manifest = json.loads(manifest_path.read_text("utf-8"))
+    manifest["mapping_sets"][0]["sha256"] = "0" * 64
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="SHA-256"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root))
+
+
+def test_validate_salmon_datapackage_refuses_a_corrupt_decomposition_artifact(
+    tmp_path,
+):
+    """metasalmon #49 (hub B-124), class 3 of 3, the other artifact.
+
+    As with SSSOM: the artifact had a validator and the end-to-end validator
+    never called it, so a CSV whose bytes had drifted from its manifest
+    validated clean. Either managed file triggers the check, so a CSV whose
+    manifest has gone is refused rather than silently unbound.
+    """
+    from metasalmonpy.measurement_decompositions import (
+        SDP_DECOMPOSITION_CSV_PATH,
+        SDP_DECOMPOSITION_MANIFEST_PATH,
+        write_sdp_measurement_decompositions,
+    )
+
+    root = _build_example(tmp_path / "decomposition")
+    write_sdp_measurement_decompositions(root, _decomposition_rows())
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        validate_salmon_datapackage(str(root))
+
+    csv_path = root / SDP_DECOMPOSITION_CSV_PATH
+    csv_path.write_text(
+        csv_path.read_text("utf-8").replace("Aggregation modifier", "Aggregation"),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="SHA-256"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root))
+
+    (root / SDP_DECOMPOSITION_MANIFEST_PATH).unlink()
+    with pytest.raises(FileNotFoundError, match="manifest"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            validate_salmon_datapackage(str(root))
+
+
+def test_a_blank_required_enum_warns_by_default_like_every_other_blank(tmp_path):
+    """Codex review of metasalmonpy #29 (P2), on the B-124 port.
+
+    ``value_type`` and ``column_role`` are ``constraints.required`` non-keys of
+    ``column_dictionary.csv``, so the contract the port documents is: warn by
+    default, error under ``require_iris=True``. It did not hold for these two.
+    ``read_sdp_csv()`` keeps an empty CSV cell as ``""`` where R's
+    ``.ms_read_metadata_csv()`` reads it as NA, and R's enum check exempts NA
+    explicitly — so a blank never reaches R's check, reached this one, and was
+    rejected as an invalid token in **both** modes.
+
+    Measured 2026-09-16 on identical package directories: metasalmon 0.5.0
+    returned with the warning, this package raised
+    ``Invalid value_type in rows [3]: ['']``. R warning and Python raising makes
+    this the port being incomplete, not a design choice, so Python moved.
+
+    A blank is not unchecked — it is the schema-required diagnostic below — and
+    a genuinely invalid token is still refused in every mode, which is the half
+    of this that must not move.
+    """
+    for field in ("value_type", "column_role"):
+        root = _build_example(tmp_path / f"blank-{field}")
+
+        def blank_it(frame, field=field):
+            frame.loc[frame["column_name"] == "WATERBODY", field] = ""
+            return frame
+
+        _edit_csv(root / "metadata" / "column_dictionary.csv", blank_it)
+
+        with pytest.warns(UserWarning, match="schema-required"):
+            validate_salmon_datapackage(str(root), require_iris=False)
+        with pytest.raises(
+            ValueError, match=f"{field} is required by the SDP schema and blank"
+        ):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                validate_salmon_datapackage(str(root), require_iris=True)
+
+        # The enum check keeps its real job in both modes.
+        def make_bogus(frame, field=field):
+            frame.loc[frame["column_name"] == "WATERBODY", field] = "bogus"
+            return frame
+
+        _edit_csv(root / "metadata" / "column_dictionary.csv", make_bogus)
+        for strict in (False, True):
+            with pytest.raises(ValueError, match=f"Invalid {field}"):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    validate_salmon_datapackage(str(root), require_iris=strict)
+
+
+def test_a_unicode_whitespace_enum_is_a_token_not_a_blank(tmp_path):
+    """Codex review of metasalmonpy #29, second round (P2).
+
+    The blank-is-absent reading above is right; the way it was spelled was not.
+    ``_present()`` used a parameterless ``.str.strip()``, which removes Unicode
+    whitespace, while ``read_sdp_csv()`` trims only ``READR_TRIM_CHARS`` -- the
+    ASCII set ``readr``'s ``trim_ws = TRUE`` trims. So a ``value_type`` or
+    ``column_role`` holding only U+00A0 or U+3000 survived the read as a real
+    token, ``_collect_blank_required_metadata_fields()`` (which uses
+    ``READR_TRIM_CHARS``) correctly saw it as present and therefore did not
+    report it as blank, and the enum check saw it as absent and skipped it. It
+    fell through both and validated clean in **every** mode.
+
+    Measured 2026-09-16 over the same four package directories on disk:
+    metasalmon 0.5.0 raised for all four, in both modes --
+    ``Invalid value_type in rows 4: <U+3000>.`` -- because R's check is
+    ``!dict$value_type %in% valid & !is.na(dict$value_type)`` and a U+00A0 cell
+    is neither NA nor valid. This package accepted all four silently. That is a
+    divergence this port introduced: ``origin/main`` (``b939fd9``) raised
+    ``Invalid value_type in rows [3]: ['\\xa0']`` on the identical input.
+
+    Two properties, and the test needs both, because fixing either one alone is
+    how this defect was written in the first place: a Unicode-whitespace token
+    is refused, and a genuinely empty cell is still the warn-by-default blank.
+    """
+    for field in ("value_type", "column_role"):
+        for label, token in (("nbsp", " "), ("ideographic", "　")):
+            root = _build_example(tmp_path / f"{field}-{label}")
+
+            def set_token(frame, field=field, token=token):
+                frame.loc[frame["column_name"] == "WATERBODY", field] = token
+                return frame
+
+            _edit_csv(root / "metadata" / "column_dictionary.csv", set_token)
+
+            for strict in (False, True):
+                with pytest.raises(ValueError, match=f"Invalid {field}"):
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        validate_salmon_datapackage(str(root), require_iris=strict)
+
+        # The boundary the fix must not cross: an actually empty cell is still
+        # absent, so it warns by default and errors under require_iris=True.
+        blank_root = _build_example(tmp_path / f"{field}-truly-empty")
+
+        def blank_it(frame, field=field):
+            frame.loc[frame["column_name"] == "WATERBODY", field] = ""
+            return frame
+
+        _edit_csv(blank_root / "metadata" / "column_dictionary.csv", blank_it)
+        with pytest.warns(UserWarning, match="schema-required"):
+            validate_salmon_datapackage(str(blank_root), require_iris=False)
+        with pytest.raises(
+            ValueError, match=f"{field} is required by the SDP schema and blank"
+        ):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                validate_salmon_datapackage(str(blank_root), require_iris=True)
