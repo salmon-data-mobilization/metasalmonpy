@@ -1403,3 +1403,63 @@ def test_a_blank_required_enum_warns_by_default_like_every_other_blank(tmp_path)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     validate_salmon_datapackage(str(root), require_iris=strict)
+
+
+def test_a_unicode_whitespace_enum_is_a_token_not_a_blank(tmp_path):
+    """Codex review of metasalmonpy #29, second round (P2).
+
+    The blank-is-absent reading above is right; the way it was spelled was not.
+    ``_present()`` used a parameterless ``.str.strip()``, which removes Unicode
+    whitespace, while ``read_sdp_csv()`` trims only ``READR_TRIM_CHARS`` -- the
+    ASCII set ``readr``'s ``trim_ws = TRUE`` trims. So a ``value_type`` or
+    ``column_role`` holding only U+00A0 or U+3000 survived the read as a real
+    token, ``_collect_blank_required_metadata_fields()`` (which uses
+    ``READR_TRIM_CHARS``) correctly saw it as present and therefore did not
+    report it as blank, and the enum check saw it as absent and skipped it. It
+    fell through both and validated clean in **every** mode.
+
+    Measured 2026-09-16 over the same four package directories on disk:
+    metasalmon 0.5.0 raised for all four, in both modes --
+    ``Invalid value_type in rows 4: <U+3000>.`` -- because R's check is
+    ``!dict$value_type %in% valid & !is.na(dict$value_type)`` and a U+00A0 cell
+    is neither NA nor valid. This package accepted all four silently. That is a
+    divergence this port introduced: ``origin/main`` (``b939fd9``) raised
+    ``Invalid value_type in rows [3]: ['\\xa0']`` on the identical input.
+
+    Two properties, and the test needs both, because fixing either one alone is
+    how this defect was written in the first place: a Unicode-whitespace token
+    is refused, and a genuinely empty cell is still the warn-by-default blank.
+    """
+    for field in ("value_type", "column_role"):
+        for label, token in (("nbsp", " "), ("ideographic", "　")):
+            root = _build_example(tmp_path / f"{field}-{label}")
+
+            def set_token(frame, field=field, token=token):
+                frame.loc[frame["column_name"] == "WATERBODY", field] = token
+                return frame
+
+            _edit_csv(root / "metadata" / "column_dictionary.csv", set_token)
+
+            for strict in (False, True):
+                with pytest.raises(ValueError, match=f"Invalid {field}"):
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        validate_salmon_datapackage(str(root), require_iris=strict)
+
+        # The boundary the fix must not cross: an actually empty cell is still
+        # absent, so it warns by default and errors under require_iris=True.
+        blank_root = _build_example(tmp_path / f"{field}-truly-empty")
+
+        def blank_it(frame, field=field):
+            frame.loc[frame["column_name"] == "WATERBODY", field] = ""
+            return frame
+
+        _edit_csv(blank_root / "metadata" / "column_dictionary.csv", blank_it)
+        with pytest.warns(UserWarning, match="schema-required"):
+            validate_salmon_datapackage(str(blank_root), require_iris=False)
+        with pytest.raises(
+            ValueError, match=f"{field} is required by the SDP schema and blank"
+        ):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                validate_salmon_datapackage(str(blank_root), require_iris=True)

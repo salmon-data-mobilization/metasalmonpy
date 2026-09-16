@@ -12,6 +12,7 @@ except ImportError as exc:  # pragma: no cover - import guard
     raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
 
 from .metadata import (
+    READR_TRIM_CHARS,
     ensure_resource_mapping,
     infer_codes_from_resources,
     infer_dataset_metadata_from_resources,
@@ -552,8 +553,27 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
     # "Invalid value_type in rows [3]: ['']" (Codex review of metasalmonpy #29).
     # The blank is not unchecked: `_collect_blank_required_metadata_fields()`
     # reports it, and strict validation still refuses it.
+    #
+    # `READR_TRIM_CHARS`, not a parameterless `.str.strip()`, and the
+    # difference is the whole correctness of this helper. `read_sdp_csv()`
+    # trims exactly what `readr`'s `trim_ws = TRUE` trims -- ASCII space, tab,
+    # CR, LF -- so a cell holding only U+00A0 or U+3000 SURVIVES the read in
+    # both implementations and is a real token, not an absent one. A
+    # parameterless `.str.strip()` removes Unicode whitespace too, which made
+    # such a cell look absent here while
+    # `_collect_blank_required_metadata_fields()` (which does use
+    # `READR_TRIM_CHARS`) correctly saw it as present -- so it fell through
+    # both checks and validated clean in every mode. Measured 2026-09-16 on
+    # identical package directories: metasalmon 0.5.0 raised
+    # `Invalid value_type in rows 4: <U+3000>.` for all four combinations of
+    # {value_type, column_role} x {U+00A0, U+3000} in both modes, and this
+    # package accepted all four silently (Codex review of metasalmonpy #29,
+    # second round). Matching the reader's trim set is what keeps "absent"
+    # meaning the same thing in the two collectors and in R.
+    # *Retires when:* `read_sdp_csv()` stops being the single reader, at which
+    # point "absent" has to be re-derived from whatever replaces it.
     def _present(series: pd.Series) -> pd.Series:
-        return series.notna() & (series.astype(str).str.strip() != "")
+        return series.notna() & (series.astype(str).str.strip(READR_TRIM_CHARS) != "")
 
     # Validate value types
     declared_types = df["value_type"].loc[_present(df["value_type"])]
