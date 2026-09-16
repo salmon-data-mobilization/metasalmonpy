@@ -1080,11 +1080,28 @@ def migrate_sdp_methods(path: Union[str, Path], dry_run: bool = False) -> dict:
             "Nothing to migrate: no method bindings and no metadata/methods.csv."
         )
         return {
-            # Two columns, not three: R's nothing-to-migrate report frame has
-            # no ``columns`` column (unlike the empty placements frame the
-            # stop-free path returns), and the differential run showed it.
+            # Same three columns as every other exit, so
+            # ``report["tables"]["columns"]`` is a column rather than a
+            # ``KeyError`` in exactly the case where the package was already
+            # clean -- the branch least likely to be exercised. ``columns`` is
+            # object-dtype because the populated build below renders it with
+            # ``", ".join(...)``.
+            #
+            # From S10 chunk A until B-144 this comment read "Two columns, not
+            # three: R's nothing-to-migrate report frame has no ``columns``
+            # column (unlike the empty placements frame the stop-free path
+            # returns), and the differential run showed it." The differential
+            # was reported accurately and the conclusion drawn from it was
+            # wrong: this package carried the internally consistent
+            # three-column frame FIRST and gave it up to mirror R's
+            # inconsistency. Brett ruled the three-column shape on 2026-09-14
+            # for both implementations, R moved at metasalmon pull request
+            # #117, and this restores what was here before chunk A. PARITY.md
+            # row 9 is the record, and
+            # ``test_every_migration_exit_reports_the_same_three_table_columns``
+            # pins all three exits rather than only this one.
             "tables": pd.DataFrame(
-                columns=["table_id", "method_iri"], dtype=object
+                columns=["table_id", "method_iri", "columns"], dtype=object
             ),
             "dropped_review": dropped_review,
             "registry": None,
