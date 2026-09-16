@@ -138,8 +138,9 @@ RULED_INSTANT = re.compile(r"^[0-9]+-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2
 
 # ``_iso_seconds`` renders a calendar without committing to a zone marker, so a
 # caller that appends its own is a second rendering of an instant waiting to
-# drift from the first. Five such call sites existed before B-145 and three of
-# them disagreed with the other two. Each entry says what would retire it.
+# drift from the first. **Four** such call sites existed before B-145, in two
+# modules, and two of them wrote a different string from the other two for the
+# same tz-aware instant. Each entry says what would retire it.
 ISO_SECONDS_CALLERS: dict[str, str] = {
     "resource_types.py:iso_instant_text": (
         "The one rendering of an instant as written bytes. Retires when "
@@ -185,11 +186,19 @@ def test_only_the_named_callers_render_an_instant_themselves():
     every angle except the one where you compare the outputs. It is found by
     reading, so this test is the reading, done mechanically.
 
-    What it would have caught: before B-145 the string ``_iso_seconds(x) +
-    "Z"`` appeared at five call sites across two modules. Two of them folded a
-    tz-aware value to UTC first and three did not, so the same instant was
-    written with a ``Z`` that meant UTC in some files and local wall clock in
-    others -- and every suite stayed green, because each test built its
+    What it would have caught, measured on the pre-fix tree rather than
+    asserted. ``_iso_seconds(x) + "Z"`` appeared at **four** call sites across
+    two modules: ``render_resource_frame`` twice,
+    ``observation_structures._typed_character`` and ``._normalize_typed_values``.
+    Only ``_typed_character`` folded a tz-aware value to UTC first;
+    ``_normalize_typed_values`` was handed a value ``_parse_datetime`` had
+    already folded; and neither branch of ``render_resource_frame`` folded at
+    all. So for ``datetime(2024, 12, 31, tzinfo=UTC-08:00)`` the package wrote
+    **two different strings for one instant** --
+    ``render_resource_frame`` gave ``2024-12-31T00:00:00Z``, a local wall clock
+    wearing a ``Z``, where ``_typed_character`` gave the correct
+    ``2024-12-31T08:00:00Z``, which is also what ``readr::write_csv()`` writes.
+    Every suite stayed green throughout, because each test built its
     expectation with the same call it was testing.
     """
     offenders = []
@@ -240,11 +249,24 @@ def test_every_instant_emitter_agrees_on_one_value():
 def test_a_tz_aware_instant_is_folded_to_utc_before_the_z_is_added():
     """``Z`` is a claim about the instant, not decoration.
 
-    ``readr::write_csv()`` folds to UTC, so a renderer that stamps ``Z`` on a
-    local wall clock moves the instant and diverges from metasalmon silently.
+    ``readr::write_csv()`` folds to UTC -- measured 2026-09-16, R 4.3.3 / readr
+    2.2.0, which writes ``2024-12-31T08:00:00Z`` for the value below -- so a
+    renderer that stamps ``Z`` on a local wall clock moves the instant and
+    diverges from metasalmon silently. Both branches of
+    ``render_resource_frame`` did exactly that before B-145; they are asserted
+    here too, because the helper agreeing with itself proves nothing about the
+    callers.
     """
     aware = INSTANT_END.replace(tzinfo=_dt.timezone(_dt.timedelta(hours=-8)))
     assert rt.iso_instant_text(aware) == "2024-12-31T08:00:00Z"
+    assert obs._typed_character(aware) == "2024-12-31T08:00:00Z"
+    object_column = pd.DataFrame({"w": pd.Series([aware], dtype="object")})
+    assert rt.render_resource_frame(object_column)["w"].iloc[0] == (
+        "2024-12-31T08:00:00Z"
+    )
+    assert rt.render_resource_frame(pd.DataFrame({"w": [aware]}))["w"].iloc[0] == (
+        "2024-12-31T08:00:00Z"
+    )
 
 
 def _package_with_typed_instants(tmpdir: str) -> Path:

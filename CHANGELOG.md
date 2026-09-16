@@ -238,14 +238,20 @@ are not part of this change.
 
   **`resource_types.iso_instant_text()` is now the single renderer**, and that
   is the substance rather than a tidy-up. The string `_iso_seconds(x) + "Z"`
-  stood at **five** call sites across two modules; two of them folded a
-  tz-aware value to UTC first and three did not, so the same instant was
-  written with a `Z` that meant UTC in some files and a local wall clock in
-  others — and every suite stayed green, because each test built its
-  expectation with the same call it was testing. All five now call one
-  function, which folds to UTC (as `readr::write_csv()` does) and pads the year
-  by construction. `tests/test_platform_determinism_guard.py` gains a call-site
-  guard that fails on a sixth, in the shape of the `strftime` guard beside it.
+  stood at **four** call sites across two modules — `render_resource_frame()`
+  twice, `observation_structures._typed_character()` and
+  `._normalize_typed_values()` — and **two of them wrote a different string
+  from the other two for the same tz-aware instant**. Measured on the pre-fix
+  tree for `datetime(2024, 12, 31, tzinfo=UTC-08:00)`: `render_resource_frame()`
+  gave `2024-12-31T00:00:00Z`, a local wall clock wearing a `Z`, where
+  `_typed_character()` gave the correct `2024-12-31T08:00:00Z` — which is also
+  what `readr::write_csv()` writes for the same value (measured, R 4.3.3 /
+  readr 2.2.0). Every suite stayed green throughout, because each test built
+  its expectation with the same call it was testing. All four now call one
+  function, which folds to UTC and pads the year by construction, so the
+  tz-aware case **converges onto metasalmon** rather than merely becoming
+  self-consistent. `tests/test_platform_determinism_guard.py` gains a call-site
+  guard that fails on a fifth, in the shape of the `strftime` guard beside it.
 
   **One residual is deliberately left open and measured rather than decided.**
   Each implementation now agrees with itself; below year 1000 they do not agree
