@@ -1352,3 +1352,54 @@ def test_validate_salmon_datapackage_refuses_a_corrupt_decomposition_artifact(
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             validate_salmon_datapackage(str(root))
+
+
+def test_a_blank_required_enum_warns_by_default_like_every_other_blank(tmp_path):
+    """Codex review of metasalmonpy #29 (P2), on the B-124 port.
+
+    ``value_type`` and ``column_role`` are ``constraints.required`` non-keys of
+    ``column_dictionary.csv``, so the contract the port documents is: warn by
+    default, error under ``require_iris=True``. It did not hold for these two.
+    ``read_sdp_csv()`` keeps an empty CSV cell as ``""`` where R's
+    ``.ms_read_metadata_csv()`` reads it as NA, and R's enum check exempts NA
+    explicitly — so a blank never reaches R's check, reached this one, and was
+    rejected as an invalid token in **both** modes.
+
+    Measured 2026-09-16 on identical package directories: metasalmon 0.5.0
+    returned with the warning, this package raised
+    ``Invalid value_type in rows [3]: ['']``. R warning and Python raising makes
+    this the port being incomplete, not a design choice, so Python moved.
+
+    A blank is not unchecked — it is the schema-required diagnostic below — and
+    a genuinely invalid token is still refused in every mode, which is the half
+    of this that must not move.
+    """
+    for field in ("value_type", "column_role"):
+        root = _build_example(tmp_path / f"blank-{field}")
+
+        def blank_it(frame, field=field):
+            frame.loc[frame["column_name"] == "WATERBODY", field] = ""
+            return frame
+
+        _edit_csv(root / "metadata" / "column_dictionary.csv", blank_it)
+
+        with pytest.warns(UserWarning, match="schema-required"):
+            validate_salmon_datapackage(str(root), require_iris=False)
+        with pytest.raises(
+            ValueError, match=f"{field} is required by the SDP schema and blank"
+        ):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                validate_salmon_datapackage(str(root), require_iris=True)
+
+        # The enum check keeps its real job in both modes.
+        def make_bogus(frame, field=field):
+            frame.loc[frame["column_name"] == "WATERBODY", field] = "bogus"
+            return frame
+
+        _edit_csv(root / "metadata" / "column_dictionary.csv", make_bogus)
+        for strict in (False, True):
+            with pytest.raises(ValueError, match=f"Invalid {field}"):
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    validate_salmon_datapackage(str(root), require_iris=strict)

@@ -510,15 +510,34 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
         if col not in df.columns:
             df[col] = pd.NA
 
+    # A blank enum cell is ABSENT, not invalid -- the same reading R has, and
+    # the same reading the ``required`` check three blocks below already
+    # applies. R's `.ms_read_metadata_csv()` reads an empty CSV cell as NA and
+    # its validator exempts NA explicitly (`& !is.na(dict$value_type)`), so a
+    # blank `value_type` or `column_role` never reaches R's enum check at all.
+    # `read_sdp_csv()` keeps the empty string, so it did reach this one and was
+    # rejected as an invalid token in BOTH modes. That contradicted the
+    # blank-schema-required contract ported in the same change (B-124): those
+    # two fields are `constraints.required` non-keys, which warn by default and
+    # error under `require_iris=True`. Measured 2026-09-16 on identical package
+    # directories -- R returned with the warning, this package raised
+    # "Invalid value_type in rows [3]: ['']" (Codex review of metasalmonpy #29).
+    # The blank is not unchecked: `_collect_blank_required_metadata_fields()`
+    # reports it, and strict validation still refuses it.
+    def _present(series: pd.Series) -> pd.Series:
+        return series.notna() & (series.astype(str).str.strip() != "")
+
     # Validate value types
-    invalid_types = df["value_type"].dropna().loc[~df["value_type"].isin(VALID_VALUE_TYPES)]
+    declared_types = df["value_type"].loc[_present(df["value_type"])]
+    invalid_types = declared_types.loc[~declared_types.isin(VALID_VALUE_TYPES)]
     if not invalid_types.empty:
         bad_rows = invalid_types.index.tolist()
         raise ValueError(f"Invalid value_type in rows {bad_rows}: {invalid_types.tolist()}")
 
     # Validate roles
     if "column_role" in df.columns:
-        invalid_roles = df["column_role"].dropna().loc[~df["column_role"].isin(VALID_COLUMN_ROLES)]
+        declared_roles = df["column_role"].loc[_present(df["column_role"])]
+        invalid_roles = declared_roles.loc[~declared_roles.isin(VALID_COLUMN_ROLES)]
         if not invalid_roles.empty:
             bad_rows = invalid_roles.index.tolist()
             raise ValueError(f"Invalid column_role in rows {bad_rows}: {invalid_roles.tolist()}")
