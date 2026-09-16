@@ -278,8 +278,12 @@ def test_a_missing_instant_is_a_missing_field_and_not_a_crash():
     pre-fix tree: ``render_resource_frame`` raised for an object column holding
     one instant and one ``NaT``, while its own ``datetime64`` branch two lines
     above guarded with ``pd.isna`` -- one function, two branches, two answers.
-    ``readr::write_csv()`` writes an ``NA`` POSIXct as the empty field rather
-    than aborting, so raising was also a divergence from metasalmon.
+    metasalmon completes that write rather than aborting:
+    ``readr::write_csv(na = .ms_csv_na_token())`` renders an ``NA`` POSIXct as
+    the empty field (measured, R 4.3.3 / readr 2.2.0; readr's own default
+    ``na`` is the two characters ``NA``, which is why the token is named). So
+    raising was a divergence from metasalmon and not only an internal
+    inconsistency.
 
     Both dtypes and both writers are asserted, because the defect was that one
     branch had the guard and the other did not.

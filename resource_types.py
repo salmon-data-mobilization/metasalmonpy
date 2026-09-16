@@ -177,8 +177,15 @@ def is_instant(value: Any) -> bool:
     identity is both exact and safe here.
 
     A missing instant is left in place for the CSV writer's ``na_rep`` to
-    render, which is what ``readr::write_csv()`` does with an ``NA`` POSIXct --
-    the empty field -- rather than aborting the write.
+    render, rather than aborting the write, because that is what metasalmon
+    does: ``readr::write_csv(na = .ms_csv_na_token())`` writes an ``NA``
+    POSIXct as the empty field (measured 2026-09-16, R 4.3.3 / readr 2.2.0,
+    with ``.ms_csv_na_token()`` being the empty string). **Stated with its
+    configuration on purpose** -- readr's *own* default ``na`` is the two
+    characters ``NA``, so "readr writes the empty field" would be a claim
+    stronger than the measurement. What is true of readr unconditionally, and
+    is the part this guard turns on, is that it renders a missing instant
+    rather than raising.
 
     *Retires when:* nothing, unless ``NaTType`` stops subclassing ``datetime``.
     """
