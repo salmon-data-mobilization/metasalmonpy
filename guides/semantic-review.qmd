@@ -140,3 +140,148 @@ way") and this package moved. See PARITY.md row 57.
 For an interactive, resumable whole-variable review, use
 `chat_decomposition()`. It persists structured state and never submits a term
 request automatically.
+
+## Assemble the reviewed closure
+
+**Strict validation is not the publication gate.** A package that passes
+`validate_salmon_datapackage(require_iris=True)` can still be refused by
+`write_eml_from_sdp()` and `publish_sdp_to_knb()`, because the EML/KNB path
+additionally requires a **reviewed closure**: a standing record of which
+vocabulary terms you accepted, on what evidence, and for which target.
+
+Three files carry it. **`write_sdp_semantic_closure()` writes the first two and
+pins the digests the third one carries**; the reviewed EML facts in the third
+are yours.
+
+| File | What it must contain | Written by |
+| --- | --- | --- |
+| `metadata/semantic_vocabulary.csv` | One evidence row per canonical measurement IRI — exactly that set, no more and no less | `write_sdp_semantic_closure()` |
+| `reviewed_semantic_selections.csv` | Exactly one `accepted` row per canonical review target | `write_sdp_semantic_closure()` |
+| `metadata/eml-mapping.yml` | The reviewed EML facts, plus the SHA-256 of each of the two files above | you, except the two SHA-256 values |
+
+**The canonical measurement IRI set** is every non-empty value across
+`term_iri`, `property_iri`, `entity_iri`, `constraint_iri`,
+`statistical_modifier_iri` and `unit_iri` on your `measurement` dictionary rows,
+plus any `tables.csv` `method_iri` and any procedure IRIs reached through
+`codes.csv` from an observation-structures binding.
+
+**The canonical review target set** is derived independently, and it is *not*
+the measurement set plus anything. It is every slot a reviewer decided: the same
+six semantic fields on your `measurement` dictionary rows, plus each table's
+`observation_unit_iri` **and** its `method_iri`.
+
+**The two sets differ in both directions**, which is why neither can be reasoned
+from the other:
+
+* an `observation_unit_iri` is a **review target and not a vocabulary term** — a
+  reviewed selection, but not something the EML measurement path emits; and
+* a `sosa:usedProcedure` reached through a code value is a **vocabulary term and
+  not a review target** — the EML method path emits it, but no reviewer ever
+  selected it as a slot, because it comes from the data rather than from a
+  metadata field.
+
+Getting that second direction backwards is worth avoiding rather than
+discovering: the ledger gate accepts **exactly** the canonical target set, so a
+row added for a code-resolved procedure is refused as unexpected, and the
+package stops validating because of a row you added to make it validate.
+
+### Produce both files
+
+`write_sdp_semantic_closure()` derives both canonical sets, re-runs
+`find_terms()` for each IRI to resolve its evidence, computes every
+`reviewed_snapshot_sha256`, writes both files, and rewrites the two file digests
+in `metadata/eml-mapping.yml`. **No SHA-256 in a reviewed package is ever
+hand-written.**
+
+Two kinds of value it cannot derive, and both go in `evidence`:
+
+* **Vocabularies `find_terms()` cannot search.** It resolves `smn` and `gcdfo`.
+  A QUDT unit row is hand-authored in full. It also cannot fill `native_type` or
+  `source_url`, which describe the ontology *artifact* rather than the term;
+  those are derived from the resolved source and can be overridden.
+* **`confidence` and `review_rationale`**, which are your judgement. They are
+  read from `semantic_suggestions.csv` where `apply_sdp_semantics()` recorded a
+  decision reason, and otherwise written as a `REVIEW REQUIRED:` marker with a
+  warning naming each target that got one. Replace those before publishing.
+
+```python
+import pandas as pd
+
+from metasalmonpy import write_sdp_semantic_closure
+
+# Your judgement on each accepted IRI. The term evidence is resolved for you.
+judgements = pd.DataFrame([
+    {
+        "iri": "https://w3id.org/gcdfo/salmon#SpawnerAbundance",
+        "confidence": "high",
+        "review_rationale": "The column is an escapement estimate of adult spawners.",
+    },
+    {
+        "iri": "https://w3id.org/smn/Observation",
+        "confidence": "high",
+        "review_rationale": "Each row is one population-year observation.",
+    },
+])
+
+# A QUDT row is hand-authored end to end: the search cannot reach QUDT.
+qudt = pd.DataFrame([{
+    "iri": "https://qudt.org/vocab/unit/INDIV",
+    "label": "Individual",
+    "definition": "A counting unit denoting one organism.",
+    "source": "qudt",
+    "ontology": "qudt",
+    "resource_kind": "Unit",
+    "type_iris": "http://qudt.org/schema/qudt/Unit",
+    "native_type": "qudt:Unit",
+    "source_url": "https://qudt.org/vocab/unit/",
+    "confidence": "high",
+    "review_rationale": "Values are whole counts of organisms.",
+}])
+
+closure = write_sdp_semantic_closure(
+    "path/to/package",
+    evidence=pd.concat([judgements, qudt], ignore_index=True),
+)
+```
+
+Copy the reviewed EML sidecar template **before** running this, so the two
+digests are pinned in the same pass. If you produce the closure first, run it
+again once the sidecar exists.
+
+### Three outcomes, and only one of them is an ontology gap
+
+**An IRI it cannot resolve is reported, not guessed at, and not fatal.**
+`closure["gaps"]` is a term-gap table in the same shape
+`detect_semantic_term_gaps()` returns, so it feeds the request pipeline
+directly:
+
+```python
+from metasalmonpy import render_ontology_term_request, submit_term_request_issues
+
+if len(closure["gaps"]) > 0:
+    requests = render_ontology_term_request(closure["gaps"], ask=False)
+    submit_term_request_issues(requests, dry_run=True)
+```
+
+The unresolved row is left out of the vocabulary rather than invented, and the
+omission is not silent: attempting EML export names the same IRI as missing.
+
+The other two ways a row can go unwritten are **not** gaps, because in neither
+case is the term known to be absent — and reporting either as a gap would ask an
+ontology to mint a term nobody established was missing:
+
+* **A lookup that did not answer** — a search that raised, or a `find_terms()`
+  result whose `attrs["diagnostics"]` records a source that failed. Nothing has
+  been learned about that IRI, so the call raises `RuntimeError` and **writes
+  nothing**, naming each IRI and the sources that did not answer. The remedy is
+  to re-run; leaving a half-derived closure on disk would make the retry start
+  from worse state.
+* **A term found with incomplete evidence** — an exact IRI hit carrying a blank
+  required field, which a class with no definition is the ordinary case of. The
+  row appears in `closure["incomplete"]`, naming the missing field and the slot,
+  with a warning; every other row is still written. Supply the field through
+  `evidence`, or annotate the term in its ontology.
+
+Reading a package with an existing closure, the whole thing round-trips: the two
+files this writes are exactly the two `write_eml_from_sdp()` and
+`publish_sdp_to_knb()` read back.

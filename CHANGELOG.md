@@ -15,6 +15,67 @@ See `AGENTS.md`'s *Current honest state*.
 
 ### Added
 
+* **`write_sdp_semantic_closure()` produces the reviewed semantic closure**, the
+  two files `write_eml_from_sdp()` and `publish_sdp_to_knb()` both require and
+  neither wrote. Ports metasalmon backlog **#116** / hub **B-116** (hub queue
+  **B-165**); the R half is metasalmon pull request #121. Until now a Python user
+  reaching the publication gate had to hand-author
+  `metadata/semantic_vocabulary.csv` and `reviewed_semantic_selections.csv`,
+  **including a SHA-256 per row and two more in the sidecar**, with the digest
+  helper private in `eml.py` and reachable only by importing past the API
+  boundary. Neither file was mentioned in any user-facing doc.
+
+  ```python
+  closure = write_sdp_semantic_closure(pkg_path, evidence=judgements)
+  closure["gaps"]        # term-gap shape, feeds render_ontology_term_request()
+  closure["incomplete"]  # found, but short of a required evidence field
+  ```
+
+  - **Both canonical sets are derived, neither is reasoned from the other.** The
+    measurement set includes a code-resolved `sosa:usedProcedure` and excludes a
+    table's `observation_unit_iri`; the review-target set is the reverse. In the
+    bundled fixture they differ by exactly one row.
+  - **Evidence is resolved through this package's own `find_terms()`**, not a new
+    retrieval path, and **no LLM is reachable from it** — pinned by a raising
+    binding on the provider call.
+  - **Gap, not abort**, the shape Brett ruled on 2026-09-12 for both
+    implementations: an IRI every searched source answered about and none has
+    becomes a `detect_semantic_term_gaps()`-shaped row and both files are still
+    written. **And a gap is a claim, so only that one outcome makes one.** A
+    lookup that *did not answer* — a search that raised, or an empty result whose
+    `attrs["diagnostics"]` names a failed source — raises `RuntimeError` and
+    writes nothing; a term *found* with a blank required field is reported in
+    `incomplete` with a warning saying in as many words that it is not an
+    ontology gap. Routing either through the gap table would ask an ontology to
+    mint a term nobody established was missing.
+  - **The degraded-source test is one copy.** `find_terms()`'s own warning and
+    this producer both read `term_search._search_failed_sources()`, hoisted out
+    of `find_terms()` here. A second copy would let one caller keep manufacturing
+    gaps after the other stopped, and nothing in either copy would say which was
+    current. `term_requests._namespace_scope()` was hoisted out of
+    `render_ontology_term_request()` for the same reason.
+  - **The two CSVs and the sidecar install as one link-refusing set**, through
+    `sdp_methods._atomic_write_set()`, with both sidecar digests computed over
+    the bytes *about to be installed* rather than by hashing files already on
+    disk — which is what lets all three join one write set instead of leaving a
+    replaced CSV beside its previous `sha256`. The sidecar is edited line-wise
+    rather than round-tripped through a YAML dump, because a dump deletes the
+    template's own instructions. Root, every intermediate component and each
+    final entry are refused when symlinked; **hard links are closed structurally
+    by the staged rename rather than detected**, because no portable check can
+    see them, and the docstring says so rather than implying coverage.
+  - **Verified against R, not asserted.** Both producers driven over the same
+    package with the same injected search and the same evidence:
+    `semantic_vocabulary.csv`, `reviewed_semantic_selections.csv` and
+    `eml-mapping.yml` came out **byte-identical** in the ordinary case, the gap
+    case and the incomplete case, and the degraded case aborts in both with the
+    same IRI count and the same named source.
+
+  `guides/semantic-review.qmd` gains an *Assemble the reviewed closure* section.
+  **That is this item's documentation, not S5's** — the note above about the
+  version staying at 0.4.0 still holds, because the guide still presents the
+  spreadsheet as the workflow for the review itself (hub **B-153**).
+
 * **The semantic review and the metadata editing no longer have to leave
   Python.** Nine new public functions plus two accessors, porting roadmap
   stream **S5** from metasalmon 0.5.0 (hub queue **B-126**). A salmon data
