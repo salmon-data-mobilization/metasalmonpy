@@ -1121,7 +1121,11 @@ def write_sdp_semantic_closure(
     # CSVs whose bytes are hashed into the reviewed sidecar.
     # ------------------------------------------------------------------
     measurement_iris = sorted(
-        {value for value in _closure_column(_canonical_measurement_iris(Path(path), pkg)) if value}
+        {
+            value
+            for value in _closure_column(_canonical_measurement_iris(Path(path), pkg))
+            if value
+        }
     )
 
     target_rows = [
