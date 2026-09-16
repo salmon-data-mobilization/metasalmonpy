@@ -1,17 +1,43 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
-**No version bump, and the reason changed.** This section previously said "both
-packages are released at 0.4.0"; that stopped being true on 2026-08-25, when
-metasalmon released `v0.5.0` and opened a `0.4.0 → 0.5.0` catch-up window
-(roadmap S5). The S5 port below closes the behavioural half of that window. The
-number stays at 0.4.0 anyway, because 0.5.0's documentation half is not done —
-`guides/semantic-review.qmd` still presents the spreadsheet as the workflow
-rather than as the fallback, which is the change 0.5.0's own NEWS entry leads
-with. The version is a parity claim; claiming 0.5.0 while a documented 0.5.0
-behaviour is missing is the false claim the lockstep rule exists to prevent.
-See `AGENTS.md`'s *Current honest state*.
+**The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue
+**B-126** for the behaviour, **B-153** for the documentation and this number).
+It opened on 2026-08-25 when metasalmon released `v0.5.0`, and closing it took
+two halves, because the number is a parity claim and metasalmon 0.5.0's own NEWS
+entry leads with a documentation claim: that a package reaches
+`validate_salmon_datapackage(require_iris=True)` **without opening a single file
+in a spreadsheet**. The behavioural half landed first and deliberately left the
+number at 0.4.0. Only now is that claim true of this package, so only now may
+the number say so.
+
+**The documentation half, in full, because the heading here described the gap
+wrongly.** It said `guides/semantic-review.qmd` "still presents the spreadsheet
+as the workflow rather than as the fallback". Measured 2026-09-16: the word
+*spreadsheet* appeared nowhere in that file, or in any `.qmd` in this repository
+— there was no spreadsheet workflow to demote. What the guide did was name
+**none** of the nine functions, except one passing mention of
+`apply_sdp_semantics()` inside the closure section, and neither accessor as a
+call, while `_quarto.yml` had listed all eleven under *Review and edit (in
+Python)* since the port landed. The guide is now built around
+`create_sdp()` → `review_semantics()` → `accept_suggestion()` /
+`reject_suggestion()` → `apply_sdp_semantics()` → `review_metadata()` →
+`set_sdp_*()` → strict validation, showing the real printed output of each step,
+with the spreadsheet named as the fallback and told why it is one. `index.qmd`,
+`README.md` and `guides/parity.qmd` follow.
+
+**`_quarto.yml`'s `quartodoc.version` was a fifth version place nothing
+enumerated**, found still reading `0.4.0` while the other four moved. It moves
+here, `AGENTS.md`'s list of places grows to five, and three new tests in
+`tests/test_public_api.py` pin `uv.lock`, `_quarto.yml` and the guide's coverage
+of the review surface against `__version__`, so the next bump cannot miss one
+quietly. Two stale prose copies — `index.qmd` and `README.md`, both still
+claiming parity with metasalmon **0.1.6** — were deleted rather than updated,
+which is the better fix for a copy no test reads.
+
+Tagging `v0.5.0` and publishing the GitHub Release are separate outward acts and
+are not part of this change.
 
 ### Added
 
