@@ -22,8 +22,16 @@ from __future__ import annotations
 
 import ast
 import datetime as _dt
+import json
+import re
+import tempfile
+import warnings
 from pathlib import Path
 
+import pandas as pd
+
+from metasalmonpy import observation_structures as obs
+from metasalmonpy import package_io
 from metasalmonpy import resource_types as rt
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -105,3 +113,281 @@ def test_a_pre_1000_datetime_keys_with_a_padded_year():
     """The same boundary on the datetime key, which has its own renderer."""
     key = rt.format_datetime_token(_dt.datetime(42, 7, 9, 1, 2, 3))
     assert key is not None and key.startswith("0042-07-09T01:02:03")
+
+
+# --- one value, one rendering ----------------------------------------------
+#
+# Everything below is hub item **B-145**, the metasalmonpy half of **B-115**.
+# It lives in this file because this is the guard the defect slipped past: the
+# two tests above pin the padded year in a canonical *key*, and nothing pinned
+# it -- or the separator, or the zone marker -- in the bytes a package is
+# actually written with.
+#
+# The spelling is **ruled, not chosen** (Brett, 2026-09-14, once for both
+# implementations): readr's ISO instant form, the ``T`` separator and the ``Z``
+# zone marker.
+
+# The item's own fixture, and metasalmon B-115's: a pre-1000 instant, so the
+# year is exercised, and an all-midnight instant, because pandas' column-wise
+# ``to_csv`` formatter drops the time from a column whose values are all
+# midnight -- which is how ``temporal_end`` became the bare ``2024-12-31``.
+INSTANT_START = _dt.datetime(999, 6, 5, 13, 45, 30)
+INSTANT_END = _dt.datetime(2024, 12, 31, 0, 0, 0)
+
+RULED_INSTANT = re.compile(r"^[0-9]+-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
+
+# ``_iso_seconds`` renders a calendar without committing to a zone marker, so a
+# caller that appends its own is a second rendering of an instant waiting to
+# drift from the first. Five such call sites existed before B-145 and three of
+# them disagreed with the other two. Each entry says what would retire it.
+ISO_SECONDS_CALLERS: dict[str, str] = {
+    "resource_types.py:iso_instant_text": (
+        "The one rendering of an instant as written bytes. Retires when "
+        "nothing -- this is the function every other caller was folded into."
+    ),
+    "resource_types.py:format_datetime_token": (
+        "A canonical comparison KEY, not written bytes: microsecond "
+        "precision, and an exact-epoch suffix past it, so it cannot share "
+        "iso_instant_text()'s second-resolution output. Retires when the key "
+        "and the byte renderer are ruled to be the same string, which would "
+        "mean writing microseconds into every package."
+    ),
+}
+
+
+def _iso_seconds_call_sites(path: Path) -> list[str]:
+    """``module:function`` for every ``_iso_seconds(...)`` call in one module."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    enclosing: dict[ast.AST, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for child in ast.walk(node):
+                enclosing.setdefault(child, node.name)
+
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and (
+            (isinstance(node.func, ast.Name) and node.func.id == "_iso_seconds")
+            or (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "_iso_seconds"
+            )
+        ):
+            found.append(f"{path.name}:{enclosing.get(node, '<module>')}")
+    return found
+
+
+def test_only_the_named_callers_render_an_instant_themselves():
+    """An instant has one rendering, and this is what keeps it to one.
+
+    ``AGENTS.md``'s "one value, one rendering -- and the renderer is chosen by
+    type" contract: two renderings of one value looks like ordinary code from
+    every angle except the one where you compare the outputs. It is found by
+    reading, so this test is the reading, done mechanically.
+
+    What it would have caught: before B-145 the string ``_iso_seconds(x) +
+    "Z"`` appeared at five call sites across two modules. Two of them folded a
+    tz-aware value to UTC first and three did not, so the same instant was
+    written with a ``Z`` that meant UTC in some files and local wall clock in
+    others -- and every suite stayed green, because each test built its
+    expectation with the same call it was testing.
+    """
+    offenders = []
+    for path in _package_sources():
+        for site in _iso_seconds_call_sites(path):
+            if site not in ISO_SECONDS_CALLERS:
+                offenders.append(site)
+
+    assert not offenders, (
+        "_iso_seconds() renders a calendar without a zone marker, so appending "
+        "one is a second rendering of an instant. Call "
+        "resource_types.iso_instant_text() instead, which is the single "
+        "renderer every written instant goes through. If this really is a "
+        "different string -- a comparison key rather than written bytes -- add "
+        "the call site to ISO_SECONDS_CALLERS with the condition that would "
+        f"retire the entry. Offenders: {sorted(set(offenders))}"
+    )
+
+
+def test_every_iso_seconds_caller_entry_still_has_a_call_site():
+    """An allowance that outlived its cause hides the next failure."""
+    live = {
+        site for path in _package_sources() for site in _iso_seconds_call_sites(path)
+    }
+    stale = sorted(set(ISO_SECONDS_CALLERS) - live)
+    assert not stale, f"ISO_SECONDS_CALLERS entries with no matching call site: {stale}"
+
+
+def test_every_instant_emitter_agrees_on_one_value():
+    """The descriptor, both CSV writers and the dimension normalizer agree.
+
+    Not "they call the same helper" -- that is the implementation. This asserts
+    the observable: four independent paths, one instant, one string.
+    """
+    rendered = rt.iso_instant_text(INSTANT_START)
+
+    assert package_io._descriptor_temporal_text(INSTANT_START) == rendered
+    assert package_io._descriptor_temporal_text(pd.Timestamp(INSTANT_START)) == rendered
+    assert obs._typed_character(INSTANT_START) == rendered
+
+    frame = pd.DataFrame({"when": [INSTANT_START]})
+    assert rt.render_resource_frame(frame)["when"].iloc[0] == rendered
+    assert package_io._metadata_csv_bytes(frame).decode("utf-8").splitlines()[1] == (
+        rendered
+    )
+
+
+def test_a_tz_aware_instant_is_folded_to_utc_before_the_z_is_added():
+    """``Z`` is a claim about the instant, not decoration.
+
+    ``readr::write_csv()`` folds to UTC, so a renderer that stamps ``Z`` on a
+    local wall clock moves the instant and diverges from metasalmon silently.
+    """
+    aware = INSTANT_END.replace(tzinfo=_dt.timezone(_dt.timedelta(hours=-8)))
+    assert rt.iso_instant_text(aware) == "2024-12-31T08:00:00Z"
+
+
+def _package_with_typed_instants(tmpdir: str) -> Path:
+    """The item's fixture, written through the real writer."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        target = package_io.write_salmon_datapackage(
+            {"obs": pd.DataFrame({"note": ["a"]})},
+            pd.DataFrame(
+                [
+                    {
+                        "dataset_id": "demo",
+                        "title": "Demo",
+                        "temporal_start": INSTANT_START,
+                        "temporal_end": INSTANT_END,
+                    }
+                ]
+            ),
+            pd.DataFrame(
+                [{"dataset_id": "demo", "table_id": "obs", "file_name": "obs.csv"}]
+            ),
+            pd.DataFrame(
+                [
+                    {
+                        "dataset_id": "demo",
+                        "table_id": "obs",
+                        "column_name": "note",
+                        "column_label": "Note",
+                        "column_description": "A note.",
+                        "column_role": "attribute",
+                        "value_type": "string",
+                        "required": False,
+                    }
+                ]
+            ),
+            path=tmpdir,
+            overwrite=True,
+        )
+    return Path(target)
+
+
+def _written_instants(target: Path) -> tuple[dict, dict]:
+    """``temporal_start``/``temporal_end`` as each written file spells them."""
+    descriptor = json.loads((target / "datapackage.json").read_text(encoding="utf-8"))
+    row = pd.read_csv(
+        target / "metadata" / "dataset.csv", dtype=str, keep_default_na=False
+    ).iloc[0]
+    return (
+        {
+            "start": descriptor.get("temporal", {}).get("start"),
+            "end": descriptor.get("temporal", {}).get("end"),
+        },
+        {"start": row["temporal_start"], "end": row["temporal_end"]},
+    )
+
+
+def test_datapackage_json_and_dataset_csv_spell_an_instant_identically():
+    """The twin of metasalmon's B-115 assertion, and B-145's whole point.
+
+    Agreement is asserted rather than a literal, so it survives any later
+    ruling that moves the spelling: whichever writer moves next, the two files
+    still have to move together. Measured before the fix, 2026-09-16 on pandas
+    3.0.5 -- ``datapackage.json`` held ``0999-06-05T13:45:30`` and
+    ``2024-12-31T00:00:00`` while ``metadata/dataset.csv`` held
+    ``999-06-05 13:45:30`` and ``2024-12-31``, so all four cells differed.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        descriptor, csv = _written_instants(_package_with_typed_instants(tmpdir))
+
+    assert descriptor["start"] == csv["start"]
+    assert descriptor["end"] == csv["end"]
+
+
+def test_a_written_instant_takes_the_ruled_iso_form():
+    """The shape Brett ruled: ``T`` separator, ``Z`` zone marker, seconds.
+
+    A shape rather than a literal, so a ruling on the *year* -- hub item
+    **B-161** -- can change that digit group without rewriting this test.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        descriptor, csv = _written_instants(_package_with_typed_instants(tmpdir))
+
+    for spelled in (descriptor["start"], descriptor["end"], csv["start"], csv["end"]):
+        assert RULED_INSTANT.match(spelled), spelled
+
+
+def test_a_written_pre_1000_instant_keeps_its_padded_year():
+    """The residual hub item **B-161** names, pinned rather than described.
+
+    Deliberately a **literal**, where the two tests above are deliberately not.
+    In metasalmon the year is platform-dependent -- ``readr::write_csv()``
+    wrote ``999-06-05T13:45:30Z`` on Linux and ``0999-06-05T13:45:30Z`` on
+    macOS -- which is why its own test asserts a shape. Here it is padded **by
+    construction**: ``resource_types._iso_date`` builds the year with ``%04d``
+    and never reaches ``strftime``, which is what the rest of this file exists
+    to keep true. So a literal costs nothing in portability and buys the one
+    thing a shape cannot: if this path is ever routed back through ``to_csv``
+    or ``strftime``, the padding goes and only this assertion notices.
+
+    It is therefore also the measurement B-161 is about, in executable form:
+    **Python writes the padded year on every platform; metasalmon writes
+    whichever year readr writes.** Those agree on macOS and differ on Linux,
+    which is where CI runs. This test asserts what this implementation does and
+    rules nothing about what it should do -- B-161 is where that is settled,
+    for both implementations at once.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        descriptor, csv = _written_instants(_package_with_typed_instants(tmpdir))
+
+    assert descriptor["start"] == "0999-06-05T13:45:30Z"
+    assert csv["start"] == "0999-06-05T13:45:30Z"
+
+
+def test_an_all_midnight_instant_column_keeps_its_time():
+    """pandas' CSV formatter is vector-wise; the ruled spelling is not.
+
+    ``to_csv`` renders a ``datetime64`` column whose every value is midnight as
+    a bare date, so ``temporal_end`` was written ``2024-12-31`` while the
+    descriptor wrote ``2024-12-31T00:00:00``. One cell's bytes depending on the
+    other rows in its column is the ``.ms_sssom_canonical_bytes()`` defect
+    ``AGENTS.md`` describes, in pandas.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        descriptor, csv = _written_instants(_package_with_typed_instants(tmpdir))
+
+    assert descriptor["end"] == "2024-12-31T00:00:00Z"
+    assert csv["end"] == "2024-12-31T00:00:00Z"
+
+
+def test_a_date_is_not_an_instant_and_keeps_its_own_spelling():
+    """The narrowness B-115 chose, mirrored: only the instant branch moved.
+
+    ``datetime.datetime`` subclasses ``date``, so the dispatch has to be
+    written in the direction that leaves a plain date alone. A ``date`` already
+    agrees between the two files -- ``date.isoformat()`` and ``str(date)`` are
+    the same pure-Python padded string -- and coercing it would change bytes
+    the ruling never touched.
+    """
+    day = _dt.date(999, 6, 5)
+    assert package_io._descriptor_temporal_text(day) == "0999-06-05"
+    assert (
+        package_io._metadata_csv_bytes(pd.DataFrame({"when": [day]}))
+        .decode("utf-8")
+        .splitlines()[1]
+        == "0999-06-05"
+    )

@@ -201,6 +201,64 @@ are not part of this change.
 
 ### Fixed
 
+* **`datapackage.json` and `metadata/dataset.csv` spell a typed instant the
+  same way, in the form Brett ruled.** A `datetime`/`Timestamp` in
+  `temporal_start` or `temporal_end` reached both files through two different
+  renderers and they disagreed about everything. Measured before the fix,
+  2026-09-16 on pandas 3.0.5 / Python 3.11.15, for
+  `datetime(999, 6, 5, 13, 45, 30)` and `datetime(2024, 12, 31, 0, 0, 0)`:
+
+  ```
+  descriptor start : 0999-06-05T13:45:30    csv start : 999-06-05 13:45:30
+  descriptor end   : 2024-12-31T00:00:00    csv end   : 2024-12-31
+  ```
+
+  All four cells differed — separator, zone marker, year padding, **and**
+  whether an all-midnight column keeps its time at all. Both files now read
+  `0999-06-05T13:45:30Z` and `2024-12-31T00:00:00Z`.
+
+  The spelling is **ruled, not chosen**: Brett ruled it on **2026-09-14**, once
+  for both implementations so that neither side's implementer picks one —
+  readr's ISO instant form, the `T` separator and the `Z` zone marker.
+  metasalmon adopted it the same day (hub **B-115**, metasalmon pull request
+  #118); this is the mirror half, hub queue item **B-145**. It opens no new
+  `PARITY.md` row — row **56** already owns this divergence and named this very
+  ruling as its retirement condition, so it is amended in place.
+
+  **Two thirds of the defect were pandas', not this package's, and that is why
+  the CSV side had to move too.** A column of `datetime.datetime` becomes
+  `datetime64[us]`, and `to_csv` renders it **column-wise**: the year is
+  unpadded below 1000, the separator is a space, and the time is dropped
+  entirely when every value in the column is midnight. One cell's bytes
+  depending on the other rows in its column is exactly the shape `AGENTS.md`'s
+  *one value, one rendering* contract names. `str()` of the same value and an
+  object-dtype column pad and keep the time, so the module converged on the
+  padded form everywhere it rendered text itself and nowhere pandas rendered
+  for it.
+
+  **`resource_types.iso_instant_text()` is now the single renderer**, and that
+  is the substance rather than a tidy-up. The string `_iso_seconds(x) + "Z"`
+  stood at **five** call sites across two modules; two of them folded a
+  tz-aware value to UTC first and three did not, so the same instant was
+  written with a `Z` that meant UTC in some files and a local wall clock in
+  others — and every suite stayed green, because each test built its
+  expectation with the same call it was testing. All five now call one
+  function, which folds to UTC (as `readr::write_csv()` does) and pads the year
+  by construction. `tests/test_platform_determinism_guard.py` gains a call-site
+  guard that fails on a sixth, in the shape of the `strftime` guard beside it.
+
+  **One residual is deliberately left open and measured rather than decided.**
+  Each implementation now agrees with itself; below year 1000 they do not agree
+  with each other. Measured 2026-09-16 on one Linux container (R 4.3.3 / readr
+  2.2.0, pandas 3.0.5), driving each writer over the same fixture: metasalmon
+  writes `999-06-05T13:45:30Z`, this package writes `0999-06-05T13:45:30Z`, and
+  for `2024-12-31T00:00:00Z` the two agree exactly. On macOS R 4.5.2 metasalmon
+  wrote the padded form and would agree (cited from B-115, not re-measured
+  here). Which year is correct is hub item **B-161** and is Brett's, because
+  padding R's CSV side means reopening backlog #93 item 1 deliberately. Reached
+  only from a caller-supplied typed instant, which neither implementation
+  produces on its own.
+
 * **`migrate_sdp_methods()`'s nothing-to-migrate report carries the same three
   columns as every other exit.** Its early return built
   `pd.DataFrame(columns=["table_id", "method_iri"])`, so
