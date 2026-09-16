@@ -253,6 +253,23 @@ are not part of this change.
   self-consistent. `tests/test_platform_determinism_guard.py` gains a call-site
   guard that fails on a fifth, in the shape of the `strftime` guard beside it.
 
+  **A second, smaller defect was found by wiring the renderer up and is fixed
+  here rather than deferred.** `pd.NaT` **subclasses** `datetime.datetime`, so
+  `render_resource_frame()`'s object-column branch accepted a missing value and
+  raised `ValueError: cannot convert float NaN to integer` — while its own
+  `datetime64` branch two lines above guarded with `pd.isna`. One function, two
+  branches, two answers. Measured on clean `main`: an object column holding one
+  instant and one `NaT` raised; the `datetime64` column rendered
+  `['2024-12-31T00:00:00Z', None]`. `readr::write_csv()` with metasalmon's own
+  NA token writes a missing `POSIXct` as the **empty field** rather than
+  aborting, so raising was a divergence from metasalmon too. `is_instant()` is
+  now the shared test — `value is not pd.NaT` rather than `pd.isna`, because an
+  object column may hold a list or an array whose `pd.isna` returns an array. It
+  is fixed rather than filed because the crashing branch is a line this change
+  already rewrites, and leaving one caller of the new single renderer crashing
+  on a missing value while the other did not would re-create in miniature the
+  inconsistency this entry is about.
+
   **One residual is deliberately left open and measured rather than decided.**
   Each implementation now agrees with itself; below year 1000 they do not agree
   with each other. Measured 2026-09-16 on one Linux container (R 4.3.3 / readr

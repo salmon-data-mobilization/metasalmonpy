@@ -269,6 +269,38 @@ def test_a_tz_aware_instant_is_folded_to_utc_before_the_z_is_added():
     )
 
 
+def test_a_missing_instant_is_a_missing_field_and_not_a_crash():
+    """``pd.NaT`` subclasses ``datetime``, which is the trap this pins.
+
+    ``isinstance(pd.NaT, datetime.datetime)`` is **True**, so a bare isinstance
+    test accepts a missing value and the renderer then raises
+    ``ValueError: cannot convert float NaN to integer``. Measured on the
+    pre-fix tree: ``render_resource_frame`` raised for an object column holding
+    one instant and one ``NaT``, while its own ``datetime64`` branch two lines
+    above guarded with ``pd.isna`` -- one function, two branches, two answers.
+    ``readr::write_csv()`` writes an ``NA`` POSIXct as the empty field rather
+    than aborting, so raising was also a divergence from metasalmon.
+
+    Both dtypes and both writers are asserted, because the defect was that one
+    branch had the guard and the other did not.
+    """
+    assert isinstance(pd.NaT, _dt.datetime)  # the premise, pinned
+    assert not rt.is_instant(pd.NaT)
+    assert rt.is_instant(INSTANT_END)
+
+    for frame in (
+        pd.DataFrame({"w": pd.Series([INSTANT_END, pd.NaT], dtype="object")}),
+        pd.DataFrame({"w": [INSTANT_END, None]}),
+    ):
+        rendered = list(rt.render_resource_frame(frame)["w"])
+        assert rendered[0] == "2024-12-31T00:00:00Z"
+        assert rendered[1] is None or pd.isna(rendered[1])
+
+        rows = package_io._metadata_csv_bytes(frame).decode("utf-8").splitlines()
+        assert rows[1] == "2024-12-31T00:00:00Z"
+        assert rows[2] in ('""', "")
+
+
 def _package_with_typed_instants(tmpdir: str) -> Path:
     """The item's fixture, written through the real writer."""
     with warnings.catch_warnings():

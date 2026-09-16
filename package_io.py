@@ -43,6 +43,7 @@ from .resource_types import (
     VALUE_TYPES,
     canonical_value_tokens,
     convert_declared_tokens,
+    is_instant,
     iso_instant_text,
     render_resource_frame,
     typed_series,
@@ -111,7 +112,7 @@ def _descriptor_temporal_text(value):
     ``date.isoformat()`` -- which is pure Python, padded, and already agrees
     with what ``to_csv`` writes for an object column of dates.
     """
-    if isinstance(value, (pd.Timestamp, _dt.datetime)):
+    if is_instant(value):
         return iso_instant_text(value)
     return _clean(value)
 
@@ -203,17 +204,14 @@ def _metadata_csv_bytes(df: pd.DataFrame) -> bytes:
                 csv_na_token() if pd.isna(value) else iso_instant_text(value)
                 for value in series
             ]
-        elif series.dtype == object and any(
-            isinstance(value, _dt.datetime) for value in series
-        ):
+        elif series.dtype == object and any(is_instant(value) for value in series):
             # A ``datetime.date`` is left alone deliberately: ``to_csv``
             # renders it with ``str()``, which is ``date.isoformat()`` -- pure
             # Python, padded, and the spelling the SDP profile already rules
-            # for a date.
+            # for a date. ``is_instant`` rather than a bare ``isinstance``
+            # because ``pd.NaT`` subclasses ``datetime``; see its docstring.
             out[column] = [
-                iso_instant_text(value)
-                if isinstance(value, _dt.datetime)
-                else value
+                iso_instant_text(value) if is_instant(value) else value
                 for value in series
             ]
     # ``csv_na_token()`` is the one authority for the missing-value token

@@ -159,6 +159,32 @@ def iso_instant_text(value: Any) -> str:
     return _iso_seconds(value) + "Z"
 
 
+def is_instant(value: Any) -> bool:
+    """Is this a value :func:`iso_instant_text` can render?
+
+    ``pd.NaT`` is the trap, and it is not a hypothetical one: ``NaTType``
+    **subclasses** ``datetime.datetime``, so a bare ``isinstance(value,
+    datetime)`` accepts a missing value and ``iso_instant_text`` then raises
+    ``ValueError: cannot convert float NaN to integer``. That is exactly what
+    ``render_resource_frame``'s object-column branch did before B-145 --
+    measured, an object column holding one instant and one ``NaT`` raised --
+    while its own ``datetime64`` branch two lines above guarded with
+    ``pd.isna``. One function, two branches, two answers.
+
+    ``value is not pd.NaT`` rather than ``not pd.isna(value)`` on purpose: an
+    object column may hold anything, and ``pd.isna`` on a list or an array
+    returns an array whose truthiness raises. ``NaT`` is a singleton, so
+    identity is both exact and safe here.
+
+    A missing instant is left in place for the CSV writer's ``na_rep`` to
+    render, which is what ``readr::write_csv()`` does with an ``NA`` POSIXct --
+    the empty field -- rather than aborting the write.
+
+    *Retires when:* nothing, unless ``NaTType`` stops subclassing ``datetime``.
+    """
+    return isinstance(value, _dt.datetime) and value is not pd.NaT
+
+
 def _is_blank(token: Any) -> bool:
     """R's ``!present``: NA, or text that is empty after trimming."""
     if token is None:
@@ -733,11 +759,9 @@ def render_resource_frame(frame: pd.DataFrame) -> pd.DataFrame:
             ])
         elif series.dtype == object:
             values = list(series)
-            if any(isinstance(value, _dt.datetime) for value in values):
+            if any(is_instant(value) for value in values):
                 assign(column, [
-                    iso_instant_text(value)
-                    if isinstance(value, _dt.datetime)
-                    else value
+                    iso_instant_text(value) if is_instant(value) else value
                     for value in values
                 ])
     return out
@@ -771,6 +795,7 @@ __all__ = [
     "double_spacing",
     "format_datetime_token",
     "format_number_token",
+    "is_instant",
     "iso_instant_text",
     "numeric_token_exponent",
     "numeric_token_lossy",
