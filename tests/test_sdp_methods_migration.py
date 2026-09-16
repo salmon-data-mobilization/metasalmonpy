@@ -470,6 +470,79 @@ def test_a_package_with_only_review_bindings_still_migrates_to_the_v03_shape(tmp
     assert "statistical_modifier_iri" in migrated.columns
 
 
+# ``migrate_sdp_methods()`` builds ``report["tables"]`` at three exits -- the
+# nothing-to-migrate early return, the populated build, and the no-placement
+# empty frame -- and a caller reading ``report["tables"]["columns"]`` has to get
+# a column from all three. Hub item B-144: the early return built two columns,
+# so that caller got a ``KeyError`` in exactly the case where the package was
+# already clean, the branch least likely to be exercised. All three are pinned
+# here rather than only the branch that was wrong, because pinning one leaves
+# the others free to drift away from it and the failure would look identical.
+#
+# Brett ruled the three-column shape on 2026-09-14, for both implementations;
+# metasalmon's half is backlog #112 (pull request #117). **This package carried
+# the three-column frame first** and gave it up at S10 chunk A (pull request 14,
+# 2026-08-22) to mirror R's two-column one, so this is a revert rather than a
+# port of something new, and R is the side that moved -- PARITY.md row 9 and the
+# amended mirror contract are the record of why.
+#
+# The R counterpart is ``test-sdp-methods.R``'s "every migrate_sdp_methods()
+# exit reports the same three table columns", which pins the same three exits in
+# the same order; keep the two together when either moves.
+#
+# Retires when: ``migrate_sdp_methods()`` stops returning a ``tables`` frame, at
+# which point there is no shared column set left to pin.
+def test_every_migration_exit_reports_the_same_three_table_columns(tmp_path):
+    expected = ["table_id", "method_iri", "columns"]
+
+    # Exit 1: nothing to migrate -- a package already in the v0.3 shape.
+    clean_root = make_migration_test_sdp(tmp_path / "clean")
+    clean = migrate_sdp_methods(clean_root)
+
+    # Exit 2: the populated build -- one agreeing method across every
+    # measurement column, so the table-level placement is made.
+    populated_root = make_migration_test_sdp(tmp_path / "populated")
+    add_legacy_dictionary_methods(
+        populated_root,
+        {
+            "abundance": "https://ex.org/m/mark-recapture",
+            "density": "https://ex.org/m/mark-recapture",
+        },
+    )
+    populated = migrate_sdp_methods(populated_root)
+
+    # Exit 3: no placement -- REVIEW:-only bindings, so the rewrite runs but
+    # nothing is promoted and the frame stays empty.
+    review_root = make_migration_test_sdp(tmp_path / "review")
+    add_legacy_dictionary_methods(
+        review_root,
+        {
+            "abundance": "REVIEW: https://example.org/methods/unresolved",
+            "density": "REVIEW: https://example.org/methods/unresolved",
+        },
+    )
+    review = migrate_sdp_methods(review_root)
+
+    # Order as well as membership, matching R's ``expect_named()``, so a
+    # reordered build fails here too.
+    assert list(clean["tables"].columns) == expected
+    assert list(populated["tables"].columns) == expected
+    assert list(review["tables"].columns) == expected
+
+    # The empty exits must carry the dtype the populated build renders -- it
+    # joins the bound column names into one string -- or concatenating the
+    # reports of two runs coerces the column.
+    assert populated["tables"]["columns"].dtype == object
+    assert clean["tables"]["columns"].dtype == object
+    assert review["tables"]["columns"].dtype == object
+
+    # Asserted so the column set above cannot be satisfied by an exit that
+    # gained the column by gaining a row it should not have.
+    assert len(clean["tables"]) == 0
+    assert len(review["tables"]) == 0
+    assert len(populated["tables"]) == 1
+
+
 def test_migration_aborts_before_any_writes_when_the_descriptor_cannot_be_parsed(
     tmp_path,
 ):

@@ -156,7 +156,12 @@ The source site is `_quarto.yml`, `index.qmd`, `getting-started.qmd`,
 
 ## Compatibility
 
-- metasalmonpy 0.1.6 aligns its core user-facing behavior with metasalmon 0.1.6.
+- This package's version number is a **parity claim**: it names the metasalmon
+  release whose functionality it actually delivers. The number itself lives in
+  `pyproject.toml` and in `AGENTS.md`'s mirror contract, and is stated for
+  readers in the [R and Python parity guide](guides/parity.qmd); this line
+  deliberately no longer restates it, having said `0.1.6` for the three releases
+  after 0.1.6.
 - The R package remains the normative SDP/ontology contract. Python-native
   implementation details and test harnesses intentionally differ where the
   public behavior does not.

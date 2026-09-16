@@ -6,7 +6,7 @@ infer dictionaries, validate metadata, search ontology terms, and build/read
 Frictionless-style Salmon Data Packages.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from .dictionary import (
     apply_salmon_dictionary,
@@ -57,6 +57,7 @@ from .sdp_methods import (
     validate_sdp_methods,
     write_sdp_methods,
 )
+from .semantic_closure import write_sdp_semantic_closure
 from .metadata_write import apply_sdp_semantics
 from .review_console import (
     SemanticReview,
@@ -170,5 +171,6 @@ __all__ = [
     "write_sdp_methods",
     "write_sdp_observation_structures",
     "write_sdp_reproducibility_manifest",
+    "write_sdp_semantic_closure",
     "write_sdp_sssom",
 ]

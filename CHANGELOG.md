@@ -2,18 +2,158 @@
 
 ## Unreleased
 
-**No version bump, and the reason changed.** This section previously said "both
-packages are released at 0.4.0"; that stopped being true on 2026-08-25, when
-metasalmon released `v0.5.0` and opened a `0.4.0 → 0.5.0` catch-up window
-(roadmap S5). The S5 port below closes the behavioural half of that window. The
-number stays at 0.4.0 anyway, because 0.5.0's documentation half is not done —
-`guides/semantic-review.qmd` still presents the spreadsheet as the workflow
-rather than as the fallback, which is the change 0.5.0's own NEWS entry leads
-with. The version is a parity claim; claiming 0.5.0 while a documented 0.5.0
-behaviour is missing is the false claim the lockstep rule exists to prevent.
-See `AGENTS.md`'s *Current honest state*.
+**Work that landed after the `0.5.0` number moved, and the reason it is not
+under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
+closed when it set `__version__` to `0.5.0`. Measured 2026-09-16: `v0.5.0` is
+not tagged and no GitHub Release exists for it, so that section describes a
+number that has been *claimed* rather than a release that has shipped. Anything
+merged after that claim belongs here, because filing it under `## 0.5.0` would
+make this file say a version contains a change that the commit making the
+version current does not. metasalmon's `NEWS.md` keeps the same shape with its
+*(development version)* heading, which is what this heading mirrors. **The
+number does not move here**: it is a parity claim, and moving it is a separate
+outward act.
+
+### Fixed
+
+* **`validate_salmon_datapackage()` now checks three things it had been
+  claiming and not doing.** Ported from metasalmon pull request #111 (backlog
+  **#49**), hub queue item **B-124**. This is R-shipped-first lag being closed,
+  not a deliberate difference, so it opens no `PARITY.md` row.
+
+  1. **A column the dictionary declares `required` must not ship missing
+     values.** The flag was inferred, written to `column_dictionary.csv`,
+     parsed back to boolean, exported as Frictionless `constraints.required`
+     and read by nothing that compared it to the data — so a package could
+     state a column is required and ship blanks in it. Only columns present in
+     the data are checked; an absent one was already reported.
+  2. **A schema-required metadata field must not be blank.** The Frictionless
+     schemas have carried `constraints.required` since the schema bundle
+     landed, `review_metadata()` reports a blank one as blocking strict
+     validation, and strict validation let it through — the placeholder scan
+     only sees a field that *says* it is missing, not one that is. A blank
+     **key** field is structural in every mode, because a row without its key
+     cannot be addressed; a blank **non-key** required field takes the
+     placeholder channel, warning by default and erroring under
+     `require_iris=True`, so a freshly created package stays valid until the
+     user asks for the strict answer. A column the file does not have counts as
+     blank in every row, in all four metadata files.
+  3. **A corrupt SSSOM mapping set or measurement decomposition is refused.**
+     Both artifacts have had their own validator since they shipped and only
+     the KNB publication and archive paths called them, so end-to-end
+     validation reported success over a manifest whose SHA-256 no longer
+     matched its bytes. Presence is detected by the managed file names and
+     never by scanning `metadata/semantic/`, so an editor backup or an
+     unapproved draft there stays local and unread.
+
+  Each class has a failing-before test in `tests/test_validation_hardening.py`,
+  and every expected message was measured by running metasalmon 0.5.0 over the
+  same package directory on disk: for the two issue classes R and Python emit
+  byte-identical messages, pluralisation included. The differential fixture
+  `pk-missing-values` gains a second expected row, because the example's
+  `POP_ID` is declared required — R reports the same pair.
+
+## 0.5.0
+
+**The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue
+**B-126** for the behaviour, **B-153** for the documentation and this number).
+It opened on 2026-08-25 when metasalmon released `v0.5.0`, and closing it took
+two halves, because the number is a parity claim and metasalmon 0.5.0's own NEWS
+entry leads with a documentation claim: that a package reaches
+`validate_salmon_datapackage(require_iris=True)` **without opening a single file
+in a spreadsheet**. The behavioural half landed first and deliberately left the
+number at 0.4.0. Only now is that claim true of this package, so only now may
+the number say so.
+
+**The documentation half, in full, because the heading here described the gap
+wrongly.** It said `guides/semantic-review.qmd` "still presents the spreadsheet
+as the workflow rather than as the fallback". Measured 2026-09-16: the word
+*spreadsheet* appeared nowhere in that file, or in any `.qmd` in this repository
+— there was no spreadsheet workflow to demote. What the guide did was name
+**none** of the nine functions, except one passing mention of
+`apply_sdp_semantics()` inside the closure section, and neither accessor as a
+call, while `_quarto.yml` had listed all eleven under *Review and edit (in
+Python)* since the port landed. The guide is now built around
+`create_sdp()` → `review_semantics()` → `accept_suggestion()` /
+`reject_suggestion()` → `apply_sdp_semantics()` → `review_metadata()` →
+`set_sdp_*()` → strict validation, showing the real printed output of each step,
+with the spreadsheet named as the fallback and told why it is one. `index.qmd`,
+`README.md` and `guides/parity.qmd` follow.
+
+**`_quarto.yml`'s `quartodoc.version` was a fifth version place nothing
+enumerated**, found still reading `0.4.0` while the other four moved. It moves
+here, `AGENTS.md`'s list of places grows to five, and three new tests in
+`tests/test_public_api.py` pin `uv.lock`, `_quarto.yml` and the guide's coverage
+of the review surface against `__version__`, so the next bump cannot miss one
+quietly. Two stale prose copies — `index.qmd` and `README.md`, both still
+claiming parity with metasalmon **0.1.6** — were deleted rather than updated,
+which is the better fix for a copy no test reads.
+
+Tagging `v0.5.0` and publishing the GitHub Release are separate outward acts and
+are not part of this change.
 
 ### Added
+
+* **`write_sdp_semantic_closure()` produces the reviewed semantic closure**, the
+  two files `write_eml_from_sdp()` and `publish_sdp_to_knb()` both require and
+  neither wrote. Ports metasalmon backlog **#116** / hub **B-116** (hub queue
+  **B-165**); the R half is metasalmon pull request #121. Until now a Python user
+  reaching the publication gate had to hand-author
+  `metadata/semantic_vocabulary.csv` and `reviewed_semantic_selections.csv`,
+  **including a SHA-256 per row and two more in the sidecar**, with the digest
+  helper private in `eml.py` and reachable only by importing past the API
+  boundary. Neither file was mentioned in any user-facing doc.
+
+  ```python
+  closure = write_sdp_semantic_closure(pkg_path, evidence=judgements)
+  closure["gaps"]        # term-gap shape, feeds render_ontology_term_request()
+  closure["incomplete"]  # found, but short of a required evidence field
+  ```
+
+  - **Both canonical sets are derived, neither is reasoned from the other.** The
+    measurement set includes a code-resolved `sosa:usedProcedure` and excludes a
+    table's `observation_unit_iri`; the review-target set is the reverse. In the
+    bundled fixture they differ by exactly one row.
+  - **Evidence is resolved through this package's own `find_terms()`**, not a new
+    retrieval path, and **no LLM is reachable from it** — pinned by a raising
+    binding on the provider call.
+  - **Gap, not abort**, the shape Brett ruled on 2026-09-12 for both
+    implementations: an IRI every searched source answered about and none has
+    becomes a `detect_semantic_term_gaps()`-shaped row and both files are still
+    written. **And a gap is a claim, so only that one outcome makes one.** A
+    lookup that *did not answer* — a search that raised, or an empty result whose
+    `attrs["diagnostics"]` names a failed source — raises `RuntimeError` and
+    writes nothing; a term *found* with a blank required field is reported in
+    `incomplete` with a warning saying in as many words that it is not an
+    ontology gap. Routing either through the gap table would ask an ontology to
+    mint a term nobody established was missing.
+  - **The degraded-source test is one copy.** `find_terms()`'s own warning and
+    this producer both read `term_search._search_failed_sources()`, hoisted out
+    of `find_terms()` here. A second copy would let one caller keep manufacturing
+    gaps after the other stopped, and nothing in either copy would say which was
+    current. `term_requests._namespace_scope()` was hoisted out of
+    `render_ontology_term_request()` for the same reason.
+  - **The two CSVs and the sidecar install as one link-refusing set**, through
+    `sdp_methods._atomic_write_set()`, with both sidecar digests computed over
+    the bytes *about to be installed* rather than by hashing files already on
+    disk — which is what lets all three join one write set instead of leaving a
+    replaced CSV beside its previous `sha256`. The sidecar is edited line-wise
+    rather than round-tripped through a YAML dump, because a dump deletes the
+    template's own instructions. Root, every intermediate component and each
+    final entry are refused when symlinked; **hard links are closed structurally
+    by the staged rename rather than detected**, because no portable check can
+    see them, and the docstring says so rather than implying coverage.
+  - **Verified against R, not asserted.** Both producers driven over the same
+    package with the same injected search and the same evidence:
+    `semantic_vocabulary.csv`, `reviewed_semantic_selections.csv` and
+    `eml-mapping.yml` came out **byte-identical** in the ordinary case, the gap
+    case and the incomplete case, and the degraded case aborts in both with the
+    same IRI count and the same named source.
+
+  `guides/semantic-review.qmd` gains an *Assemble the reviewed closure* section.
+  **That is this item's documentation, not S5's** — the note above about the
+  version staying at 0.4.0 still holds, because the guide still presents the
+  spreadsheet as the workflow for the review itself (hub **B-153**).
 
 * **The semantic review and the metadata editing no longer have to leave
   Python.** Nine new public functions plus two accessors, porting roadmap
@@ -114,42 +254,46 @@ See `AGENTS.md`'s *Current honest state*.
 
 ### Fixed
 
-* **`validate_salmon_datapackage()` now checks three things it had been
-  claiming and not doing.** Ported from metasalmon pull request #111 (backlog
-  **#49**), hub queue item **B-124**. This is R-shipped-first lag being closed,
-  not a deliberate difference, so it opens no `PARITY.md` row.
+* **`migrate_sdp_methods()`'s nothing-to-migrate report carries the same three
+  columns as every other exit.** Its early return built
+  `pd.DataFrame(columns=["table_id", "method_iri"])`, so
+  `report["tables"]["columns"]` raised `KeyError` in exactly the case where the
+  package was already clean — the branch least likely to be exercised — while
+  the populated build and the no-placement return both named all three.
+  Brett ruled the three-column shape on **2026-09-14, for both
+  implementations**; hub queue item **B-144**, the mirror half of metasalmon
+  backlog **#112** (hub **B-112**, metasalmon pull request #117).
 
-  1. **A column the dictionary declares `required` must not ship missing
-     values.** The flag was inferred, written to `column_dictionary.csv`,
-     parsed back to boolean, exported as Frictionless `constraints.required`
-     and read by nothing that compared it to the data — so a package could
-     state a column is required and ship blanks in it. Only columns present in
-     the data are checked; an absent one was already reported.
-  2. **A schema-required metadata field must not be blank.** The Frictionless
-     schemas have carried `constraints.required` since the schema bundle
-     landed, `review_metadata()` reports a blank one as blocking strict
-     validation, and strict validation let it through — the placeholder scan
-     only sees a field that *says* it is missing, not one that is. A blank
-     **key** field is structural in every mode, because a row without its key
-     cannot be addressed; a blank **non-key** required field takes the
-     placeholder channel, warning by default and erroring under
-     `require_iris=True`, so a freshly created package stays valid until the
-     user asks for the strict answer. A column the file does not have counts as
-     blank in every row, in all four metadata files.
-  3. **A corrupt SSSOM mapping set or measurement decomposition is refused.**
-     Both artifacts have had their own validator since they shipped and only
-     the KNB publication and archive paths called them, so end-to-end
-     validation reported success over a manifest whose SHA-256 no longer
-     matched its bytes. Presence is detected by the managed file names and
-     never by scanning `metadata/semantic/`, so an editor backup or an
-     unapproved draft there stays local and unread.
+  **This runs backwards, and the direction is the point.** This package carried
+  the internally consistent three-column frame *first* and gave it up at S10
+  chunk A (pull request 14, 2026-08-22) to mirror R's two-column early return —
+  but R's other two exits had three columns all along, so what chunk A mirrored
+  was an inconsistency rather than a shape. Under the amended mirror contract
+  (Brett, 2026-08-17) which side is right is a ruling and not an implementer's
+  call, so **R was the side that moved** and this restores what was here before
+  chunk A. It is catch-up to a ruling rather than a chosen difference, so it
+  opens no `PARITY.md` row; row **9** is amended in place instead, which is
+  where that row's `1:1` claim lived.
 
-  Each class has a failing-before test in `tests/test_validation_hardening.py`,
-  and every expected message was measured by running metasalmon 0.5.0 over the
-  same package directory on disk: for the two issue classes R and Python emit
-  byte-identical messages, pluralisation included. The differential fixture
-  `pk-missing-values` gains a second expected row, because the example's
-  `POP_ID` is declared required — R reports the same pair.
+  The comment above the frame moved with it. It read *"Two columns, not three:
+  R's nothing-to-migrate report frame has no `columns` column … and the
+  differential run showed it"* — an accurate report of what the differential
+  saw and a wrong conclusion about what the shape should be, and a fix that left
+  it standing would leave the next reader an explanation for a behaviour that no
+  longer exists.
+
+  Reproduced before the fix and pinned after it by
+  `test_every_migration_exit_reports_the_same_three_table_columns`, which pins
+  **all three** exits — the no-op early return, the populated build and the
+  no-placement empty frame — rather than only the one that was wrong, because
+  pinning one leaves the others free to drift away from it and the failure would
+  look identical. Its R counterpart pins the same three. Measured by running
+  both implementations rather than by reading either: on metasalmon `main`
+  (`9eec204`) all three R exits return `table_id`, `method_iri`, `columns`, all
+  `character`, with `report$tables$columns` empty rather than `NULL` at the
+  no-op exit; here all three now return the same three names at `object` dtype,
+  the type the populated build renders because it joins the bound column names
+  into one string.
 
 * **An enumerable string column is typed `categorical`, not `attribute`.**
   Ported from metasalmon pull request #112 (backlog **#95**), ruled **Q29** on
