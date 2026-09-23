@@ -1,5 +1,180 @@
 # Changelog
 
+## Unreleased
+
+**Work that landed after the `0.5.0` number moved, and the reason it is not
+under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
+closed when it set `__version__` to `0.5.0`. Measured 2026-09-16: `v0.5.0` is
+not tagged and no GitHub Release exists for it, so that section describes a
+number that has been *claimed* rather than a release that has shipped. Anything
+merged after that claim belongs here, because filing it under `## 0.5.0` would
+make this file say a version contains a change that the commit making the
+version current does not. metasalmon's `NEWS.md` keeps the same shape with its
+*(development version)* heading, which is what this heading mirrors. **The
+number does not move here**: it is a parity claim, and moving it is a separate
+outward act.
+
+### Fixed
+
+* **`datapackage.json` and `metadata/dataset.csv` spell a typed instant the
+  same way, in the form Brett ruled.** A `datetime`/`Timestamp` in
+  `temporal_start` or `temporal_end` reached both files through two different
+  renderers and they disagreed about everything. Measured before the fix,
+  2026-09-16 on pandas 3.0.5 / Python 3.11.15, for
+  `datetime(999, 6, 5, 13, 45, 30)` and `datetime(2024, 12, 31, 0, 0, 0)`:
+
+  ```
+  descriptor start : 0999-06-05T13:45:30    csv start : 999-06-05 13:45:30
+  descriptor end   : 2024-12-31T00:00:00    csv end   : 2024-12-31
+  ```
+
+  All four cells differed — separator, zone marker, year padding, **and**
+  whether an all-midnight column keeps its time at all. Both files now read
+  `0999-06-05T13:45:30Z` and `2024-12-31T00:00:00Z`.
+
+  The spelling is **ruled, not chosen**: Brett ruled it on **2026-09-14**, once
+  for both implementations so that neither side's implementer picks one —
+  readr's ISO instant form, the `T` separator and the `Z` zone marker.
+  metasalmon adopted it the same day (hub **B-115**, metasalmon pull request
+  #118); this is the mirror half, hub queue item **B-145**. It opens no new
+  `PARITY.md` row — row **56** already owns this divergence and named this very
+  ruling as its retirement condition, so it is amended in place.
+
+  **Two thirds of the defect were pandas', not this package's, and that is why
+  the CSV side had to move too.** A column of `datetime.datetime` becomes
+  `datetime64[us]`, and `to_csv` renders it **column-wise**: the year is
+  unpadded below 1000, the separator is a space, and the time is dropped
+  entirely when every value in the column is midnight. One cell's bytes
+  depending on the other rows in its column is exactly the shape `AGENTS.md`'s
+  *one value, one rendering* contract names. `str()` of the same value and an
+  object-dtype column pad and keep the time, so the module converged on the
+  padded form everywhere it rendered text itself and nowhere pandas rendered
+  for it.
+
+  **`resource_types.iso_instant_text()` is now the single renderer**, and that
+  is the substance rather than a tidy-up. The string `_iso_seconds(x) + "Z"`
+  stood at **four** call sites across two modules — `render_resource_frame()`
+  twice, `observation_structures._typed_character()` and
+  `._normalize_typed_values()` — and **two of them wrote a different string
+  from the other two for the same tz-aware instant**. Measured on the pre-fix
+  tree for `datetime(2024, 12, 31, tzinfo=UTC-08:00)`: `render_resource_frame()`
+  gave `2024-12-31T00:00:00Z`, a local wall clock wearing a `Z`, where
+  `_typed_character()` gave the correct `2024-12-31T08:00:00Z` — which is also
+  what `readr::write_csv()` writes for the same value (measured, R 4.3.3 /
+  readr 2.2.0). Every suite stayed green throughout, because each test built
+  its expectation with the same call it was testing. All four now call one
+  function, which folds to UTC and pads the year by construction, so the
+  tz-aware case **converges onto metasalmon** rather than merely becoming
+  self-consistent. `tests/test_platform_determinism_guard.py` gains a call-site
+  guard that fails on a fifth, in the shape of the `strftime` guard beside it.
+
+  **A second, smaller defect was found by wiring the renderer up and is fixed
+  here rather than deferred.** `pd.NaT` **subclasses** `datetime.datetime`, so
+  `render_resource_frame()`'s object-column branch accepted a missing value and
+  raised `ValueError: cannot convert float NaN to integer` — while its own
+  `datetime64` branch two lines above guarded with `pd.isna`. One function, two
+  branches, two answers. Measured on clean `main`: an object column holding one
+  instant and one `NaT` raised; the `datetime64` column rendered
+  `['2024-12-31T00:00:00Z', None]`. `readr::write_csv()` with metasalmon's own
+  NA token writes a missing `POSIXct` as the **empty field** rather than
+  aborting, so raising was a divergence from metasalmon too. `is_instant()` is
+  now the shared test — `value is not pd.NaT` rather than `pd.isna`, because an
+  object column may hold a list or an array whose `pd.isna` returns an array. It
+  is fixed rather than filed because the crashing branch is a line this change
+  already rewrites, and leaving one caller of the new single renderer crashing
+  on a missing value while the other did not would re-create in miniature the
+  inconsistency this entry is about.
+
+  **One residual is deliberately left open and measured rather than decided.**
+  Each implementation now agrees with itself; below year 1000 they do not agree
+  with each other. Measured 2026-09-16 on one Linux container (R 4.3.3 / readr
+  2.2.0, pandas 3.0.5), driving each writer over the same fixture: metasalmon
+  writes `999-06-05T13:45:30Z`, this package writes `0999-06-05T13:45:30Z`, and
+  for `2024-12-31T00:00:00Z` the two agree exactly. On macOS R 4.5.2 metasalmon
+  wrote the padded form and would agree (cited from B-115, not re-measured
+  here). Which year is correct is hub item **B-161** and is Brett's, because
+  padding R's CSV side means reopening backlog #93 item 1 deliberately. Reached
+  only from a caller-supplied typed instant, which neither implementation
+  produces on its own.
+
+* **`validate_salmon_datapackage()` now checks three things it had been
+  claiming and not doing.** Ported from metasalmon pull request #111 (backlog
+  **#49**), hub queue item **B-124**. This is R-shipped-first lag being closed,
+  not a deliberate difference, so it opens no `PARITY.md` row.
+
+  1. **A column the dictionary declares `required` must not ship missing
+     values.** The flag was inferred, written to `column_dictionary.csv`,
+     parsed back to boolean, exported as Frictionless `constraints.required`
+     and read by nothing that compared it to the data — so a package could
+     state a column is required and ship blanks in it. Only columns present in
+     the data are checked; an absent one was already reported.
+  2. **A schema-required metadata field must not be blank.** The Frictionless
+     schemas have carried `constraints.required` since the schema bundle
+     landed, `review_metadata()` reports a blank one as blocking strict
+     validation, and strict validation let it through — the placeholder scan
+     only sees a field that *says* it is missing, not one that is. A blank
+     **key** field is structural in every mode, because a row without its key
+     cannot be addressed; a blank **non-key** required field takes the
+     placeholder channel, warning by default and erroring under
+     `require_iris=True`, so a freshly created package stays valid until the
+     user asks for the strict answer. A column the file does not have counts as
+     blank in every row, in all four metadata files.
+  3. **A corrupt SSSOM mapping set or measurement decomposition is refused.**
+     Both artifacts have had their own validator since they shipped and only
+     the KNB publication and archive paths called them, so end-to-end
+     validation reported success over a manifest whose SHA-256 no longer
+     matched its bytes. Presence is detected by the managed file names and
+     never by scanning `metadata/semantic/`, so an editor backup or an
+     unapproved draft there stays local and unread.
+
+  Each class has a failing-before test in `tests/test_validation_hardening.py`,
+  and every expected message was measured by running metasalmon 0.5.0 over the
+  same package directory on disk: for the two issue classes R and Python emit
+  byte-identical messages, pluralisation included. The differential fixture
+  `pk-missing-values` gains a second expected row, because the example's
+  `POP_ID` is declared required — R reports the same pair.
+
+* **`migrate_sdp_methods()`'s nothing-to-migrate report carries the same three
+  columns as every other exit.** Its early return built
+  `pd.DataFrame(columns=["table_id", "method_iri"])`, so
+  `report["tables"]["columns"]` raised `KeyError` in exactly the case where the
+  package was already clean — the branch least likely to be exercised — while
+  the populated build and the no-placement return both named all three.
+  Brett ruled the three-column shape on **2026-09-14, for both
+  implementations**; hub queue item **B-144**, the mirror half of metasalmon
+  backlog **#112** (hub **B-112**, metasalmon pull request #117).
+
+  **This runs backwards, and the direction is the point.** This package carried
+  the internally consistent three-column frame *first* and gave it up at S10
+  chunk A (pull request 14, 2026-08-22) to mirror R's two-column early return —
+  but R's other two exits had three columns all along, so what chunk A mirrored
+  was an inconsistency rather than a shape. Under the amended mirror contract
+  (Brett, 2026-08-17) which side is right is a ruling and not an implementer's
+  call, so **R was the side that moved** and this restores what was here before
+  chunk A. It is catch-up to a ruling rather than a chosen difference, so it
+  opens no `PARITY.md` row; row **9** is amended in place instead, which is
+  where that row's `1:1` claim lived.
+
+  The comment above the frame moved with it. It read *"Two columns, not three:
+  R's nothing-to-migrate report frame has no `columns` column … and the
+  differential run showed it"* — an accurate report of what the differential
+  saw and a wrong conclusion about what the shape should be, and a fix that left
+  it standing would leave the next reader an explanation for a behaviour that no
+  longer exists.
+
+  Reproduced before the fix and pinned after it by
+  `test_every_migration_exit_reports_the_same_three_table_columns`, which pins
+  **all three** exits — the no-op early return, the populated build and the
+  no-placement empty frame — rather than only the one that was wrong, because
+  pinning one leaves the others free to drift away from it and the failure would
+  look identical. Its R counterpart pins the same three. Measured by running
+  both implementations rather than by reading either: on metasalmon `main`
+  (`9eec204`) all three R exits return `table_id`, `method_iri`, `columns`, all
+  `character`, with `report$tables$columns` empty rather than `NULL` at the
+  no-op exit; here all three now return the same three names at `object` dtype,
+  the type the populated build renders because it joins the bound column names
+  into one string.
+
 ## 0.5.0
 
 **The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue
@@ -200,128 +375,6 @@ are not part of this change.
   implicit.
 
 ### Fixed
-
-* **`datapackage.json` and `metadata/dataset.csv` spell a typed instant the
-  same way, in the form Brett ruled.** A `datetime`/`Timestamp` in
-  `temporal_start` or `temporal_end` reached both files through two different
-  renderers and they disagreed about everything. Measured before the fix,
-  2026-09-16 on pandas 3.0.5 / Python 3.11.15, for
-  `datetime(999, 6, 5, 13, 45, 30)` and `datetime(2024, 12, 31, 0, 0, 0)`:
-
-  ```
-  descriptor start : 0999-06-05T13:45:30    csv start : 999-06-05 13:45:30
-  descriptor end   : 2024-12-31T00:00:00    csv end   : 2024-12-31
-  ```
-
-  All four cells differed — separator, zone marker, year padding, **and**
-  whether an all-midnight column keeps its time at all. Both files now read
-  `0999-06-05T13:45:30Z` and `2024-12-31T00:00:00Z`.
-
-  The spelling is **ruled, not chosen**: Brett ruled it on **2026-09-14**, once
-  for both implementations so that neither side's implementer picks one —
-  readr's ISO instant form, the `T` separator and the `Z` zone marker.
-  metasalmon adopted it the same day (hub **B-115**, metasalmon pull request
-  #118); this is the mirror half, hub queue item **B-145**. It opens no new
-  `PARITY.md` row — row **56** already owns this divergence and named this very
-  ruling as its retirement condition, so it is amended in place.
-
-  **Two thirds of the defect were pandas', not this package's, and that is why
-  the CSV side had to move too.** A column of `datetime.datetime` becomes
-  `datetime64[us]`, and `to_csv` renders it **column-wise**: the year is
-  unpadded below 1000, the separator is a space, and the time is dropped
-  entirely when every value in the column is midnight. One cell's bytes
-  depending on the other rows in its column is exactly the shape `AGENTS.md`'s
-  *one value, one rendering* contract names. `str()` of the same value and an
-  object-dtype column pad and keep the time, so the module converged on the
-  padded form everywhere it rendered text itself and nowhere pandas rendered
-  for it.
-
-  **`resource_types.iso_instant_text()` is now the single renderer**, and that
-  is the substance rather than a tidy-up. The string `_iso_seconds(x) + "Z"`
-  stood at **four** call sites across two modules — `render_resource_frame()`
-  twice, `observation_structures._typed_character()` and
-  `._normalize_typed_values()` — and **two of them wrote a different string
-  from the other two for the same tz-aware instant**. Measured on the pre-fix
-  tree for `datetime(2024, 12, 31, tzinfo=UTC-08:00)`: `render_resource_frame()`
-  gave `2024-12-31T00:00:00Z`, a local wall clock wearing a `Z`, where
-  `_typed_character()` gave the correct `2024-12-31T08:00:00Z` — which is also
-  what `readr::write_csv()` writes for the same value (measured, R 4.3.3 /
-  readr 2.2.0). Every suite stayed green throughout, because each test built
-  its expectation with the same call it was testing. All four now call one
-  function, which folds to UTC and pads the year by construction, so the
-  tz-aware case **converges onto metasalmon** rather than merely becoming
-  self-consistent. `tests/test_platform_determinism_guard.py` gains a call-site
-  guard that fails on a fifth, in the shape of the `strftime` guard beside it.
-
-  **A second, smaller defect was found by wiring the renderer up and is fixed
-  here rather than deferred.** `pd.NaT` **subclasses** `datetime.datetime`, so
-  `render_resource_frame()`'s object-column branch accepted a missing value and
-  raised `ValueError: cannot convert float NaN to integer` — while its own
-  `datetime64` branch two lines above guarded with `pd.isna`. One function, two
-  branches, two answers. Measured on clean `main`: an object column holding one
-  instant and one `NaT` raised; the `datetime64` column rendered
-  `['2024-12-31T00:00:00Z', None]`. `readr::write_csv()` with metasalmon's own
-  NA token writes a missing `POSIXct` as the **empty field** rather than
-  aborting, so raising was a divergence from metasalmon too. `is_instant()` is
-  now the shared test — `value is not pd.NaT` rather than `pd.isna`, because an
-  object column may hold a list or an array whose `pd.isna` returns an array. It
-  is fixed rather than filed because the crashing branch is a line this change
-  already rewrites, and leaving one caller of the new single renderer crashing
-  on a missing value while the other did not would re-create in miniature the
-  inconsistency this entry is about.
-
-  **One residual is deliberately left open and measured rather than decided.**
-  Each implementation now agrees with itself; below year 1000 they do not agree
-  with each other. Measured 2026-09-16 on one Linux container (R 4.3.3 / readr
-  2.2.0, pandas 3.0.5), driving each writer over the same fixture: metasalmon
-  writes `999-06-05T13:45:30Z`, this package writes `0999-06-05T13:45:30Z`, and
-  for `2024-12-31T00:00:00Z` the two agree exactly. On macOS R 4.5.2 metasalmon
-  wrote the padded form and would agree (cited from B-115, not re-measured
-  here). Which year is correct is hub item **B-161** and is Brett's, because
-  padding R's CSV side means reopening backlog #93 item 1 deliberately. Reached
-  only from a caller-supplied typed instant, which neither implementation
-  produces on its own.
-
-* **`migrate_sdp_methods()`'s nothing-to-migrate report carries the same three
-  columns as every other exit.** Its early return built
-  `pd.DataFrame(columns=["table_id", "method_iri"])`, so
-  `report["tables"]["columns"]` raised `KeyError` in exactly the case where the
-  package was already clean — the branch least likely to be exercised — while
-  the populated build and the no-placement return both named all three.
-  Brett ruled the three-column shape on **2026-09-14, for both
-  implementations**; hub queue item **B-144**, the mirror half of metasalmon
-  backlog **#112** (hub **B-112**, metasalmon pull request #117).
-
-  **This runs backwards, and the direction is the point.** This package carried
-  the internally consistent three-column frame *first* and gave it up at S10
-  chunk A (pull request 14, 2026-08-22) to mirror R's two-column early return —
-  but R's other two exits had three columns all along, so what chunk A mirrored
-  was an inconsistency rather than a shape. Under the amended mirror contract
-  (Brett, 2026-08-17) which side is right is a ruling and not an implementer's
-  call, so **R was the side that moved** and this restores what was here before
-  chunk A. It is catch-up to a ruling rather than a chosen difference, so it
-  opens no `PARITY.md` row; row **9** is amended in place instead, which is
-  where that row's `1:1` claim lived.
-
-  The comment above the frame moved with it. It read *"Two columns, not three:
-  R's nothing-to-migrate report frame has no `columns` column … and the
-  differential run showed it"* — an accurate report of what the differential
-  saw and a wrong conclusion about what the shape should be, and a fix that left
-  it standing would leave the next reader an explanation for a behaviour that no
-  longer exists.
-
-  Reproduced before the fix and pinned after it by
-  `test_every_migration_exit_reports_the_same_three_table_columns`, which pins
-  **all three** exits — the no-op early return, the populated build and the
-  no-placement empty frame — rather than only the one that was wrong, because
-  pinning one leaves the others free to drift away from it and the failure would
-  look identical. Its R counterpart pins the same three. Measured by running
-  both implementations rather than by reading either: on metasalmon `main`
-  (`9eec204`) all three R exits return `table_id`, `method_iri`, `columns`, all
-  `character`, with `report$tables$columns` empty rather than `NULL` at the
-  no-op exit; here all three now return the same three names at `object` dtype,
-  the type the populated build renders because it joins the bound column names
-  into one string.
 
 * **An enumerable string column is typed `categorical`, not `attribute`.**
   Ported from metasalmon pull request #112 (backlog **#95**), ruled **Q29** on
