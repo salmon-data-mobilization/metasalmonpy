@@ -1297,7 +1297,9 @@ def test_validate_salmon_datapackage_refuses_a_corrupt_sssom_artifact(tmp_path):
 
     from metasalmonpy.sssom import write_sdp_sssom
 
-    from .test_sssom import sssom_text, write_raw
+    # tests/ is not a package (tests/conftest.py says why), so a sibling test
+    # module is imported by its top-level name, not relatively.
+    from test_sssom import sssom_text, write_raw
 
     root = _build_example(tmp_path / "sssom")
     source = write_raw(tmp_path / "approved.sssom.tsv", sssom_text())
