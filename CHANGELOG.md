@@ -123,6 +123,38 @@ and moving it is a separate outward act.
   This changes how the suite finds the package and nothing the package does,
   so it opens no `PARITY.md` row.
 
+* **`apply_salmon_dictionary()` names each code value it turns into a missing
+  value.** Hub queue item **B-241**, the mirror half of metasalmon backlog
+  **#55** (hub **B-55**, metasalmon pull request #154). A value that is present
+  in a column and absent from the column's code list has no category, so it
+  becomes missing, and until now it did that without a word. Under pandas 3 the
+  only signal was pandas' own `Pandas4Warning` that building a Categorical from
+  such a value "will raise in a future version". Under pandas 2.2 there was no
+  signal at all. Each such value is now named in one `RuntimeWarning` per
+  column, under either value of `strict`, because `strict` governs type
+  coercion. Missing and blank values are not named. Past twenty values the list
+  is shortened the way cli shortens R's (the first eighteen, an ellipsis, and
+  the last two), and the count is always given in full.
+
+  The value is blanked explicitly, before the Categorical is built, so the codes
+  step no longer relies on the construction pandas deprecates. That includes a
+  column that is already a Categorical, whose unused categories are dropped
+  first. One consequence goes beyond the report. A code list pandas cannot
+  build a Categorical from, because a `code_value` repeats or a hand-built one
+  is missing, used to send the column to the fallback that keeps it as text,
+  with every value kept, unlisted ones included. The unlisted values are now
+  blanked on that path too, so the report is true there as well. For a repeated
+  `code_value` that is what R does.
+
+  **The other half of #55 owed a test and no fix.** metasalmon's
+  `strict = TRUE` let through a value that its coercion only warns about.
+  `_coerce_series()` has always raised on such a value, through
+  `errors="raise"`, so R moved to where this package already was. Nothing pinned
+  that behaviour, and `ApplyDictionaryFailureReportTests` in
+  `tests/test_dictionary.py` now does, the twin of metasalmon's
+  `tests/testthat/test-edge-cases.R`. This closes R-shipped-first lag and is not
+  a deliberate difference, so it opens no `PARITY.md` row.
+
 ## 0.5.0
 
 **The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue

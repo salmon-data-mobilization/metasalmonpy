@@ -243,9 +243,10 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 966
-passed / 1 skipped with the extras installed, 825 / 142 with core dependencies
-only (2026-09-23, measured for hub B-191 under pytest 9.1.1; 951 / 1 and
+dependency configurations, and CI runs both (see *Dependency boundaries*): 975
+passed / 1 skipped with the extras installed, 834 / 142 with core dependencies
+only (2026-09-24, measured for hub B-241 under pytest 9.1.1 and pandas 3.0.6;
+966 / 1 and 825 / 142 on 2026-09-23 for hub B-191; 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
 on 2026-09-14, and 803 / 3 and 690 / 116 before that). The gap is the extras-gated
 EML, KNB and context-reader tests; the one that skips either way is a

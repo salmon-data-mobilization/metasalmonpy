@@ -511,9 +511,17 @@ def infer_dictionary(
     return dict_df
 
 
-def _collapse_inline(values) -> str:
-    """cli's inline vector collapse: ``8``, ``8 and 9``, ``7, 8, and 9``."""
+def _collapse_inline(values, trunc: Optional[int] = None) -> str:
+    """cli's inline vector collapse: ``8``, ``8 and 9``, ``7, 8, and 9``.
+
+    With ``trunc``, a vector longer than ``trunc`` is shortened the way cli's
+    default ``vec-trunc`` of 20 shortens one: the first ``trunc - 2`` values, an
+    ellipsis, and the last two, so 25 values read ``1, ..., 18, ..., 24, and
+    25``. Measured against cli 3.6.6.
+    """
     texts = [str(value) for value in values]
+    if trunc is not None and len(texts) > trunc:
+        texts = texts[: trunc - 2] + ["..."] + texts[-2:]
     if len(texts) <= 1:
         return "".join(texts)
     if len(texts) == 2:
@@ -726,6 +734,43 @@ def _coerce_series(series: pd.Series, target: str, strict: bool = True) -> pd.Se
         return series.astype("string")
 
 
+def _apply_dictionary_present(series: pd.Series) -> pd.Series:
+    """R's ``.ms_apply_dictionary_present()``: not missing and not blank.
+
+    A blank cell is a missing value to every reader this package uses, so a
+    code list turning one into a missing value loses nothing and is not
+    reported. Blank means empty after trimming ``READR_TRIM_CHARS``, the set R's
+    ``trimws()`` strips, for the reason ``validate_dictionary()`` gives.
+    """
+    return series.notna() & (series.astype(str).str.strip(READR_TRIM_CHARS) != "")
+
+
+def _report_unlisted_code_values(column: str, series: pd.Series, code_values: Sequence) -> pd.Series:
+    """Warn naming each present value the code list does not name; return the listed mask.
+
+    The codes step of metasalmon's ``apply_salmon_dictionary()`` (hub items
+    B-55 and B-241): each distinct value that is present in the column and
+    absent from its code list is named, under either value of ``strict``,
+    before it becomes missing. The caller blanks exactly the rows this mask
+    leaves out, so what is named is what is blanked.
+    """
+    listed = series.isin(list(code_values))
+    unlisted = series[_apply_dictionary_present(series) & ~listed].drop_duplicates().tolist()
+    if unlisted:
+        count = len(unlisted)
+        noun, verb = ("value", "it becomes") if count == 1 else ("values", "they become")
+        shown = _collapse_inline(
+            [repr(str(value)) if isinstance(value, str) else str(value) for value in unlisted],
+            trunc=20,
+        )
+        warnings.warn(
+            f"Column {column!r} has {count} {noun} not in its code list; {verb} missing: {shown}",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return listed
+
+
 def apply_salmon_dictionary(
     df: pd.DataFrame,
     dict_df: pd.DataFrame,
@@ -734,6 +779,11 @@ def apply_salmon_dictionary(
 ) -> pd.DataFrame:
     """
     Rename columns, coerce types, and apply codes using a validated dictionary.
+
+    A value that is not in its column's code list has no category, so it
+    becomes missing. Each such value is named in a ``RuntimeWarning``, whatever
+    ``strict`` is, because ``strict`` governs type coercion. Missing and blank
+    values are not reported.
     """
     data = _ensure_dataframe(df, "df")
     dictionary = validate_dictionary(dict_df, require_iris=False)
@@ -785,6 +835,27 @@ def apply_salmon_dictionary(
             if not col_codes.empty and new_name in result.columns:
                 code_values = list(col_codes["code_value"])
                 code_labels = list(col_codes.get("code_label", code_values))
+                # A value the code list does not name has no category, so it
+                # becomes missing. That happened silently until hub item B-241,
+                # the mirror of metasalmon's B-55: it is now named whatever
+                # ``strict`` is, and blanked here, before the constructor, for
+                # two reasons. pandas deprecates building a Categorical from a
+                # value outside its categories, or from a Categorical carrying
+                # such a category even unused, so neither can reach it; and
+                # when the constructor raises (a missing or a repeated
+                # code_value), the fallback below would otherwise keep a value
+                # the warning has just said becomes missing.
+                #
+                # A column name the data repeats makes ``result[new_name]`` a
+                # DataFrame, which is left to the path it always took rather
+                # than failing inside the report. Retires when a repeated
+                # column name is refused, or read as R's ``[[`` reads it.
+                if isinstance(result[new_name], pd.Series):
+                    listed = _report_unlisted_code_values(original_name, result[new_name], code_values)
+                    blanked = result[new_name].where(listed)
+                    if _is_categorical(blanked):
+                        blanked = blanked.cat.remove_unused_categories()
+                    result[new_name] = blanked
                 try:
                     result[new_name] = pd.Categorical(result[new_name], categories=code_values)
                     result[new_name] = result[new_name].rename_categories(dict(zip(code_values, code_labels)))
