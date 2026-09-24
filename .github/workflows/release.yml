@@ -66,8 +66,26 @@ jobs:
           [ "$here" = "$VERSION" ] || { echo "::error::pyproject.toml at $COMMIT says '$here', not '$VERSION'"; exit 1; }
           before="$(version_at "${COMMIT}^1")"
           [ "$before" != "$VERSION" ] || { echo "::error::the version was already $VERSION before $COMMIT, so this is not the commit that made it current"; exit 1; }
+
+      # A run can fail after the tag is pushed and before the release exists.
+      # A rerun must be able to finish that job, so an existing tag is accepted
+      # only if it is annotated and names the same commit; it then skips
+      # straight to publishing. Anything else about an existing tag or release
+      # is refused.
+      - name: Check any existing tag or release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
           if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
-            echo "::error::tag v$VERSION already exists"; exit 1
+            git fetch --quiet origin "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            [ "$(git cat-file -t "v$VERSION")" = "tag" ] || { echo "::error::tag v$VERSION exists but is not annotated"; exit 1; }
+            [ "$(git rev-parse "v$VERSION^{commit}")" = "$COMMIT" ] || { echo "::error::tag v$VERSION exists on a different commit"; exit 1; }
+            echo "Tag v$VERSION already exists on $COMMIT; this run publishes the release only."
+            echo "TAG_EXISTS=1" >> "$GITHUB_ENV"
+          fi
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::release v$VERSION already exists"; exit 1
           fi
 
       - name: Take the notes from the changelog at that commit
@@ -84,8 +102,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "v$VERSION" -m "metasalmonpy $VERSION" "$COMMIT"
-          git push origin "refs/tags/v$VERSION"
+          if [ "${TAG_EXISTS:-0}" != "1" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "v$VERSION" -m "metasalmonpy $VERSION" "$COMMIT"
+            git push origin "refs/tags/v$VERSION"
+          fi
           gh release create "v$VERSION" --verify-tag --title "metasalmonpy $VERSION" --notes-file release-notes.md
