@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
+import string
 import warnings
 from collections.abc import Mapping
 from typing import Optional, Sequence, Union
@@ -232,6 +233,52 @@ def _name_has_sample_size_hint(name_tokens: Sequence[str]) -> bool:
     )
 
 
+# Every ASCII punctuation character and nothing else. ``string.punctuation`` is
+# the same 32 characters as the four ranges R's ``.ms_name_words()`` spells out
+# (0x21-0x2F, 0x3A-0x40, 0x5B-0x60 and 0x7B-0x7E). A fixed ASCII set, so the
+# split cannot move with the locale and a non-ASCII letter is never a boundary.
+_NAME_WORD_BOUNDARY_RE = re.compile("[" + re.escape(string.punctuation) + "]+")
+
+# The time words that keep year-shaped values deciding: the name-temporal
+# tokens plus the plurals that check leaves out. The plurals are not added to
+# ``_TEMPORAL_TOKENS`` itself, because that check also sees values off the year
+# range, where a column counting days or years is not a date.
+_YEAR_SHAPE_TIME_WORDS = _TEMPORAL_TOKENS | frozenset("years yrs months days".split())
+
+
+def _name_words(name_tokens: Sequence[str]) -> list[str]:
+    """Mirror ``.ms_name_words``: the name's tokens split again at punctuation.
+
+    ``_name_tokens()`` splits only at whitespace, ``.``, ``_``, ``-`` and case
+    changes, so ``Water depth(mm)`` gives the token ``depth(mm)`` and
+    ``adult/count`` stays one token. This splits those tokens again at every
+    other ASCII punctuation character.
+    """
+    return [
+        word
+        for token in name_tokens
+        for word in _NAME_WORD_BOUNDARY_RE.split(str(token))
+        if word
+    ]
+
+
+def _name_has_measurement_word(name_words: Sequence[str]) -> bool:
+    """Mirror ``.ms_name_has_measurement_word``: whole-word evidence only.
+
+    A measurement word, or a sample or partition size. It leaves out the two
+    pattern tests in :func:`_name_has_measurement_hint`, because both match
+    names that are not measurements: the substring pattern finds ``temp``
+    inside ``temporal_start``, and the unit pattern accepts any parenthetical
+    containing a ``g``, such as ``Cohort (Aug)``. Those are tolerable where the
+    hint only chooses among non-temporal roles, and not where it overrides a
+    temporal signal, which is the one job this predicate has (metasalmon
+    backlog #53).
+    """
+    return any(word in _MEASUREMENT_TOKENS for word in name_words) or (
+        _name_has_sample_size_hint(name_words)
+    )
+
+
 def infer_column_role(col_name: str, series: pd.Series) -> str:
     """Infer ``column_role`` from a column's name and contents.
 
@@ -250,6 +297,15 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
     column is anything else. All three now read
     :func:`~metasalmonpy.metadata.values_form_code_list`, which is the seeder's
     own criterion, so the dictionary row and the code rows cannot disagree.
+
+    **Year-shaped values do not outrank a measurement name** (metasalmon
+    backlog #53; hub queue B-240, the port of B-53). A column whose every value
+    is a four-digit number from 1800 to 2500 is ``temporal`` unless its name's
+    words, split at punctuation as well as whitespace, include a measurement
+    word or a sample or partition size and no date or time word. Such a column
+    is then typed exactly as it would be with values off the year range, so a
+    ``spawner_count`` of 1850, 2003 and 1999 is a ``measurement``, while
+    ``BY``, ``count_year`` and ``Escapement (yr)`` stay ``temporal``.
     """
     name_lower = str(col_name).lower()
     name_tokens = _name_tokens(col_name)
@@ -282,13 +338,46 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
     ):
         return "identifier"
 
+    # Check for date/time patterns in the name or the column type.
     if (
         re.search(r"date|time|dtt|timestamp", name_lower)
         or pd.api.types.is_datetime64_any_dtype(series)
         or any(token in _TEMPORAL_TOKENS for token in name_tokens)
-        or _values_look_yearish(series)
     ):
         return "temporal"
+
+    # Year-shaped values -- every value a four-digit number from 1800 to 2500 --
+    # are the one temporal signal that reads nothing but the values, and a count
+    # or escapement column whose values all fall in that range has exactly that
+    # shape. Typed temporal, such a column was dropped from the whole semantic
+    # pipeline (metasalmon backlog #53). So the value shape decides unless the
+    # name's words include a measurement word and no date or time word; then the
+    # column goes through the same checks below that it would with any other
+    # values.
+    #
+    # Words, split at punctuation as well as whitespace (``_name_words()``), so
+    # that ``Water depth(mm)`` and ``adult/count`` are measurement names, and so
+    # that a time word hidden by punctuation still counts, as in
+    # ``Escapement (yr)`` and ``count/year``, which the token check above does
+    # not see. The time words include the plurals, so ``escapement_years``
+    # stays temporal. Whole words, not ``_name_has_measurement_hint()``, whose
+    # substring and unit patterns would retype ``temporal_start`` and
+    # ``Cohort (Aug)``.
+    #
+    # The words decide only whether the year shape may decide. The checks below
+    # keep the coarser tokens, so a column this lets through is typed exactly
+    # as it would be with values off the year range. Those checks cannot read
+    # the words without every check that outranks the measurement check
+    # reading them too, and there the split breaks units and rates:
+    # ``Discharge (m3/day)``, ``Escapement (fish/yr)`` and ``Rate (per day)``
+    # would become temporal, and ``Fish (no./site)`` an identifier.
+    if _values_look_yearish(series):
+        name_words = _name_words(name_tokens)
+        measurement_named = _name_has_measurement_word(name_words) and not any(
+            word in _YEAR_SHAPE_TIME_WORDS for word in name_words
+        )
+        if not measurement_named:
+            return "temporal"
 
     # Preserve explicit factor/categorical intent from the source data.
     if _is_categorical(series):
