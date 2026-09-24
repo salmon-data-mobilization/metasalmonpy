@@ -67,7 +67,12 @@ jobs:
           # report a match as a failure.
           git rev-list --first-parent origin/main > first-parent.txt
           grep -qxF "$COMMIT" first-parent.txt || { echo "::error::$COMMIT is not on main's first-parent history. A commit from a merged branch is not the one that made the version current on main; give the merge commit."; exit 1; }
-          version_at() { git show "$1:pyproject.toml" | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1; }
+          # No pipes that can end early: under pipefail, a reader that stops
+          # before its writer finishes fails the step with exit 141 (SIGPIPE).
+          version_at() {
+            git show "$1:pyproject.toml" > version-probe.toml
+            awk -F'"' '/^version = "/ { print $2; exit }' version-probe.toml
+          }
           here="$(version_at "$COMMIT")"
           [ "$here" = "$VERSION" ] || { echo "::error::pyproject.toml at $COMMIT says '$here', not '$VERSION'"; exit 1; }
           before="$(version_at "${COMMIT}^1")"
@@ -97,9 +102,12 @@ jobs:
       - name: Take the notes from the changelog at that commit
         run: |
           set -euo pipefail
-          git show "$COMMIT:CHANGELOG.md" \
-            | awk -v heading="## $VERSION" '$0 == heading { found = 1; next } /^## / { if (found) exit } found' \
-            > release-notes.md
+          # The changelog goes to a file first. Piped into awk, which stops at
+          # the next heading, `git show` was killed by SIGPIPE on the first
+          # real run (v0.5.0, 2026-09-24) and pipefail failed the step.
+          git show "$COMMIT:CHANGELOG.md" > changelog-at-commit.md
+          awk -v heading="## $VERSION" '$0 == heading { found = 1; next } /^## / { if (found) exit } found' \
+            changelog-at-commit.md > release-notes.md
           grep -q '[^[:space:]]' release-notes.md || { echo "::error::CHANGELOG.md at $COMMIT has no '## $VERSION' section, or it is empty"; exit 1; }
           echo "Notes: $(wc -l < release-notes.md) lines"
 
