@@ -169,9 +169,11 @@ the contract was missing.
 the version and the full SHA of the commit that made it current. It refuses a
 commit that is not on `main`, a version that `pyproject.toml` at that commit does
 not carry, a commit whose parent already carried the version (so a later merge
-cannot be tagged by mistake), and a tag that already exists. It publishes the
-version's `CHANGELOG.md` section, as it stood at that commit, as the release
-body. It exists because agent sessions cannot push tags. Running it is still an
+cannot be tagged by mistake), and a release that already exists. An existing tag
+is refused if it is lightweight or names a different commit; an annotated tag on
+the requested commit is accepted, so a rerun can finish a release whose tag was
+pushed before the release step failed. It publishes the version's
+`CHANGELOG.md` section, as it stood at that commit, as the release body. It exists because agent sessions cannot push tags. Running it is still an
 outward act, and it is Brett's decision: an agent dispatches it only on his word.
 
 **The version number lives in six places and they drift.** A bump moves all
