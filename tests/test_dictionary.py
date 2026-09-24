@@ -1,4 +1,5 @@
 import unittest
+import warnings
 from unittest import mock
 
 try:
@@ -193,6 +194,185 @@ class EraColumnRoleTests(unittest.TestCase):
         row = dictionary.loc[dictionary["column_name"] == "sample_id"].iloc[0]
         self.assertEqual(row["column_role"], "identifier")
         self.assertTrue(pd.isna(row["required"]))
+
+
+def _one_column_dictionary(column, value_type):
+    return pd.DataFrame(
+        {
+            "dataset_id": ["d"],
+            "table_id": ["t"],
+            "column_name": [column],
+            "column_label": [column],
+            "column_description": ["c"],
+            "column_role": ["attribute"],
+            "value_type": [value_type],
+            "required": [False],
+        }
+    )
+
+
+def _code_list(column, values, labels=None):
+    return pd.DataFrame(
+        {
+            "dataset_id": "d",
+            "table_id": "t",
+            "column_name": column,
+            "code_value": values,
+            "code_label": values if labels is None else labels,
+        }
+    )
+
+
+def _call_recording_warnings(call):
+    """Run ``call``; return its result, its reports, and pandas' Categorical deprecations.
+
+    A report is a ``RuntimeWarning``, the category this module reports a data
+    problem with; pandas' deprecation warnings are not a subclass of it. The
+    two are counted separately rather than as "every warning", because an
+    unrelated library deprecation is not what these tests are about: pandas
+    1.5 raises numpy's ``find_common_type`` one on the way through
+    ``to_numeric``.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = call()
+    reports = [str(w.message) for w in caught if issubclass(w.category, RuntimeWarning)]
+    deprecations = [
+        str(w.message)
+        for w in caught
+        if issubclass(w.category, (DeprecationWarning, FutureWarning)) and "Categorical" in str(w.message)
+    ]
+    return result, reports, deprecations
+
+
+class ApplyDictionaryFailureReportTests(unittest.TestCase):
+    """Both paths of hub item B-241, the mirror half of metasalmon's B-55.
+
+    The R twins are in metasalmon's ``tests/testthat/test-edge-cases.R``. The
+    coercion path is a pin and not a fix: ``_coerce_series()`` has always raised
+    on a value that does not convert, through ``errors="raise"``, and metasalmon
+    moved to where this package was. The codes path is the fix: an unlisted
+    value used to become missing with no report except pandas' own deprecation
+    warning.
+    """
+
+    def test_strict_raises_naming_a_value_that_does_not_convert(self):
+        frame = pd.DataFrame({"count": ["100", "not-a-number", "200"]})
+        with self.assertRaisesRegex(ValueError, "not-a-number"):
+            apply_salmon_dictionary(frame, _one_column_dictionary("count", "integer"), strict=True)
+
+        weights = pd.DataFrame({"weight": ["1.5", "1,5"]})
+        with self.assertRaisesRegex(ValueError, "1,5"):
+            apply_salmon_dictionary(weights, _one_column_dictionary("weight", "number"), strict=True)
+
+    def test_non_strict_warns_and_keeps_the_column_as_text(self):
+        frame = pd.DataFrame({"count": ["100", "not-a-number", "200"]})
+        with self.assertWarnsRegex(RuntimeWarning, "keeping as string"):
+            result = apply_salmon_dictionary(frame, _one_column_dictionary("count", "integer"), strict=False)
+        self.assertEqual(result["count"].tolist(), ["100", "not-a-number", "200"])
+
+    def test_missing_and_blank_values_are_not_coercion_failures(self):
+        frame = pd.DataFrame({"count": ["1", None, "", "2"]})
+        result, reports, _ = _call_recording_warnings(
+            lambda: apply_salmon_dictionary(frame, _one_column_dictionary("count", "integer"), strict=True)
+        )
+        self.assertEqual(reports, [])
+        self.assertEqual(str(result["count"].dtype), "Int64")
+        self.assertEqual(result["count"].isna().tolist(), [False, True, True, False])
+
+    def test_strict_raises_on_a_coercion_that_errors(self):
+        frame = pd.DataFrame({"day": ["not a date", "2024-01-01"]})
+        with warnings.catch_warnings():
+            # pandas' "Could not infer format" notice on the way to the error.
+            warnings.simplefilter("ignore", UserWarning)
+            with self.assertRaisesRegex(ValueError, "Failed to coerce column to date"):
+                apply_salmon_dictionary(frame, _one_column_dictionary("day", "date"), strict=True)
+
+    def test_an_unlisted_code_value_is_named_once_under_both_strict_modes(self):
+        frame = pd.DataFrame({"species": ["Coho", "Chinook", "Unknown", None, ""]})
+        dictionary = _one_column_dictionary("species", "string")
+        codes = _code_list("species", ["Coho", "Chinook"], ["Coho Salmon", "Chinook Salmon"])
+        for strict in (True, False):
+            with self.subTest(strict=strict):
+                result, reports, deprecations = _call_recording_warnings(
+                    lambda: apply_salmon_dictionary(frame, dictionary, codes=codes, strict=strict)
+                )
+                self.assertEqual(len(reports), 1, reports)
+                message = reports[0]
+                # "1 value": the missing and the blank value are not named.
+                self.assertIn("has 1 value not in its code list", message)
+                self.assertIn("'Unknown'", message)
+                self.assertNotIn("''", message)
+                self.assertEqual(result["species"].isna().tolist(), [False, False, True, True, True])
+                # The deprecation pandas raises for a Categorical built from a
+                # value outside its categories was the only signal before.
+                self.assertEqual(deprecations, [])
+
+    def test_a_column_whose_present_values_are_all_listed_is_not_reported(self):
+        frame = pd.DataFrame({"species": ["Coho", "Chinook", None, ""]})
+        _, reports, deprecations = _call_recording_warnings(
+            lambda: apply_salmon_dictionary(
+                frame, _one_column_dictionary("species", "string"), codes=_code_list("species", ["Coho", "Chinook"])
+            )
+        )
+        self.assertEqual(reports, [])
+        self.assertEqual(deprecations, [])
+
+    def test_a_named_value_is_blanked_when_pandas_cannot_build_the_categorical(self):
+        # A repeated code_value, or a missing one in a code list built by hand,
+        # makes pd.Categorical raise, and the fallback keeps the column as
+        # text. The unlisted value is blanked before that, so the report is
+        # true on that path too.
+        frame = pd.DataFrame({"run": ["Early", "Late", "Summer"]})
+        code_lists = {
+            "a repeated code_value": _code_list("run", ["Early", "Early", "Late"]),
+            "a missing code_value": _code_list("run", ["Early", "Late", None]),
+        }
+        for name, codes in code_lists.items():
+            with self.subTest(name):
+                result, reports, _ = _call_recording_warnings(
+                    lambda: apply_salmon_dictionary(frame, _one_column_dictionary("run", "string"), codes=codes)
+                )
+                self.assertEqual(len(reports), 1, reports)
+                self.assertIn("has 1 value not in its code list", reports[0])
+                self.assertIn("'Summer'", reports[0])
+                self.assertEqual(result["run"].isna().tolist(), [False, False, True])
+
+    def test_a_categorical_column_is_reported_without_the_pandas_deprecation(self):
+        # A Categorical input keeps its categories after the blanking, and
+        # pandas deprecates recoding from a category the new one lacks even
+        # when no row uses it.
+        frame = pd.DataFrame({"run": pd.Categorical(["Early", "Summer"])})
+        result, reports, deprecations = _call_recording_warnings(
+            lambda: apply_salmon_dictionary(
+                frame, _one_column_dictionary("run", None), codes=_code_list("run", ["Early", "Late"])
+            )
+        )
+        self.assertEqual(len(reports), 1, reports)
+        self.assertIn("'Summer'", reports[0])
+        self.assertEqual(result["run"].isna().tolist(), [False, True])
+        self.assertEqual(deprecations, [])
+
+    def test_a_long_report_is_shortened_the_way_cli_shortens_it(self):
+        from metasalmonpy.dictionary import _collapse_inline
+
+        values = [f"v{i:02d}" for i in range(1, 22)]
+        # cli 3.6.6: twenty values are all named; twenty-one keep the first
+        # eighteen and the last two.
+        self.assertNotIn("...", _collapse_inline(values[:20], trunc=20))
+        self.assertTrue(_collapse_inline(values, trunc=20).endswith("v17, v18, ..., v20, and v21"))
+
+        frame = pd.DataFrame({"run": [f"v{i:02d}" for i in range(1, 26)]})
+        _, reports, _ = _call_recording_warnings(
+            lambda: apply_salmon_dictionary(
+                frame, _one_column_dictionary("run", "string"), codes=_code_list("run", ["Early"])
+            )
+        )
+        self.assertEqual(len(reports), 1, reports)
+        message = reports[0]
+        self.assertIn("has 25 values not in its code list; they become missing:", message)
+        self.assertIn("'v18', ..., 'v24', and 'v25'", message)
+        self.assertNotIn("'v19'", message)
 
 
 if __name__ == "__main__":  # pragma: no cover
