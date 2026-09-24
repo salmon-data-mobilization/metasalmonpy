@@ -318,6 +318,29 @@ class ApplyDictionaryFailureReportTests(unittest.TestCase):
         self.assertEqual(reports, [])
         self.assertEqual(deprecations, [])
 
+    def test_a_code_list_leaves_a_numeric_logical_or_date_column_alone_as_in_r(self):
+        # R's codes step runs only on a character or factor column, so a
+        # column typed integer, number, boolean or date keeps its values with
+        # no report, even where a value is unlisted. Matching such values
+        # against the text of a code list used to blank every one of them.
+        cases = {
+            "integer": (["1", "2", "3"], ["1", "2"]),
+            "number": (["1.5", "2"], ["1.5"]),
+            "boolean": (["TRUE", "FALSE"], ["TRUE"]),
+            "date": (["2024-01-01", "2024-02-01"], ["2024-01-01"]),
+        }
+        for value_type, (values, listed) in cases.items():
+            with self.subTest(value_type):
+                frame = pd.DataFrame({"v": values})
+                dictionary = _one_column_dictionary("v", value_type)
+                without_codes = apply_salmon_dictionary(frame, dictionary)
+                result, reports, deprecations = _call_recording_warnings(
+                    lambda: apply_salmon_dictionary(frame, dictionary, codes=_code_list("v", listed))
+                )
+                self.assertEqual(reports, [])
+                self.assertEqual(deprecations, [])
+                pd.testing.assert_series_equal(result["v"], without_codes["v"])
+
     def test_a_named_value_is_blanked_when_pandas_cannot_build_the_categorical(self):
         # A repeated code_value, or a missing one in a code list built by hand,
         # makes pd.Categorical raise, and the fallback keeps the column as

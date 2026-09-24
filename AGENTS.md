@@ -243,8 +243,8 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1016
-passed / 1 skipped with the extras installed, 875 / 142 with core dependencies
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1017
+passed / 1 skipped with the extras installed, 876 / 142 with core dependencies
 only (2026-09-24, measured for hub B-241 under pytest 9.1.1 and pandas 3.0.6;
 1007 / 1 and 866 / 142 for B-240 earlier that day, 966 / 1 and 825 / 142 for
 B-191 on 2026-09-23, 951 / 1 and

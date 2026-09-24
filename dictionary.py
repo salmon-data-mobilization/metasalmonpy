@@ -834,6 +834,30 @@ def _apply_dictionary_present(series: pd.Series) -> pd.Series:
     return series.notna() & (series.astype(str).str.strip(READR_TRIM_CHARS) != "")
 
 
+def _code_list_applies(column) -> bool:
+    """R's guard on the codes step: ``inherits(x, "character") || inherits(x, "factor")``.
+
+    So a code list applies to a Categorical, a string column, or an ``object``
+    column whose values are text. A numeric, logical or date column keeps its
+    values and its dtype and is not reported, as in R. Matching its values
+    against the text of ``codes.csv`` would blank every one of them. The text
+    test reads the values rather than the dtype because the ``date`` value type
+    leaves an ``object`` column of ``datetime.date``, which R holds as a
+    ``Date``. ``metadata.code_list_values()`` mirrors the same R guard by dtype
+    alone, which is right there because it reads data before any coercion.
+
+    A column name the data repeats gives a DataFrame, which is let through to
+    the path it always took; the codes step says why.
+    """
+    if not isinstance(column, pd.Series):
+        return True
+    if isinstance(column.dtype, pd.CategoricalDtype):
+        return True
+    if pd.api.types.is_string_dtype(column.dtype) or pd.api.types.is_object_dtype(column.dtype):
+        return pd.api.types.infer_dtype(column, skipna=True) in ("string", "empty")
+    return False
+
+
 def _report_unlisted_code_values(column: str, series: pd.Series, code_values: Sequence) -> pd.Series:
     """Warn naming each present value the code list does not name; return the listed mask.
 
@@ -872,7 +896,8 @@ def apply_salmon_dictionary(
     A value that is not in its column's code list has no category, so it
     becomes missing. Each such value is named in a ``RuntimeWarning``, whatever
     ``strict`` is, because ``strict`` governs type coercion. Missing and blank
-    values are not reported.
+    values are not reported. As in metasalmon, a code list applies to a text or
+    Categorical column; a numeric, logical or date column keeps its values.
     """
     data = _ensure_dataframe(df, "df")
     dictionary = validate_dictionary(dict_df, require_iris=False)
@@ -921,7 +946,7 @@ def apply_salmon_dictionary(
             if table_id is not None:
                 col_codes = col_codes[col_codes["table_id"] == table_id]
             col_codes = col_codes[col_codes["column_name"] == original_name]
-            if not col_codes.empty and new_name in result.columns:
+            if not col_codes.empty and new_name in result.columns and _code_list_applies(result[new_name]):
                 code_values = list(col_codes["code_value"])
                 code_labels = list(col_codes.get("code_label", code_values))
                 # A value the code list does not name has no category, so it

@@ -201,6 +201,12 @@ and moving it is a separate outward act.
   blanked on that path too, so the report is true there as well. For a repeated
   `code_value` that is what R does.
 
+  **A code list now applies only to a text or Categorical column, as in R**,
+  whose codes step runs only on a character or factor column. A column typed
+  `integer`, `number`, `boolean` or `date` keeps its values. Matching those
+  values against the text of `codes.csv` used to blank every one of them
+  without a report, where R leaves the column as it is.
+
   **The other half of #55 owed a test and no fix.** metasalmon's
   `strict = TRUE` let through a value that its coercion only warns about.
   `_coerce_series()` has always raised on such a value, through
