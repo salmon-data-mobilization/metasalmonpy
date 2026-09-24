@@ -349,64 +349,6 @@ def test_every_printed_reject_call_runs():
         assert (result.rows["decision"] == "reject").any(), call
 
 
-def test_a_column_level_slot_sharing_a_role_with_its_codes_is_still_ambiguous():
-    """A known limitation, shared with metasalmon 0.5.0 and pinned here.
-
-    A **measurement** column with a code list gets a column-level
-    ``entity_iri`` target (role ``entity``, no ``code_value``) AND a code-level
-    ``codes.csv`` ``term_iri`` target per code (role ``entity``, with a
-    ``code_value``) -- see ``semantics.py``'s
-    ``["constraint", "entity", "method"]`` role set for a measurement parent.
-    ``_review_call_args()`` adds ``code_value=`` only when the row it is
-    printing *has* one, so the column-level slot prints
-    ``accept_suggestion(review, "col", "entity", rank=1, table="t")``, which
-    then resolves to two slots and raises.
-
-    R's ``.ms_review_call_args()`` / ``.ms_review_match_slot_rows()`` behave
-    identically, so this is inherited rather than introduced, and it is left
-    matching R rather than fixed here: a deliberate divergence would need a
-    ``PARITY.md`` row, and the S5 port is a port. The raised message does name
-    ``code_value=`` as the argument to add, so a user can recover.
-
-    *Retires when:* the shared defect is fixed in both implementations -- the
-    column-level slot needs to constrain ``code_value`` to *absent* rather than
-    leaving it unconstrained. Reported as a hub queue candidate by the B-126
-    port; delete this test when that item lands.
-    """
-    dictionary = _dictionary_with(
-        [
-            _suggestion_row(
-                dictionary_role="entity", target_sdp_field="entity_iri"
-            ),
-            _suggestion_row(
-                code_value="wild",
-                dictionary_role="entity",
-                target_sdp_file="codes.csv",
-                target_sdp_field="term_iri",
-                target_row_key="demo-1/spawners/spawner_count/wild",
-            ),
-        ]
-    )
-    review = review_semantics(dictionary)
-    printed = [
-        line.strip()[len("review = "):]
-        for line in review.render_lines(object_name="review")
-        if line.strip().startswith("review = accept_suggestion(")
-    ]
-    column_level = printed[0]
-    assert "code_value=" not in column_level
-    with pytest.raises(ValueError, match="more than one review slot"):
-        eval(  # noqa: S307
-            column_level,
-            {"accept_suggestion": accept_suggestion, "review": review},
-        )
-    # The code-level sibling's own printed call is unambiguous and runs.
-    assert 'code_value="wild"' in printed[1]
-    eval(  # noqa: S307
-        printed[1], {"accept_suggestion": accept_suggestion, "review": review}
-    )
-
-
 # ---------------------------------------------------------------------------
 # A measurement column with a code list: hub queue B-242, the mirror half of
 # metasalmon's B-151. Each test mirrors one in metasalmon's
@@ -637,10 +579,16 @@ def test_a_blank_code_value_never_selects_a_code_slot_whose_codes_row_has_no_cod
             MEASUREMENT_COLUMN_SLOT
         }, repr(blank)
 
-    # And the refusal offers the column's own slot an option that reaches it.
+    # And the refusal offers the column's own slot an option that reaches it,
+    # while the code slot keeps the bare table= it always had: no argument
+    # settles that slot, and dropping its option would leave the message naming
+    # one slot where two matched.
     with pytest.raises(ValueError, match="more than one review slot") as refused:
         accept_suggestion(review, "spawner_count", "entity", rank=1)
-    assert 'table="spawners", code_value=""' in _refusal_options(refused)
+    assert _refusal_options(refused) == [
+        'table="spawners", code_value=""',
+        'table="spawners"',
+    ]
     decided = accept_suggestion(
         review, "spawner_count", "entity", rank=1, table="spawners", code_value=""
     ).rows

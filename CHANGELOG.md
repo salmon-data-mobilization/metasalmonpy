@@ -123,6 +123,47 @@ and moving it is a separate outward act.
   This changes how the suite finds the package and nothing the package does,
   so it opens no `PARITY.md` row.
 
+* **The call `review_semantics()` prints for a measurement column's own slot
+  now runs when the column has a code list.** Hub queue item **B-242**, the
+  mirror half of metasalmon's **B-151** (metasalmon pull request #153). A
+  measurement column's `entity_iri` and `constraint_iri` targets share their
+  roles with the `codes.csv` targets of its codes, and an omitted `code_value`
+  matches every code. So the column's own slot printed
+  `accept_suggestion(review, "spawner_count", "entity", rank=1, table="spawners")`,
+  which matched that slot and every code's slot and raised *"That column and
+  role match more than one review slot"*; its `reject_suggestion()` line did
+  the same. The refusal's list of arguments to add was no way out either,
+  because the option it offered for the column's slot was the `table=` the call
+  already carried. Measured through `create_sdp(semantic_code_scope="all")`
+  with two codes on a count column, on `e595752`: 6 of the 33 printed calls
+  raised.
+
+  `review_semantics()` now prints `code_value=""` whenever `table` alone would
+  not select the column's own slot, and the refusal offers it too. A blank
+  `code_value` (`""`, or a missing value) selects the slots that belong to no
+  code. The matcher already read a blank that way, where metasalmon's raised,
+  but it also matched a code slot whose `codes.csv` row leaves `code_value`
+  empty because it supplies `vocabulary_iri`, which the codes schema allows.
+  Whether a slot is a code's is now read from its file, so a blank never
+  selects a code's slot. An omitted `code_value` still matches every code, and
+  no earlier version printed a blank one, so every call an earlier version
+  printed resolves as it did.
+
+  One case is not fixed, in either implementation. A code slot whose
+  `codes.csv` row has no code value has no call of its own that tells it apart
+  from another slot of the same column, role and table, such as the column's
+  own slot. Its printed call still refuses as ambiguous, as it did before, and
+  never decides the other slot.
+
+  Run through each package's `create_sdp()` on the same inputs, metasalmon
+  `main` (`71a9199`) and this package now print the same arguments for every
+  slot, resolve each printed call to the same slot, and offer the same options
+  when they refuse. This removes
+  `test_a_column_level_slot_sharing_a_role_with_its_codes_is_still_ambiguous`,
+  the pin pull request #28 added with this defect as its retirement condition,
+  and replaces it with mirrors of metasalmon's tests. It is R-shipped-first lag
+  being closed, not a deliberate difference, so it opens no `PARITY.md` row.
+
 ## 0.5.0
 
 **The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue
