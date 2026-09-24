@@ -165,6 +165,15 @@ repository has been following that rule without stating it (`v0.4.0` sits at
 `3b587e6`, with a docs-only merge after it), so the practice was real and only
 the contract was missing.
 
+**To cut one, run the Release workflow** (`.github/workflows/release.yml`) with
+the version and the full SHA of the commit that made it current. It refuses a
+commit that is not on `main`, a version that `pyproject.toml` at that commit does
+not carry, a commit whose parent already carried the version (so a later merge
+cannot be tagged by mistake), and a tag that already exists. It publishes the
+version's `CHANGELOG.md` section, as it stood at that commit, as the release
+body. It exists because agent sessions cannot push tags. Running it is still an
+outward act, and it is Brett's decision: an agent dispatches it only on his word.
+
 **The version number lives in six places and they drift.** A bump moves all
 six in the same change, and **every one of them is pinned by a test in
 `tests/test_public_api.py`**, so a bump that misses one turns the suite red

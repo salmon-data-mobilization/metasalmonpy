@@ -1,0 +1,91 @@
+name: Release
+
+# Cuts a release: an annotated tag `vX.Y.Z` on the commit that made X.Y.Z the
+# version, and a GitHub Release whose body is that version's CHANGELOG.md
+# section as it stood at that commit. Those are the rules in metasalmon's
+# AGENTS.md ("Releases"), which this package mirrors:
+#
+#   * the tag is annotated;
+#   * it goes on the commit that made the version current, never on a later
+#     merge -- a change that merged after the bump is filed under
+#     `## Unreleased`, not under the version it did not ship in;
+#   * every release from 0.3.0 on is also a GitHub Release with its changelog
+#     entry as the body.
+#
+# It exists because agent sessions cannot push a tag: the environment they run
+# in refuses tag pushes, so until now every release waited on someone at a
+# terminal. Running this workflow is still a release, which is an outward act,
+# and under the hub's rules that is Brett's decision (HUB.md, "Which pull
+# requests need Brett", class 3). An agent dispatches it only on his word.
+#
+# The checks below refuse, rather than warn, on anything that would make the
+# tag or the notes wrong, because a published tag is not something to fix
+# afterwards.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the v, for example 0.5.0"
+        required: true
+        type: string
+      commit:
+        description: "Full 40-character SHA of the commit that made that version current"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      # Inputs reach the shell through the environment, never by template
+      # interpolation into a script, so an input cannot become code.
+      VERSION: ${{ inputs.version }}
+      COMMIT: ${{ inputs.commit }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the commit is the one that made the version current
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must look like 0.5.0, got '$VERSION'"; exit 1; }
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::commit must be a full 40-character SHA"; exit 1; }
+          git cat-file -e "${COMMIT}^{commit}" || { echo "::error::$COMMIT is not a commit in this repository"; exit 1; }
+          git merge-base --is-ancestor "$COMMIT" origin/main || { echo "::error::$COMMIT is not on main"; exit 1; }
+          version_at() { git show "$1:pyproject.toml" | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1; }
+          here="$(version_at "$COMMIT")"
+          [ "$here" = "$VERSION" ] || { echo "::error::pyproject.toml at $COMMIT says '$here', not '$VERSION'"; exit 1; }
+          before="$(version_at "${COMMIT}^1")"
+          [ "$before" != "$VERSION" ] || { echo "::error::the version was already $VERSION before $COMMIT, so this is not the commit that made it current"; exit 1; }
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::tag v$VERSION already exists"; exit 1
+          fi
+
+      - name: Take the notes from the changelog at that commit
+        run: |
+          set -euo pipefail
+          git show "$COMMIT:CHANGELOG.md" \
+            | awk -v heading="## $VERSION" '$0 == heading { found = 1; next } /^## / { if (found) exit } found' \
+            > release-notes.md
+          grep -q '[^[:space:]]' release-notes.md || { echo "::error::CHANGELOG.md at $COMMIT has no '## $VERSION' section, or it is empty"; exit 1; }
+          echo "Notes: $(wc -l < release-notes.md) lines"
+
+      - name: Tag and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "metasalmonpy $VERSION" "$COMMIT"
+          git push origin "refs/tags/v$VERSION"
+          gh release create "v$VERSION" --verify-tag --title "metasalmonpy $VERSION" --notes-file release-notes.md
