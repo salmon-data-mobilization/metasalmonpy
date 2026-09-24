@@ -123,6 +123,61 @@ and moving it is a separate outward act.
   This changes how the suite finds the package and nothing the package does,
   so it opens no `PARITY.md` row.
 
+* **A measurement column whose values all look like years is no longer typed
+  `temporal`.** Ported from metasalmon pull request #152 (backlog **#53**),
+  hub queue item **B-240**, the mirror half of **B-53**. This is
+  R-shipped-first lag being closed, not a deliberate difference, so it opens
+  no `PARITY.md` row.
+
+  `infer_column_role()` typed a column `temporal` whenever every value was a
+  four-digit number from 1800 to 2500, reading the values alone and ahead of
+  any measurement word in its name. So a small stock's `NATURAL_ADULT_SPAWNERS`
+  of 1850, 2003 and 1999 became a `temporal` column. `suggest_semantics()`
+  skips temporal columns, so the column left the whole semantic pipeline with
+  no variable, property, entity or unit target and no warning, while the same
+  column holding numbers outside that range was typed `measurement`.
+
+  The year shape now decides unless the name's words include a measurement
+  word (one the measurement check already reads: `count`, `total`, `spawners`,
+  `escapement`, `weight`, `depth` and the rest) or a sample or partition size,
+  and no date or time word. Then the year shape is not consulted, and the
+  column is typed by the checks that follow exactly as it would be with values
+  outside the year range. Words are split at whitespace, punctuation and case
+  changes, so `Water depth(mm)` and `adult/count` are measurement names, while
+  the year word in `Escapement (yr)` and `count/year`, or a plural one as in
+  `escapement_years`, keeps them `temporal`, as `count_year` always was. Whole
+  words rather than the broader measurement hint, because that hint's
+  substring and unit patterns match names that are not measurements: `temp`
+  inside `temporal_start`, and any parenthetical containing a `g`, such as
+  `Cohort (Aug)`.
+
+  **Not covered, as in R:** a name whose only measurement evidence is a
+  substring (`ADULTCOUNT`) or a unit in parentheses (`Mass (kg)`) is still
+  `temporal` when its values look like years. The words decide only whether the
+  year shape may decide, and the role checks after it read the name as before,
+  so a year-shaped `adult/spawners` or `fish/weight` is no longer `temporal` but
+  not `measurement` either: it gets the role it gets with any other values.
+  **Nor does it touch a `float64` column,** which never looks year-shaped here:
+  the values are rendered through `str()`, and `str(1850.0)` is `"1850.0"`. R
+  reads a double column of the same numbers as year-shaped. So a year column
+  that pandas reads as `float64`, as it reads any integer column with a missing
+  cell, is typed from its name alone here: `pd.read_csv()` on
+  `BY` / `2001` / (blank) / `2003` gives an `attribute`, where
+  `readr::read_csv()` on the same text gives R a `temporal` column. That was
+  true before this change and still is.
+
+  Pinned by `tests/test_year_shaped_measurement_role.py`, the port of
+  `tests/testthat/test-year-shaped-measurement-role.R`. It checks each fixture
+  against `_values_look_yearish()` before asserting its role, and follows one
+  column through `infer_dictionary()` and `suggest_semantics()` to its semantic
+  targets. Its fixtures are `int64`, nullable `Int64`, text and categorical,
+  the storage types this package reads as year-shaped. Measured 2026-09-24 by
+  running metasalmon `main` (`16976b1`) over the same 64 name and value pairs,
+  R and this package now agree on every year-shape verdict and every role,
+  where 18 of the 64 differed before. Over the 1,271 columns in the CSVs of
+  metasalmon, metasalmonpy, smn-data-pkg and salmon-domain-ontology, read with
+  `pd.read_csv()` defaults, no column's role changes.
+
 * **`apply_salmon_dictionary()` names each code value it turns into a missing
   value.** Hub queue item **B-241**, the mirror half of metasalmon backlog
   **#55** (hub **B-55**, metasalmon pull request #154). A value that is present
