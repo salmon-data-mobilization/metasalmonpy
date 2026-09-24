@@ -94,6 +94,33 @@ outward act.
   the type the populated build renders because it joins the bound column names
   into one string.
 
+* **The test suite runs from a checkout at any path.** The repository root is
+  the package, and pytest named it after the directory the checkout sits in, so
+  the suite only worked when that directory was called `metasalmonpy`. Hub
+  queue item **B-191**. Measured 2026-09-23 on `3f8349a`, with the package
+  installed editable as CI installs it. From a directory named like a hub
+  worktree (`salmon-data-mobilization-metasalmonpy-B-191`), pytest 8.4.2 and
+  9.1.1 imported the root as a bare `__init__` module and **all 935 tests
+  errored at setup**. pytest 7.4.4 was unaffected. From a directory named
+  `checkout`, the suite went **green against a different tree**: pytest
+  imported the root a second time under that name, and `import metasalmonpy`
+  found whichever copy was installed. With nothing installed, only a directory
+  named `metasalmonpy` loaded the suite at all. CI never saw any of it, because
+  `actions/checkout` names the directory after the repository.
+
+  `tests/conftest.py` now binds `metasalmonpy` to the checkout it lives in by
+  file location. On pytest 8 and later it also collects the checkout root as a
+  plain directory, so pytest never imports it under a name of its own.
+  `tests/__init__.py` is gone, because it made pytest name every test module
+  after the checkout directory. That turns the one relative sibling import, in
+  `tests/test_validation_hardening.py`, into a top-level one.
+  `tests/test_import_route_guard.py` runs a copy of the checkout under both
+  names. It fails on the unfixed tree even from a directory named
+  `metasalmonpy`, which is the view CI now has, and it fails when any one of
+  the three measures above is removed. The wheel's file list is unchanged.
+  This changes how the suite finds the package and nothing the package does,
+  so it opens no `PARITY.md` row.
+
 * **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
   Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
   **B-111**, metasalmon pull request #119). `create_sdp()` writes three files of
