@@ -4,15 +4,17 @@
 
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
-closed when it set `__version__` to `0.5.0`. Measured 2026-09-16: `v0.5.0` is
-not tagged and no GitHub Release exists for it, so that section describes a
-number that has been *claimed* rather than a release that has shipped. Anything
-merged after that claim belongs here, because filing it under `## 0.5.0` would
-make this file say a version contains a change that the commit making the
-version current does not. metasalmon's `NEWS.md` keeps the same shape with its
-*(development version)* heading, which is what this heading mirrors. **The
-number does not move here**: it is a parity claim, and moving it is a separate
-outward act.
+closed when it set `__version__` to `0.5.0`, and the commit that made that
+version current is B-153's merge, `67fb486` (#33). On 2026-09-16 `v0.5.0` was
+not tagged and no GitHub Release existed for it, so that section described a
+number that had been *claimed* rather than a release that had shipped. Measured
+2026-09-24, it has shipped: `v0.5.0` was tagged on `67fb486` that day and its
+GitHub Release published. Anything merged after `67fb486` belongs here, because
+filing it under `## 0.5.0` would make this file say a version contains a change
+that the commit making the version current does not. metasalmon's `NEWS.md`
+keeps the same shape with its *(development version)* heading, which is what
+this heading mirrors. **The number does not move here**: it is a parity claim,
+and moving it is a separate outward act.
 
 ### Fixed
 

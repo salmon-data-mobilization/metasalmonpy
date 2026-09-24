@@ -36,9 +36,9 @@ violation like a failing test.
    2026-08-24. This package's version stays at the last delivered milestone
    until the next one lands — do **not** bump the number ahead of the
    functionality (Brett's decision, 2026-08-13: bump on parity, not on calendar).
-   The tree now reads 0.5.0; **tagging `v0.5.0` and publishing the GitHub
-   Release are separate outward acts and are Brett's**, so until he makes them
-   the newest tag here is still `v0.4.0`.
+   The tree reads 0.5.0, and measured 2026-09-24 the newest tag here is
+   `v0.5.0`: annotated, on the bump merge `67fb486`, made that day by the
+   Release workflow together with its GitHub Release.
 
    **That window was closed in two halves, and recording both is the point,
    because the second half is the one that gets skipped.** The behavioural half
@@ -227,8 +227,10 @@ Two further mentions of `0.1.6` are deliberately left alone, because they are
 about **tags** rather than about this claim: the install instructions in
 `README.md` and `getting-started.qmd` both say the `v0.1.6` tag is what a user
 can install. That is wrong — `v0.4.0` exists at `3b587e6` — but fixing it is a
-statement about which tag to install, so it waits on the tagging decision rather
-than riding along with a version bump.
+statement about which tag to install, so it waited on the tagging decision
+rather than riding along with a version bump. That decision was made on
+2026-09-24, when `v0.5.0` was tagged on `67fb486`, so the fix is no longer
+blocked and is still owed.
 
 The version is a **parity claim**, so it moves only when the mirrored behaviour
 actually lands; the mirror contract above governs what makes the claim true.
