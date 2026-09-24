@@ -140,10 +140,12 @@ and moving it is a separate outward act.
 
   `review_semantics()` now prints `code_value=""` whenever `table` alone would
   not select the column's own slot, and the refusal offers it too. A blank
-  `code_value` (`""`, or a missing value) selects the slots that belong to no
-  code. The matcher already read a blank that way, where metasalmon's raised,
-  but it also matched a code slot whose `codes.csv` row leaves `code_value`
-  empty because it supplies `vocabulary_iri`, which the codes schema allows.
+  `code_value` (`""`, `pd.NA` or `NaN`) selects the slots that belong to no
+  code, while `None`, the default, still leaves it unconstrained, as R's
+  `NULL` does. The matcher already read a blank that way, where metasalmon's
+  raised, but it also matched a code slot whose `codes.csv` row leaves
+  `code_value` empty because it supplies `vocabulary_iri`, which the codes
+  schema allows.
   Whether a slot is a code's is now read from its file, so a blank never
   selects a code's slot. An omitted `code_value` still matches every code, and
   no earlier version printed a blank one, so every call an earlier version

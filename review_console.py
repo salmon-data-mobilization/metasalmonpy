@@ -790,10 +790,10 @@ def _match_slot_rows(
     phantom missing row had made look ambiguous. ``column=None`` selects the
     column-less (table-scope) slots deliberately.
 
-    ``code_value`` has three states. ``None`` leaves it unconstrained; a value
-    selects that code's slot; and a BLANK value (``""``, or a missing value,
-    which :func:`_text` reads as ``""``) selects the slots that belong to no
-    code: the column's own slot, or a table's. That third state is what tells a
+    ``code_value`` has three states. ``None`` leaves it unconstrained, as R's
+    ``NULL`` does; a value selects that code's slot; and a BLANK value (``""``,
+    or ``pd.NA`` or ``NaN``, which :func:`_text` reads as ``""``) selects the
+    slots that belong to no code: the column's own slot, or a table's. That third state is what tells a
     column's own slot apart from its codes' slots when they share a role -- a
     measurement column's ``entity_iri`` and its codes' ``entity`` targets do --
     because omitting ``code_value`` matches every code as well as the column
@@ -1185,13 +1185,14 @@ def accept_suggestion(
         Table identifier; needed only when the column name appears in more than
         one table.
     code_value
-        Code value; needed only for code-level slots. Pass ``""`` (or a
-        missing value) to select a column's own slot when codes of that column
-        have slots with the same role, as a measurement column's codes do:
-        leaving ``code_value`` out matches those code slots too. A blank never
-        selects a code's slot, even for a ``codes.csv`` row that leaves
-        ``code_value`` empty because it supplies ``vocabulary_iri``.
-        :func:`review_semantics` prints it whenever it is needed.
+        Code value; needed only for code-level slots. Pass ``""`` (``pd.NA``
+        and ``NaN`` mean the same) to select a column's own slot when codes of
+        that column have slots with the same role, as a measurement column's
+        codes do: leaving ``code_value`` out, which is what ``None`` means,
+        matches those code slots too. A blank never selects a code's slot, even
+        for a ``codes.csv`` row that leaves ``code_value`` empty because it
+        supplies ``vocabulary_iri``. :func:`review_semantics` prints it whenever
+        it is needed.
     iri
         Optional IRI to accept instead of a shortlisted candidate -- for the
         case where the right term exists but retrieval did not surface it.

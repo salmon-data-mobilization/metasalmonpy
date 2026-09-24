@@ -494,9 +494,12 @@ def test_a_blank_code_value_selects_the_columns_own_slot_and_an_omitted_one_stil
     # printed for a code slot when that slot was the only one for its column and
     # role carries no code_value, and reading the omission as "no code value"
     # would re-point that pasted call at the column's own slot, or at nothing.
-    # So the bare call still refuses rather than guessing.
+    # So the bare call still refuses rather than guessing, and so does an
+    # explicit None, which is the omitted default, as R's NULL is.
     with pytest.raises(ValueError, match="more than one review slot"):
         accept_suggestion(review, "spawner_count", "entity", rank=1)
+    with pytest.raises(ValueError, match="more than one review slot"):
+        accept_suggestion(review, "spawner_count", "entity", rank=1, code_value=None)
 
 
 def test_doing_what_the_ambiguity_refusal_says_reaches_every_slot_it_matched():
