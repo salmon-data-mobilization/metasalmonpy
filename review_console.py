@@ -126,6 +126,17 @@ def review_target_keys(target_file: str) -> Optional[Sequence[str]]:
     return _TARGET_KEYS.get(str(target_file))
 
 
+def _is_code_slot(target_file) -> bool:
+    """Whether a target is a code's slot: its address includes ``code_value``.
+
+    Read from :func:`review_target_keys` rather than spelled a second time, so
+    the two cannot disagree. A code's slot stays one when its ``code_value`` is
+    empty, as a ``codes.csv`` row's may be when it supplies ``vocabulary_iri``
+    instead. Mirrors R's ``.ms_review_is_code_slot()``.
+    """
+    return "code_value" in (review_target_keys(_text(target_file)) or ())
+
+
 def _text(value) -> str:
     return scalar_text(value)
 
@@ -778,6 +789,21 @@ def _match_slot_rows(
     a spurious ``table="spawners"`` on an unrelated dictionary slot that a
     phantom missing row had made look ambiguous. ``column=None`` selects the
     column-less (table-scope) slots deliberately.
+
+    ``code_value`` has three states. ``None`` leaves it unconstrained, as R's
+    ``NULL`` does; a value selects that code's slot; and a BLANK value (``""``,
+    or ``pd.NA`` or ``NaN``, which :func:`_text` reads as ``""``) selects the
+    slots that belong to no code: the column's own slot, or a table's. That third state is what tells a
+    column's own slot apart from its codes' slots when they share a role -- a
+    measurement column's ``entity_iri`` and its codes' ``entity`` targets do --
+    because omitting ``code_value`` matches every code as well as the column
+    (hub queue B-151, whose Python half is B-242).
+
+    "Belongs to no code" is decided by the slot's file, not by an empty
+    ``code_value``. A ``codes.csv`` row may leave ``code_value`` empty when it
+    supplies ``vocabulary_iri``, which the codes schema allows, and discovery
+    still gives it a code-level target; read as "no code", a blank would match
+    that slot and the column's own slot together and settle nothing.
     """
     if rows.empty:
         return rows
@@ -790,7 +816,12 @@ def _match_slot_rows(
     if table is not None:
         keep &= rows["table_id"].map(_text) == _text(table)
     if code_value is not None:
-        keep &= rows["code_value"].map(_text) == _text(code_value)
+        code_text = _text(code_value)
+        codes = rows["code_value"].map(_text)
+        if code_text:
+            keep &= codes == code_text
+        else:
+            keep &= (codes == "") & ~rows["target_file"].map(_is_code_slot)
     return rows[keep]
 
 
@@ -802,6 +833,15 @@ def _review_call_args(rows: pd.DataFrame, slot_id: str) -> dict:
     the common single-table case prints the short call. A column-less slot has
     no positional spelling at all, so it prints named arguments and ``table``
     is mandatory rather than a disambiguator.
+
+    When ``table`` is not enough, ``code_value`` is added. For a code's slot
+    that is its code value. For a slot that belongs to no code it is
+    ``code_value=""``, the only spelling that excludes the code slots sharing
+    this slot's column and role, because an omitted ``code_value`` matches them
+    all (hub queue B-151). A code's slot with an empty ``code_value`` gets
+    neither: ``""`` selects the slots that belong to no code, so printing it
+    there would decide the column's own slot instead of this one. That slot's
+    call stays ambiguous, and refuses rather than deciding the wrong slot.
     """
     row = rows[rows["slot_id"] == slot_id].iloc[0]
     column = _text(row["column_name"])
@@ -825,7 +865,7 @@ def _review_call_args(rows: pd.DataFrame, slot_id: str) -> dict:
             extra["table"] = table_value
     if len(resolved(extra)) > 1:
         code_value = _text(row["code_value"])
-        if code_value:
+        if code_value or not _is_code_slot(row["target_file"]):
             extra["code_value"] = code_value
     args.update(extra)
     return args
@@ -1073,16 +1113,30 @@ def _resolve_slot(
 
     slots = list(dict.fromkeys(matched["slot_id"]))
     if len(slots) > 1:
+        # A slot that belongs to no code, in a table whose code slots are also
+        # among the matches, is selected only by code_value=""; offering it a
+        # bare table= repeats an argument that settles nothing (hub queue
+        # B-151). A code's slot with an empty code_value has no option of its
+        # own that settles it, since no argument tells it apart from the
+        # column's own slot, so it keeps the bare table=.
+        coded_tables = {
+            _text(row["table_id"])
+            for _, row in matched.iterrows()
+            if _is_code_slot(row["target_file"])
+        }
+
+        def option_for(row) -> str:
+            table_text = _text(row["table_id"])
+            code_text = _text(row["code_value"])
+            option = "table=" + _quote(table_text)
+            if code_text:
+                return option + ", code_value=" + _quote(code_text)
+            if not _is_code_slot(row["target_file"]) and table_text in coded_tables:
+                return option + ', code_value=""'
+            return option
+
         ambiguous = list(
-            dict.fromkeys(
-                "table=" + _quote(_text(row["table_id"]))
-                + (
-                    ""
-                    if not _text(row["code_value"])
-                    else ", code_value=" + _quote(_text(row["code_value"]))
-                )
-                for _, row in matched.iterrows()
-            )
+            dict.fromkeys(option_for(row) for _, row in matched.iterrows())
         )
         raise ValueError(
             "That column and role match more than one review slot. Add one of "
@@ -1131,7 +1185,14 @@ def accept_suggestion(
         Table identifier; needed only when the column name appears in more than
         one table.
     code_value
-        Code value; needed only for code-level slots.
+        Code value; needed only for code-level slots. Pass ``""`` (``pd.NA``
+        and ``NaN`` mean the same) to select a column's own slot when codes of
+        that column have slots with the same role, as a measurement column's
+        codes do: leaving ``code_value`` out, which is what ``None`` means,
+        matches those code slots too. A blank never selects a code's slot, even
+        for a ``codes.csv`` row that leaves ``code_value`` empty because it
+        supplies ``vocabulary_iri``. :func:`review_semantics` prints it whenever
+        it is needed.
     iri
         Optional IRI to accept instead of a shortlisted candidate -- for the
         case where the right term exists but retrieval did not surface it.

@@ -95,7 +95,9 @@ apply_sdp_semantics(package_path, review)
 The address arguments follow the slot, and `review_semantics()` always prints
 the right spelling: omit `column` for a table-level slot and pass `table=`
 instead; pass `table=` as well when a column name appears in more than one
-table; pass `code_value=` for a `codes.csv` slot. Where the right term exists
+table; pass `code_value=` for a `codes.csv` slot, and `code_value=""` for a
+column's own slot when that column's codes have slots with the same role, as a
+measurement column's codes do. Where the right term exists
 but retrieval never surfaced it, accept it directly with
 `accept_suggestion(review, "spawner_count", "variable", iri="…")`.
 
