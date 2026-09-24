@@ -10,6 +10,7 @@ and fails the moment anyone pastes it.
 from __future__ import annotations
 
 import functools
+import re
 import warnings
 from pathlib import Path
 
@@ -25,7 +26,12 @@ from metasalmonpy import (
     semantic_llm_assessments,
     semantic_suggestions,
 )
-from metasalmonpy.review_console import SemanticReview
+from metasalmonpy.review_console import (
+    SemanticReview,
+    _accept_call,
+    _reject_call,
+    _strip_review_iri,
+)
 
 SPAWNER_IRI = "https://w3id.org/smn/SpawnerAbundance"
 WATERCOURSE_IRI = "https://w3id.org/smn/WatercourseDesignation"
@@ -399,6 +405,402 @@ def test_a_column_level_slot_sharing_a_role_with_its_codes_is_still_ambiguous():
     eval(  # noqa: S307
         printed[1], {"accept_suggestion": accept_suggestion, "review": review}
     )
+
+
+# ---------------------------------------------------------------------------
+# A measurement column with a code list: hub queue B-242, the mirror half of
+# metasalmon's B-151. Each test mirrors one in metasalmon's
+# tests/testthat/test-review-console.R.
+# ---------------------------------------------------------------------------
+
+MEASUREMENT_COLUMN_SLOT = (
+    "column_dictionary.csv|demo-1/spawners/spawner_count|entity_iri"
+)
+
+
+def _measurement_code_review() -> SemanticReview:
+    """A measurement column whose codes share its roles.
+
+    A **measurement** column's own ``entity_iri`` and ``constraint_iri``
+    targets share their roles with its codes' ``codes.csv`` targets, which a
+    measurement parent gives the roles constraint, entity and method -- see
+    ``semantics.py``'s ``["constraint", "entity", "method"]`` role set. So one
+    (column, role) pair names the column's own slot AND a slot per code. An
+    omitted ``code_value`` matches every code, so the column's own slot printed
+    ``accept_suggestion(review, "spawner_count", "entity", rank=1,
+    table="spawners")``, which matched three slots and raised: the printed call
+    that cannot run. Built the way discovery builds it: the three roles of one
+    code share that code's slot. Mirrors R's ``measurement_code_review()``.
+    """
+
+    def code_rows(code: str) -> list:
+        return [
+            _suggestion_row(
+                code_value=code,
+                dictionary_role=role,
+                target_scope="code",
+                target_sdp_file="codes.csv",
+                target_sdp_field="term_iri",
+                target_row_key=f"demo-1/spawners/spawner_count/{code}",
+                label=f"{role} term for {code}",
+                iri=f"https://example.org/{role}/{code}",
+            )
+            for role in ("constraint", "entity", "method")
+        ]
+
+    dictionary = _dictionary_with(
+        [
+            _suggestion_row(
+                dictionary_role="entity",
+                target_sdp_field="entity_iri",
+                label="Spawner",
+                iri="https://w3id.org/smn/Spawner",
+            ),
+            _suggestion_row(
+                dictionary_role="constraint",
+                target_sdp_field="constraint_iri",
+                label="Wild origin",
+                iri="https://example.org/constraint/column",
+            ),
+            *code_rows("-9"),
+            *code_rows("-99"),
+        ]
+    )
+    return review_semantics(dictionary)
+
+
+def _refusal_options(refused: pytest.ExceptionInfo) -> list:
+    """The arguments an ambiguity refusal tells the caller to add, one each."""
+    message = str(refused.value)
+    return message.split("to say which: ", 1)[1].rstrip(".").split("; ")
+
+
+def _assert_printed_calls_decide_their_own_slots(
+    review: SemanticReview, must_run=None
+):
+    """Run every printed call and check the slot and rank it was printed UNDER.
+
+    Not only that it decides something: a call that resolves to a sibling slot
+    passes a "one decision was recorded" check and writes the wrong field. The
+    text run is the rendered line, so it is what a user pastes.
+
+    The calls of every slot in ``must_run`` (all slots by default) have to run.
+    A slot left out of it may refuse as ambiguous, which is what a call does
+    when nothing in its arguments can tell its slot apart, but no call may ever
+    decide a slot other than the one it was printed under. Mirrors R's
+    ``expect_printed_calls_decide_their_own_slots()``.
+    """
+    rendered = {
+        re.sub(r"\s+#.*$", "", line.strip())
+        for line in review.render_lines(object_name="review")
+    }
+    namespace = {
+        "accept_suggestion": accept_suggestion,
+        "reject_suggestion": reject_suggestion,
+        "review": review,
+    }
+    rows = review.rows
+    required = set(rows["slot_id"]) if must_run is None else set(must_run)
+
+    def run(call, slot):
+        try:
+            return eval(call, namespace).rows  # noqa: S307 - the call is the contract
+        except ValueError as refused:
+            assert slot not in required, f"{call} -> {refused}"
+            assert "more than one review slot" in str(refused), call
+            return None
+
+    for _, row in rows.iterrows():
+        call = _accept_call(rows, row["slot_id"], row["rank"])
+        assert f"review = {call}" in rendered, call
+        decided = run(call, row["slot_id"])
+        if decided is None:
+            continue
+        accepted = decided[decided["decision"].notna()]
+        assert len(accepted) == 1, call
+        assert accepted["slot_id"].iloc[0] == row["slot_id"], call
+        assert int(accepted["rank"].iloc[0]) == int(row["rank"]), call
+    for slot in dict.fromkeys(rows["slot_id"]):
+        call = _reject_call(rows, slot)
+        assert f"review = {call}" in rendered, call
+        decided = run(call, slot)
+        if decided is None:
+            continue
+        assert set(decided.loc[decided["decision"].notna(), "slot_id"]) == {slot}, call
+
+
+def test_a_measurement_column_with_a_code_list_prints_a_call_that_reaches_its_own_slot():
+    review = _measurement_code_review()
+    lines = [line.strip() for line in review.render_lines(object_name="review")]
+    assert (
+        'review = accept_suggestion(review, "spawner_count", "entity", rank=1, '
+        'table="spawners", code_value="")'
+    ) in lines
+    _assert_printed_calls_decide_their_own_slots(review)
+
+
+def test_a_blank_code_value_selects_the_columns_own_slot_and_an_omitted_one_still_matches_every_code():
+    review = _measurement_code_review()
+    for blank in ("", pd.NA, float("nan")):
+        decided = accept_suggestion(
+            review, "spawner_count", "entity", rank=1, code_value=blank
+        ).rows
+        assert set(decided.loc[decided["decision"].notna(), "slot_id"]) == {
+            MEASUREMENT_COLUMN_SLOT
+        }, repr(blank)
+    # An omitted code_value still matches every code, as it always has. A call
+    # printed for a code slot when that slot was the only one for its column and
+    # role carries no code_value, and reading the omission as "no code value"
+    # would re-point that pasted call at the column's own slot, or at nothing.
+    # So the bare call still refuses rather than guessing.
+    with pytest.raises(ValueError, match="more than one review slot"):
+        accept_suggestion(review, "spawner_count", "entity", rank=1)
+
+
+def test_doing_what_the_ambiguity_refusal_says_reaches_every_slot_it_matched():
+    # The column's own option used to be a bare table="spawners", which repeated
+    # the ambiguity instead of settling it, so a user who followed the message
+    # could not reach that slot at all.
+    review = _measurement_code_review()
+    with pytest.raises(ValueError, match="more than one review slot") as refused:
+        accept_suggestion(review, "spawner_count", "entity", rank=1)
+    namespace = {"accept_suggestion": accept_suggestion, "review": review}
+    reached = set()
+    for option in _refusal_options(refused):
+        call = f'accept_suggestion(review, "spawner_count", "entity", rank=1, {option})'
+        try:
+            decided = eval(call, namespace).rows  # noqa: S307
+        except ValueError:
+            reached.add(None)
+            continue
+        reached |= set(decided.loc[decided["decision"].notna(), "slot_id"])
+    assert reached == set(review.rows.loc[review.rows["role"] == "entity", "slot_id"])
+
+
+def _vocabulary_code_review() -> SemanticReview:
+    """A code slot whose ``codes.csv`` row has no code value.
+
+    The codes schema lets a row leave ``code_value`` empty when it supplies
+    ``vocabulary_iri``, and discovery still gives it a code-level target, with
+    the three roles a measurement parent gives its codes. Its ``code_value`` is
+    as empty as the column's own slot's, so only the file tells the two apart.
+    Mirrors R's ``vocabulary_code_review()``.
+    """
+    dictionary = _dictionary_with(
+        [
+            _suggestion_row(
+                dictionary_role="entity",
+                target_sdp_field="entity_iri",
+                label="Spawner",
+                iri="https://w3id.org/smn/Spawner",
+            ),
+            _suggestion_row(
+                dictionary_role="constraint",
+                target_sdp_field="constraint_iri",
+                label="Wild origin",
+                iri="https://example.org/constraint/column",
+            ),
+            *[
+                _suggestion_row(
+                    code_value=pd.NA,
+                    dictionary_role=role,
+                    target_scope="code",
+                    target_sdp_file="codes.csv",
+                    target_sdp_field="term_iri",
+                    target_row_key="demo-1/spawners/spawner_count/NA",
+                    label=f"{role} term for the vocabulary",
+                    iri=f"https://example.org/{role}/vocabulary",
+                )
+                for role in ("constraint", "entity", "method")
+            ],
+        ]
+    )
+    return review_semantics(dictionary)
+
+
+def test_a_blank_code_value_never_selects_a_code_slot_whose_codes_row_has_no_code_value():
+    review = _vocabulary_code_review()
+    rows = review.rows
+    column_slots = set(rows.loc[rows["target_file"] != "codes.csv", "slot_id"])
+
+    # The column's own slots print calls that run and decide them. The code
+    # slot's own calls may still refuse, because no argument tells a code slot
+    # with no code value apart from the column's own slot; that is a separate
+    # defect, recorded in metasalmon's .hub/workpads/B-151.md. What no call may
+    # do is decide the other slot.
+    _assert_printed_calls_decide_their_own_slots(review, must_run=column_slots)
+    for blank in ("", pd.NA, float("nan")):
+        decided = accept_suggestion(
+            review, "spawner_count", "entity", rank=1, code_value=blank
+        ).rows
+        assert set(decided.loc[decided["decision"].notna(), "slot_id"]) == {
+            MEASUREMENT_COLUMN_SLOT
+        }, repr(blank)
+
+    # And the refusal offers the column's own slot an option that reaches it.
+    with pytest.raises(ValueError, match="more than one review slot") as refused:
+        accept_suggestion(review, "spawner_count", "entity", rank=1)
+    assert 'table="spawners", code_value=""' in _refusal_options(refused)
+    decided = accept_suggestion(
+        review, "spawner_count", "entity", rank=1, table="spawners", code_value=""
+    ).rows
+    assert set(decided.loc[decided["decision"].notna(), "slot_id"]) == {
+        MEASUREMENT_COLUMN_SLOT
+    }
+
+
+def _measurement_code_package(tmp_path, monkeypatch, codes, name) -> Path:
+    """Build a package through the real pipeline, ``codes`` seeded onto the
+    measurement column ``spawner_count``, with retrieval stubbed.
+
+    ``semantic_code_scope="all"`` is the documented option that gives a numeric
+    column's codes semantic targets; the default, ``"factor"``, gives them
+    none. Mirrors R's ``measurement_code_package()``.
+    """
+    from metasalmonpy import semantics as sem
+
+    def hits(query, role=None, sources=None):
+        return pd.DataFrame(
+            {
+                "label": [f"Term {i} for {role}" for i in (1, 2)],
+                "iri": [f"https://example.org/candidates/{role}Term{i}" for i in (1, 2)],
+                "source": ["smn", "smn"],
+                "ontology": ["smn", "smn"],
+                "role": [role, role],
+                "match_type": ["label_exact", "label_exact"],
+                "definition": ["A term.", "A term."],
+                "score": [4.5, 3.5],
+            }
+        )
+
+    monkeypatch.setattr(
+        sem,
+        "suggest_semantics",
+        functools.partial(sem.suggest_semantics, search_fn=hits),
+    )
+    return Path(
+        create_sdp(
+            {
+                "spawners": pd.DataFrame(
+                    {
+                        "stream_name": ["Bear Creek", "Elk River"] * 6,
+                        "spawner_count": [120, 340, -9, 88, 17, -99, 5, 9, 10, 11, 12, 13],
+                    }
+                )
+            },
+            path=tmp_path / name,
+            dataset_id="demo-1",
+            table_id="spawners",
+            semantic_max_per_role=2,
+            seed_semantics=True,
+            seed_codes=codes,
+            semantic_code_scope="all",
+            seed_verbose=False,
+            check_updates=False,
+        )
+    )
+
+
+def _assert_column_call_writes_the_dictionary(path: Path, review: SemanticReview):
+    """Paste the column's own entity call, apply it, and check it wrote the
+    column's ``entity_iri`` and left ``codes.csv`` alone. Mirrors R's
+    ``expect_column_call_writes_the_dictionary()``."""
+
+    def read(file_name: str) -> pd.DataFrame:
+        return pd.read_csv(
+            path / "metadata" / file_name, dtype=str, keep_default_na=False
+        )
+
+    rows = review.rows
+    codes_before = read("codes.csv")
+    call = _accept_call(rows, MEASUREMENT_COLUMN_SLOT, 1)
+    assert 'code_value=""' in call
+    decided = eval(  # noqa: S307
+        call, {"accept_suggestion": accept_suggestion, "review": review}
+    )
+    apply_sdp_semantics(str(path), decided, quiet=True)
+
+    chosen = rows.loc[
+        (rows["slot_id"] == MEASUREMENT_COLUMN_SLOT) & (rows["rank"] == 1), "iri"
+    ].iloc[0]
+    dictionary = read("column_dictionary.csv")
+    written = dictionary.loc[
+        dictionary["column_name"] == "spawner_count", "entity_iri"
+    ].iloc[0]
+    assert written == _strip_review_iri(chosen)
+    pd.testing.assert_frame_equal(read("codes.csv"), codes_before)
+
+
+def test_a_measurement_column_with_a_code_list_round_trips_from_create_sdp_to_disk(
+    tmp_path, monkeypatch
+):
+    # The same collision reached through the real pipeline rather than a
+    # hand-built frame.
+    codes = pd.DataFrame(
+        {
+            "dataset_id": ["demo-1", "demo-1"],
+            "table_id": ["spawners", "spawners"],
+            "column_name": ["spawner_count", "spawner_count"],
+            "code_value": ["-9", "-99"],
+            "code_label": ["Not surveyed", "Survey abandoned"],
+            "code_description": [
+                "The reach was not surveyed.",
+                "The survey was abandoned.",
+            ],
+        }
+    )
+    path = _measurement_code_package(tmp_path, monkeypatch, codes, "measurement-codes")
+    review = review_semantics(str(path))
+    rows = review.rows
+
+    code_slots = {
+        f"codes.csv|demo-1/spawners/spawner_count/{code}|term_iri"
+        for code in ("-9", "-99")
+    }
+    # The collision is real: the column's own slot and both code slots answer
+    # to (spawner_count, entity), and the code slots to constraint as well.
+    assert {MEASUREMENT_COLUMN_SLOT} | code_slots <= set(
+        rows.loc[rows["role"] == "entity", "slot_id"]
+    )
+    assert code_slots <= set(rows.loc[rows["role"] == "constraint", "slot_id"])
+
+    _assert_printed_calls_decide_their_own_slots(review)
+    _assert_column_call_writes_the_dictionary(path, review)
+
+
+def test_a_measurement_column_whose_codes_row_names_a_vocabulary_round_trips_from_create_sdp_to_disk(
+    tmp_path, monkeypatch
+):
+    # The vocabulary-backed row through the real pipeline: the column's only
+    # codes.csv row supplies vocabulary_iri and no code value.
+    codes = pd.DataFrame(
+        {
+            "dataset_id": ["demo-1"],
+            "table_id": ["spawners"],
+            "column_name": ["spawner_count"],
+            "code_value": [pd.NA],
+            "code_label": ["Count categories"],
+            "code_description": [
+                "Counts are recorded against a published category vocabulary."
+            ],
+            "vocabulary_iri": ["https://example.org/vocab/count-categories"],
+        }
+    )
+    path = _measurement_code_package(tmp_path, monkeypatch, codes, "vocabulary-codes")
+    review = review_semantics(str(path))
+    rows = review.rows
+
+    # Counted, not named: the slot is keyed on the code value's text, and R and
+    # Python spell a missing value differently there ("NA" against "nan").
+    code_slots = set(rows.loc[rows["target_file"] == "codes.csv", "slot_id"])
+    assert len(code_slots) == 1
+    assert {MEASUREMENT_COLUMN_SLOT} | code_slots <= set(
+        rows.loc[rows["role"] == "entity", "slot_id"]
+    )
+
+    column_slots = set(rows.loc[rows["target_file"] != "codes.csv", "slot_id"])
+    _assert_printed_calls_decide_their_own_slots(review, must_run=column_slots)
+    _assert_column_call_writes_the_dictionary(path, review)
 
 
 def test_a_table_level_slot_never_names_a_column_that_does_not_exist():
