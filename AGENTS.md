@@ -245,14 +245,20 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
 dependency configurations, and CI runs both (see *Dependency boundaries*): 1012
 passed / 1 skipped with the extras installed, 871 / 142 with core dependencies
-only (2026-09-24, measured for hub B-242 under pytest 9.1.1 and pandas 3.0.6;
-1007 / 1 and 866 / 142 for B-240 earlier that day, 966 / 1 and 825 / 142 for
-B-191 on 2026-09-23, 951 / 1 and
+only (2026-09-24, measured locally for hub B-242 under Python 3.11.15, pytest
+9.1.1 and pandas 3.0.6, on a machine where `Rscript` is on `PATH` and
+`/tmp/metasalmon-lib` exists; 1007 / 1 and 866 / 142 for B-240 earlier that
+day, 966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
-on 2026-09-14, and 803 / 3 and 690 / 116 before that). The gap is the extras-gated
-EML, KNB and context-reader tests; the one that skips either way is a
-filesystem-symlink guard. These counts are a dated measurement, not a target —
-update them when you add tests rather than treating a mismatch as a failure.
+on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads two fewer
+passes in each leg for the same tree**: 1010 / 3 and 869 / 144 on B-242's head
+`183f887`. The two are `tests/test_roundtrip.py`, which runs only where both of
+those hold. CI's suite jobs have neither, so it skips there and runs in CI's
+`parity` job instead. The gap between the legs is the extras-gated EML, KNB and
+context-reader tests; the one that skips in both legs, locally and on CI, is
+the Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1`
+is set. These counts are a dated measurement, not a target — update them when
+you add tests rather than treating a mismatch as a failure.
 
 **The suite runs from a checkout at any path.** It did not until 2026-09-23
 (hub **B-191**). The root `__init__.py` and a `tests/__init__.py` made pytest
