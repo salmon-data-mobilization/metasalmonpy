@@ -226,32 +226,41 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 951
-passed / 1 skipped with the extras installed, 810 / 142 with core dependencies
-only (0.5.0, 2026-09-16; 896 / 3 and 783 / 116 at the S5 parity port on
-2026-09-14, and 803 / 3 and 690 / 116 before that). The gap is the extras-gated
+dependency configurations, and CI runs both (see *Dependency boundaries*): 966
+passed / 1 skipped with the extras installed, 825 / 142 with core dependencies
+only (2026-09-23, measured for hub B-191 under pytest 9.1.1; 951 / 1 and
+810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
+on 2026-09-14, and 803 / 3 and 690 / 116 before that). The gap is the extras-gated
 EML, KNB and context-reader tests; the one that skips either way is a
 filesystem-symlink guard. These counts are a dated measurement, not a target —
 update them when you add tests rather than treating a mismatch as a failure.
 
-**Run it from a directory named `metasalmonpy`.** The root `__init__.py` and
-`tests/__init__.py` make pytest infer the package name from the checkout
-directory, so a git worktree parked at `.../my-fix` collects the suite as
-package `my-fix` and *every* test errors on a relative import — a wall of
-failures that looks like a broken branch and is only a broken path. Put an
-auxiliary worktree at a path whose last component is `metasalmonpy`
-(`git worktree add ../.worktrees/<topic>/metasalmonpy <branch>`). Retire this
-note if the package ever moves into its own `src/metasalmonpy/` directory,
-which is what would make the checkout name irrelevant.
+**The suite runs from a checkout at any path.** It did not until 2026-09-23
+(hub **B-191**). The root `__init__.py` and a `tests/__init__.py` made pytest
+name the package after the checkout directory, so under pytest 8 and later a
+worktree at `.../my-fix` errored on every test. Hub agents took to nesting each
+worktree under a directory named `metasalmonpy` to get a suite to run.
+**Nesting is no longer needed, and `tests/` must stay a plain directory**,
+because an `__init__.py` there brings the dependency back. `tests/conftest.py`
+says how the suite now finds the package. `tests/test_import_route_guard.py`
+runs a copy of the checkout under two directory names that used to break, so
+CI, whose checkout is always named `metasalmonpy`, sees a regression. Retire
+this note with the conftest's measures, when the package moves into its own
+`src/metasalmonpy/` directory.
 
-**And check which tree you are actually testing.** `package-dir` makes an
-editable install register a `sys.meta_path` finder pinned to the *absolute
-path it was installed from*, and `sys.meta_path` is consulted before
-`sys.path`. A virtualenv built in the primary checkout therefore keeps
-importing the primary checkout's modules while you run pytest inside a
-worktree — a green suite that says nothing about the branch you are on, and
-nothing in the output hints at it. Install the package from the worktree, and
-confirm it took:
+**A pytest run tests the tree it lives in, and nothing else does that for
+you.** `package-dir` makes an editable install register an import finder
+pinned to the *absolute path it was installed from*. That finder sits after
+`sys.path` on `sys.meta_path` (measured 2026-09-23), so it answers whenever
+nothing on `sys.path` provides `metasalmonpy`. Before B-191 that was every
+pytest run in a checkout not named `metasalmonpy`: a virtualenv built in the
+primary checkout kept testing the primary checkout from inside a worktree, the
+run was green, and nothing in the output hinted at it. `tests/conftest.py` now
+binds `metasalmonpy` to its own checkout, and refuses to load if the package
+was already imported from somewhere else. **Everything outside pytest still
+resolves the package through whatever is installed**: `tests/smoke.py`, the
+scripts, a notebook, `python -c`. For those, install the package from the tree
+you mean, and confirm it took:
 
 ```sh
 python -c "import metasalmonpy; print(metasalmonpy.__file__)"
