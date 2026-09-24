@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tempfile
 import xml.etree.ElementTree as ET
 from datetime import date
 from pathlib import Path
@@ -305,6 +306,30 @@ def edh_build_hnap_xml(
         date_stamp=date_stamp,
         profile="dfo_edh_hnap",
     )
+
+
+def _edh_hnap_xml_bytes(dataset_meta: pd.DataFrame, **kwargs) -> bytes:
+    """Render the EDH XML to the exact bytes ``edh_build_hnap_xml(output_path=...)``
+    writes, without touching the destination.
+
+    Mirrors ``.ms_edh_hnap_xml_bytes()``. ``create_sdp()`` installs these bytes
+    with ``atomic_io.atomic_write()`` (hub queue B-179). This builder renders
+    from dataset metadata at write time, so it had the most abort points of the
+    three create-owned sidecars, and it used to run after the existing file had
+    been unlinked.
+
+    It goes through the builder's own write, into a file in a scratch
+    directory, rather than encoding the returned ``xml`` string here. That
+    keeps ``create_sdp()``'s EDH bytes identical to
+    ``write_edh_xml_from_sdp()``'s by construction: both come from the one
+    ``write_text`` call inside the builder, which translates newlines to
+    ``os.linesep``. An atomicity fix must not change those bytes, and must not
+    open a second way of rendering one file.
+    """
+    with tempfile.TemporaryDirectory() as scratch:
+        staging = Path(scratch) / "metadata-edh-hnap.xml"
+        edh_build_hnap_xml(dataset_meta, output_path=staging, **kwargs)
+        return staging.read_bytes()
 
 
 def write_edh_xml_from_sdp(

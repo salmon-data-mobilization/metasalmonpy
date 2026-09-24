@@ -4,6 +4,7 @@ import json
 import shutil
 import datetime as _dt
 import re
+import tempfile
 import urllib.parse
 import warnings
 from pathlib import Path
@@ -14,6 +15,7 @@ try:
 except ImportError as exc:  # pragma: no cover - import guard
     raise ImportError("metasalmonpy requires pandas; install via `pip install pandas`.") from exc
 
+from .atomic_io import atomic_write
 from .dictionary import infer_dictionary, validate_dictionary
 from .metadata import (
     csv_na_token,
@@ -208,6 +210,43 @@ def _package_ownership_bytes() -> bytes:
     return "metasalmonpy-owned\n".encode("utf-8")
 
 
+def _text_file_bytes(text: str) -> bytes:
+    """Render text to the exact bytes ``Path.write_text(text, encoding="utf-8")``
+    writes, without touching the file the text is for.
+
+    Mirrors ``.ms_sdp_extension_text_bytes()``. It goes through the real writer,
+    into a file in a scratch directory, rather than calling
+    ``text.encode("utf-8")``, because ``write_text`` opens the file in text mode
+    and translates every ``"\\n"`` to ``os.linesep``. So the two differ on
+    Windows. ``create_sdp()``'s sidecars became atomic in hub queue B-179, and
+    that change must not change their bytes. Using the writer the file always
+    used is the only way to guarantee that on every platform. It also keeps the
+    render on ``Path.write_text``, which is where
+    ``tests/test_create_sdp_sidecar_atomicity.py`` injects its README abort. That
+    hook is shared by the code before the fix and after it, and that is what lets
+    the test fail on the old code.
+    """
+    with tempfile.TemporaryDirectory() as scratch:
+        staging = Path(scratch) / "render.txt"
+        staging.write_text(text, encoding="utf-8")
+        return staging.read_bytes()
+
+
+def _suggestions_csv_bytes(suggestions: pd.DataFrame) -> bytes:
+    """Render ``semantic_suggestions.csv`` exactly as ``create_sdp()`` always wrote it.
+
+    The frame and the keyword arguments are unchanged from the former
+    ``to_csv(path, ...)`` call, and only the destination moved. This is the same
+    move ``_metadata_csv_bytes()`` made, and for the same reason. It is
+    deliberately NOT ``_metadata_csv_bytes()``, whose frame preparation renders
+    a logical column as ``TRUE``/``FALSE``. Borrowing it would change this
+    file's bytes, and an atomicity fix must not do that. The equality with a
+    direct ``to_csv(path)`` write is pinned in
+    ``tests/test_create_sdp_sidecar_atomicity.py``, not assumed.
+    """
+    return suggestions.to_csv(index=False, na_rep=csv_na_token()).encode("utf-8")
+
+
 def _read_metadata_csv(path: Path) -> pd.DataFrame:
     return read_sdp_csv(path)
 
@@ -383,20 +422,6 @@ def _package_managed_paths(target: Path, data_file_names) -> list[Path]:
         if candidate not in unique:
             unique.append(candidate)
     return unique
-
-
-def _replace_create_output(path: Path) -> None:
-    """Remove a create-owned output before recreating it.
-
-    Mirrors ``.ms_replace_create_output()``. The containment check catches
-    symbolic links, but it does not see HARD links, and writing through one
-    truncates the shared inode outside the package. The pre-0.2.0
-    full-directory wipe unlinked these entries first; preserving the directory
-    removed that protection, so it has to be explicit — and it belongs next to
-    each write, not in one caller, so it holds however the writer is reached.
-    """
-    if path.exists() or path.is_symlink():
-        path.unlink()
 
 
 def _check_package_write_dir(
@@ -1814,11 +1839,14 @@ def _write_review_readme(package_path: Path, has_suggestions: bool) -> None:
             "Share the complete package directory or a zip of that directory.",
         ]
     )
-    readme_path = package_path / "README-review.txt"
-    _replace_create_output(readme_path)
-    readme_path.write_text(
-        "\n".join(lines) + "\n",
-        encoding="utf-8",
+    # Rendered to bytes before anything on disk is touched, then installed by
+    # staged-sibling rename (hub queue B-179, the mirror of metasalmon's B-111).
+    # A re-run of ``create_sdp()`` cannot reproduce a copy of this file that a
+    # user annotated, so an abort mid-rewrite used to destroy the one file here
+    # a user may have edited.
+    atomic_write(
+        _text_file_bytes("\n".join(lines) + "\n"),
+        package_path / "README-review.txt",
     )
 
 
@@ -2073,8 +2101,22 @@ def create_sdp(
     # ``create_sdp()`` writes these itself, after the generic writer has run,
     # so they are deliberately absent from the writer's managed paths — that is
     # what preserves a reviewed copy on a rewrite. They still need the same
-    # containment check: without it a symlinked ``README-review.txt`` is
-    # followed and an external file is truncated.
+    # containment check. Without it, a ``metadata/`` that is a symbolic link
+    # would carry the EDH install outside the package, and a symlinked sidecar
+    # would be replaced silently where it should be refused.
+    #
+    # Each of the three is rendered to bytes and then installed by
+    # ``atomic_io.atomic_write()``, so an abort during a render leaves the
+    # previous file byte-intact (hub queue B-179, the mirror of metasalmon's
+    # B-111). That is one ``os.replace`` of a same-directory stage. The writer
+    # never opens the destination, so an external hard link to a sidecar keeps
+    # its own inode and content, which is the protection the deleted
+    # ``_replace_create_output()`` existed for. They are three separate
+    # transactions rather than one set, for the reasons the R half gives. They
+    # are independent files written at different points in this function. The
+    # harm the fix removes is a DESTROYED file, not a partly updated group. And
+    # the suggestions branch can delete rather than write, which a write set
+    # cannot express. Pinned by tests/test_create_sdp_sidecar_atomicity.py.
     _assert_managed_paths_contained(
         pkg_path,
         [
@@ -2087,16 +2129,13 @@ def create_sdp(
     suggestions = artifacts.get("semantic_suggestions")
     suggestions_path = pkg_path / "semantic_suggestions.csv"
     if isinstance(suggestions, pd.DataFrame) and not suggestions.empty:
-        # ``create_sdp()`` owns this file, so it clears its own stale copy
-        # rather than writing through a hard link the pre-0.2.0 full-directory
-        # wipe used to unlink implicitly.
-        _replace_create_output(suggestions_path)
-        suggestions.to_csv(
-            suggestions_path,
-            index=False,
-            na_rep=csv_na_token(),
-        )
+        # ``create_sdp()`` owns this file, so it replaces its own stale copy;
+        # the generic writer's managed-path inventory deliberately does not
+        # know about it.
+        atomic_write(_suggestions_csv_bytes(suggestions), suggestions_path)
     elif suggestions_path.exists() or suggestions_path.is_symlink():
+        # Deleting a file is already atomic, and the writer has no delete to
+        # route this through, so the removal branch stays a plain unlink.
         suggestions_path.unlink()
     _write_review_readme(
         pkg_path,
@@ -2105,15 +2144,28 @@ def create_sdp(
     )
 
     if include_edh_xml:
-        from .edh_xml import edh_build_hnap_xml
+        from .edh_xml import _edh_hnap_xml_bytes
 
         output = pkg_path / "metadata" / "metadata-edh-hnap.xml"
-        _replace_create_output(output)
+        # The whole package is read, and the XML rendered, BEFORE anything on
+        # disk is touched. So a read or parse failure anywhere in the package
+        # leaves the previous XML in place, as a failure in the builder does.
+        # Before B-179 this read ran after the old file had been unlinked,
+        # which made this the widest window of the three and wider than R's,
+        # since R builds from the in-memory artifacts. The read is kept rather
+        # than replaced by those artifacts, because the builder must go on
+        # seeing the frame it has always seen. The frame before the write is
+        # not the same thing. Measured: a caller-seeded ``temporal_end``
+        # Timestamp renders as ``2002-06-30 00:00:00`` from memory and as
+        # ``2002-06-30`` from the written package. Switching frames would
+        # change what the XML says, and this fix must not do that.
         package = read_salmon_datapackage(pkg_path)
-        edh_build_hnap_xml(
-            package["dataset"],
-            output_path=output,
-        )
+        payload = _edh_hnap_xml_bytes(package["dataset"])
+        # The builder created this directory itself when it wrote here
+        # directly. The render now goes to a scratch file, so the directory has
+        # to exist before the install.
+        output.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(payload, output)
         if _collect_review_issues(package):
             warnings.warn(
                 "Created EDH XML is a draft because package metadata still "
