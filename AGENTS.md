@@ -166,15 +166,19 @@ repository has been following that rule without stating it (`v0.4.0` sits at
 the contract was missing.
 
 **To cut one, run the Release workflow** (`.github/workflows/release.yml`) with
-the version and the full SHA of the commit that made it current. It refuses a
-commit that is not on `main`, a version that `pyproject.toml` at that commit does
-not carry, a commit whose parent already carried the version (so a later merge
-cannot be tagged by mistake), and a release that already exists. An existing tag
-is refused if it is lightweight or names a different commit; an annotated tag on
-the requested commit is accepted, so a rerun can finish a release whose tag was
-pushed before the release step failed. It publishes the version's
-`CHANGELOG.md` section, as it stood at that commit, as the release body. It exists because agent sessions cannot push tags. Running it is still an
-outward act, and it is Brett's decision: an agent dispatches it only on his word.
+the version and the full SHA of the commit that made it current. For a version
+bumped in a pull request, that is the merge commit on `main`, not the bump
+commit on the branch. It refuses a commit that is not on `main`'s first-parent
+history (so a branch commit cannot be tagged, although it is an ancestor of
+`main`), a version that `pyproject.toml` at that commit does not carry, a commit
+whose parent already carried the version (so a later merge cannot be tagged by
+mistake), and a release that already exists. An existing tag is refused if it is
+lightweight or names a different commit; an annotated tag on the requested
+commit is accepted, so a rerun can finish a release whose tag was pushed before
+the release step failed. It publishes the version's `CHANGELOG.md` section, as
+it stood at that commit, as the release body. It exists because agent sessions
+cannot push tags. Running it is still an outward act, and it is Brett's
+decision: an agent dispatches it only on his word.
 
 **The version number lives in six places and they drift.** A bump moves all
 six in the same change, and **every one of them is pinned by a test in

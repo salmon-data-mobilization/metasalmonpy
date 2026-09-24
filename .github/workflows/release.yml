@@ -60,7 +60,13 @@ jobs:
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must look like 0.5.0, got '$VERSION'"; exit 1; }
           [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::commit must be a full 40-character SHA"; exit 1; }
           git cat-file -e "${COMMIT}^{commit}" || { echo "::error::$COMMIT is not a commit in this repository"; exit 1; }
-          git merge-base --is-ancestor "$COMMIT" origin/main || { echo "::error::$COMMIT is not on main"; exit 1; }
+          # First-parent history, not ancestry: a bump commit on a merged
+          # feature branch is an ancestor of main, but the version became
+          # current on main at the merge. The list goes to a file because
+          # `grep -q` in a pipe can end the pipe early, and pipefail would then
+          # report a match as a failure.
+          git rev-list --first-parent origin/main > first-parent.txt
+          grep -qxF "$COMMIT" first-parent.txt || { echo "::error::$COMMIT is not on main's first-parent history. A commit from a merged branch is not the one that made the version current on main; give the merge commit."; exit 1; }
           version_at() { git show "$1:pyproject.toml" | sed -n 's/^version = "\(.*\)"$/\1/p' | head -n 1; }
           here="$(version_at "$COMMIT")"
           [ "$here" = "$VERSION" ] || { echo "::error::pyproject.toml at $COMMIT says '$here', not '$VERSION'"; exit 1; }
