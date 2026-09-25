@@ -513,6 +513,69 @@ and moving it is a separate outward act.
 
 ### Changed
 
+* **A target's shortlist comes through one function, and a second retrieval
+  pass merges into the first the way metasalmon merges it.** Hub queue item
+  **B-363**, the metasalmonpy half of the S16 convergence that precedes the
+  shared review-packet contract (S16 execplan, sections 2.3 and 4, ruled by
+  Brett on 2026-09-25).
+
+  The loop `suggest_semantics()` ran inline over its discovered targets is now
+  `semantics._retrieve_semantic_target_candidates(target, source_policy,
+  max_per_role, search_fn, query=None, retrieval_pass=1)`, the counterpart of
+  `.ms_retrieve_semantic_target_candidates()`. It was moved, not changed:
+  `tests/test_semantic_retrieval.py` replays three retrieval configurations
+  over a multi-table fixture -- 26 targets, every role including
+  `statistical_modifier`, all four scopes, the explicit allowlist, a shortlist
+  without a score column, the role-collision block -- against a capture taken
+  on `main` `ba1b54a` before the move, row for row and column for column,
+  including the order and arguments of every `search_fn` call.
+
+  **What changes is the second pass.** `llm_review._retry_candidates()` now
+  retrieves through that same function with `retrieval_pass=2`, so a retry
+  shortlist is filtered by an explicit allowlist on the way out, deduplicated
+  on `(source, iri)`, and ranked with the role-hint bonus exactly as pass 1
+  is; before, it searched and then sorted on the raw score alone, with no
+  allowlist filter and a `(source, iri, label)` key. And the merge is a port
+  of `.ms_merge_semantic_target_candidates()`,
+  `semantics._merge_semantic_target_candidates()`: the two passes bound, sorted
+  in C order on seven keys -- `score` descending (or `role_hint_bonus` when
+  there is no score), then `source`, `ontology`, `label`, `iri`,
+  `retrieval_pass`, `retrieval_query`, missing values last -- deduplicated by
+  R's candidate identity (`_semantic_candidate_identity()`, ported with its
+  rolling text hash so an IRI-less candidate fingerprints as it does in R),
+  and capped at `max(1, max_per_role)`. Before, the merge sorted on score
+  alone and deduplicated on `(source, iri, label)`, so two rows for one IRI
+  with different labels both survived and a tie could land in either order.
+  The candidate gain a retry records in `llm_exploration_candidate_gain` is
+  counted as `.ms_semantic_bundle_retry()` counts it: identities in the merged
+  shortlist the target did not have before.
+
+  Pinned against R by **running** it: `tests/data/semantics/r-merge-candidates.R`
+  drove R's merge and identity over nine shared cases
+  (`merge-candidates-cases.json`; a rescored duplicate across passes, ties
+  broken in C order including a non-ASCII initial and two pass-2 rows for one
+  IRI, no score column, missing scores and strings, IRI-less fingerprints,
+  a zero cap, an empty pass on either side, a column only the second pass
+  carries) under R 4.5.2 with metasalmon `main` @ `98cb9e6`, and the Python
+  merge gives the same rows, the same identities and the same gain for all
+  nine. `PARITY.md` row 39, which said the merge had no counterpart and this
+  package had no retry pass, is amended in place; both halves had gone stale.
+
+  **B-243** (`suggest_semantics()` searching each distinct query, role and
+  sources tuple once per call) touches this loop and had not landed when this
+  was written: it is `ready` and unclaimed in the hub queue, with no branch in
+  this repository. Whichever lands second rebases onto the other; the natural
+  seam is that B-243's once-per-call wrapper takes the place of `search_fn`
+  around the extracted function, as `.ms_search_once_per_call()` does in R.
+
+  Three pass-1 differences from R were **found and left alone**, because the
+  item requires pass-1 output unchanged and none is registered: pass 1
+  deduplicates on `(source, iri)` where R deduplicates by candidate identity
+  (so two IRI-less candidates from one source collapse to one here); a
+  missing score is filled with 0 before the bonus where R keeps it missing;
+  and the pass-1 cap is `max_per_role` as given where R floors it at 1. They
+  are reported to the hub rather than registered here.
+
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
   Hub queue item **B-166**, the twin of the copy metasalmon made in its pull
   request #120. The change is Brett's ruling of 2026-09-14, landed upstream by

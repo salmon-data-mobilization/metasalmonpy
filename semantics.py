@@ -257,6 +257,237 @@ def _role_hint_explanation(status: str, role: str):
     return pd.NA
 
 
+# --- candidate identity, the shortlist retriever and the second-pass merge ---
+#
+# Counterparts of metasalmon's .ms_semantic_candidate_identity() and
+# .ms_semantic_text_hash() (R/semantic-suggestions.R) and of
+# .ms_retrieve_semantic_target_candidates() and
+# .ms_merge_semantic_target_candidates() (R/semantics-helpers.R), for hub item
+# B-363. The retriever is the loop that used to sit inline in
+# suggest_semantics(), moved and not changed: tests/test_semantic_retrieval.py
+# pins its output against a capture taken before the move. The merge and the
+# identity are ports, pinned against what R gives for the same inputs.
+
+
+def _semantic_trim_string(value, default=None):
+    """``.ms_semantic_trim_string()``: the first value, trimmed as R trims."""
+    if isinstance(value, pd.Series):
+        value = value.iloc[0] if len(value) else None
+    elif isinstance(value, (list, tuple)):
+        value = value[0] if value else None
+    if _is_missing(value):
+        return default
+    text = str(value).strip(" \t\r\n")
+    return text if text else default
+
+
+def _semantic_text_hash(parts) -> str:
+    """``.ms_semantic_text_hash()``: two rolling hashes over the code points.
+
+    R joins the parts with a carriage return, takes ``utf8ToInt()`` of the
+    result and folds it twice modulo two primes below 2^31; the sixteen hex
+    digits are the concatenation. Integer arithmetic here reproduces R's
+    double arithmetic exactly, because every intermediate stays below 2^53.
+    """
+    code_points = [ord(char) for char in "\r".join(parts)]
+    if not code_points:
+        return "0000000000000000"
+
+    def rolling(multiplier: int, seed: int, modulus: int) -> str:
+        value = seed
+        for point in code_points:
+            value = (value * multiplier + point) % modulus
+        return f"{value:08x}"
+
+    return rolling(131, 216613626, 2147483629) + rolling(137, 16777619, 2147483587)
+
+
+_FINGERPRINT_COLUMNS = (
+    "ontology",
+    "label",
+    "definition",
+    "match_type",
+    "role_hints",
+    "resource_kind",
+    "type_iris",
+    "term_type",
+)
+
+
+def _is_na(value) -> bool:
+    """``is.na()`` for one cell: a blank string is a value, not a missing one."""
+    if value is None:
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _semantic_candidate_identity(candidate_rows, role=None) -> list[str]:
+    """R's identity of each candidate row, ``.ms_semantic_candidate_identity()``.
+
+    ``<source>::<iri>`` when the row has an IRI (both trimmed, a missing
+    source reading ``unknown``); otherwise ``blank::<role>::<fingerprint>``,
+    the fingerprint hashing the role, the source and the eight fingerprint
+    columns, so two IRI-less candidates that differ in any of them stay
+    distinct. The role is the one passed, else the row's ``dictionary_role``,
+    else its ``role``, else ``unknown``; a missing or blank role is
+    ``unknown`` too. The merge deduplicates on this, and the retry
+    bookkeeping counts candidate gain with it.
+    """
+    frame = pd.DataFrame() if candidate_rows is None else pd.DataFrame(candidate_rows)
+    if len(frame) == 0:
+        return []
+    identities = []
+    for _, row in frame.iterrows():
+        if role is not None:
+            role_value = role
+        elif "dictionary_role" in frame.columns:
+            role_value = row["dictionary_role"]
+        elif "role" in frame.columns:
+            role_value = row["role"]
+        else:
+            role_value = "unknown"
+        if _is_na(role_value) or not str(role_value).strip():
+            role_value = "unknown"
+        role_value = str(role_value)
+        iri = _semantic_trim_string(row.get("iri"))
+        source = _semantic_trim_string(row.get("source"), default="unknown")
+        if iri is not None:
+            identities.append(f"{source}::{iri}")
+            continue
+        fingerprint = [role_value, source]
+        for column in _FINGERPRINT_COLUMNS:
+            value = row.get(column) if column in frame.columns else None
+            fingerprint.append("" if _is_na(value) else str(value))
+        identities.append(f"blank::{role_value}::{_semantic_text_hash(fingerprint)}")
+    return identities
+
+
+def _retrieve_semantic_target_candidates(
+    target,
+    source_policy: dict,
+    max_per_role: int,
+    search_fn: Callable,
+    query: Optional[str] = None,
+    retrieval_pass: int = 1,
+) -> pd.DataFrame:
+    """One target's shortlist: ``.ms_retrieve_semantic_target_candidates()``.
+
+    ``target`` is one discovered target, a mapping or a row of the
+    ``semantic_targets`` frame. Its ``search_role`` (else ``dictionary_role``)
+    chooses the sources under ``source_policy`` and is the role the search is
+    asked for; ``query`` overrides the target's ``search_query`` for a second
+    pass, and ``retrieval_pass`` is recorded on every row. Returns an empty
+    frame, without searching, when there is no role or no query.
+
+    The body is the loop ``suggest_semantics()`` ran inline before hub item
+    B-363, kept step for step so pass-1 output is unchanged: the explicit
+    allowlist applied on the way out as well as in (metasalmon 0.1.7), one
+    row per ``(source, iri)``, the role-hint status and bonus, the sort on
+    score (or bonus) then source, ontology, label and iri, the cap, and the
+    target's own columns copied onto every row.
+    """
+    from .llm_review import policy_sources
+
+    search_role = target.get("search_role")
+    if _is_missing(search_role):
+        search_role = target.get("dictionary_role")
+    search_role = "" if _is_missing(search_role) else str(search_role)
+    if not search_role:
+        return pd.DataFrame()
+    query_text = target.get("search_query") if query is None else query
+    if _is_missing(query_text) or not str(query_text).strip():
+        return pd.DataFrame()
+    target_sources = policy_sources(source_policy, search_role)
+    res = search_fn(query_text, role=search_role, sources=target_sources)
+    if res is None or res.empty:
+        return pd.DataFrame()
+    res = res.copy()
+    # metasalmon v0.1.7 made an explicit source list a strict allowlist on
+    # the way *out* as well as the way in: results are filtered to the
+    # allowed sources, so an injected search_fn cannot widen a deliberately
+    # bounded source set.
+    if source_policy["explicit"]:
+        if "source" not in res.columns:
+            return pd.DataFrame()
+        allowed = {str(name).strip().lower() for name in target_sources}
+        candidate_sources = res["source"].map(
+            lambda value: "" if _is_missing(value) else str(value).strip().lower()
+        )
+        res = res[candidate_sources.isin(allowed) & (candidate_sources != "")].copy()
+        if res.empty:
+            return pd.DataFrame()
+    if "role_hints" not in res.columns:
+        res["role_hints"] = pd.NA
+    res = res.drop_duplicates(subset=[col for col in ["source", "iri"] if col in res.columns], keep="first")
+    res["role_hint_status"] = res["role_hints"].apply(lambda value: _role_hint_status(search_role, value))
+    res["role_hint_bonus"] = res["role_hint_status"].apply(_role_hint_bonus)
+    res["role_hint_explanation"] = res["role_hint_status"].apply(lambda status: _role_hint_explanation(status, search_role))
+    if "score" in res.columns:
+        res["score"] = pd.to_numeric(res["score"], errors="coerce").fillna(0) + res["role_hint_bonus"]
+        res = res.sort_values(["score", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
+    else:
+        res = res.sort_values(["role_hint_bonus", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
+    res = res.head(max_per_role).copy()
+    res["retrieval_query"] = query_text
+    res["retrieval_pass"] = retrieval_pass
+    for key, value in target.items():
+        res[key] = value
+    return res
+
+
+_MERGE_TIE_BREAK_KEYS = ("source", "ontology", "label", "iri", "retrieval_pass", "retrieval_query")
+
+
+def _merge_semantic_target_candidates(existing_rows, extra_rows, max_per_role) -> pd.DataFrame:
+    """Merge a second retrieval pass into the first, as metasalmon does.
+
+    A port of ``.ms_merge_semantic_target_candidates()``: the two frames are
+    bound (column union in order of first appearance), sorted on seven keys
+    in C order -- ``score`` descending, or ``role_hint_bonus`` descending when
+    there is no score column, then ``source``, ``ontology``, ``label``,
+    ``iri``, ``retrieval_pass`` and ``retrieval_query`` ascending, missing
+    values last at every key -- deduplicated by candidate identity keeping
+    the first row, and capped at ``max(1, max_per_role)``. The sort is stable,
+    so rows equal on all seven keys keep first-pass-before-second-pass order.
+    pandas compares strings by code point, which is the UTF-8 byte order R's
+    radix sort uses, so no locale can change the result. A missing key column
+    is an error here as it is in R.
+    """
+    existing = pd.DataFrame() if existing_rows is None else pd.DataFrame(existing_rows)
+    extra = pd.DataFrame() if extra_rows is None else pd.DataFrame(extra_rows)
+    columns = list(dict.fromkeys([*existing.columns, *extra.columns]))
+    frames = [frame for frame in (existing, extra) if len(frame)]
+    if not frames:
+        return pd.DataFrame(columns=columns)
+    combined = pd.concat(frames, ignore_index=True, sort=False).reindex(columns=columns)
+
+    first_key = "score" if "score" in combined.columns else "role_hint_bonus"
+    keys = [first_key, *_MERGE_TIE_BREAK_KEYS]
+    missing = [key for key in keys if key not in combined.columns]
+    if missing:
+        raise KeyError(
+            "Cannot merge candidate rows without the sort key column(s) "
+            + ", ".join(repr(key) for key in missing)
+            + "."
+        )
+    sort_key = "_ms_merge_sort_key"
+    ordered = combined.assign(**{sort_key: pd.to_numeric(combined[first_key], errors="coerce")})
+    ordered = ordered.sort_values(
+        by=[sort_key, *_MERGE_TIE_BREAK_KEYS],
+        ascending=[False] + [True] * len(_MERGE_TIE_BREAK_KEYS),
+        na_position="last",
+        kind="mergesort",
+    ).drop(columns=[sort_key])
+
+    identities = pd.Series(_semantic_candidate_identity(ordered), index=ordered.index)
+    ordered = ordered.loc[~identities.duplicated(keep="first")]
+    cap = 3 if max_per_role is None else int(max_per_role)
+    return ordered.head(max(1, cap)).reset_index(drop=True)
+
+
 def _scalar_text(value) -> str:
     return "" if _is_missing(value) else str(value).strip()
 
@@ -658,7 +889,6 @@ def suggest_semantics(
     from .llm_review import (
         assess_semantic_suggestions,
         make_source_policy,
-        policy_sources,
         validate_context_files,
     )
 
@@ -958,51 +1188,18 @@ def suggest_semantics(
         "code_description",
     ]
 
+    # One shortlist per target through the retriever the LLM retry pass also
+    # uses (hub B-363); pass 1 here, pass 2 in llm_review._retry_candidates().
     for target in targets:
-        if not str(target.get("search_query") or "").strip():
-            continue
-        target_sources = policy_sources(
+        res = _retrieve_semantic_target_candidates(
+            target,
             source_policy,
-            str(target["dictionary_role"]),
+            max_per_role,
+            search_fn,
+            retrieval_pass=1,
         )
-        res = search_fn(
-            target["search_query"],
-            role=target["dictionary_role"],
-            sources=target_sources,
-        )
-        if res is None or res.empty:
+        if res.empty:
             continue
-        res = res.copy()
-        # metasalmon v0.1.7 made an explicit source list a strict allowlist on
-        # the way *out* as well as the way in: results are filtered to the
-        # allowed sources, so an injected search_fn cannot widen a deliberately
-        # bounded source set.
-        if source_policy["explicit"]:
-            if "source" not in res.columns:
-                continue
-            allowed = {str(name).strip().lower() for name in target_sources}
-            candidate_sources = res["source"].map(
-                lambda value: "" if _is_missing(value) else str(value).strip().lower()
-            )
-            res = res[candidate_sources.isin(allowed) & (candidate_sources != "")]
-            if res.empty:
-                continue
-        if "role_hints" not in res.columns:
-            res["role_hints"] = pd.NA
-        res = res.drop_duplicates(subset=[col for col in ["source", "iri"] if col in res.columns], keep="first")
-        res["role_hint_status"] = res["role_hints"].apply(lambda value: _role_hint_status(str(target["dictionary_role"]), value))
-        res["role_hint_bonus"] = res["role_hint_status"].apply(_role_hint_bonus)
-        res["role_hint_explanation"] = res["role_hint_status"].apply(lambda status: _role_hint_explanation(status, str(target["dictionary_role"])))
-        if "score" in res.columns:
-            res["score"] = pd.to_numeric(res["score"], errors="coerce").fillna(0) + res["role_hint_bonus"]
-            res = res.sort_values(["score", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
-        else:
-            res = res.sort_values(["role_hint_bonus", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
-        res = res.head(max_per_role).copy()
-        res["retrieval_query"] = target["search_query"]
-        res["retrieval_pass"] = 1
-        for key, value in target.items():
-            res[key] = value
         suggestion_rows.append(res)
 
     if suggestion_rows:
