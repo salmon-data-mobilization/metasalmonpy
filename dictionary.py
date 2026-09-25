@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
+import string
 import warnings
 from collections.abc import Mapping
 from typing import Optional, Sequence, Union
@@ -232,6 +233,52 @@ def _name_has_sample_size_hint(name_tokens: Sequence[str]) -> bool:
     )
 
 
+# Every ASCII punctuation character and nothing else. ``string.punctuation`` is
+# the same 32 characters as the four ranges R's ``.ms_name_words()`` spells out
+# (0x21-0x2F, 0x3A-0x40, 0x5B-0x60 and 0x7B-0x7E). A fixed ASCII set, so the
+# split cannot move with the locale and a non-ASCII letter is never a boundary.
+_NAME_WORD_BOUNDARY_RE = re.compile("[" + re.escape(string.punctuation) + "]+")
+
+# The time words that keep year-shaped values deciding: the name-temporal
+# tokens plus the plurals that check leaves out. The plurals are not added to
+# ``_TEMPORAL_TOKENS`` itself, because that check also sees values off the year
+# range, where a column counting days or years is not a date.
+_YEAR_SHAPE_TIME_WORDS = _TEMPORAL_TOKENS | frozenset("years yrs months days".split())
+
+
+def _name_words(name_tokens: Sequence[str]) -> list[str]:
+    """Mirror ``.ms_name_words``: the name's tokens split again at punctuation.
+
+    ``_name_tokens()`` splits only at whitespace, ``.``, ``_``, ``-`` and case
+    changes, so ``Water depth(mm)`` gives the token ``depth(mm)`` and
+    ``adult/count`` stays one token. This splits those tokens again at every
+    other ASCII punctuation character.
+    """
+    return [
+        word
+        for token in name_tokens
+        for word in _NAME_WORD_BOUNDARY_RE.split(str(token))
+        if word
+    ]
+
+
+def _name_has_measurement_word(name_words: Sequence[str]) -> bool:
+    """Mirror ``.ms_name_has_measurement_word``: whole-word evidence only.
+
+    A measurement word, or a sample or partition size. It leaves out the two
+    pattern tests in :func:`_name_has_measurement_hint`, because both match
+    names that are not measurements: the substring pattern finds ``temp``
+    inside ``temporal_start``, and the unit pattern accepts any parenthetical
+    containing a ``g``, such as ``Cohort (Aug)``. Those are tolerable where the
+    hint only chooses among non-temporal roles, and not where it overrides a
+    temporal signal, which is the one job this predicate has (metasalmon
+    backlog #53).
+    """
+    return any(word in _MEASUREMENT_TOKENS for word in name_words) or (
+        _name_has_sample_size_hint(name_words)
+    )
+
+
 def infer_column_role(col_name: str, series: pd.Series) -> str:
     """Infer ``column_role`` from a column's name and contents.
 
@@ -250,6 +297,15 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
     column is anything else. All three now read
     :func:`~metasalmonpy.metadata.values_form_code_list`, which is the seeder's
     own criterion, so the dictionary row and the code rows cannot disagree.
+
+    **Year-shaped values do not outrank a measurement name** (metasalmon
+    backlog #53; hub queue B-240, the port of B-53). A column whose every value
+    is a four-digit number from 1800 to 2500 is ``temporal`` unless its name's
+    words, split at punctuation as well as whitespace, include a measurement
+    word or a sample or partition size and no date or time word. Such a column
+    is then typed exactly as it would be with values off the year range, so a
+    ``spawner_count`` of 1850, 2003 and 1999 is a ``measurement``, while
+    ``BY``, ``count_year`` and ``Escapement (yr)`` stay ``temporal``.
     """
     name_lower = str(col_name).lower()
     name_tokens = _name_tokens(col_name)
@@ -282,13 +338,46 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
     ):
         return "identifier"
 
+    # Check for date/time patterns in the name or the column type.
     if (
         re.search(r"date|time|dtt|timestamp", name_lower)
         or pd.api.types.is_datetime64_any_dtype(series)
         or any(token in _TEMPORAL_TOKENS for token in name_tokens)
-        or _values_look_yearish(series)
     ):
         return "temporal"
+
+    # Year-shaped values -- every value a four-digit number from 1800 to 2500 --
+    # are the one temporal signal that reads nothing but the values, and a count
+    # or escapement column whose values all fall in that range has exactly that
+    # shape. Typed temporal, such a column was dropped from the whole semantic
+    # pipeline (metasalmon backlog #53). So the value shape decides unless the
+    # name's words include a measurement word and no date or time word; then the
+    # column goes through the same checks below that it would with any other
+    # values.
+    #
+    # Words, split at punctuation as well as whitespace (``_name_words()``), so
+    # that ``Water depth(mm)`` and ``adult/count`` are measurement names, and so
+    # that a time word hidden by punctuation still counts, as in
+    # ``Escapement (yr)`` and ``count/year``, which the token check above does
+    # not see. The time words include the plurals, so ``escapement_years``
+    # stays temporal. Whole words, not ``_name_has_measurement_hint()``, whose
+    # substring and unit patterns would retype ``temporal_start`` and
+    # ``Cohort (Aug)``.
+    #
+    # The words decide only whether the year shape may decide. The checks below
+    # keep the coarser tokens, so a column this lets through is typed exactly
+    # as it would be with values off the year range. Those checks cannot read
+    # the words without every check that outranks the measurement check
+    # reading them too, and there the split breaks units and rates:
+    # ``Discharge (m3/day)``, ``Escapement (fish/yr)`` and ``Rate (per day)``
+    # would become temporal, and ``Fish (no./site)`` an identifier.
+    if _values_look_yearish(series):
+        name_words = _name_words(name_tokens)
+        measurement_named = _name_has_measurement_word(name_words) and not any(
+            word in _YEAR_SHAPE_TIME_WORDS for word in name_words
+        )
+        if not measurement_named:
+            return "temporal"
 
     # Preserve explicit factor/categorical intent from the source data.
     if _is_categorical(series):
@@ -511,9 +600,17 @@ def infer_dictionary(
     return dict_df
 
 
-def _collapse_inline(values) -> str:
-    """cli's inline vector collapse: ``8``, ``8 and 9``, ``7, 8, and 9``."""
+def _collapse_inline(values, trunc: Optional[int] = None) -> str:
+    """cli's inline vector collapse: ``8``, ``8 and 9``, ``7, 8, and 9``.
+
+    With ``trunc``, a vector longer than ``trunc`` is shortened the way cli's
+    default ``vec-trunc`` of 20 shortens one: the first ``trunc - 2`` values, an
+    ellipsis, and the last two, so 25 values read ``1, ..., 18, ..., 24, and
+    25``. Measured against cli 3.6.6.
+    """
     texts = [str(value) for value in values]
+    if trunc is not None and len(texts) > trunc:
+        texts = texts[: trunc - 2] + ["..."] + texts[-2:]
     if len(texts) <= 1:
         return "".join(texts)
     if len(texts) == 2:
@@ -726,6 +823,67 @@ def _coerce_series(series: pd.Series, target: str, strict: bool = True) -> pd.Se
         return series.astype("string")
 
 
+def _apply_dictionary_present(series: pd.Series) -> pd.Series:
+    """R's ``.ms_apply_dictionary_present()``: not missing and not blank.
+
+    A blank cell is a missing value to every reader this package uses, so a
+    code list turning one into a missing value loses nothing and is not
+    reported. Blank means empty after trimming ``READR_TRIM_CHARS``, the set R's
+    ``trimws()`` strips, for the reason ``validate_dictionary()`` gives.
+    """
+    return series.notna() & (series.astype(str).str.strip(READR_TRIM_CHARS) != "")
+
+
+def _code_list_applies(column) -> bool:
+    """R's guard on the codes step: ``inherits(x, "character") || inherits(x, "factor")``.
+
+    So a code list applies to a Categorical, a string column, or an ``object``
+    column whose values are text. A numeric, logical or date column keeps its
+    values and its dtype and is not reported, as in R. Matching its values
+    against the text of ``codes.csv`` would blank every one of them. The text
+    test reads the values rather than the dtype because the ``date`` value type
+    leaves an ``object`` column of ``datetime.date``, which R holds as a
+    ``Date``. ``metadata.code_list_values()`` mirrors the same R guard by dtype
+    alone, which is right there because it reads data before any coercion.
+
+    A column name the data repeats gives a DataFrame, which is let through to
+    the path it always took; the codes step says why.
+    """
+    if not isinstance(column, pd.Series):
+        return True
+    if isinstance(column.dtype, pd.CategoricalDtype):
+        return True
+    if pd.api.types.is_string_dtype(column.dtype) or pd.api.types.is_object_dtype(column.dtype):
+        return pd.api.types.infer_dtype(column, skipna=True) in ("string", "empty")
+    return False
+
+
+def _report_unlisted_code_values(column: str, series: pd.Series, code_values: Sequence) -> pd.Series:
+    """Warn naming each present value the code list does not name; return the listed mask.
+
+    The codes step of metasalmon's ``apply_salmon_dictionary()`` (hub items
+    B-55 and B-241): each distinct value that is present in the column and
+    absent from its code list is named, under either value of ``strict``,
+    before it becomes missing. The caller blanks exactly the rows this mask
+    leaves out, so what is named is what is blanked.
+    """
+    listed = series.isin(list(code_values))
+    unlisted = series[_apply_dictionary_present(series) & ~listed].drop_duplicates().tolist()
+    if unlisted:
+        count = len(unlisted)
+        noun, verb = ("value", "it becomes") if count == 1 else ("values", "they become")
+        shown = _collapse_inline(
+            [repr(str(value)) if isinstance(value, str) else str(value) for value in unlisted],
+            trunc=20,
+        )
+        warnings.warn(
+            f"Column {column!r} has {count} {noun} not in its code list; {verb} missing: {shown}",
+            RuntimeWarning,
+            stacklevel=3,
+        )
+    return listed
+
+
 def apply_salmon_dictionary(
     df: pd.DataFrame,
     dict_df: pd.DataFrame,
@@ -734,6 +892,12 @@ def apply_salmon_dictionary(
 ) -> pd.DataFrame:
     """
     Rename columns, coerce types, and apply codes using a validated dictionary.
+
+    A value that is not in its column's code list has no category, so it
+    becomes missing. Each such value is named in a ``RuntimeWarning``, whatever
+    ``strict`` is, because ``strict`` governs type coercion. Missing and blank
+    values are not reported. As in metasalmon, a code list applies to a text or
+    Categorical column; a numeric, logical or date column keeps its values.
     """
     data = _ensure_dataframe(df, "df")
     dictionary = validate_dictionary(dict_df, require_iris=False)
@@ -782,9 +946,30 @@ def apply_salmon_dictionary(
             if table_id is not None:
                 col_codes = col_codes[col_codes["table_id"] == table_id]
             col_codes = col_codes[col_codes["column_name"] == original_name]
-            if not col_codes.empty and new_name in result.columns:
+            if not col_codes.empty and new_name in result.columns and _code_list_applies(result[new_name]):
                 code_values = list(col_codes["code_value"])
                 code_labels = list(col_codes.get("code_label", code_values))
+                # A value the code list does not name has no category, so it
+                # becomes missing. That happened silently until hub item B-241,
+                # the mirror of metasalmon's B-55: it is now named whatever
+                # ``strict`` is, and blanked here, before the constructor, for
+                # two reasons. pandas deprecates building a Categorical from a
+                # value outside its categories, or from a Categorical carrying
+                # such a category even unused, so neither can reach it; and
+                # when the constructor raises (a missing or a repeated
+                # code_value), the fallback below would otherwise keep a value
+                # the warning has just said becomes missing.
+                #
+                # A column name the data repeats makes ``result[new_name]`` a
+                # DataFrame, which is left to the path it always took rather
+                # than failing inside the report. Retires when a repeated
+                # column name is refused, or read as R's ``[[`` reads it.
+                if isinstance(result[new_name], pd.Series):
+                    listed = _report_unlisted_code_values(original_name, result[new_name], code_values)
+                    blanked = result[new_name].where(listed)
+                    if _is_categorical(blanked):
+                        blanked = blanked.cat.remove_unused_categories()
+                    result[new_name] = blanked
                 try:
                     result[new_name] = pd.Categorical(result[new_name], categories=code_values)
                     result[new_name] = result[new_name].rename_categories(dict(zip(code_values, code_labels)))

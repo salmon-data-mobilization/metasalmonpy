@@ -28,13 +28,7 @@ from typing import Optional
 
 import pandas as pd
 
-from .metadata import (
-    CODES_COLUMNS,
-    DICTIONARY_COLUMNS,
-    TABLE_META_COLUMNS,
-    align_columns,
-    read_sdp_csv,
-)
+from .metadata import read_sdp_csv
 from .review_console import (
     SemanticReview,
     WRITABLE_FILES,
@@ -49,12 +43,6 @@ from .review_console import (
 from .semantics import _infer_term_type
 
 __all__ = ["apply_sdp_semantics"]
-
-_ALIGN_COLUMNS = {
-    "column_dictionary.csv": DICTIONARY_COLUMNS,
-    "codes.csv": CODES_COLUMNS,
-    "tables.csv": TABLE_META_COLUMNS,
-}
 
 
 def apply_sdp_semantics(
@@ -209,10 +197,16 @@ def apply_sdp_semantics(
                 }
             )
 
+    # In the order of the schema the settings select, as metasalmon's apply
+    # aligns through `.ms_dictionary_cols()` and its siblings, which read the
+    # session schema. Deferred, as `sdp_field_setters` already reaches back
+    # into this module the same way.
+    from .sdp_field_setters import _in_declared_order
+
     writes = {}
     for file_name, frame in frames.items():
         writes[paths[file_name]] = _metadata_csv_bytes(
-            align_columns(frame, _ALIGN_COLUMNS[file_name])
+            _in_declared_order(frame, file_name)
         )
 
     # The descriptor duplicates the dictionary's IRI fields, so it is part of
@@ -287,6 +281,21 @@ _SLOT_ADDRESS_COLUMNS = (
 #: would let the row read as a candidate from an unnamed source rather than as
 #: one the user supplied.
 _HAND_PICKED_SOURCE = "user"
+
+
+def _is_hand_picked(suggestions: pd.DataFrame) -> pd.Series:
+    """Mark the rows of a suggestions table that record a hand-picked accept.
+
+    Such a row is a reviewer's decision rather than retrieval output, which is
+    why :func:`~metasalmonpy.term_requests.detect_semantic_term_gaps` drops it.
+    ``source`` is compared trimmed and lower-cased, as that function normalises
+    it, and an empty ``source`` is never a recorded accept. The counterpart of
+    metasalmon's ``.ms_review_is_hand_picked()``.
+    """
+    if "source" not in suggestions:
+        return pd.Series(False, index=suggestions.index)
+    source = suggestions["source"].fillna("").astype(str).str.lower().str.strip()
+    return source == _HAND_PICKED_SOURCE
 
 
 def _with_hand_picked_accept(

@@ -36,9 +36,9 @@ violation like a failing test.
    2026-08-24. This package's version stays at the last delivered milestone
    until the next one lands — do **not** bump the number ahead of the
    functionality (Brett's decision, 2026-08-13: bump on parity, not on calendar).
-   The tree now reads 0.5.0; **tagging `v0.5.0` and publishing the GitHub
-   Release are separate outward acts and are Brett's**, so until he makes them
-   the newest tag here is still `v0.4.0`.
+   The tree reads 0.5.0, and measured 2026-09-24 the newest tag here is
+   `v0.5.0`: annotated, on the bump merge `67fb486`, made that day by the
+   Release workflow together with its GitHub Release.
 
    **That window was closed in two halves, and recording both is the point,
    because the second half is the one that gets skipped.** The behavioural half
@@ -165,6 +165,21 @@ repository has been following that rule without stating it (`v0.4.0` sits at
 `3b587e6`, with a docs-only merge after it), so the practice was real and only
 the contract was missing.
 
+**To cut one, run the Release workflow** (`.github/workflows/release.yml`) with
+the version and the full SHA of the commit that made it current. For a version
+bumped in a pull request, that is the merge commit on `main`, not the bump
+commit on the branch. It refuses a commit that is not on `main`'s first-parent
+history (so a branch commit cannot be tagged, although it is an ancestor of
+`main`), a version that `pyproject.toml` at that commit does not carry, a commit
+whose parent already carried the version (so a later merge cannot be tagged by
+mistake), and a release that already exists. An existing tag is refused if it is
+lightweight or names a different commit; an annotated tag on the requested
+commit is accepted, so a rerun can finish a release whose tag was pushed before
+the release step failed. It publishes the version's `CHANGELOG.md` section, as
+it stood at that commit, as the release body. It exists because agent sessions
+cannot push tags. Running it is still an outward act, and it is Brett's
+decision: an agent dispatches it only on his word.
+
 **The version number lives in six places and they drift.** A bump moves all
 six in the same change, and **every one of them is pinned by a test in
 `tests/test_public_api.py`**, so a bump that misses one turns the suite red
@@ -212,8 +227,10 @@ Two further mentions of `0.1.6` are deliberately left alone, because they are
 about **tags** rather than about this claim: the install instructions in
 `README.md` and `getting-started.qmd` both say the `v0.1.6` tag is what a user
 can install. That is wrong — `v0.4.0` exists at `3b587e6` — but fixing it is a
-statement about which tag to install, so it waits on the tagging decision rather
-than riding along with a version bump.
+statement about which tag to install, so it waited on the tagging decision
+rather than riding along with a version bump. That decision was made on
+2026-09-24, when `v0.5.0` was tagged on `67fb486`, so the fix is no longer
+blocked and is still owed.
 
 The version is a **parity claim**, so it moves only when the mirrored behaviour
 actually lands; the mirror contract above governs what makes the claim true.
@@ -226,32 +243,56 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 951
-passed / 1 skipped with the extras installed, 810 / 142 with core dependencies
-only (0.5.0, 2026-09-16; 896 / 3 and 783 / 116 at the S5 parity port on
-2026-09-14, and 803 / 3 and 690 / 116 before that). The gap is the extras-gated
-EML, KNB and context-reader tests; the one that skips either way is a
-filesystem-symlink guard. These counts are a dated measurement, not a target —
-update them when you add tests rather than treating a mismatch as a failure.
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1056
+passed / 1 skipped with the extras installed, 915 / 142 with core dependencies
+only (2026-09-25, measured locally for hub B-215 on `9577f35`, which has `main`
+`2405df2` merged in, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
+machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists; 1032 / 1
+and 891 / 142 for B-216 with `main` `fc5d16f` merged in, 1030 / 1 and 889 / 142
+for B-220 on `acf243e` and 1024 / 1 and 883 / 142 for B-216 on `f663c9b`
+earlier that day, 1022 / 1 and 881 / 142 for B-241 on the tree of its head
+`5b83c27` on 2026-09-24, 1012 / 1 and
+871 / 142 for B-242 and 1007 / 1 and 866 / 142 for B-240 earlier that day,
+966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
+810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
+on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads two fewer
+passes in each leg for the same tree**: 1020 / 3 and 879 / 144 on B-241's head
+`5b83c27`, read from its check logs on 2026-09-24, as B-242's head `183f887`
+read 1010 / 3 and 869 / 144. The two are `tests/test_roundtrip.py`, which runs
+only where both of those hold. CI's suite jobs have neither, so it skips there
+and runs in CI's `parity` job instead. The gap between the legs is the
+extras-gated EML, KNB and context-reader tests; the one that skips in both legs,
+locally and on CI, is
+the Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1`
+is set. These counts are a dated measurement, not a target — update them when
+you add tests rather than treating a mismatch as a failure.
 
-**Run it from a directory named `metasalmonpy`.** The root `__init__.py` and
-`tests/__init__.py` make pytest infer the package name from the checkout
-directory, so a git worktree parked at `.../my-fix` collects the suite as
-package `my-fix` and *every* test errors on a relative import — a wall of
-failures that looks like a broken branch and is only a broken path. Put an
-auxiliary worktree at a path whose last component is `metasalmonpy`
-(`git worktree add ../.worktrees/<topic>/metasalmonpy <branch>`). Retire this
-note if the package ever moves into its own `src/metasalmonpy/` directory,
-which is what would make the checkout name irrelevant.
+**The suite runs from a checkout at any path.** It did not until 2026-09-23
+(hub **B-191**). The root `__init__.py` and a `tests/__init__.py` made pytest
+name the package after the checkout directory, so under pytest 8 and later a
+worktree at `.../my-fix` errored on every test. Hub agents took to nesting each
+worktree under a directory named `metasalmonpy` to get a suite to run.
+**Nesting is no longer needed, and `tests/` must stay a plain directory**,
+because an `__init__.py` there brings the dependency back. `tests/conftest.py`
+says how the suite now finds the package. `tests/test_import_route_guard.py`
+runs a copy of the checkout under two directory names that used to break, so
+CI, whose checkout is always named `metasalmonpy`, sees a regression. Retire
+this note with the conftest's measures, when the package moves into its own
+`src/metasalmonpy/` directory.
 
-**And check which tree you are actually testing.** `package-dir` makes an
-editable install register a `sys.meta_path` finder pinned to the *absolute
-path it was installed from*, and `sys.meta_path` is consulted before
-`sys.path`. A virtualenv built in the primary checkout therefore keeps
-importing the primary checkout's modules while you run pytest inside a
-worktree — a green suite that says nothing about the branch you are on, and
-nothing in the output hints at it. Install the package from the worktree, and
-confirm it took:
+**A pytest run tests the tree it lives in, and nothing else does that for
+you.** `package-dir` makes an editable install register an import finder
+pinned to the *absolute path it was installed from*. That finder sits after
+`sys.path` on `sys.meta_path` (measured 2026-09-23), so it answers whenever
+nothing on `sys.path` provides `metasalmonpy`. Before B-191 that was every
+pytest run in a checkout not named `metasalmonpy`: a virtualenv built in the
+primary checkout kept testing the primary checkout from inside a worktree, the
+run was green, and nothing in the output hinted at it. `tests/conftest.py` now
+binds `metasalmonpy` to its own checkout, and refuses to load if the package
+was already imported from somewhere else. **Everything outside pytest still
+resolves the package through whatever is installed**: `tests/smoke.py`, the
+scripts, a notebook, `python -c`. For those, install the package from the tree
+you mean, and confirm it took:
 
 ```sh
 python -c "import metasalmonpy; print(metasalmonpy.__file__)"
