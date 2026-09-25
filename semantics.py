@@ -388,9 +388,26 @@ def _retrieve_semantic_target_candidates(
     row per ``(source, iri)``, the role-hint status and bonus, the sort on
     score (or bonus) then source, ontology, label and iri, the cap, and the
     target's own columns copied onto every row.
+
+    **Pass 1 and pass 2 differ on three points, on purpose and for now.**
+    Today's pass 1 keeps one row per ``(source, iri)``, so IRI-less
+    candidates from one source collapse to one; fills a missing score with 0
+    before the role-hint bonus, so an unscored hinted candidate can outrank a
+    scored one; and caps at ``max_per_role`` as given. R deduplicates by
+    candidate identity, leaves a missing score missing (it sorts last, bonus
+    or not) and floors the cap at 1. Pass 1 keeps today's rule because B-363
+    pins ``suggest_semantics()``'s output unchanged; pass 2 takes R's, pinned
+    against R on shared inputs in ``tests/test_semantic_retrieval.py``,
+    because the second pass is what B-363 converges and the retry code this
+    replaced already kept distinct IRI-less rows and missing scores. *Retires
+    when* pass-1 retrieval converges on R -- the packet exporter re-retrieves
+    pass-1 targets through this function, so B-327 needs it -- at which point
+    the ``pass_one`` branches collapse into the R ones and the pass-1 pin is
+    regenerated under that item.
     """
     from .llm_review import policy_sources
 
+    pass_one = int(retrieval_pass) == 1
     search_role = target.get("search_role")
     if _is_missing(search_role):
         search_role = target.get("dictionary_role")
@@ -421,16 +438,23 @@ def _retrieve_semantic_target_candidates(
             return pd.DataFrame()
     if "role_hints" not in res.columns:
         res["role_hints"] = pd.NA
-    res = res.drop_duplicates(subset=[col for col in ["source", "iri"] if col in res.columns], keep="first")
+    if pass_one:
+        res = res.drop_duplicates(subset=[col for col in ["source", "iri"] if col in res.columns], keep="first")
+    else:
+        identities = pd.Series(
+            _semantic_candidate_identity(res, role=search_role), index=res.index
+        )
+        res = res.loc[~identities.duplicated(keep="first")].copy()
     res["role_hint_status"] = res["role_hints"].apply(lambda value: _role_hint_status(search_role, value))
     res["role_hint_bonus"] = res["role_hint_status"].apply(_role_hint_bonus)
     res["role_hint_explanation"] = res["role_hint_status"].apply(lambda status: _role_hint_explanation(status, search_role))
     if "score" in res.columns:
-        res["score"] = pd.to_numeric(res["score"], errors="coerce").fillna(0) + res["role_hint_bonus"]
+        score = pd.to_numeric(res["score"], errors="coerce")
+        res["score"] = (score.fillna(0) if pass_one else score) + res["role_hint_bonus"]
         res = res.sort_values(["score", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
     else:
         res = res.sort_values(["role_hint_bonus", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
-    res = res.head(max_per_role).copy()
+    res = res.head(max_per_role if pass_one else max(1, int(max_per_role))).copy()
     res["retrieval_query"] = query_text
     res["retrieval_pass"] = retrieval_pass
     for key, value in target.items():

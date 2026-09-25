@@ -532,11 +532,31 @@ and moving it is a separate outward act.
 
   **What changes is the second pass.** `llm_review._retry_candidates()` now
   retrieves through that same function with `retrieval_pass=2`, so a retry
-  shortlist is filtered by an explicit allowlist on the way out, deduplicated
-  on `(source, iri)`, and ranked with the role-hint bonus exactly as pass 1
-  is; before, it searched and then sorted on the raw score alone, with no
-  allowlist filter and a `(source, iri, label)` key. And the merge is a port
-  of `.ms_merge_semantic_target_candidates()`,
+  shortlist is filtered by an explicit allowlist on the way out and ranked
+  with the role-hint bonus as pass 1 is; before, it searched and then sorted
+  on the raw score alone, with no allowlist filter and a `(source, iri,
+  label)` key. **On three points the second pass takes R's rule where today's
+  first pass does not, and the difference is deliberate and dated.** Pass 1
+  keeps one row per `(source, iri)`, so IRI-less candidates from one source
+  collapse to one; fills a missing score with 0 before the bonus, so an
+  unscored hinted candidate can outrank a scored one; and caps at
+  `max_per_role` as given. R deduplicates by candidate identity, leaves a
+  missing score missing (it sorts last, bonus or not) and floors the cap at
+  1. Pass 1 keeps today's rule because this item pins `suggest_semantics()`'s
+  output unchanged; pass 2 takes R's, because the second pass is what this
+  item converges and the retry code this replaced already kept distinct
+  IRI-less rows and missing scores -- the first push of this change routed
+  pass 2 through pass 1's rule and lost both, which the Codex review of that
+  push caught. The retriever's docstring names what retires the branch:
+  pass-1 retrieval converging on R, which the packet exporter needs (B-327).
+  Pinned against R by running it: `tests/data/semantics/r-retrieve-candidates.R`
+  drove `.ms_retrieve_semantic_target_candidates()` at pass 2 over four
+  shared cases (`retrieve-candidates-cases.json`; IRI-less rows differing
+  only in `match_type`, an exact IRI-less repeat, a second row for a seen IRI,
+  a missing score with a matching hint, an explicit allowlist with a padded
+  upper-case source, no score column, a zero depth) and the Python second
+  pass gives the same rows in the same order for all four. And the merge is
+  a port of `.ms_merge_semantic_target_candidates()`,
   `semantics._merge_semantic_target_candidates()`: the two passes bound, sorted
   in C order on seven keys -- `score` descending (or `role_hint_bonus` when
   there is no score), then `source`, `ontology`, `label`, `iri`,
@@ -568,13 +588,11 @@ and moving it is a separate outward act.
   seam is that B-243's once-per-call wrapper takes the place of `search_fn`
   around the extracted function, as `.ms_search_once_per_call()` does in R.
 
-  Three pass-1 differences from R were **found and left alone**, because the
-  item requires pass-1 output unchanged and none is registered: pass 1
-  deduplicates on `(source, iri)` where R deduplicates by candidate identity
-  (so two IRI-less candidates from one source collapse to one here); a
-  missing score is filled with 0 before the bonus where R keeps it missing;
-  and the pass-1 cap is `max_per_role` as given where R floors it at 1. They
-  are reported to the hub rather than registered here.
+  The three pass-1 differences above were **found and left in place for pass
+  1**, because the item requires pass-1 output unchanged and none is
+  registered; they are reported to the hub as the convergence the packet
+  exporter will need rather than registered here, and the `pass_one` branch
+  in the retriever is the whole of their footprint.
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
   Hub queue item **B-166**, the twin of the copy metasalmon made in its pull

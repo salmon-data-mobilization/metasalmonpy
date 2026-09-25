@@ -445,6 +445,122 @@ def test_r_fixture_provenance_is_recorded():
     assert provenance["r_version"].startswith("R version 4.5.2")
 
 
+# --- the second pass through the retriever: R's rule, on shared inputs -------
+#
+# Pass 1 keeps today's rule on three points the item pins (the (source, iri)
+# key, a missing score filled with 0, the cap as given); pass 2 takes R's,
+# because the second pass is what B-363 converges. The retriever's docstring
+# carries the retirement condition. ``r-retrieve-candidates.json`` holds what
+# R gives at pass 2 for the inputs in ``retrieve-candidates-cases.json``.
+
+R_RETRIEVE_PATH = DATA / "r-retrieve-candidates.json"
+R_RETRIEVE = _load(R_RETRIEVE_PATH, {"cases": [], "provenance": {}})
+
+
+def _retrieve_cases():
+    return [pytest.param(case, id=case["id"]) for case in R_RETRIEVE["cases"]]
+
+
+def _same_cell(got, want) -> bool:
+    if isinstance(got, float) and isinstance(want, (int, float)) and not isinstance(want, bool):
+        return math.isclose(got, float(want), rel_tol=1e-12, abs_tol=0.0)
+    return got == want
+
+
+def _same_row(got: dict, want: dict) -> bool:
+    return set(got) == set(want) and all(_same_cell(got[key], want[key]) for key in want)
+
+
+def _retrieve_at(case, retrieval_pass):
+    from metasalmonpy.llm_review import make_source_policy
+    from metasalmonpy.semantics import _retrieve_semantic_target_candidates
+
+    results = _frame(case["results"], case["result_columns"])
+    calls = []
+
+    def search(query, role=None, sources=None):
+        calls.append({"query": query, "role": role})
+        return results.copy()
+
+    rows = _retrieve_semantic_target_candidates(
+        dict(case["target"]),
+        make_source_policy(case["sources"]),
+        case["max_per_role"],
+        search,
+        query=case["query"],
+        retrieval_pass=retrieval_pass,
+    )
+    return rows, calls
+
+
+@pytest.mark.parametrize("case", _retrieve_cases())
+def test_second_pass_retrieval_gives_the_rows_r_gives(case):
+    rows, calls = _retrieve_at(case, retrieval_pass=2)
+    assert calls == case["search_calls"]
+    got = _records(rows)
+    assert set(got["columns"]) == set(case["retrieved"]["columns"])
+    assert len(got["rows"]) == len(case["retrieved"]["rows"])
+    for position, (have, want) in enumerate(zip(got["rows"], case["retrieved"]["rows"])):
+        assert _same_row(have, want), f"row {position}: {have} != {want}"
+
+
+def test_r_retrieve_fixture_provenance_is_recorded():
+    assert R_RETRIEVE_PATH.is_file(), R_RETRIEVE_PATH
+    provenance = R_RETRIEVE["provenance"]
+    assert provenance["metasalmon_commit"] == "98cb9e6"
+    assert provenance["r_version"].startswith("R version 4.5.2")
+
+
+def test_pass_one_keeps_todays_rule_where_pass_two_takes_rs():
+    # The same shortlist through both passes. Pass 1 is today's behaviour,
+    # pinned by the item; pass 2 is R's. The branch retires with pass-1
+    # convergence (see the retriever's docstring).
+    case = next(case for case in R_RETRIEVE["cases"] if case["id"] == "iri-less-and-missing-score")
+    pass_one, _ = _retrieve_at(case, retrieval_pass=1)
+    pass_two, _ = _retrieve_at(case, retrieval_pass=2)
+    # (source, iri) collapses every IRI-less zooma row to one; identity keeps
+    # the two that differ in match_type and drops the exact repeat.
+    assert int(pass_one["iri"].isna().sum()) == 1
+    assert int(pass_two["iri"].isna().sum()) == 2
+    assert list(pass_two.loc[pass_two["iri"].isna(), "match_type"]) == ["label", "synonym"]
+    # A missing score is filled with 0 (then the bonus) on pass 1 and left
+    # missing, sorting last, on pass 2.
+    assert pass_one["score"].notna().all()
+    assert int(pass_two["score"].isna().sum()) == 1
+    assert pd.isna(pass_two["score"].iloc[-1])
+    assert pass_two["label"].iloc[-1] == "marine phase"
+    assert set(pass_one["retrieval_pass"]) == {1}
+    assert set(pass_two["retrieval_pass"]) == {2}
+
+
+def test_a_zero_depth_keeps_nothing_on_pass_one_and_one_row_on_pass_two():
+    case = next(case for case in R_RETRIEVE["cases"] if case["id"] == "cap-zero-keeps-one")
+    pass_one, _ = _retrieve_at(case, retrieval_pass=1)
+    pass_two, _ = _retrieve_at(case, retrieval_pass=2)
+    assert len(pass_one) == 0
+    assert len(pass_two) == 1
+
+
+def test_retry_candidates_keep_distinct_iri_less_alternatives():
+    """The retry path sees every distinct IRI-less candidate, as it did before B-363."""
+    from metasalmonpy.llm_review import _retry_candidates, make_source_policy
+
+    case = next(case for case in R_RETRIEVE["cases"] if case["id"] == "iri-less-and-missing-score")
+    results = _frame(case["results"], case["result_columns"])
+    target = pd.Series(case["target"])
+    rows = _retry_candidates(
+        target,
+        case["query"],
+        lambda query, role=None, sources=None: results.copy(),
+        make_source_policy(None),
+        case["max_per_role"],
+    )
+    assert int(rows["iri"].isna().sum()) == 2
+    assert set(rows["retrieval_pass"]) == {2}
+    assert set(rows["retrieval_query"]) == {case["query"]}
+    assert set(rows["search_query"]) == {case["target"]["search_query"]}
+
+
 def test_retry_merge_counts_gain_the_way_r_does():
     """``_merge_retry_candidates()`` splices R's merge into the suggestions frame."""
     from metasalmonpy.llm_review import _merge_retry_candidates
