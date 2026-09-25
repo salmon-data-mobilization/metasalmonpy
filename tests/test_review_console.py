@@ -849,7 +849,7 @@ MARKER_ONLY_IRIS = {
     # the trim, and only the strip's ``str.strip()`` removes it.
     "a form feed after the colon": "REVIEW:\f",
     # The strip compares ``str.upper()``, which folds a dotless i onto I.
-    "a dotless i": "REVıEW:",
+    "a dotless i": "REV\u0131EW:",
 }
 
 
