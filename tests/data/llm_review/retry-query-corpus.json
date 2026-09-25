@@ -1,0 +1,197 @@
+{
+  "_comment": "Retry-query pairs driven through metasalmon's .ms_llm_classify_retry_query() by r-retry-query-verdicts.R; the verdicts land in r-retry-query-verdicts.json. Each case names what it exercises. Every pair here gets the same verdict from metasalmon before and after hub item B-361 point (5), which moves R's duplicate check to ASCII-only case folding; a pair that differs only in a non-ASCII letter's case is deliberately absent, because current R folds it by locale and the ruled verdict (not a duplicate) is pinned by tests/test_retry_query_classifier.py directly.",
+  "cases": [
+    {
+      "id": "dup-case-and-padding",
+      "retry": "  Fork   LENGTH ",
+      "original": "fork length",
+      "exercises": "case-insensitive duplicate after whitespace collapse and trim"
+    },
+    {
+      "id": "dup-tab-newline",
+      "retry": "fork\tlength\n",
+      "original": "fork length",
+      "exercises": "tab and newline collapse to one space"
+    },
+    {
+      "id": "dup-original-normalized-too",
+      "retry": "Fork Length",
+      "original": "fork  length",
+      "exercises": "the original query is normalized before the comparison"
+    },
+    {
+      "id": "dup-title-case",
+      "retry": "mean weight",
+      "original": "Mean Weight",
+      "exercises": "plain case difference"
+    },
+    {
+      "id": "use-longer-query",
+      "retry": "fork length",
+      "original": "fork length mm",
+      "exercises": "a different query is usable"
+    },
+    {
+      "id": "use-no-original",
+      "retry": "fork length mm",
+      "original": null,
+      "exercises": "no original query to compare with"
+    },
+    {
+      "id": "invalid-null",
+      "retry": null,
+      "original": "fork length",
+      "exercises": "a missing retry query is invalid"
+    },
+    {
+      "id": "invalid-empty",
+      "retry": "",
+      "original": "fork length",
+      "exercises": "an empty retry query is invalid"
+    },
+    {
+      "id": "invalid-blank",
+      "retry": "   ",
+      "original": "fork length",
+      "exercises": "a blank retry query is invalid"
+    },
+    {
+      "id": "vertical-tab-only",
+      "retry": "\u000b",
+      "original": "x",
+      "exercises": "trimws() strips only space, tab, CR and LF, so a lone vertical tab survives the emptiness check and collapses to an empty usable query"
+    },
+    {
+      "id": "curie-underscore-digit",
+      "retry": "gcdfo_v2:X",
+      "original": "fork length",
+      "exercises": "a CURIE whose prefix has an underscore and a digit is identifier-like (the case B-362 names)"
+    },
+    {
+      "id": "curie-camel",
+      "retry": "smn:CatchCount",
+      "original": "catch count",
+      "exercises": "a CURIE is identifier-like"
+    },
+    {
+      "id": "curie-lowercase-s",
+      "retry": "smn:species",
+      "original": "species",
+      "exercises": "R's bracket expression [^\\s] excludes the letter s, so a local part containing s is not identifier-like"
+    },
+    {
+      "id": "curie-uppercase-s",
+      "retry": "abc:S",
+      "original": "x",
+      "exercises": "an uppercase S after the colon is allowed"
+    },
+    {
+      "id": "curie-space-allowed",
+      "retry": "abc:d e",
+      "original": "x",
+      "exercises": "R's bracket expression [^\\s] does not exclude a space"
+    },
+    {
+      "id": "curie-backslash",
+      "retry": "abc:\\",
+      "original": "x",
+      "exercises": "R's bracket expression [^\\s] excludes a backslash"
+    },
+    {
+      "id": "curie-digit-first",
+      "retry": "1a:b",
+      "original": "x",
+      "exercises": "the prefix must start with a letter"
+    },
+    {
+      "id": "curie-prefix-punctuation",
+      "retry": "e-mail+x.y:z",
+      "original": "x",
+      "exercises": "dots, plus and hyphen are allowed in the prefix"
+    },
+    {
+      "id": "curie-empty-local-part",
+      "retry": "fish:",
+      "original": "x",
+      "exercises": "at least one character after the colon"
+    },
+    {
+      "id": "curie-note-prose",
+      "retry": "Note: fish",
+      "original": "x",
+      "exercises": "prose with a colon; the local part contains s, so not identifier-like"
+    },
+    {
+      "id": "curie-non-ascii-prefix",
+      "retry": "É:x",
+      "original": "x",
+      "exercises": "the prefix class is ASCII letters only"
+    },
+    {
+      "id": "http-iri",
+      "retry": "http://qudt.org/vocab/unit/MilliM",
+      "original": "millimetre",
+      "exercises": "an http IRI is identifier-like"
+    },
+    {
+      "id": "https-upper-with-space",
+      "retry": "HTTPS://example.org/x y",
+      "original": "x",
+      "exercises": "the scheme prefixes match case-insensitively and are prefix matches, so a later space does not matter"
+    },
+    {
+      "id": "urn",
+      "retry": "urn:isbn:1",
+      "original": "x",
+      "exercises": "urn: prefix"
+    },
+    {
+      "id": "doi-upper",
+      "retry": "DOI:10.1000/xyz",
+      "original": "x",
+      "exercises": "doi: prefix, case-insensitive"
+    },
+    {
+      "id": "doi-space",
+      "retry": "doi: 10.1",
+      "original": "x",
+      "exercises": "doi: is a prefix match"
+    },
+    {
+      "id": "sharp-s-not-folded",
+      "retry": "STRAßE",
+      "original": "strasse",
+      "exercises": "tolower() does not fold sharp s to ss, unlike Python's casefold()"
+    },
+    {
+      "id": "nbsp-not-collapsed",
+      "retry": "a b",
+      "original": "a b",
+      "exercises": "a no-break space is not whitespace to R's \\s"
+    },
+    {
+      "id": "em-space-collapsed",
+      "retry": "a b",
+      "original": "a b",
+      "exercises": "an em space is whitespace to R's \\s"
+    },
+    {
+      "id": "ideographic-space-collapsed",
+      "retry": "a　b",
+      "original": "a b",
+      "exercises": "an ideographic space is whitespace to R's \\s"
+    },
+    {
+      "id": "nel-not-collapsed",
+      "retry": "ab",
+      "original": "a b",
+      "exercises": "NEL is not whitespace to R's \\s"
+    },
+    {
+      "id": "narrow-nbsp-not-collapsed",
+      "retry": "a b",
+      "original": "a b",
+      "exercises": "a narrow no-break space is not whitespace to R's \\s"
+    }
+  ]
+}

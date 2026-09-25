@@ -18,6 +18,62 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **A persisted assessment reads back as written, and a retry query gets the
+  verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
+  half of the S16 convergence that precedes the shared review-packet contract
+  (S16 execplan, section 3.4 and decisions 11 and 12, ruled by Brett on
+  2026-09-25). Two defects, each shown failing before the change.
+
+  1. **`normalize_assessment_rows()` reads the strings `TRUE` and `FALSE` as
+     the booleans they name.** The `llm_exploration_used` column went through
+     `.astype(bool)`, so the non-empty string `"FALSE"` -- what a persisted
+     assessment CSV carries once every column is read as text -- became
+     `True`. Measured on `main` `ba1b54a`: one row with `"FALSE"` normalized to
+     `[True]`. A cell is now cast as metasalmon's
+     `.ms_llm_cast_assessment_column()` casts it: a boolean stays itself,
+     `true`/`t`/`1` and `false`/`f`/`0` (any case, trimmed) name the two
+     values, a missing cell keeps the column's standing default of `False`,
+     and text that names no boolean raises `ValueError` rather than being read
+     by truthiness -- so `"yes"`, which used to normalize to `True`, is
+     refused.
+
+  2. **The retry-query classifier is a port of metasalmon's**
+     (`.ms_llm_normalize_query_text()`, `.ms_llm_query_looks_like_identifier()`
+     and `.ms_llm_classify_retry_query()`), returning the same four members
+     (`query`, `original_query`, `disposition`, `rejection_reason`) with R's
+     disposition vocabulary. Three verdicts change. **(a)** The identifier
+     pattern is R's, so a CURIE whose prefix carries an underscore or a digit
+     -- `gcdfo_v2:X` -- is identifier-like and takes the plain-language
+     fallback instead of being searched as a lexical query; the old pattern
+     (`[A-Za-z]+:`) missed it. **(b)** The duplicate check folds case over
+     ASCII letters only, the same in every locale, where it used `casefold()`:
+     `STRAßE` is no longer a duplicate of `strasse`, and a pair differing only
+     in a non-ASCII letter's case (`ÉTUDE` / `étude`) is not a duplicate
+     either. That is the ruled target rather than what current R does -- R's
+     `tolower()` folds non-ASCII letters by locale -- and metasalmon moves to
+     it under **B-361** point (5), which is the metasalmon half of this item.
+     **(c)** The query that is retried and recorded in
+     `llm_exploration_queries` is the whitespace-collapsed one, as R records
+     it; the raw string was used before. The whitespace class is R's `\s` as
+     measured under a UTF-8 locale, written out because Python's `\s` also
+     swallows no-break spaces.
+
+     Every other verdict was pinned by **running** R (4.5.2, metasalmon
+     `main` @ `98cb9e6`, UTF-8 locale) over a 32-pair corpus,
+     `tests/data/llm_review/retry-query-corpus.json`, and the port reproduces
+     all of them, including two that are only right because they are R's:
+     TRE reads the `[^\s]` in R's CURIE pattern as "neither a backslash nor
+     the letter s", so `abc:d e` is identifier-like and `smn:species` is not;
+     and `trimws()` strips only space, tab, CR and LF, so a lone vertical tab
+     becomes an empty usable query. Both are reproduced on purpose -- the
+     review record needs one verdict in both packages -- and the code says
+     what retires them. The generator, `r-retry-query-verdicts.R`, sits beside
+     the fixture so the verdicts can be re-measured when R changes.
+
+     Not a `PARITY.md` row: this closes an unregistered difference rather than
+     opening one, and the one deliberate departure from *current* R is the
+     ruled convergence point R itself is moving to.
+
 * **`datapackage.json` and `metadata/dataset.csv` spell a typed instant the
   same way, in the form Brett ruled.** A `datetime`/`Timestamp` in
   `temporal_start` or `temporal_end` reached both files through two different
