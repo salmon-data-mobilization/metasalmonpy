@@ -289,6 +289,21 @@ _SLOT_ADDRESS_COLUMNS = (
 _HAND_PICKED_SOURCE = "user"
 
 
+def _is_hand_picked(suggestions: pd.DataFrame) -> pd.Series:
+    """Mark the rows of a suggestions table that record a hand-picked accept.
+
+    Such a row is a reviewer's decision rather than retrieval output, which is
+    why :func:`~metasalmonpy.term_requests.detect_semantic_term_gaps` drops it.
+    ``source`` is compared trimmed and lower-cased, as that function normalises
+    it, and an empty ``source`` is never a recorded accept. The counterpart of
+    metasalmon's ``.ms_review_is_hand_picked()``.
+    """
+    if "source" not in suggestions:
+        return pd.Series(False, index=suggestions.index)
+    source = suggestions["source"].fillna("").astype(str).str.lower().str.strip()
+    return source == _HAND_PICKED_SOURCE
+
+
 def _with_hand_picked_accept(
     suggestions: pd.DataFrame, in_slot, accepted_iri: str
 ) -> pd.DataFrame:
