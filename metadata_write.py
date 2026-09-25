@@ -28,13 +28,7 @@ from typing import Optional
 
 import pandas as pd
 
-from .metadata import (
-    CODES_COLUMNS,
-    DICTIONARY_COLUMNS,
-    TABLE_META_COLUMNS,
-    align_columns,
-    read_sdp_csv,
-)
+from .metadata import read_sdp_csv
 from .review_console import (
     SemanticReview,
     WRITABLE_FILES,
@@ -49,12 +43,6 @@ from .review_console import (
 from .semantics import _infer_term_type
 
 __all__ = ["apply_sdp_semantics"]
-
-_ALIGN_COLUMNS = {
-    "column_dictionary.csv": DICTIONARY_COLUMNS,
-    "codes.csv": CODES_COLUMNS,
-    "tables.csv": TABLE_META_COLUMNS,
-}
 
 
 def apply_sdp_semantics(
@@ -209,10 +197,16 @@ def apply_sdp_semantics(
                 }
             )
 
+    # In the order of the schema the settings select, as metasalmon's apply
+    # aligns through `.ms_dictionary_cols()` and its siblings, which read the
+    # session schema. Deferred, as `sdp_field_setters` already reaches back
+    # into this module the same way.
+    from .sdp_field_setters import _in_declared_order
+
     writes = {}
     for file_name, frame in frames.items():
         writes[paths[file_name]] = _metadata_csv_bytes(
-            align_columns(frame, _ALIGN_COLUMNS[file_name])
+            _in_declared_order(frame, file_name)
         )
 
     # The descriptor duplicates the dictionary's IRI fields, so it is part of

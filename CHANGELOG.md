@@ -308,6 +308,43 @@ and moving it is a separate outward act.
   detector as it stood. R shipped this behaviour first and the difference was
   not deliberate, so the port opens no `PARITY.md` row.
 
+* **`review_metadata()`, the four `set_sdp_*()` setters and the blank-required
+  check in `validate_salmon_datapackage()` read the schema the settings
+  select, and the metadata files are written in that schema's field order.**
+  Hub queue item **B-215**, the port of metasalmon's **B-175**
+  (metasalmon pull request #145). They read the bundled schema under every
+  setting. So a schema selected with `set_sdp_schema_source()` or
+  `set_sdp_schema_base_url()`, or with `METASALMONPY_SDP_SCHEMA_SOURCE` or
+  `METASALMONPY_SDP_SCHEMA_BASE_URL`, reached the package writers and none of
+  these. Measured on `fc5d16f` with a selected schema that adds one required
+  `dataset.csv` field: the writers' field list included it, `review_metadata()`
+  did not report it, `set_sdp_dataset()` refused it as "no such field", and the
+  blank-required check did not name it. All four settings were silently
+  ignored. Now they read the schema the settings select, as the writers do:
+  from this process's schema cache once a writer has loaded it, and otherwise
+  by loading it once.
+
+  Under a selected schema, the metadata files are now also written the way
+  metasalmon writes them. The setters, `write_salmon_datapackage()` and
+  `apply_sdp_semantics()` all align each file to the fields that schema
+  declares, in its order, with any other column after them. So a field the
+  schema declares mid-list is written in place rather than last, and a setter
+  call, a fresh write or an apply adds any declared column the file lacks, as
+  an empty column. A rebuild or an apply therefore keeps the bytes a setter
+  wrote.
+
+  Under the shipped settings, no written byte changes, because the declared
+  order is the order these files always had. `review_metadata()` and the
+  setters still read the bundled copy and contact no network, as
+  `review_metadata()` documents.
+
+  One consequence follows the writers' loader. With
+  `set_sdp_schema_source("remote")` and no network, `review_metadata()`, the
+  setters, `validate_salmon_datapackage()` and `apply_sdp_semantics()` now
+  raise `SdpSchemaError` where they used to read the bundled copy. This closes
+  R-shipped-first lag and is not a deliberate difference, so it opens no
+  `PARITY.md` row.
+
 * **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
   Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
   **B-111**, metasalmon pull request #119). `create_sdp()` writes three files of

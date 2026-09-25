@@ -27,10 +27,11 @@ package for an unresolved ``REVIEW:`` IRI until 2026-09-15, because the prose
 test cannot see the marker. ``_is_unresolved_iri()`` records why that needed a
 second test rather than a wider first one.
 
-It reads the schema from the BUNDLED bundle rather than the remote one
-(``_SCHEMA_SOURCE``), because a function documented as never contacting a network
-cannot reach one, and ``load_sdp_schema()``'s default source fetches before it
-falls back.
+Under the shipped schema settings it reads the BUNDLED schema rather than the
+remote one (``_schema_source()``), because a function documented as never
+contacting a network cannot reach one, and ``load_sdp_schema()``'s default
+source fetches before it falls back. Under a schema the settings select, it
+reads that one, as the package writers do.
 
 THE CONTRACT IT IS JUDGED AGAINST: every row :func:`review_metadata` reports
 prints a runnable ``set_sdp_*()`` call that fixes it, and when the last row is
@@ -57,10 +58,6 @@ from typing import Optional, Sequence
 import pandas as pd
 
 from .metadata import (
-    CODES_COLUMNS,
-    DATASET_META_COLUMNS,
-    DICTIONARY_COLUMNS,
-    TABLE_META_COLUMNS,
     align_columns,
     is_review_placeholder,
     read_sdp_csv,
@@ -74,6 +71,7 @@ from .review_console import (
     _text,
 )
 from .sdp_schema import (
+    _sdp_schema_options_are_default,
     sdp_schema_field_description,
     sdp_schema_field_names,
     sdp_schema_required_field_names,
@@ -126,31 +124,66 @@ METADATA_KEY_FIELDS = {
 #: still fails.
 MEASUREMENT_IRI_FIELDS = ("term_iri", "property_iri", "entity_iri", "unit_iri")
 
-_ALIGN_COLUMNS = {
-    "dataset.csv": DATASET_META_COLUMNS,
-    "tables.csv": TABLE_META_COLUMNS,
-    "column_dictionary.csv": DICTIONARY_COLUMNS,
-    "codes.csv": CODES_COLUMNS,
-}
 
-#: Every schema read in this module comes from the BUNDLED copy, never the
-#: remote one. :func:`review_metadata` documents that it never contacts a
-#: network, and ``load_sdp_schema()``'s default ``"auto"`` source fetches six
-#: documents over HTTP before falling back to that same bundled copy -- so on a
-#: fresh process a documented-local scan reached the network, and waited out a
-#: timeout per document when there was none.
-#:
-#: The setters read the same source deliberately. They are local edits to local
-#: files with no reason to reach a network either, and the gap scan and the
-#: printed call have to agree about which fields exist: a call
-#: :func:`review_metadata` prints must be one ``_set_sdp_metadata()`` accepts,
-#: and it would not be if one read the remote schema and the other the bundled
-#: one.
-#:
-#: Retires when ``load_sdp_schema()`` stops fetching on its default source, at
-#: which point the default is already offline and this constant has nothing left
-#: to say.
-_SCHEMA_SOURCE = "vendored"
+def _schema_source() -> Optional[str]:
+    """The ``source`` that every schema read in this module passes.
+
+    UNDER THE SHIPPED SCHEMA SETTINGS, ``"vendored"``: the bundled copy, read
+    outside the loader's cache. :func:`review_metadata` documents that it never
+    contacts a network, and ``load_sdp_schema()``'s default ``"auto"`` source
+    fetches the bundle over HTTP before falling back to that same bundled copy.
+    So on a fresh process a documented-local scan reached the network, and
+    waited out a timeout when there was none (hub B-175).
+
+    UNDER ANY OTHER SCHEMA SETTING, ``None``: the schema the loader resolves.
+    That is the schema the package writers read, so it is the field contract the
+    package was written to. Until hub B-215 this was ``"vendored"`` under every
+    setting, so ``set_sdp_schema_source()``, ``set_sdp_schema_base_url()`` and
+    their environment variables reached the writers and nothing here. The scan
+    then omitted a requirement the selected schema declares, and the setters
+    refused a field the package carries. The loader answers from the session
+    cache once a writer has loaded that schema, and otherwise loads it once, as
+    a writer would. Selecting a schema is the opt-in to reading it.
+
+    The setters read the same source deliberately. They are local edits to local
+    files, and the gap scan and the printed call have to agree about which fields
+    exist: a call :func:`review_metadata` prints must be one
+    ``_set_sdp_metadata()`` accepts. The validator's blank-required collector
+    reads it too, which keeps "the last row is gone" and "strict validation
+    passes" one statement.
+
+    Resolved at call time, like the settings it reads. The first branch retires
+    when ``load_sdp_schema()`` stops fetching on its default source, because the
+    default is then already offline.
+    """
+    return "vendored" if _sdp_schema_options_are_default() else None
+
+
+def _declared_metadata_fields(file_name: str) -> list:
+    """The fields the selected schema declares for one metadata file, in order.
+
+    Read through :func:`_schema_source`, so under the shipped settings it is
+    the bundled schema, read offline.
+    """
+    return sdp_schema_field_names(
+        METADATA_SCHEMA_TABLES[file_name], source=_schema_source()
+    )
+
+
+def _in_declared_order(frame: pd.DataFrame, file_name: str) -> pd.DataFrame:
+    """One metadata frame, aligned to the fields the selected schema declares.
+
+    The declared fields come first, in the schema's order, and a declared
+    field the frame lacks is added empty. Any other column follows. This is
+    metasalmon's `.ms_align_cols(df, .ms_dataset_meta_cols())` and its
+    siblings. The setters, ``write_salmon_datapackage()`` and
+    ``apply_sdp_semantics()`` all write through it, so a package keeps its
+    bytes from one of them to the next (hub B-215). Under the bundled schema
+    the declared order is the order of the static column lists in
+    ``metadata.py``, so under the shipped settings no written byte changes.
+    """
+    return align_columns(frame, _declared_metadata_fields(file_name))
+
 
 _PLACEHOLDER_PREFIX = re.compile(
     r"^\s*(MISSING METADATA|MISSING DESCRIPTION|REVIEW REQUIRED)\s*:\s*",
@@ -293,7 +326,7 @@ def settable_required_fields(file_name: str) -> Sequence[str]:
     return [
         name
         for name in sdp_schema_required_field_names(
-            table_name, source=_SCHEMA_SOURCE
+            table_name, source=_schema_source()
         )
         if name not in keys
     ]
@@ -321,7 +354,7 @@ def _gap_row(
             hint = placeholder_hint
         else:
             hint = sdp_schema_field_description(
-                METADATA_SCHEMA_TABLES[file_name], field, source=_SCHEMA_SOURCE
+                METADATA_SCHEMA_TABLES[file_name], field, source=_schema_source()
             )
     hint = _text(hint) or field
     return {
@@ -414,7 +447,7 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
     scan_fields = [
         name
         for name in sdp_schema_field_names(
-            METADATA_SCHEMA_TABLES[file_name], source=_SCHEMA_SOURCE
+            METADATA_SCHEMA_TABLES[file_name], source=_schema_source()
         )
         if name in frame.columns
     ]
@@ -594,9 +627,13 @@ def review_metadata(path) -> MetadataReview:
       ``entity_iri`` or ``unit_iri``;
     * ``tables.csv`` rows with a blank ``observation_unit_iri``.
 
-    It never contacts a network or an LLM. The schema it reads
-    ``constraints.required`` from is the bundled copy, never the remote one, so
-    that guarantee holds on the default schema source.
+    It never contacts an LLM, and under the shipped schema settings it never
+    contacts a network: the SDP schema it reads ``constraints.required`` from
+    is the copy bundled with metasalmonpy. When ``set_sdp_schema_source()`` or
+    ``set_sdp_schema_base_url()``, or ``METASALMONPY_SDP_SCHEMA_SOURCE`` or
+    ``METASALMONPY_SDP_SCHEMA_BASE_URL``, selects a different schema, it reads
+    that one, as the package writers do: from this process's cache once they
+    have loaded it, and otherwise by loading it as they would.
 
     Returns
     -------
@@ -623,7 +660,7 @@ def review_metadata(path) -> MetadataReview:
         # ``_set_sdp_metadata()`` adds the column it is asked to write.
         frame = align_columns(
             read_sdp_csv(located),
-            sdp_schema_field_names(table_name, source=_SCHEMA_SOURCE),
+            sdp_schema_field_names(table_name, source=_schema_source()),
         )
         gaps.extend(_gaps_for_file(frame, file_name))
 
@@ -1015,7 +1052,7 @@ def _set_sdp_metadata(
         )
 
     table_name = METADATA_SCHEMA_TABLES[file_name]
-    declared = sdp_schema_field_names(table_name, source=_SCHEMA_SOURCE)
+    declared = sdp_schema_field_names(table_name, source=_schema_source())
     unknown = [name for name in values if name not in declared]
     if unknown:
         raise ValueError(
@@ -1063,11 +1100,11 @@ def _set_sdp_metadata(
             frame[field] = pd.NA
         frame.at[index, field] = value
 
-    writes = {
-        located: _metadata_csv_bytes(
-            align_columns(frame, _ALIGN_COLUMNS[file_name])
-        )
-    }
+    # Ordered by ``declared``, the names the field check above was made
+    # against, as metasalmon's setter orders by them since B-175. Under a
+    # selected schema that is the selected order; under the bundled one it is
+    # the order the static column lists also give.
+    writes = {located: _metadata_csv_bytes(align_columns(frame, declared))}
 
     descriptor_path = target / "datapackage.json"
     if descriptor_path.is_file():
@@ -1132,6 +1169,11 @@ def set_sdp_dataset(
 
     Pass ``None`` for a field you are not setting; pass ``pandas.NA`` to clear
     one deliberately. A blank string is refused as ambiguous.
+
+    The fields a setter accepts come from the same SDP schema
+    :func:`review_metadata` reads, so a call it prints is one the setter
+    accepts. Under the shipped schema settings that is the copy bundled with
+    metasalmonpy, and neither contacts a network.
     """
     return _set_sdp_metadata(
         path,
