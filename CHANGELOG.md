@@ -1901,6 +1901,16 @@ rewrite it would have been the more error-prone route. PARITY.md rows 39 and 40 
   registers the open question of whether metasalmon's own date key is
   portable; the hub owns that side.
 
+  *(Correction, 2026-09-25: this fix is not in the `v0.2.1` tag, and neither
+  is PARITY.md row 40, which this entry's first paragraph counts as new. The
+  tag names `f1d9b0e`, the release commit in pull request #10. The fix is
+  `10d0616`, which that pull request committed after it and merged with it as
+  `3fdd323`, the merge that made 0.2.1 the version on `main`. So `main` has
+  carried the fix since 0.2.1 became current there, and the first tag that
+  contains it is `v0.4.0`. The tag stays where it is (Brett, 2026-09-25), and
+  `scripts/check-changelog-window.py` exempts this commit's lines under this
+  heading for as long as this correction names it. Hub queue item B-201.)*
+
 - **Per-resource schema URLs in `datapackage.json` are derived from the loaded
   SDP bundle** rather than composed from a hardcoded constant. 0.2.0 did this
   for the four core metadata resources; this completes it for the SDP
