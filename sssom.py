@@ -26,6 +26,7 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Union
@@ -193,8 +194,33 @@ _JUSTIFICATIONS = tuple(
 
 _CARDINALITIES = ("1:1", "1:n", "n:1", "n:n", "1:0", "0:1", "0:0")
 
+# The SSSOM built-in prefixes, copied in order from the table in the
+# specification's IRI prefixes section
+# (https://mapping-commons.github.io/sssom/1.0/spec-intro/#iri-prefixes; the
+# 1.1 draft at https://mapping-commons.github.io/sssom/dev/spec-intro/ has the
+# same table). The model's Identifiers section says what they allow: "By
+# exception, prefix names listed in the table found in the IRI prefixes section
+# are considered 'built-in'. As such, they MAY be omitted from the curie_map. If
+# they are not omitted, they MUST point to the same IRI prefixes as in the
+# aforementioned table." So a set may use these without declaring them, and may
+# not declare them with any other expansion. Every other prefix still has to be
+# declared: SSSOM/TSV parsers "MUST reject a file with undeclared, non-built-in
+# prefix names". The prefixes block of the SSSOM LinkML schema is a different
+# list and is not this one. Mirrors ``.ms_sssom_builtin_prefixes`` in
+# metasalmon's ``R/sssom.R``; hub B-234, the mirror half of B-233.
+_BUILTIN_PREFIXES = {
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "semapv": "https://w3id.org/semapv/vocab/",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "sssom": "https://w3id.org/sssom/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "linkml": "https://w3id.org/linkml/",
+}
+
 # Columns whose (possibly pipe-separated) values must each be an absolute URI
-# or a CURIE declared by the curie_map.
+# or a CURIE whose prefix the curie_map declares or SSSOM builds in.
 _REFERENCE_COLUMNS = (
     "record_id",
     "subject_id",
@@ -564,8 +590,8 @@ def _is_absolute_uri(value: object) -> bool:
 def _is_unambiguous_uri(value: str) -> bool:
     # A colon alone is ambiguous between an RFC 3986 scheme and a CURIE
     # prefix. Treat network URLs and these common non-hierarchical URI
-    # schemes as URIs; all other ``prefix:reference`` values must be declared
-    # by curie_map.
+    # schemes as URIs; all other ``prefix:reference`` values must use a prefix
+    # curie_map declares or an SSSOM built-in one.
     return (
         _SCHEME_URL_RE.match(value) is not None
         or _NON_HIERARCHICAL_URI_RE.match(value) is not None
@@ -590,9 +616,40 @@ def _validate_reference(
             f"SSSOM {field_name}{where} must be an absolute URI or compact CURIE."
         )
     prefix = value.split(":", 1)[0]
-    if prefix not in curie_map:
+    if prefix not in curie_map and prefix not in _BUILTIN_PREFIXES:
         raise ValueError(
             f"SSSOM {field_name}{where} uses unknown CURIE prefix '{prefix}'."
+        )
+
+
+def _validate_builtin_prefixes(curie_map: object, path: object) -> None:
+    """Mirror ``.ms_sssom_validate_builtin_prefixes``.
+
+    A curie_map may declare a built-in prefix only with its built-in
+    expansion. Every such entry is checked, including one for a prefix
+    nothing uses, because the rule is on the declaration. R walks its list
+    entry by entry so that a repeated name in an in-memory set cannot hide
+    behind a correct first entry; a mapping holds one entry per name, so there
+    is nothing to hide behind here. A value is trimmed as R's ``trimws()``
+    trims, of spaces, tabs, carriage returns and line feeds only, so an
+    in-memory value gets R's verdict; a value read from a file was trimmed by
+    the parser already. A curie_map that is not a mapping names no prefix,
+    as one with no names does in R, and fails where it is first used.
+    """
+    if not isinstance(curie_map, Mapping):
+        return
+    for prefix, value in curie_map.items():
+        expected = _BUILTIN_PREFIXES.get(prefix)
+        if expected is None:
+            continue
+        expansion = value.strip(" \t\r\n") if isinstance(value, str) else value
+        if isinstance(expansion, str) and expansion == expected:
+            continue
+        raise ValueError(
+            f"SSSOM curie_map in {path} redefines built-in prefix "
+            f"'{prefix}' as {expansion!r}. The SSSOM specification fixes "
+            f"'{prefix}' to '{expected}'; declare it with that expansion or "
+            "leave it out."
         )
 
 
@@ -607,6 +664,8 @@ def _validate_metadata(metadata: Dict[str, object], path: object) -> None:
             raise ValueError(
                 f"SSSOM metadata {field_name} in {path} must be an absolute URI."
             )
+    # The curie_map itself is checked before any CURIE is looked up in it.
+    _validate_builtin_prefixes(metadata.get("curie_map"), path)
     for field_name in ("subject_source", "object_source"):
         _validate_reference(
             str(metadata[field_name]), metadata["curie_map"], field_name
@@ -819,10 +878,19 @@ def read_sssom_mapping_set(
 
     Reads the SSSOM 1.1 embedded-TSV serialization used by Salmon Data
     Packages. The reader enforces UTF-8 without a byte-order mark, LF line
-    endings, tab delimiters, complete CURIE declarations, and the package's
+    endings, tab delimiters, declared CURIE prefixes, and the package's
     alignment-only profile. In particular, decomposition fields and raw
     literal assignments are refused because they belong in separate SDP
     semantic artifacts.
+
+    Every CURIE prefix must be declared in ``curie_map`` except the SSSOM
+    built-in prefixes (``owl``, ``rdf``, ``rdfs``, ``semapv``, ``skos``,
+    ``sssom``, ``xsd`` and ``linkml``), which the SSSOM specification lets a
+    file omit, so a canonical SSSOM/TSV file that leaves them out is read. A
+    ``curie_map`` that does declare a built-in prefix must give it the
+    expansion the specification fixes for it (for example
+    ``http://www.w3.org/2004/02/skos/core#`` for ``skos``); any other
+    expansion is refused.
 
     Parameters
     ----------
