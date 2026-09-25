@@ -146,6 +146,15 @@ def _strip_review_iri(value) -> str:
 
     ``REVIEW:`` never survives a decision: the marker means "not confident",
     and accepting is the statement that removes it.
+
+    It is also the one rendering of a candidate's IRI that asking whether a
+    decision names that candidate reads. :func:`accept_suggestion` picks the
+    candidate's row with it, :func:`apply_sdp_semantics` takes the candidate's
+    ``term_type`` only when the decision row carries the accepted IRI in it,
+    and the decision record matches rows by it (hub item B-222). It trims
+    before it strips, through ``_text()``, so it is what metasalmon's
+    ``.ms_review_decision_iri()`` computes. metasalmon's
+    ``.ms_strip_review_iri()`` removes whitespace only around a marker.
     """
     text = _text(value)
     if text.upper().startswith("REVIEW:"):
