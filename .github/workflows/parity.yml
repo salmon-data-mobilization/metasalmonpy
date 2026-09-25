@@ -132,7 +132,7 @@ jobs:
   # `python -m` puts the working directory on sys.path, so a test module that
   # imports a package module by its top-level name (`from validation import
   # ...`) collects there and stops this command at a collection error. The
-  # `pytest` console script puts only its own directory on sys.path, which is
+  # `pytest` console script puts its own directory there instead, which is
   # the view a contributor's first run has, and the one this job gives CI.
   #
   # Its claim is the invocation form, not a dependency configuration. It
