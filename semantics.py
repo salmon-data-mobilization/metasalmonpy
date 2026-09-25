@@ -12,7 +12,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 import re
 
 from .metadata import normalize_codes, normalize_dataset_meta, normalize_dictionary, normalize_table_meta
-from .term_search import find_terms
+from .term_search import _search_failed_sources, find_terms
 from .dwc_dp import suggest_dwc_mappings
 
 ROLE_MAP = {
@@ -595,6 +595,71 @@ def _table_suggestion_is_compatible(suggestion, table_row) -> bool:
     return bool(_table_text_tokens(query_context) & _table_text_tokens(label))
 
 
+def _search_once_per_call(search_fn: Callable) -> Callable:
+    """``search_fn``, answering each distinct (query, role, sources) call once.
+
+    Made for one ``suggest_semantics()`` call and dropped with it (backlog #56;
+    hub items B-56 and B-243). The port of metasalmon's
+    ``.ms_search_once_per_call()`` (``R/semantics-helpers.R``).
+
+    The retrieval loop runs once per target, and targets repeat a tuple
+    whenever tables share a column or columns share a unit query: four tables
+    carrying the same two columns are 40 targets and 9 distinct tuples, and
+    every one of the 40 used to be a search. A repeat now gets the answer the
+    first search returned, and the loop builds its rows from it exactly as
+    before, so each target keeps the candidates and order its own search would
+    have given it. The answer is kept as a copy and handed out as a copy, as
+    ``find_terms()`` keeps its own cache, so no target can change what the next
+    one receives.
+
+    Three things this is deliberately not:
+
+    * Not a second result cache. ``find_terms()`` has a session cache behind
+      ``METASALMONPY_CACHE``; this one lives inside one call, so it never
+      serves an answer across calls or across a change of ranking settings,
+      and it covers an injected ``search_fn``, which that cache never sees.
+    * Never a store for a degraded answer. An answer whose diagnostics say a
+      source did not answer goes to the target that asked and is not kept, so
+      the next target with that tuple searches again. Keeping it would hand
+      one outage's short or empty result to every later target, where it
+      reads as a gap. This is the rule ``find_terms()`` applies to its own
+      cache, read through the one copy of the status list,
+      ``_search_failed_sources()``, from ``result.attrs.get("diagnostics")``.
+      A search that raises keeps nothing either, and its exception propagates
+      as before.
+    * Not keyed on sorted sources. The key is the arguments exactly as
+      ``search_fn`` receives them, sources in their given order. Within one
+      call a role's sources are one fixed tuple (``policy_sources()``), so
+      sorting would merge no more targets, and it would assume an injected
+      ``search_fn`` ignores source order.
+
+    A call whose query is not a string, or whose arguments cannot key a dict,
+    is passed straight through and never kept.
+    """
+    kept: dict = {}
+
+    def search_once(query, role=None, sources=None):
+        key = (query, role, sources) if isinstance(query, str) else None
+        if key is not None:
+            try:
+                if key in kept:
+                    return _copy_search_answer(kept[key])
+            except TypeError:  # an unhashable role or sources
+                key = None
+        result = search_fn(query, role=role, sources=sources)
+        attrs = getattr(result, "attrs", None)
+        diagnostics = attrs.get("diagnostics") if isinstance(attrs, Mapping) else None
+        if key is not None and not _search_failed_sources(diagnostics):
+            kept[key] = _copy_search_answer(result)
+        return result
+
+    return search_once
+
+
+def _copy_search_answer(answer):
+    return answer.copy() if isinstance(answer, pd.DataFrame) else answer
+
+
 def suggest_semantics(
     df,
     dict_df: pd.DataFrame,
@@ -958,6 +1023,10 @@ def suggest_semantics(
         "code_description",
     ]
 
+    # One search per distinct (query, role, sources) tuple rather than one per
+    # target, and never a degraded answer reused (backlog #56). The LLM retry
+    # searches below still call search_fn directly.
+    search_once = _search_once_per_call(search_fn)
     for target in targets:
         if not str(target.get("search_query") or "").strip():
             continue
@@ -965,7 +1034,7 @@ def suggest_semantics(
             source_policy,
             str(target["dictionary_role"]),
         )
-        res = search_fn(
+        res = search_once(
             target["search_query"],
             role=target["dictionary_role"],
             sources=target_sources,
