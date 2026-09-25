@@ -607,6 +607,39 @@ and moving it is a separate outward act.
   suite jobs check out one commit and skip them, and the new workflow runs
   them strictly.
 
+* **`create_sdp()` with its defaults no longer raises once two targets get
+  search candidates.** Hub queue item **B-370**. Every `find_terms()` answer
+  carries its per-source diagnostics in `attrs["diagnostics"]`, a DataFrame.
+  The retrieval loop in `suggest_semantics()` copied each answer with its
+  `attrs`, and `pd.concat()` compares its inputs' `attrs` whenever every input
+  has some. A DataFrame there has no single truth value, so the call raised
+  `ValueError` as soon as two targets got candidates. `create_sdp()` and
+  `infer_dictionary(seed_semantics=True)` seed through that loop with
+  `find_terms()` as the search, so both raised on any table a search could
+  answer for two targets, and so did `suggest_semantics()` with its default
+  search or with a `search_fn` whose answers carry a DataFrame in `attrs`.
+  Measured on `main` `380a7a4` (pandas 3.0.6, both dependency legs), with
+  every search source patched and the network refused, each of those raised,
+  and each now completes.
+
+  The loop's own copy of each answer now drops the answer's `attrs`, so the
+  candidate frames reach `pd.concat()` without them. The answer itself is not
+  touched, and what a caller reads from `find_terms()`'s `attrs` is
+  unchanged. One consequence is observable: when exactly one target got
+  candidates, the `semantic_suggestions` frame inherited that one search's
+  diagnostics in its own `attrs`, and it now carries none, as it already did
+  whenever the answers carried no `attrs`. With `llm_assess=True`, the
+  review's retry merge raised the same way on `main` when the first pass left
+  one candidate frame. It completes now, because the frame it merges into no
+  longer carries `attrs`.
+
+  `tests/test_search_answer_attrs.py` pins `suggest_semantics()` and
+  `create_sdp()` with its defaults, and failed on `380a7a4`. The lasting
+  outage in `tests/test_semantic_retrieval_dedup.py` now answers with one
+  candidate per target, as metasalmon's twin does, which the crash had
+  prevented. There is no metasalmon half, because R has no counterpart of
+  pandas' `attrs` comparison.
+
 ### Changed
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
