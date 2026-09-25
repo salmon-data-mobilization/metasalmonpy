@@ -27,12 +27,23 @@ never name different spec eras). It is overridable, so nothing is locked away:
 ``METASALMONPY_SDP_SCHEMA_BASE_URL`` (or :func:`set_sdp_schema_base_url`)
 names any ref or host.
 
-The vendored bundle under ``data/schema`` and ``data/profiles`` is a verbatim
-copy of the upstream ``sdp-0.3.0`` git tag. That tag has no
-``methods.schema.json``: sdp-0.3.0 removed the ``metadata/methods.csv``
-registry from the specification, so the legacy registry *reader* in
-``sdp_methods`` carries its own frozen column contract instead of reading one
-from this bundle.
+The vendored bundle under ``data/schema`` and ``data/profiles``, meaning the
+files ``SDP_METADATA_SCHEMA_PATHS``, ``SDP_PROFILE_PATH`` and
+``SDP_RULES_PATH`` name, is a verbatim copy of the upstream ``sdp-0.3.0`` git
+tag, with one exception. That tag has no ``methods.schema.json``: sdp-0.3.0
+removed the ``metadata/methods.csv`` registry from the specification, so the
+legacy registry *reader* in ``sdp_methods`` carries its own frozen column
+contract instead of reading one from this bundle.
+
+**The exception is ``data/schema/sdp.rules.yaml``** (hub B-166). It is a
+verbatim copy of ``smn-data-pkg`` ``main``'s, carrying the SOSA Procedure rules
+reworded after the tag (its pull request 8). When it was copied, metasalmon
+vendored the same git blob and no tag carried those rules. Its ``version:`` and
+``profile:`` scalars, the only two fields this module reads, are the tag's, so
+the pinned remote bundle and the vendored one still agree on everything this
+package reads, and differ only in rule text nothing here parses. *Retires
+when:* the whole bundle is re-vendored from one tag that carries those rules
+(hub B-199).
 """
 
 from __future__ import annotations

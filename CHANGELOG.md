@@ -430,6 +430,36 @@ and moving it is a separate outward act.
   item **B-211**. A defect the two packages share is not a deliberate
   difference, so this opens no `PARITY.md` row.
 
+### Changed
+
+* **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
+  Hub queue item **B-166**, the twin of the copy metasalmon made in its pull
+  request #120. The change is Brett's ruling of 2026-09-14, landed upstream by
+  hub item **B-106** as smn-data-pkg pull request 8. `data/schema/sdp.rules.yaml`
+  is a byte-for-byte copy of smn-data-pkg `main`'s `schema/sdp.rules.yaml`, and
+  so of metasalmon's `inst/extdata/schema/sdp.rules.yaml`. Measured 2026-09-25,
+  all three are git blob `489d46a0` (md5 `f94d6c8f...`, 8506 bytes); this copy
+  was md5 `3c702a37...`, the `sdp-0.3.0` tag's bytes. Nothing was hand-edited.
+
+  `methods_are_sosa_procedures` and `row_varying_procedures_use_codes` now state
+  **reachability**. A method or protocol IRI, and every `codes.csv` `term_iri`
+  on a component bound with `sosa:usedProcedure`, is declared by a shared
+  vocabulary and reaches a resource typed `sosa:Procedure` by a `skos:broader`
+  path of zero or more steps, so a directly typed IRI passes. An asserted SKOS
+  semantic relation whose other side is an `owl:Class` is refused by name, and
+  estimate-type and data-quality vocabularies are never method vocabularies.
+  The reasoning moved upstream to `docs/adr/0002-sosa-procedure-reachability.md`.
+  The file's comments name that path, which resolves in smn-data-pkg and not in
+  this package.
+
+  **Nothing this package accepts, rejects or reports changes.** `sdp_schema`
+  reads only the file's top-level `version:` and `profile:` scalars, which are
+  unchanged, and no rule `id` or `severity` moved. The remote loader still pins
+  the `sdp-0.3.0` tag, which serves the older wording, so the vendored rules
+  file is now the bundle's one departure from that tag; `sdp_schema`'s module
+  docstring records it and what retires it. This ports metasalmon's change
+  rather than choosing a difference, so it opens no `PARITY.md` row.
+
 * **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
   Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
   **B-111**, metasalmon pull request #119). `create_sdp()` writes three files of
