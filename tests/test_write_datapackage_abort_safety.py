@@ -214,14 +214,17 @@ def test_create_sdp_inherits_the_transactional_package_write(tmp_path, monkeypat
     refactor could quietly stop being true, and the create path is the one most
     users are actually on.
 
-    Note the deliberate boundary: this covers the *package*. The three files
-    ``create_sdp()`` writes on its own afterwards — ``README-review.txt``,
-    ``semantic_suggestions.csv`` and ``metadata/metadata-edh-hnap.xml``, each
-    through ``_replace_create_output()`` — are still unlink-then-rewrite and
-    are NOT covered here. That is hub backlog #111's shape, measured present in
-    this package, and it is a separate item rather than scope creep: single-file
-    blast radius, and the files are ``create_sdp()``-owned rather than part of
-    the writer's managed-path inventory.
+    Note the deliberate boundary: this covers the *package*. It does not cover
+    the three files ``create_sdp()`` writes on its own afterwards:
+    ``README-review.txt``, ``semantic_suggestions.csv`` and
+    ``metadata/metadata-edh-hnap.xml``. Those are ``create_sdp()``-owned rather
+    than part of the writer's managed-path inventory, with a single-file blast
+    radius, so they have their own test file,
+    ``tests/test_create_sdp_sidecar_atomicity.py``. Until hub queue B-179 (the
+    mirror of metasalmon's B-111, backlog #111) each was unlink-then-rewrite
+    through ``_replace_create_output()``, which B-179 deleted. Each now renders
+    to bytes and installs with ``atomic_io.atomic_write()``, and that file
+    injects an abort at each render.
     """
     from metasalmonpy import create_sdp
 
