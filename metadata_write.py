@@ -177,9 +177,17 @@ def apply_sdp_semantics(
         ):
             if not accepted:
                 frame.at[index, "term_type"] = pd.NA
-            elif _text(row["iri"]) == _text(row["decision_iri"]):
+            elif _strip_review_iri(row["iri"]) == _text(row["decision_iri"]):
                 # ``term_type`` describes the candidate, and this decision IS
-                # that candidate.
+                # that candidate. An ``iri=`` that a shortlisted candidate
+                # carries is recorded on that candidate's row
+                # (:func:`accept_suggestion`), so it takes this branch, exactly
+                # as the same candidate accepted by ``rank=`` does. The row's
+                # IRI is read as a decision records it, without a ``REVIEW:``
+                # marker, the rendering :func:`accept_suggestion` selected the
+                # row by. Read through ``_text()``, which keeps the marker, a
+                # candidate stored as ``REVIEW: <IRI>`` never matched and wrote
+                # ``skos_concept`` by ``rank=`` as well (hub item B-222).
                 frame.at[index, "term_type"] = row["term_type"]
             else:
                 # A hand-supplied ``iri=`` rather than a shortlisted candidate:

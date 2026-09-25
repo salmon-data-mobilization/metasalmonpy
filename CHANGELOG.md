@@ -345,6 +345,40 @@ and moving it is a separate outward act.
   R-shipped-first lag and is not a deliberate difference, so it opens no
   `PARITY.md` row.
 
+* **Naming a shortlisted candidate's IRI in `accept_suggestion(iri=...)` now
+  writes that candidate's `term_type`.** Hub queue item **B-222**, the port of
+  metasalmon's **B-221** (metasalmon pull request #166). The accept was
+  recorded on the slot's first row. `apply_sdp_semantics()` takes `term_type`
+  from the row a decision sits on only when that row carries the accepted IRI,
+  and writes `skos_concept` otherwise. So hand-picking the IRI of a candidate
+  below rank 1 wrote `skos_concept`, whatever that candidate was. The review
+  rebuilt from the package replays the same decision on the candidate's own
+  row, and re-applying it wrote the candidate's type, so one decision changed
+  `column_dictionary.csv` and `datapackage.json` between two applies. Measured
+  on `ed5e22e` with an `owl_class` candidate at rank 2: the first apply wrote
+  `skos_concept` and the re-apply `owl_class`. An `iri` that a candidate in the
+  review's shortlist carries, compared trimmed and without the `REVIEW:`
+  marker, is now recorded on that candidate's row. It is the same decision as
+  `rank=<its rank>`, and applying, rebuilding and re-applying it writes the
+  same bytes.
+
+  A candidate stored with the `REVIEW:` marker on its IRI now writes its own
+  `term_type` too, by `iri=` and by `rank=` alike. The writer compared that
+  stored IRI, marker and all, with the unmarked IRI the decision records, so it
+  never recognised the candidate and wrote `skos_concept`. The selection and
+  the writer now read a candidate's IRI through `_strip_review_iri()`, the
+  rendering the decision record in `semantic_suggestions.csv` already matched
+  rows by. metasalmon's fix also changed how its record reads that IRI, to
+  trim it; the record here already did, so that part needs no port. An IRI
+  that no candidate in the shortlist carries still writes `skos_concept`, as
+  before. That includes hub item **B-176**'s case, ported here as **B-216**: a
+  term the reviewer typed, whose type nothing records.
+
+  The twins of metasalmon's tests in `tests/test_review_console.py` failed on
+  the code as it stood: by `iri=` for the unmarked candidate, and by both
+  `iri=` and `rank=` for the marked one. This closes R-shipped-first lag and is
+  not a deliberate difference, so it opens no `PARITY.md` row.
+
 * **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
   Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
   **B-111**, metasalmon pull request #119). `create_sdp()` writes three files of
