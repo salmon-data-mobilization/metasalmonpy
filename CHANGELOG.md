@@ -511,6 +511,41 @@ and moving it is a separate outward act.
   item **B-211**. A defect the two packages share is not a deliberate
   difference, so this opens no `PARITY.md` row.
 
+* **A line under a released `CHANGELOG.md` heading that the release does not
+  contain now fails a check.** Hub queue item **B-201**, the pair of the hub's
+  **B-200**. AGENTS.md's *Releases* section now carries the rule metasalmon's
+  gained on 2026-09-16: a change merged after the commit that bumped the
+  version, and before that version's tag exists, goes under `## Unreleased`.
+  `scripts/check-changelog-window.py` is its mechanical form. For each
+  released heading it finds the bump commit, which is the `vX.Y.Z` tag or,
+  before the tag exists, the first commit on `main` whose `pyproject.toml`
+  reads the version. It reports every line under the heading that the section
+  did not hold there and that `git blame` gives to a commit that is not an
+  ancestor of it. The new `changelog-window` workflow runs it on every pull
+  request, and AGENTS.md names it as the step before dispatching the Release
+  workflow. `MANIFEST.in` keeps it and its tests out of the distributions.
+
+  Replayed over this repository's history, it finds both instances the
+  changelog has held. At `1e9245c` it reports B-144's 37 lines under
+  `## 0.5.0`, which pull request #35 later moved, and 24 lines under
+  `## 0.2.1` from `10d0616`, the calendar fix. Pull request #10 committed that
+  fix after the commit `v0.2.1` names, so the tag does not contain it, and the
+  lines were still under the tagged heading on `main`. Brett ruled on
+  2026-09-25 that the tag stays. The 0.2.1 entry now carries a dated
+  correction saying so, and the check exempts that one commit's lines for as
+  long as the correction names it. With both in place the check passes over
+  `main`; with either missing it does not.
+
+  The script is a port of the hub's copy rather than a vendored one, because
+  the hub's reads this repository only as a sibling checkout and has nowhere
+  to hold a ruling. `tests/test_check_changelog_window.py` compares every
+  definition the two copies share with the hub's `main`, and the workflow runs
+  that comparison, so neither copy can change alone. The tests build a
+  throwaway repository for each shape the hub's tests cover, and replay
+  `1e9245c` and `3f8349a`. Those replays need a full clone with the tags: CI's
+  suite jobs check out one commit and skip them, and the new workflow runs
+  them strictly.
+
 ### Changed
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**

@@ -180,6 +180,39 @@ it stood at that commit, as the release body. It exists because agent sessions
 cannot push tags. Running it is still an outward act, and it is Brett's
 decision: an agent dispatches it only on his word.
 
+**A change that merges after the commit that bumped the version and before
+that version's tag exists is filed under `## Unreleased`, never under the
+version it did not ship in, and the tag stays on the bump commit** (Brett,
+2026-09-16: *"Regarding the agents.md change log entry. I will take your
+recommendation."*). metasalmon's `AGENTS.md` states the same rule for its
+`NEWS.md`. A dated correction to a shipped entry may still be appended in
+place, because it makes the entry describe what shipped more accurately rather
+than adding to what shipped; a change, a fix or an addition goes under
+`## Unreleased`. The instance that produced the rule is this repository's.
+B-144's branch filed its entry under `## Unreleased`, and its merge `b939fd9`
+(#32), 21 seconds after the bump merge `67fb486` (#33, B-153), carried it under
+`## 0.5.0` with no conflict to say so. Pull request #35 moved it back
+(`3f8349a`). The window is real on every release, because the tag is a separate
+act from the bump.
+
+**The pre-tag step is `python3 scripts/check-changelog-window.py`, run on an
+up-to-date `main` in a full clone before the Release workflow is dispatched.**
+Until the tag exists it measures the version against its bump commit, the
+first commit on `main`'s first-parent history whose `pyproject.toml` reads it,
+which is the commit the workflow must be given. It fails on any line under that
+heading added by a commit that is not an ancestor of it. A correction passes
+only in a marked, dated form: a `*(Correction, YYYY-MM-DD: …)*` paragraph or a
+`[corrected YYYY-MM-DD: …]` bracket. A red run before tagging means an entry
+moves to `## Unreleased` first. It also runs on every pull request
+(`.github/workflows/changelog-window.yml`), and its docstring states what it
+does not cover. **One commit is exempt by ruling:** `10d0616`, the calendar fix
+under `## 0.2.1`, which pull request #10 merged after the commit `v0.2.1`
+names. Brett ruled on 2026-09-25 that the tag does not move and that the entry
+says so, and the exemption holds only while the entry's dated correction names
+the commit. The script is a port of the hub's copy (hub item B-200; B-201
+here). Its test file fails when a definition the two copies share stops
+matching, so a change to either has to reach the other.
+
 **The version number lives in six places and they drift.** A bump moves all
 six in the same change, and **every one of them is pinned by a test in
 `tests/test_public_api.py`**, so a bump that misses one turns the suite red
