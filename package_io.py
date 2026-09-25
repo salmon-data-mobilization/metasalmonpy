@@ -2333,8 +2333,10 @@ def _collect_blank_required_metadata_fields(
     not blank and has its own collector, so no field is reported twice. Rows
     come back in schema order, then file order; nothing here sorts.
 
-    The schema read is the bundled copy (``_SCHEMA_SOURCE``), never the remote
-    one, because ``validate_salmon_datapackage()`` makes no network call.
+    The schema read is the one ``review_metadata()`` reads
+    (``_schema_source()``). Under the shipped schema settings that is the
+    bundled copy, so no network is reached for it. Under a schema the settings
+    select it is that schema, as the writers read it (hub B-215).
     """
     # Deferred so that ``package_io`` keeps no module-level dependency on
     # ``sdp_field_setters``; that module already reaches back into this one
@@ -2342,7 +2344,7 @@ def _collect_blank_required_metadata_fields(
     from .sdp_field_setters import (
         METADATA_KEY_FIELDS,
         METADATA_SCHEMA_TABLES,
-        _SCHEMA_SOURCE,
+        _schema_source,
     )
     from .sdp_schema import sdp_schema_required_field_names
 
@@ -2354,7 +2356,7 @@ def _collect_blank_required_metadata_fields(
 
         key_fields = set(METADATA_KEY_FIELDS.get(file_name, ()))
         required = sdp_schema_required_field_names(
-            METADATA_SCHEMA_TABLES[file_name], source=_SCHEMA_SOURCE
+            METADATA_SCHEMA_TABLES[file_name], source=_schema_source()
         )
         if keys:
             fields = [name for name in required if name in key_fields]

@@ -286,6 +286,26 @@ and moving it is a separate outward act.
   change settles none of them. This closes R-shipped-first lag and is not a
   deliberate difference, so it opens no `PARITY.md` row.
 
+* **`review_metadata()`, the four `set_sdp_*()` setters and the blank-required
+  check in `validate_salmon_datapackage()` read the schema the settings
+  select.** Hub queue item **B-215**, the port of metasalmon's **B-175**
+  (metasalmon pull request #145). They read the bundled schema under every
+  setting. So a schema selected with `set_sdp_schema_source()` or
+  `set_sdp_schema_base_url()`, or with `METASALMONPY_SDP_SCHEMA_SOURCE` or
+  `METASALMONPY_SDP_SCHEMA_BASE_URL`, reached the package writers and none of
+  these. Measured on `fc5d16f` with a selected schema that adds one required
+  `dataset.csv` field: the writers' field list included it, `review_metadata()`
+  did not report it, `set_sdp_dataset()` refused it as "no such field", and the
+  blank-required check did not name it. All four settings were silently
+  ignored. Now they read the schema the settings select, as the writers do:
+  from this process's schema cache once a writer has loaded it, and otherwise
+  by loading it once. Under the shipped settings they still read the bundled
+  copy and contact no network, as `review_metadata()` documents. One
+  consequence follows the writers too: with `set_sdp_schema_source("remote")`
+  and no network, these now raise `SdpSchemaError` where they used to read the
+  bundled copy. This closes R-shipped-first lag and is not a deliberate
+  difference, so it opens no `PARITY.md` row.
+
 ## 0.5.0
 
 **The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue

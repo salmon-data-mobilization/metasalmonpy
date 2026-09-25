@@ -468,11 +468,7 @@ def test_review_metadata_makes_no_http_request_on_the_default_schema_source(
     # has no offline contract and is not what is under test here.
     assert raw_package.is_dir()
 
-    monkeypatch.delenv("METASALMONPY_SDP_SCHEMA_SOURCE", raising=False)
-    sdp_schema.set_sdp_schema_source(None)
-    sdp_schema.reset_schema_cache()
-    sdp_schema._vendored_schema_document.cache_clear()
-    assert sdp_schema.default_sdp_schema_source() == "auto"
+    _use_shipped_schema_defaults(monkeypatch)
     monkeypatch.setattr(requests, "get", explode)
 
     try:
@@ -491,11 +487,11 @@ def test_the_offline_path_opens_no_socket_at_all(raw_package, monkeypatch):
     sentinel green while the network was reached on every call. So this one
     blocks the socket API itself, which every one of those has to go through.
 
-    It also covers the four setters and the console renderer, because
-    ``_SCHEMA_SOURCE`` claims the bundled read for all of them: a call
-    ``review_metadata()`` prints must be one ``_set_sdp_metadata()`` accepts, and
-    a setter that read the remote schema would break that on a machine with no
-    network rather than on this one.
+    It also covers the four setters and the console renderer, because under
+    the shipped schema settings ``_schema_source()`` claims the bundled read
+    for all of them: a call ``review_metadata()`` prints must be one
+    ``_set_sdp_metadata()`` accepts, and a setter that read the remote schema
+    would break that on a machine with no network rather than on this one.
 
     Retires when: never, while :func:`review_metadata` documents that it does not
     contact a network. An offline promise with no test that fails when a socket
@@ -510,11 +506,7 @@ def test_the_offline_path_opens_no_socket_at_all(raw_package, monkeypatch):
 
     assert raw_package.is_dir()
 
-    monkeypatch.delenv("METASALMONPY_SDP_SCHEMA_SOURCE", raising=False)
-    sdp_schema.set_sdp_schema_source(None)
-    sdp_schema.reset_schema_cache()
-    sdp_schema._vendored_schema_document.cache_clear()
-    assert sdp_schema.default_sdp_schema_source() == "auto"
+    _use_shipped_schema_defaults(monkeypatch)
 
     monkeypatch.setattr(socket.socket, "connect", explode)
     monkeypatch.setattr(socket.socket, "connect_ex", explode)
@@ -731,6 +723,57 @@ def test_a_selected_schema_nothing_has_loaded_is_loaded_once(
         }
         assert _set_funding_source(raw_package) is True
         assert fetched == [sdp_schema.default_sdp_schema_base_url()]
+    finally:
+        sdp_schema.set_sdp_schema_base_url(None)
+
+
+_PINNED_BASE_URL = sdp_schema.DEFAULT_SDP_SCHEMA_BASE_URL
+_SETTINGS_CASES = [
+    ({}, True),
+    ({"set_sdp_schema_source": "auto"}, True),
+    ({"METASALMONPY_SDP_SCHEMA_SOURCE": "auto"}, True),
+    ({"METASALMONPY_SDP_SCHEMA_SOURCE": ""}, True),
+    ({"set_sdp_schema_base_url": _PINNED_BASE_URL}, True),
+    ({"set_sdp_schema_base_url": ""}, True),
+    ({"METASALMONPY_SDP_SCHEMA_BASE_URL": _PINNED_BASE_URL}, True),
+    ({"METASALMONPY_SDP_SCHEMA_BASE_URL": ""}, True),
+    ({"set_sdp_schema_source": "vendored"}, False),
+    ({"set_sdp_schema_source": "remote"}, False),
+    ({"METASALMONPY_SDP_SCHEMA_SOURCE": "vendored"}, False),
+    ({"METASALMONPY_SDP_SCHEMA_SOURCE": "remote"}, False),
+    ({"set_sdp_schema_base_url": "https://example.invalid/x"}, False),
+    ({"METASALMONPY_SDP_SCHEMA_BASE_URL": "https://example.invalid/x"}, False),
+]
+
+
+@pytest.mark.parametrize(
+    "settings, expected",
+    _SETTINGS_CASES,
+    ids=[
+        ",".join(f"{name}={value!r}" for name, value in settings.items())
+        or "nothing set"
+        for settings, _ in _SETTINGS_CASES
+    ],
+)
+def test_the_shipped_settings_are_told_apart_by_what_they_resolve_to(
+    monkeypatch, settings, expected
+):
+    """The twin of metasalmon's "the default options are told apart by what
+    they resolve to".
+
+    A setting that names the default value is the default, and an empty value
+    falls back to it, exactly as the loader resolves them. Only a setting that
+    selects another schema moves the scan, the setters and the collector off the
+    bundled read.
+    """
+    _use_shipped_schema_defaults(monkeypatch)
+    try:
+        for name, value in settings.items():
+            if name.startswith("METASALMONPY_"):
+                monkeypatch.setenv(name, value)
+            else:
+                getattr(sdp_schema, name)(value)
+        assert sdp_schema._sdp_schema_options_are_default() is expected
     finally:
         sdp_schema.set_sdp_schema_base_url(None)
 

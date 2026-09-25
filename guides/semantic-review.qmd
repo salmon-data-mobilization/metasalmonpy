@@ -166,9 +166,13 @@ counts as blank in every row; any schema-declared `*_iri` field of
 `tables.csv`, `column_dictionary.csv` or `codes.csv` still carrying an
 unresolved `REVIEW:` marker; measurement columns missing `term_iri`,
 `property_iri`, `entity_iri` or `unit_iri`; and `tables.csv` rows with a blank
-`observation_unit_iri`. It never contacts a network or an LLM, and the schema it
-reads `constraints.required` from is the bundled copy rather than the remote
-one.
+`observation_unit_iri`. It never contacts an LLM. Under the shipped schema
+settings it never contacts a network either, because the schema it reads
+`constraints.required` from is the copy bundled with metasalmonpy. If you select
+a different schema with `set_sdp_schema_source()` or `set_sdp_schema_base_url()`,
+or with the `METASALMONPY_SDP_SCHEMA_SOURCE` or
+`METASALMONPY_SDP_SCHEMA_BASE_URL` environment variable, it reads that one, as
+the package writers do, and so do the setters below.
 
 ### The four setters
 

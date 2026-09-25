@@ -357,6 +357,30 @@ def default_sdp_schema_source() -> str:
     return source
 
 
+def _sdp_schema_options_are_default() -> bool:
+    """Whether the schema settings are the shipped defaults.
+
+    Mirrors ``.ms_sdp_schema_options_are_default()`` (hub B-175 and B-215): the
+    ``"auto"`` source and the pinned base URL, however each was reached. Under
+    them the loader would fetch the published copy of the release the bundled
+    copy was vendored from, so a caller that must stay offline can read the
+    bundle instead and lose nothing. Any other setting selects a schema the
+    bundle may not match. ``"remote"`` demands the published copy, and a base
+    URL of its own names another release, so a caller that wants the schema its
+    package was written to has to read that one.
+
+    It compares RESOLVED values rather than asking whether a setting is present.
+    Going through :func:`default_sdp_schema_source` and
+    :func:`default_sdp_schema_base_url`, rather than re-reading the overrides
+    and the environment, keeps one home for which setting wins. So a new way of
+    naming either one cannot get past this check while the loader obeys it.
+    """
+    return (
+        default_sdp_schema_source() == "auto"
+        and default_sdp_schema_base_url() == DEFAULT_SDP_SCHEMA_BASE_URL
+    )
+
+
 def vendored_path(relative: str) -> Path:
     """Absolute path to one file of the vendored ``sdp-0.3.0`` bundle."""
     return _DATA_DIR / relative
