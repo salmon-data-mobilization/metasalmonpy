@@ -286,6 +286,28 @@ and moving it is a separate outward act.
   change settles none of them. This closes R-shipped-first lag and is not a
   deliberate difference, so it opens no `PARITY.md` row.
 
+* **`detect_semantic_term_gaps()` no longer reports an ontology gap for a slot
+  the reviewer has just filled by hand.** Ported from metasalmon pull request
+  #146 (hub queue item **B-176**), as hub queue item **B-216**.
+  `apply_sdp_semantics()` records a hand-picked accept, an
+  `accept_suggestion(iri=...)` whose IRI no retrieved candidate carries, as a
+  row of its own in `semantic_suggestions.csv`, with `source` `user`. The
+  detector counted that row as retrieval evidence. Its blank `search_query`
+  made it a target of its own whose only candidate was not `smn`. So when the
+  post-review file was passed as `suggestions`, the output gained one more
+  gap row than the pre-review file gave, carrying the hand-picked IRI as
+  `top_non_smn_iri`. `render_ontology_term_request()` drafts a term request
+  from a gap row and `submit_term_request_issues()` files it, so a false gap
+  could have been sent to an ontology's maintainers.
+  The detector now drops recorded rows before it derives anything from the
+  table, embedded LLM assessments included, so the post-review file yields
+  exactly the gap rows the pre-review file did, and a real non-`smn` gap on the
+  same slot is still reported. A hand-picked IRI under `w3id.org/smn/` never
+  showed the defect, because the detector counts that namespace as `smn`.
+  `HandPickedAcceptGapTests` in `tests/test_term_requests.py` failed on the
+  detector as it stood. R shipped this behaviour first and the difference was
+  not deliberate, so the port opens no `PARITY.md` row.
+
 * **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
   Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
   **B-111**, metasalmon pull request #119). `create_sdp()` writes three files of

@@ -240,6 +240,21 @@ def detect_semantic_term_gaps(
         if suggestions is not None
         else pd.DataFrame()
     )
+    # A row apply_sdp_semantics() recorded for a hand-picked accept (``source``
+    # is metadata_write._HAND_PICKED_SOURCE) is a reviewer's decision, not
+    # retrieval output, and every row this function returns is a claim about
+    # what retrieval found. Counted, its blank search_query made it a target of
+    # its own whose only candidate was not smn, so a post-review
+    # semantic_suggestions.csv reported an ontology gap for the slot the
+    # reviewer had just filled. Dropped before anything is derived from the
+    # table, embedded LLM assessments included. Hub queue B-216, the port of
+    # metasalmon's B-176. Retires when: never -- a recorded decision is not
+    # retrieval evidence. If a reviewer's choice should ever count as a gap
+    # signal, that is a new gap_detection_basis of its own, decided here, not
+    # this row passing as a candidate.
+    from .metadata_write import _is_hand_picked
+
+    df = df[~_is_hand_picked(df)].copy()
     embedded = (
         df[df.get("llm_decision", pd.Series(index=df.index, dtype="object")) == "request_new_term"].copy()
         if "llm_decision" in df
