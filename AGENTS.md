@@ -276,14 +276,17 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1145
-passed / 2 skipped with the extras installed, 1003 / 144 with core dependencies
-only (2026-09-25, measured locally for hub B-370 on `6881aa0`, its merge of
-`main` `6700062`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1154
+passed / 2 skipped with the extras installed, 1012 / 144 with core dependencies
+only (2026-09-25, measured locally for hub B-274 on `188769b`, branched from
+`main` `e089b86`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
 machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a full
 clone with every tag and with `METASALMON_PATH` unset, the same under
-`python -m pytest -q` and bare `pytest -q`; 1143 / 2 and 1002 / 143 for B-370 on
-`dd43cd2`, its merge of `main` `056fccc`, and 1143 / 2 and 1001 / 144 for B-245
+`python -m pytest -q` and bare `pytest -q`; 1145 / 2 and 1003 / 144 on `main`
+`e089b86` before it, measured the same four ways, as for B-370 on `6881aa0`, its
+merge of `main` `6700062`, whose tests `main` `e089b86` merged unchanged;
+1143 / 2 and 1002 / 143 for B-370 on `dd43cd2`, its merge of `main` `056fccc`,
+and 1143 / 2 and 1001 / 144 for B-245
 on `08291c2`, its merge of the same `main`, whose tests `main` `6700062` merged
 unchanged; 1141 / 2 and 1000 / 143 on `main` `056fccc` before them, measured the
 same four ways, as for B-244 on `4722f17`, its merge of `main` `380a7a4`, whose
