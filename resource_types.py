@@ -44,8 +44,12 @@ import datetime as _dt
 import math
 import re
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
+# numpy is not a dependency of its own here: every pandas this package supports
+# requires it. It is imported for ``numpy.datetime64``, the one type that holds
+# an instant before year 1 or after year 9999 under all of them (hub B-388).
+import numpy as np
 import pandas as pd
 
 # The SDP ``value_type`` vocabulary, mirroring the enum in the vendored
@@ -66,6 +70,11 @@ VALUE_TYPES: Tuple[str, ...] = (
 _TRIM = " \t\r\n"
 
 _EPOCH = _dt.datetime(1970, 1, 1)
+
+# What a parsed ``datetime`` token becomes: a naive UTC ``datetime``, or a
+# ``numpy.datetime64`` for an instant no ``datetime`` holds. See
+# ``parse_datetime_token``.
+_Instant = Union[_dt.datetime, np.datetime64]
 
 
 # ``strftime()`` hands ``%Y`` to the platform C library, and the platforms
@@ -293,11 +302,25 @@ def parse_date_token(token: Any) -> Optional[_dt.date]:
         return None
 
 
-def parse_datetime_token(token: Any) -> Optional[_dt.datetime]:
+def parse_datetime_token(token: Any) -> Optional[_Instant]:
     """``readr::parse_datetime()`` for one token, or ``None``.
 
     Returns a naive UTC datetime, matching the POSIXct R produces: an offset
     in the token is applied and then discarded, exactly as R does.
+
+    **An offset can carry the instant out of the years a** ``datetime``
+    **holds**, which run from 1 to 9999. ``0001-01-01T00:00:00+01`` is an hour
+    before year 1, and ``9999-12-31T23:00:00-02`` an hour after year 9999.
+    readr reads both, as the POSIXct values R prints as ``"0-12-31 23:00:00
+    UTC"`` and ``"10000-01-01 01:00:00 UTC"`` (measured under R 4.3.3 and
+    readr 2.2.0; ``tests/test_instant_beyond_datetime_range.py`` records
+    them). So such a token returns the same instant as a ``numpy.datetime64``
+    at microsecond resolution, the resolution of every other value here.
+    Until hub B-388 the subtraction below raised ``OverflowError``, and every
+    read and validation of a package holding such a value raised with it.
+    ``numpy.datetime64`` rather than ``pd.Timestamp`` because pandas 1.5,
+    which this package supports, cannot hold these instants in a
+    ``Timestamp``.
     """
     if _is_blank(token):
         return None
@@ -330,7 +353,11 @@ def parse_datetime_token(token: Any) -> Optional[_dt.datetime]:
         body = offset[1:].replace(":", "")
         hours = int(body[:2])
         minutes = int(body[2:4]) if len(body) > 2 else 0
-        value = value - sign * _dt.timedelta(hours=hours, minutes=minutes)
+        shift = sign * _dt.timedelta(hours=hours, minutes=minutes)
+        try:
+            value = value - shift
+        except OverflowError:
+            return np.datetime64(value, "us") - np.timedelta64(shift)
     return value
 
 
@@ -482,7 +509,15 @@ def double_spacing(value: float) -> float:
     return 2.0 ** (math.floor(math.log2(magnitude)) - 52)
 
 
-def _epoch_seconds(value: _dt.datetime) -> float:
+def _epoch_seconds(value: _Instant) -> float:
+    """Seconds since the epoch, the double R's POSIXct stores.
+
+    A ``numpy.datetime64`` is divided from whole microseconds, the same
+    correctly rounded division ``timedelta.total_seconds()`` makes, so an
+    instant gets one epoch value whichever type holds it.
+    """
+    if isinstance(value, np.datetime64):
+        return int(value.astype("datetime64[us]").astype("int64")) / 1_000_000
     return (value - _EPOCH).total_seconds()
 
 
@@ -614,6 +649,10 @@ def typed_series(values: Sequence[Any], value_type: str) -> pd.Series:
             # Outside pandas' nanosecond range. R's POSIXct has no such bound,
             # so the column stays an object column of datetimes rather than
             # being reported as a type mismatch metasalmon would not report.
+            # An instant before year 1 or after year 9999 is a numpy
+            # ``datetime64`` in that column (hub B-388). pandas 3 reaches none
+            # of this for these values: it infers microseconds and holds them
+            # all in a ``datetime64[us]`` column.
             return pd.Series(list(values), dtype="object")
     return pd.Series(list(values), dtype="object")
 
@@ -642,7 +681,47 @@ def format_number_token(value: Optional[float]) -> Optional[str]:
     return format(Decimal(shortest_round_trip(float(value))).normalize(), "f")
 
 
-def format_datetime_token(value: Optional[_dt.datetime]) -> Optional[str]:
+class _UtcFields(NamedTuple):
+    """The calendar fields ``_iso_seconds`` reads, for a year of any size."""
+
+    year: int
+    month: int
+    day: int
+    hour: int
+    minute: int
+    second: int
+
+
+# The Gregorian calendar repeats exactly every 400 years, which are 146097
+# days, so moving an instant by whole cycles changes its year by a multiple of
+# 400 and leaves every other calendar field alone.
+_GREGORIAN_CYCLE_SECONDS = 146097 * 86400
+
+
+def _utc_fields(epoch_second: int) -> _UtcFields:
+    """The UTC calendar fields of a whole epoch second, in any year.
+
+    ``_EPOCH + timedelta(seconds=...)`` raises ``OverflowError`` outside the
+    years 1 to 9999, and R's POSIXct has no such bound: metasalmon keys the
+    instant before year 1 as year ``0000`` and the one after year 9999 as
+    ``10000`` (hub B-388). So the second is moved into the cycle that starts
+    at the epoch, read there, and its year moved back by the same number of
+    cycles. Every second takes this one path, so a key never depends on which
+    side of a range its instant falls.
+    """
+    cycles, within = divmod(epoch_second, _GREGORIAN_CYCLE_SECONDS)
+    moment = _EPOCH + _dt.timedelta(seconds=within)
+    return _UtcFields(
+        moment.year + 400 * cycles,
+        moment.month,
+        moment.day,
+        moment.hour,
+        moment.minute,
+        moment.second,
+    )
+
+
+def format_datetime_token(value: Optional[_Instant]) -> Optional[str]:
     """Canonical microsecond-ISO key for one datetime.
 
     Mirrors ``.ms_format_datetime_token()``, including its two details that
@@ -657,11 +736,24 @@ def format_datetime_token(value: Optional[_dt.datetime]) -> Optional[str]:
     seconds = _epoch_seconds(value)
     whole = math.floor(seconds)
     micros = int((seconds - whole) * 1_000_000)
-    rendered = _iso_seconds(_EPOCH + _dt.timedelta(seconds=whole))
+    rendered = _iso_seconds(_utc_fields(whole))
     token = "%s.%06dZ" % (rendered, micros)
     if seconds == round(seconds, 6):
         return token
     return token + "@" + str(format_number_token(seconds))
+
+
+def _timestamp_instant(value: pd.Timestamp) -> _Instant:
+    """The instant a ``Timestamp`` holds, as ``parse_datetime_token`` returns it.
+
+    pandas 2 and later hold an instant before year 1 or after year 9999 in a
+    ``Timestamp`` (pandas 3 reads a declared column of them into one), and
+    ``to_pydatetime()`` raises ``ValueError`` for it, so it becomes the
+    ``numpy.datetime64`` the parser gives for the same token (hub B-388).
+    """
+    if _dt.MINYEAR <= value.year <= _dt.MAXYEAR:
+        return value.to_pydatetime()
+    return value.to_datetime64()
 
 
 def canonical_value_tokens(values: Sequence[Any], value_type: Any) -> List[Optional[str]]:
@@ -703,10 +795,11 @@ def canonical_value_tokens(values: Sequence[Any], value_type: Any) -> List[Optio
             rendered.append(None if parsed is None else _iso_date(parsed))
         else:
             parsed = (
-                value.to_pydatetime()
+                _timestamp_instant(value)
                 if isinstance(value, pd.Timestamp)
                 else value
                 if isinstance(value, _dt.datetime)
+                or (isinstance(value, np.datetime64) and not np.isnat(value))
                 else parse_datetime_token(text)
             )
             rendered.append(format_datetime_token(parsed))
