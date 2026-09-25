@@ -164,14 +164,106 @@ class _TextExtractor(HTMLParser):
             self.parts.append(text)
 
 
-def _decode_text(path: Path) -> str:
-    raw = path.read_bytes()
-    for encoding in ("utf-8", "utf-8-sig", "cp1252", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("utf-8", errors="replace")
+# --- Context documents -------------------------------------------------------
+#
+# Everything from here to `_relevant_context()` mirrors metasalmon's
+# `R/llm-semantic-helpers.R` step for step (hub queue B-364, ruled 2026-09-25
+# with the S16 execplan, decision 4 and section 2.7): the same extension list,
+# the same text extraction for text formats, the same 2200/200 chunking, the
+# same source labels and chunk ids, the same token-overlap scoring and the same
+# tie order. The two packages are about to share one review-packet file
+# (B-326 / B-327), so a context document has to become the same excerpts on
+# both sides. What is deliberately NOT shared is the library-specific
+# extraction for PDF, DOCX, spreadsheets and HTML: PARITY.md row 62.
+#
+# R facts this code leans on, each measured on 2026-09-25 under R 4.5.2:
+#   * `readLines()` accepts LF, CRLF and a bare CR as a line end, discards a
+#     UTF-8 byte-order mark in a UTF-8 locale, and reports no trailing empty
+#     line for a final newline.
+#   * `trimws()` strips only space, tab, CR and LF -- never NBSP, form feed or
+#     vertical tab -- so `str.strip()` is the wrong tool here.
+#   * `iconv(..., sub = "")` drops the five bytes Windows-1252 leaves
+#     undefined (0x81, 0x8D, 0x8F, 0x90, 0x9D) instead of failing, so the
+#     latin-1 step is reached only when nothing survived cp1252.
+#   * `[^a-z0-9]` in R's default regex engine is a code-point range, so every
+#     non-ASCII character is a token separator, and `tolower()` applies the
+#     simple case mapping.
+
+# `.ms_supported_context_extensions()`, in its order.
+SUPPORTED_CONTEXT_EXTENSIONS = (
+    "md", "txt", "csv", "tsv", "json", "yaml", "yml", "rst", "r", "rmd", "qmd",
+    "pdf", "htm", "html", "docx", "xls", "xlsx", "xlsm",
+)
+# `.ms_chunk_context_text()` defaults and `.ms_llm_context_chunk_limit()`'s
+# ordinary limit.
+CONTEXT_CHUNK_CHARS = 2200
+CONTEXT_OVERLAP_CHARS = 200
+CONTEXT_EXCERPT_LIMIT = 4
+# R's `trimws()` default: `[ \t\r\n]`.
+_R_WHITESPACE = " \t\r\n"
+
+
+def _r_trimws(value) -> str:
+    """R's ``trimws()``: strip space, tab, CR and LF only, never other whitespace."""
+    return str(value).strip(_R_WHITESPACE)
+
+
+def _r_file_ext(name: str) -> str:
+    """``tools::file_ext()``: the alphanumeric run after the last dot, else ``""``."""
+    match = re.search(r"\.([^\W_]+)$", name)
+    return match.group(1) if match else ""
+
+
+def _decode_context_bytes(raw: bytes) -> str:
+    """``.ms_read_text_utf8()``'s decoding: UTF-8, then Windows-1252, then latin-1.
+
+    A leading byte-order mark goes first, as ``readLines()`` discards it. The
+    cp1252 step drops the five undefined bytes the way ``iconv(sub = "")``
+    does, so latin-1 is reached only when cp1252 produced nothing at all.
+    """
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    converted = raw.decode("cp1252", errors="ignore")
+    if not converted:
+        converted = raw.decode("latin-1")
+    return converted
+
+
+def _r_read_lines(path: Path) -> list[str]:
+    """``readLines(path, warn = FALSE, encoding = "UTF-8")`` with R's fallback decoding."""
+    text = _decode_context_bytes(path.read_bytes())
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def _read_text_file(path: Path) -> str:
+    """``.ms_read_text_utf8()``: the file's lines joined with LF, nothing collapsed."""
+    return "\n".join(_r_read_lines(path))
+
+
+def _read_rmarkdown(path: Path) -> str:
+    """``.ms_context_text_from_rmarkdown()``: drop leading YAML front matter and
+    every fence line. The fenced content itself stays."""
+    lines = _r_read_lines(path)
+    if not lines:
+        return ""
+    if _r_trimws(lines[0]) == "---":
+        closing = [
+            index
+            for index, line in enumerate(lines[1:], start=1)
+            if _r_trimws(line) == "---"
+        ]
+        if closing:
+            lines = lines[closing[0] + 1 :]
+    return "\n".join(
+        line for line in lines if not _r_trimws(line).startswith("```")
+    )
 
 
 def _read_docx(path: Path) -> str:
@@ -183,37 +275,51 @@ def _read_docx(path: Path) -> str:
     )
 
 
-def _read_context_file(path: Path) -> str:
-    suffix = path.suffix.lower()
-    if suffix in {".html", ".htm"}:
-        parser = _TextExtractor()
-        parser.feed(_decode_text(path))
-        return "\n".join(parser.parts)
-    if suffix == ".docx":
-        return _read_docx(path)
-    if suffix in {".xls", ".xlsx", ".xlsm"}:
+def _read_context_file(path: Path) -> Optional[str]:
+    """``.ms_context_text_from_file()``: the document's text, or ``None`` when it is skipped.
+
+    Text formats go through R's own extraction above. PDF, DOCX, spreadsheet
+    and HTML text is library-specific on each side (PARITY.md row 62) and only
+    the shared steps -- the extension gate, the trim and the empty-file skip --
+    are mirrored for them.
+    """
+    extension = _r_file_ext(path.name).lower()
+    if extension not in SUPPORTED_CONTEXT_EXTENSIONS:
+        warnings.warn(
+            f"Skipping unsupported context file {path}. Supported extensions: "
+            + ", ".join(SUPPORTED_CONTEXT_EXTENSIONS),
+            stacklevel=2,
+        )
+        return None
+    if extension in {"xls", "xlsx", "xlsm"}:
         workbook = pd.read_excel(path, sheet_name=None)
-        return "\n\n".join(
+        text = "\n\n".join(
             f"Sheet: {name}\n{frame.to_csv(index=False)}"
             for name, frame in workbook.items()
         )
-    if suffix == ".ipynb":
-        notebook = json.loads(_decode_text(path))
-        cells = notebook.get("cells", [])
-        return "\n\n".join(
-            "".join(cell.get("source", []))
-            for cell in cells
-            if cell.get("cell_type") in {"markdown", "code"}
-        )
-    if suffix == ".pdf":
+    elif extension == "pdf":
         try:
             from pypdf import PdfReader
         except ImportError as exc:
             raise ImportError(
                 "PDF context requires the optional pypdf dependency."
             ) from exc
-        return "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
-    return _decode_text(path)
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
+    elif extension in {"htm", "html"}:
+        parser = _TextExtractor()
+        parser.feed(_decode_context_bytes(path.read_bytes()))
+        text = "\n".join(parser.parts)
+    elif extension in {"rmd", "qmd"}:
+        text = _read_rmarkdown(path)
+    elif extension == "docx":
+        text = _read_docx(path)
+    else:
+        text = _read_text_file(path)
+    text = _r_trimws(text)
+    if not text:
+        warnings.warn(f"Skipping empty context file {path}.", stacklevel=2)
+        return None
+    return text
 
 
 def _normalize_context_files(context_files) -> list[Path]:
@@ -248,77 +354,259 @@ def validate_context_files(context_files) -> list[Path]:
     return _normalize_context_files(context_files)
 
 
+def _make_unique(names: list[str], sep: str) -> list[str]:
+    """``base::make.unique(names, sep)``: a repeated name gets ``sep`` and the
+    smallest count that is not already a name, counting on per name."""
+    taken = set(names)
+    seen: set[str] = set()
+    counters: dict[str, int] = {}
+    out = []
+    for name in names:
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+            continue
+        count = counters.get(name, 0)
+        while True:
+            count += 1
+            candidate = f"{name}{sep}{count}"
+            if candidate not in taken:
+                break
+        counters[name] = count
+        taken.add(candidate)
+        out.append(candidate)
+    return out
+
+
+def _unique_context_sources(documents: list[dict]) -> list[dict]:
+    """``.ms_unique_context_sources()``: keep a unique basename as it is; give a
+    colliding one its parent directory, then a ``" #n"`` suffix as the last
+    resort, so two ``README.md`` files never share a chunk id."""
+    if len(documents) < 2:
+        return documents
+    sources = [document["source"] for document in documents]
+    duplicated = {source for source in sources if sources.count(source) > 1}
+    if not duplicated:
+        return documents
+    for document in documents:
+        if document["source"] not in duplicated:
+            continue
+        parent = os.path.basename(os.path.dirname(document["path"]))
+        if parent and parent not in {".", "/"}:
+            document["source"] = f"{parent}/{document['source']}"
+    final = [document["source"] for document in documents]
+    if len(set(final)) != len(final):
+        for document, label in zip(documents, _make_unique(final, sep=" #")):
+            document["source"] = label
+    return documents
+
+
+def _chunk_context_text(
+    text,
+    source: str,
+    chunk_chars: int = CONTEXT_CHUNK_CHARS,
+    overlap_chars: int = CONTEXT_OVERLAP_CHARS,
+) -> list[dict]:
+    """``.ms_chunk_context_text()``: fixed-width character windows with overlap.
+
+    Windows start every ``chunk_chars - overlap_chars`` characters for as long
+    as a start lies inside the text, so a document of exactly 2200 characters
+    yields two chunks, the second being its last 200 characters. Each window
+    is trimmed; an all-whitespace window is dropped but keeps its number, so
+    the ids of the survivors are what R numbers them.
+    """
+    text = "" if text is None else str(text)
+    if not _r_trimws(text):
+        return []
+    chunk_chars = max(400, int(chunk_chars))
+    overlap_chars = max(0, min(int(overlap_chars), chunk_chars // 2))
+    step = max(1, chunk_chars - overlap_chars)
+    chunks = []
+    for index, start in enumerate(range(0, len(text), step), start=1):
+        chunk_text = _r_trimws(text[start : start + chunk_chars])
+        if chunk_text:
+            chunks.append(
+                {
+                    "source": source,
+                    "chunk_id": f"{source}#{index}",
+                    "text": chunk_text,
+                }
+            )
+    return chunks
+
+
+def _flatten_text(values) -> list[str]:
+    """The pieces ``paste(unlist(list(...)))`` would join. A missing value is
+    skipped: R renders it as ``NA``, which never survives the token filter."""
+    flat = []
+    for value in values:
+        if isinstance(value, str):
+            flat.append(value)
+        elif isinstance(value, (list, tuple, pd.Series, pd.Index)):
+            flat.extend(_flatten_text(value))
+        elif not _missing(value):
+            flat.append(str(value))
+    return flat
+
+
+def _context_tokens(*values) -> list[str]:
+    """``.ms_context_tokens()``: lowercase ASCII runs of three or more characters.
+
+    R lowercases before its camelCase split, so that split never fires and is
+    not reproduced. ``tolower()`` applies the simple case mapping where
+    ``str.lower()`` applies the full one; the only unconditional difference is
+    U+0130, which ``str.lower()`` turns into ``i`` plus a combining dot -- a
+    non-ASCII separator that would cut the token R keeps whole.
+    """
+    text = " ".join(_flatten_text(values))
+    text = text.replace("İ", "i").lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return [token for token in text.split(" ") if len(token) >= 3]
+
+
+def _context_chunk_limit(config: dict) -> int:
+    """``.ms_llm_context_chunk_limit()``: two excerpts on OpenRouter's free
+    tier, four otherwise."""
+    if _uses_openrouter_free(config.get("provider"), config.get("model")):
+        return 2
+    return CONTEXT_EXCERPT_LIMIT
+
+
+def _score_context_chunks(
+    chunks: pd.DataFrame,
+    target,
+    candidates: Optional[pd.DataFrame] = None,
+    max_chunks: int = CONTEXT_EXCERPT_LIMIT,
+) -> pd.DataFrame:
+    """``.ms_score_context_chunks()``: the pool ranked for one target.
+
+    The score is how many distinct query tokens -- from the target's search
+    query, labels and descriptions and the candidates' labels and definitions
+    -- occur in the chunk. Ties break on the shorter chunk, then the source
+    label in C collation (the order metasalmon's scorer takes under hub item
+    B-326), then pool order. A scored result carries ``context_score``; with
+    nothing to score by, R returns the head of the pool unscored, and so does
+    this.
+    """
+    if chunks is None or chunks.empty:
+        return chunks
+    labels = definitions = []
+    if candidates is not None and len(candidates) > 0:
+        if "label" in candidates:
+            labels = candidates["label"].tolist()
+        if "definition" in candidates:
+            definitions = candidates["definition"].tolist()
+    query_tokens = list(
+        dict.fromkeys(
+            _context_tokens(
+                target.get("search_query"),
+                target.get("target_label"),
+                target.get("target_description"),
+                target.get("column_label"),
+                target.get("column_description"),
+                labels,
+                definitions,
+            )
+        )
+    )
+    if not query_tokens:
+        return chunks.head(max_chunks).reset_index(drop=True)
+    query_set = set(query_tokens)
+    texts = [str(text) for text in chunks["text"]]
+    sources = [str(source) for source in chunks["source"]]
+    scores = [len(query_set.intersection(_context_tokens(text))) for text in texts]
+    order = sorted(
+        range(len(texts)),
+        key=lambda index: (-scores[index], len(texts[index]), sources[index]),
+    )
+    ranked = chunks.iloc[order].copy()
+    ranked["context_score"] = [scores[index] for index in order]
+    return ranked.head(max(1, int(max_chunks))).reset_index(drop=True)
+
+
 def load_context_chunks(
     context_files=None,
     context_text=None,
-    chunk_size: int = 1400,
+    chunk_size: int = CONTEXT_CHUNK_CHARS,
+    overlap: int = CONTEXT_OVERLAP_CHARS,
 ) -> pd.DataFrame:
+    """``.ms_collect_context_chunks()``: every context document and inline
+    snippet as a pool of chunks, one row each, with metasalmon's source labels
+    and chunk ids (``<source>#<n>`` for a file, ``inline_context[<i>]#<n>``
+    for the i-th non-empty snippet)."""
     paths = _normalize_context_files(context_files)
-    records = []
-    labels = {}
+    documents = []
     for path in paths:
-        base = path.name
-        labels[base] = labels.get(base, 0) + 1
-        source = base if labels[base] == 1 else f"{base} [{labels[base]}]"
-        records.append((source, _read_context_file(path)))
+        text = _read_context_file(path)
+        if text is None:
+            continue
+        resolved = path.resolve()
+        documents.append(
+            {"path": str(resolved), "source": resolved.name, "text": text}
+        )
+    inline = []
     if context_text is not None:
         values = (
             [context_text]
             if isinstance(context_text, str)
             else list(context_text)
         )
-        for index, value in enumerate(values, start=1):
+        for value in values:
             if not isinstance(value, str):
                 raise TypeError("llm_context_text must contain only strings.")
-            records.append((f"inline-context-{index}", value))
+            value = _r_trimws(value)
+            if value:
+                inline.append(value)
+    if not documents and not inline:
+        return pd.DataFrame(columns=["source", "chunk_id", "text"])
 
     chunks = []
-    for source, value in records:
-        text = re.sub(r"\s+", " ", value).strip()
-        if not text:
-            continue
-        for index, start in enumerate(range(0, len(text), chunk_size), start=1):
-            chunks.append(
-                {
-                    "source": source,
-                    "chunk_id": f"{source}#{index}",
-                    "text": text[start : start + chunk_size],
-                }
+    for document in _unique_context_sources(documents):
+        chunks.extend(
+            _chunk_context_text(
+                document["text"], document["source"], chunk_size, overlap
             )
+        )
+    for index, value in enumerate(inline, start=1):
+        snippet_chunks = _chunk_context_text(
+            value, "inline_context", chunk_size, overlap
+        )
+        for position, chunk in enumerate(snippet_chunks, start=1):
+            chunk["chunk_id"] = f"inline_context[{index}]#{position}"
+        chunks.extend(snippet_chunks)
     return pd.DataFrame(chunks, columns=["source", "chunk_id", "text"])
 
 
-def _relevant_context(chunks: pd.DataFrame, targets: pd.DataFrame) -> pd.DataFrame:
+def _relevant_context(
+    chunks: pd.DataFrame,
+    targets: pd.DataFrame,
+    suggestions: Optional[pd.DataFrame] = None,
+    max_chunks: int = CONTEXT_EXCERPT_LIMIT,
+) -> pd.DataFrame:
+    """The excerpts one review unit sees, at most ``max_chunks`` of them.
+
+    Each target is scored on its own with its own candidates
+    (``.ms_prepare_context_chunks()``); a bundle's per-role picks are then
+    joined in role order, deduplicated on source and chunk id, and cut to the
+    limit (``.ms_semantic_bundle_context_chunks()``). A single target is the
+    one-row case of the same rule.
+    """
     if chunks.empty:
         return chunks
-    target_text = " ".join(
-        str(value)
-        for column in (
-            "target_label",
-            "target_description",
-            "search_query",
-            "target_query_context",
+    picks = []
+    for _, target in targets.iterrows():
+        candidates = (
+            _candidates_for_target(suggestions, target)
+            if suggestions is not None
+            else None
         )
-        if column in targets
-        for value in targets[column].dropna()
-    ).lower()
-    tokens = {
-        token
-        for token in re.findall(r"[a-z0-9]+", target_text)
-        if len(token) > 2
-    }
-    ranked = chunks.copy()
-    ranked["_score"] = ranked["text"].str.lower().map(
-        lambda value: sum(token in value for token in tokens)
-    )
-    return (
-        ranked.sort_values(
-            ["_score", "source", "chunk_id"],
-            ascending=[False, True, True],
-        )
-        .head(8)
-        .drop(columns="_score")
-        .reset_index(drop=True)
+        picks.append(_score_context_chunks(chunks, target, candidates, max_chunks))
+    if not picks:
+        return chunks.head(0).reset_index(drop=True)
+    ranked = pd.concat(picks, ignore_index=True)
+    ranked = ranked.drop_duplicates(subset=["source", "chunk_id"], keep="first")
+    return ranked.head(max_chunks)[["source", "chunk_id", "text"]].reset_index(
+        drop=True
     )
 
 
@@ -2197,6 +2485,7 @@ def assess_semantic_suggestions(
         request_fn,
     )
     chunks = load_context_chunks(context_files, context_text)
+    excerpt_limit = _context_chunk_limit(config)
     rows = []
     handled = set()
     validator_findings = []
@@ -2217,7 +2506,7 @@ def assess_semantic_suggestions(
         dictionary_row = _dictionary_row(group.iloc[0], dictionary)
         if _text(dictionary_row.get("column_role"), "").lower() != "measurement":
             continue
-        context = _relevant_context(chunks, group)
+        context = _relevant_context(chunks, group, suggestions, excerpt_limit)
         bundle_rows = _assess_bundle(
             group,
             suggestions,
@@ -2252,7 +2541,9 @@ def assess_semantic_suggestions(
         if _target_key(target) in handled:
             continue
         candidates = _candidates_for_target(suggestions, target)
-        context = _relevant_context(chunks, pd.DataFrame([target]))
+        context = _relevant_context(
+            chunks, pd.DataFrame([target]), suggestions, excerpt_limit
+        )
         row = _assess_generic(target, candidates, context, config)
         initial_row = row.copy()
         suggestions, row = _apply_generic_retry(

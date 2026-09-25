@@ -651,7 +651,105 @@ and moving it is a separate outward act.
   suite jobs check out one commit and skip them, and the new workflow runs
   them strictly.
 
+* **`review_metadata()`'s console counts an IRI field reported as a
+  placeholder as an IRI, so it points at `review_semantics()` whenever an IRI
+  field is a gap.** Hub queue item **B-244**, the port of the footer half of
+  metasalmon's **B-211** (metasalmon pull request #170). The scan keeps one
+  row per field (hub item **B-212**, above), so a placeholder in an IRI field
+  keeps its `placeholder` row and gets no `iri` row. The footer counted IRI
+  gaps by the reason a row kept, so that field fell out of the count, and when
+  every IRI gap was a placeholder the footer dropped its line pointing at
+  `review_semantics()`. Measured on `66ad1a3`, on a package whose only gaps
+  were `MISSING METADATA:` in `tables.csv`'s `observation_unit_iri` and
+  `REVIEW REQUIRED:` in a measurement column's `unit_iri`: both rows came back
+  as `placeholder`, and the footer read *2 fields still block strict
+  validation.* with no IRI line. It now counts the rows whose field ends in
+  `_iri`, as metasalmon's footer does, and adds *2 of them are IRIs --
+  review_semantics() shows candidates for any that have them.* Every row the
+  old count found has such a field, so the count only gains IRI fields
+  reported under another reason: a placeholder, or `required` under a selected
+  schema that calls an IRI field required. The rows `review_metadata()`
+  returns and the calls it prints do not change.
+  `tests/test_sdp_field_setters.py` twins metasalmon's test, with every IRI
+  gap a placeholder, and it failed on the footer as it stood. metasalmon fixed
+  the footer first, so this closes R-shipped-first lag and is not a deliberate
+  difference; it opens no `PARITY.md` row.
+
+* **`create_sdp()` with its defaults no longer raises once two targets get
+  search candidates.** Hub queue item **B-370**. Every `find_terms()` answer
+  carries its per-source diagnostics in `attrs["diagnostics"]`, a DataFrame.
+  The retrieval loop in `suggest_semantics()` copied each answer with its
+  `attrs`, and `pd.concat()` compares its inputs' `attrs` whenever every input
+  has some. A DataFrame there has no single truth value, so the call raised
+  `ValueError` as soon as two targets got candidates. `create_sdp()` and
+  `infer_dictionary(seed_semantics=True)` seed through that loop with
+  `find_terms()` as the search, so both raised on any table a search could
+  answer for two targets, and so did `suggest_semantics()` with its default
+  search or with a `search_fn` whose answers carry a DataFrame in `attrs`.
+  Measured on `main` `380a7a4`, with every search source patched and the
+  network refused, each of those raised under pandas 3.0.6 in both dependency
+  legs, and under 2.2.3 and 1.5.3 with core dependencies, and each now
+  completes.
+
+  The loop's own copy of each answer now drops the answer's `attrs`, so the
+  candidate frames reach `pd.concat()` without them. The answer itself is not
+  touched, and what a caller reads from `find_terms()`'s `attrs` is
+  unchanged. One consequence is observable: when exactly one target got
+  candidates, the `semantic_suggestions` frame inherited that one search's
+  diagnostics in its own `attrs`, and it now carries none, as it already did
+  whenever the answers carried no `attrs`. With `llm_assess=True`, the
+  review's retry merge raised the same way on `main` when the first pass left
+  one candidate frame. It completes now, because the frame it merges into no
+  longer carries `attrs`.
+
+  `tests/test_search_answer_attrs.py` pins `suggest_semantics()` and
+  `create_sdp()` with its defaults, and failed on `380a7a4`. The lasting
+  outage in `tests/test_semantic_retrieval_dedup.py` now answers with one
+  candidate per target, as metasalmon's twin does, which the crash had
+  prevented. There is no metasalmon half, because R has no counterpart of
+  pandas' `attrs` comparison.
+
 ### Changed
+
+* **Context documents become the excerpts metasalmon builds.** Hub queue item
+  **B-364**, ruled 2026-09-25 when Brett took every recommendation in section
+  10 of the S16 execplan (decision 4, section 2.7): the two packages are about
+  to share one review-packet file, so a context document has to become the
+  same excerpts on both sides. `llm_review.py` now mirrors
+  `R/llm-semantic-helpers.R` step for step — metasalmon's extension list
+  (`.ipynb` is no longer read; an unsupported or empty file is skipped with a
+  warning, as R skips it); R's text extraction for text formats (UTF-8, then
+  Windows-1252 with its five undefined bytes dropped, then latin-1; a
+  byte-order mark discarded; CRLF and a bare CR to LF; front matter and fence
+  lines dropped for `.rmd` and `.qmd` only; no whitespace collapsing, where
+  this package used to fold every run into one space); 2200-character chunks
+  with 200 of overlap in place of 1400 with none; R's source labels (a
+  colliding basename gains its parent directory, then base R's
+  `make.unique(sep = " #")`, in place of a ` [2]` counter) and chunk ids
+  (`<source>#<n>`, `inline_context[<i>]#<n>`); token-overlap scoring over
+  lowercase ASCII tokens of three or more characters — the count of distinct
+  query tokens present in the chunk, drawn from the target's search query,
+  labels and descriptions **and the candidates' labels and definitions**, where
+  this package scored substring hits over the target text alone; ties broken
+  on the shorter chunk, then the source label in C collation, the radix order
+  metasalmon's scorer takes under hub item B-326; and four excerpts per
+  target, two on OpenRouter's free tier, in place of eight. A bundle's excerpts
+  are the union of its roles' picks in role order, deduplicated and cut to the
+  limit, as `.ms_semantic_bundle_context_chunks()` builds them.
+
+  Pinned by `tests/test_context_parity.py` on text-only fixtures under
+  `tests/data/context_parity/`: `expected.json` is what metasalmon's own
+  `.ms_collect_context_chunks()` and `.ms_score_context_chunks()` produced for
+  them (`expected-from-r.R` beside it, run against metasalmon `main` at
+  `98cb9e6`), the offline tests hold this package to it, and the `parity` job
+  re-runs the R script so a change on either side turns CI red. Measured
+  before the change on the same fixtures: 23 chunks of at most 1400 collapsed
+  characters against R's 21 of at most 2200; after it, the pool and every
+  scored ranking are identical. Library-specific extraction for PDF, DOCX,
+  spreadsheets and HTML is deliberately outside the pin and is **`PARITY.md`
+  row 62**, twinned in the hub's `knowledge/parity-deviations.md`.
+  `load_context_chunks()` keeps its signature; its `chunk_size` default moves
+  to 2200 and it gains `overlap=200`.
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
   Hub queue item **B-166**, the twin of the copy metasalmon made in its pull
@@ -724,6 +822,36 @@ and moving it is a separate outward act.
   This is R-shipped-first lag being closed, not a deliberate difference, so it
   opens no `PARITY.md` row. Row **53** is amended in place, because it described
   the defect as present on both sides.
+
+### Parity evidence
+
+* **Two tests pin that the EML `calendarDate` carries the spelling
+  `metadata/dataset.csv` holds.** Hub queue item **B-245**, the mirror half of
+  the hub's **B-162**: these are the twins of the two tests B-162 added to
+  metasalmon's `tests/testthat/test-canonical-date-render.R`. No behaviour
+  changed. `eml._add_coverage()` writes `temporal_start` and `temporal_end`
+  through `_as_character()`, which reads like a third renderer beside the two
+  writers. B-162 answered for R that it is not one, and the same construction
+  holds here: `write_eml_from_sdp()` reads the package back from disk, where
+  `read_sdp_csv()` reads every column as `str`, so the EML copies the one
+  rendering a writer made. Nothing pinned that.
+
+  The first test writes `datetime.date(999, 1, 1)` and
+  `datetime.date(2024, 12, 31)` through `write_salmon_datapackage()` and
+  exports the package through `write_eml_from_sdp()`, schema check included.
+  Both `calendarDate` values must equal the `dataset.csv` cells and
+  `datapackage.json`'s `temporal`, and read `0999-01-01` and `2024-12-31`. The
+  second writes the text `999-06-05`. That is not an `xs:date`, so the exported
+  call refuses it, and the test builds the coverage from the frame
+  `validate_salmon_datapackage()` returns as `package`, which is the frame the
+  builder receives. Its `calendarDate` must equal the `dataset.csv` cell. Both
+  pass on the code as it stands, and each fails under a mutation that
+  re-renders the value at the two `calendarDate` lines.
+
+  They live in `tests/test_platform_determinism_guard.py`, after the twins of
+  B-115's writer tests, as they do in metasalmon. The first needs the `[eml]`
+  extra and skips without it; the second runs in both dependency legs. The EML
+  behaves here as it does in metasalmon, so this opens no `PARITY.md` row.
 
 ## 0.5.0
 

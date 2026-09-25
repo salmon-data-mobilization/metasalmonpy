@@ -1041,7 +1041,16 @@ def suggest_semantics(
         )
         if res is None or res.empty:
             continue
+        # The loop's own copy is a candidate table, not a search answer, so it
+        # drops the answer's attrs (hub B-370). find_terms() keeps a
+        # diagnostics DataFrame there, and pd.concat() below compares its
+        # inputs' attrs whenever every input has some: a DataFrame has no
+        # single truth value, so two targets with candidates raised. The answer
+        # itself is not touched, so find_terms()'s caller, and
+        # _search_once_per_call(), which has already read the diagnostics,
+        # see them as before.
         res = res.copy()
+        res.attrs = {}
         # metasalmon v0.1.7 made an explicit source list a strict allowlist on
         # the way *out* as well as the way in: results are filtered to the
         # allowed sources, so an injected search_fn cannot widen a deliberately
