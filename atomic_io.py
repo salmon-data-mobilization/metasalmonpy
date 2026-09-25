@@ -81,7 +81,21 @@ def apply_default_file_mode(path: Union[str, Path]) -> None:
 
 
 def atomic_write(data: bytes, path: Union[str, Path]) -> None:
-    """Write ``data`` to ``path`` via a same-directory temporary and rename."""
+    """Write ``data`` to ``path`` via a same-directory temporary and rename.
+
+    The destination is never opened. The bytes go to a fresh inode, and one
+    ``os.replace`` swaps the directory entry, so an abort before the rename
+    leaves the previous file untouched. It also means an external hard link to
+    the destination keeps its own inode and content. That is why
+    ``create_sdp()``'s sidecar writes could retire ``_replace_create_output()``,
+    which unlinked first for exactly that reason (hub queue B-179).
+
+    What this does not buy: the stage is not ``fsync``ed before the rename. So
+    the write is atomic against an aborted call and not durable against a
+    machine crash, where a visible rename can outrun the staged data blocks.
+    That is stated here rather than left implied by the name, and it is hub
+    queue B-163, where both implementations agree.
+    """
     path = Path(path)
     handle, temporary = tempfile.mkstemp(
         prefix=f".{path.name}-", dir=str(path.parent)

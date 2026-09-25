@@ -541,6 +541,50 @@ and moving it is a separate outward act.
   docstring records it and what retires it. This ports metasalmon's change
   rather than choosing a difference, so it opens no `PARITY.md` row.
 
+* **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
+  Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
+  **B-111**, metasalmon pull request #119). `create_sdp()` writes three files of
+  its own after the package writer has finished: `README-review.txt`,
+  `semantic_suggestions.csv` and, with `include_edh_xml=True`,
+  `metadata/metadata-edh-hnap.xml`. Each went through `_replace_create_output()`,
+  which unlinked the existing file and then left the caller to render its
+  replacement. So an abort in between left nothing at all where the file had
+  been. The EDH window was the widest of the three, and wider than R's ever was:
+  the whole package was read and parsed from disk *after* the old XML was gone,
+  so every read or parse failure anywhere in the package destroyed it too. This
+  was measured rather than inferred. An abort injected at each render step, and
+  at the EDH read, removed the previous file every time. The file was absent,
+  not truncated.
+
+  All three now render to bytes first and install with
+  `atomic_io.atomic_write()`, a single `os.replace` of a same-directory stage.
+  So a failure while rendering, or while reading the package for the EDH XML,
+  leaves the previous file byte-for-byte as it was. `_replace_create_output()`
+  is deleted rather than left without callers. Its hard-link rationale is
+  subsumed, because the install never opens the destination, and a new test
+  pins that an external hard link keeps its content. The bytes a successful
+  call writes are unchanged: each render goes through the writer its file
+  already used (`Path.write_text`, `DataFrame.to_csv`, and the EDH builder's own
+  write), verified by md5 on all three files against the pre-fix code.
+
+  This matters for a file you have changed since it was written. Re-running
+  `create_sdp()` regenerates all three, so the loss only hit an annotated
+  `README-review.txt`, a `semantic_suggestions.csv` carrying review decisions,
+  or the EDH XML of a package whose metadata has moved on. Pinned by
+  `tests/test_create_sdp_sidecar_atomicity.py`, modelled on metasalmon's
+  `test-create-sdp-sidecar-atomicity.R`. Every hook sits at the render and is
+  keyed on content, so each test fails on the pre-fix code and passes on this
+  one.
+
+  **Scope, since the word "atomic" promises more than this delivers:** the
+  stage is not `fsync`ed before the rename. That is sufficient against an
+  aborted call and insufficient against a machine crash or power loss. This
+  change leaves that as it was, and it is true of every caller of
+  `atomic_write()`. It is hub item **B-163**, where both implementations agree.
+  This is R-shipped-first lag being closed, not a deliberate difference, so it
+  opens no `PARITY.md` row. Row **53** is amended in place, because it described
+  the defect as present on both sides.
+
 * **`create_sdp()` no longer seeds a code list for a date column.** Hub queue
   item **B-188**. `pandas.read_csv` reads a column of ISO dates as text, and the
   code-row seeder, `metadata.code_list_values()`, accepted any `object` or
