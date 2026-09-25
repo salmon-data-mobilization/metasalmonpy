@@ -493,8 +493,10 @@ and moving it is a separate outward act.
   seeds the same 129 rows over the same twelve columns as metasalmon, and
   `tests/test_codes_target_categorical.py` asserts R's plain condition, that no
   `codes.csv` row targets a non-categorical column, on every bundled example.
-  The test that pinned the two date columns as a known residual is deleted. This
-  ports R's behaviour, so it opens no `PARITY.md` row.
+  The test that pinned the two date columns as a known residual is deleted.
+  Apart from the one case above, this ports R's behaviour. That case is
+  `PARITY.md` row **62**, and Brett ruled on 2026-09-25 that R moves to match
+  (hub B-310).
 
 ## 0.5.0
 
