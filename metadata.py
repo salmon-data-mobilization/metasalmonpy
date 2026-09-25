@@ -617,7 +617,8 @@ def _code_list_applies(column) -> bool:
     It has two consumers. One is the codes step of
     ``dictionary.apply_salmon_dictionary()`` (hub B-241). The other is
     :func:`code_list_values`, the seeder's predicate, which tested the dtype
-    alone until hub B-188.
+    alone until hub B-188 and also passes a column that mixes text with other
+    values (:func:`_holds_text_among_other_values`).
 
     A column name the data repeats gives a DataFrame, which is let through to
     the path it always took; the codes step says why.
@@ -629,6 +630,44 @@ def _code_list_applies(column) -> bool:
     if pd.api.types.is_string_dtype(column.dtype) or pd.api.types.is_object_dtype(column.dtype):
         return pd.api.types.infer_dtype(column, skipna=True) in ("string", "empty")
     return False
+
+
+def _holds_text_among_other_values(column) -> bool:
+    """Whether an ``object`` column mixes text with values of other types.
+
+    R has no mixed vector. ``c("A", 1)`` is the character vector
+    ``c("A", "1")``, so a column holding any text is character there, R's
+    guard passes it, and its seeder lists every value. A column with no text,
+    such as ``c(1, TRUE)``, is numeric and lists nothing. Measured under R 4.3.3
+    against ``.ms_code_list_values()`` (Codex, second review of metasalmonpy
+    pull request 44). :func:`_code_list_applies` passes text alone, and the
+    seeder reads this as well so that its other consumer, the codes step of
+    ``apply_salmon_dictionary()``, is not changed.
+    """
+    if not isinstance(column, pd.Series) or not pd.api.types.is_object_dtype(column.dtype):
+        return False
+    if pd.api.types.infer_dtype(column, skipna=True) not in ("mixed", "mixed-integer"):
+        return False
+    return any(isinstance(value, str) for value in column.dropna())
+
+
+def _readr_reads_as_date_time(text: str) -> bool:
+    """Whether ``readr::parse_datetime()`` accepts one present token.
+
+    :func:`~metasalmonpy.resource_types.parse_datetime_token` mirrors that
+    parser and returns a ``datetime``, whose years run from 1 to 9999. R's run
+    further. So a token whose offset carries it past either end, such as
+    ``0001-01-01T00:00:00+01``, raised ``OverflowError`` here and aborted
+    ``create_sdp()`` (Codex, second review of metasalmonpy pull request 44).
+    The overflow comes only from applying a parsed offset to valid fields, and
+    readr reads such a token as ``POSIXct``: measured under R 4.3.3 and readr
+    2.2.0 for that token, ``0001-01-01T00:30:00+01`` and
+    ``9999-12-31T23:00:00-02``. So it counts as a date-time.
+    """
+    try:
+        return parse_datetime_token(text) is not None
+    except OverflowError:
+        return True
 
 
 def _text_reads_as_dates(texts) -> bool:
@@ -653,7 +692,7 @@ def _text_reads_as_dates(texts) -> bool:
     if not present:
         return False
     return all(_DATE_RE.match(text) for text in present) or all(
-        parse_datetime_token(text) is not None for text in present
+        _readr_reads_as_date_time(text) for text in present
     )
 
 
@@ -681,9 +720,10 @@ def code_list_values(series, code_limit: int = CODE_LIST_LIMIT) -> list:
 
     Mirrors ``.ms_code_list_values()``. R's guard is
     ``inherits(col, "factor") || inherits(col, "character")``, which
-    :func:`_code_list_applies` reads, so a Categorical, a string column or an
-    ``object`` column of text passes, and an ``object`` column of
-    ``datetime.date``, which R holds as a ``Date``, does not. That guard alone
+    :func:`_code_list_applies` and :func:`_holds_text_among_other_values` read,
+    so a Categorical, a string column or an ``object`` column holding text
+    passes, and an ``object`` column of ``datetime.date``, which R holds as a
+    ``Date``, does not. That guard alone
     is not R's behaviour, because R's seeder receives what ``readr::read_csv()``
     typed. A column of ISO dates reaches R as a ``Date`` and is never selected,
     and ``pandas.read_csv`` hands the same column over as text. So text that
@@ -693,7 +733,7 @@ def code_list_values(series, code_limit: int = CODE_LIST_LIMIT) -> list:
     ``temporal``.
     """
     values = pd.Series(series) if not isinstance(series, pd.Series) else series
-    if not _code_list_applies(values):
+    if not (_code_list_applies(values) or _holds_text_among_other_values(values)):
         return []
     distinct = list(pd.Series(values.dropna().astype(str).unique()))
     if len(distinct) == 0 or len(distinct) > code_limit:

@@ -442,3 +442,32 @@ def test_a_date_column_is_neither_seeded_nor_typed_categorical():
     role = dictionary.loc[dictionary["column_name"] == "SURVEY_WAVE", "column_role"].iloc[0]
     assert role != "categorical"
     assert infer_column_role("START_DTT", pd.Series(["2001-11-06", None])) == "temporal"
+
+
+def test_an_object_column_mixing_text_with_other_values_is_seeded_as_in_r():
+    # R has no mixed vector: c("A", 1) is the character vector c("A", "1"),
+    # which its guard passes and its seeder lists, while c(1, TRUE) is numeric
+    # and lists nothing. Measured under R 4.3.3 against .ms_code_list_values()
+    # on metasalmon 4ce7f33. The readr guard of hub B-188 refused the first
+    # until Codex's second review of pull request 44.
+    mixed = pd.Series(["A", 1, None, "B", 1], dtype=object)
+    assert code_list_values(mixed) == ["A", "1", "B"]
+    assert infer_column_role("CODE", mixed) == "categorical"
+    assert code_list_values(pd.Series([1, True], dtype=object)) == []
+    assert code_list_values(pd.Series([1, 2.5], dtype=object)) == []
+
+
+@pytest.mark.parametrize(
+    "token",
+    ["0001-01-01T00:00:00+01", "0001-01-01T00:30:00+01", "9999-12-31T23:00:00-02"],
+)
+def test_a_date_time_past_the_years_a_datetime_holds_is_still_a_date_time(token):
+    # The offset carries each token past year 1 or year 9999, which a datetime
+    # cannot hold, so the readr probe raised OverflowError out of create_sdp()
+    # until Codex's second review of pull request 44. readr reads each as
+    # POSIXct (measured under R 4.3.3 and readr 2.2.0, reading "x\n<token>"
+    # with readr::read_csv(I(...))), so it lists nothing, as a POSIXct column
+    # lists nothing in R.
+    assert code_list_values(pd.Series([token, token])) == []
+    assert code_list_values(pd.Series([token, "A"])) == [token, "A"]
+    infer_column_role("STAMP", pd.Series([token, token]))

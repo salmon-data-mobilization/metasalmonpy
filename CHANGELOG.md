@@ -554,6 +554,8 @@ and moving it is a separate outward act.
 
   The seeder now applies R's guard the way `apply_salmon_dictionary()` does
   (hub B-241): a Categorical, a string column, or an `object` column of text. An
+  `object` column that mixes text with other values still seeds, as before,
+  because R holds any vector with text in it as character. An
   `object` column of `datetime.date`, `datetime`, number or logical values
   seeds nothing, as a `Date`, `POSIXct`, numeric or logical column seeds
   nothing in R. Text that readr would read as a date or a date-time seeds
