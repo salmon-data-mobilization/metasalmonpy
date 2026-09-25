@@ -459,8 +459,20 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
             "column_name": _text(row.get("column_name")),
             "code_value": _text(row.get("code_value")),
         }
+        # One gap row per field of this row, because the printed call names
+        # each reported field as a keyword argument and Python refuses a
+        # keyword given twice. A field two branches both report is therefore
+        # not reported more loudly: its call does not compile (hub B-212). The
+        # first branch to report a field keeps it, and the field loop runs
+        # first.
+        reported: set = set()
 
-        def add(field, reason, hint=None, row=row, address=address):
+        def add(
+            field, reason, hint=None, row=row, address=address, reported=reported
+        ):
+            if field in reported:
+                return
+            reported.add(field)
             gaps.append(
                 _gap_row(
                     file_name,
@@ -503,13 +515,17 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
                 add(field, "required")
 
         if file_name == "tables.csv" and "observation_unit_iri" in frame.columns:
-            # Blank or a prose placeholder: the schema calls this
-            # ``recommended``, and strict validation refuses a blank one anyway
+            # This branch and the measurement-IRI one below exist to catch a
+            # BLANK field, which the loop above passes over unless the schema
+            # calls the field required. This one is ``recommended``, and strict
+            # validation refuses a blank one anyway
             # (``_collect_missing_table_observation_unit_iri_issues()``). The
-            # schema is not the authority on what blocks; the validator is. A
-            # value still carrying ``REVIEW:`` was already reported above, so
-            # the prose test is what belongs here -- using the marker test in
-            # both places would report one field twice.
+            # schema is not the authority on what blocks; the validator is.
+            # The prose test cannot see a ``REVIEW:`` marker, which the loop
+            # reports. It does count a prose placeholder as unfilled, and the
+            # loop has already reported one as a placeholder in any field it
+            # scans, so ``add()`` keeps that row and drops this one. Before
+            # that, the field came back twice (hub B-212).
             if _is_unfilled_metadata(row.get("observation_unit_iri")):
                 add(
                     "observation_unit_iri",
@@ -521,6 +537,7 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
             file_name == "column_dictionary.csv"
             and _text(row.get("column_role")) == "measurement"
         ):
+            # The same test, and the same single report, as the branch above.
             for field in MEASUREMENT_IRI_FIELDS:
                 if field not in frame.columns:
                     continue

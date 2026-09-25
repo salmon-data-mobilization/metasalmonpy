@@ -379,6 +379,37 @@ and moving it is a separate outward act.
   `iri=` and `rank=` for the marked one. This closes R-shipped-first lag and is
   not a deliberate difference, so it opens no `PARITY.md` row.
 
+* **`review_metadata()` reports a placeholder in an IRI field once, and the
+  call it prints for that row runs.** Hub queue item **B-212**. A
+  `MISSING METADATA:`, `MISSING DESCRIPTION:` or `REVIEW REQUIRED:`
+  placeholder in `tables.csv`'s `observation_unit_iri`, or in a measurement
+  column's `term_iri`, `property_iri`, `entity_iri` or `unit_iri`, came back
+  as two rows. The scan's field loop reported it with reason `placeholder`, as
+  it does a placeholder in any field. The check for a blank one of those
+  fields then reported it again with reason `iri`, because its test counts a
+  placeholder as unfilled. The `set_sdp_table()` or `set_sdp_column()` call
+  printed for the row named the field twice, and Python refuses to compile a
+  call that repeats a keyword argument. Measured on `70fa8fd`, with one
+  placeholder planted in each of those two files: two rows for each field, and
+  both printed calls failed with *keyword argument repeated*. Each field now
+  comes back once, as a placeholder, and the console's count of fields still
+  blocking strict validation counts it once. A blank IRI field is still
+  reported once with reason `iri`, and so is one still carrying a `REVIEW:`
+  marker.
+
+  The scan now keeps one row per field of each metadata row, and the first
+  check to report a field keeps it. So the same holds whichever two checks find
+  one field. Measured on `70fa8fd` under a selected schema that calls
+  `unit_iri` required, a blank one came back as `required` and as `iri`, and
+  its call failed the same way; it now comes back once, as `required`. No
+  shipped schema calls an IRI field required, and nothing in this package
+  writes a placeholder into an IRI field, so only a hand-edited package reached
+  either. `tests/test_sdp_field_setters.py` runs the printed calls for the
+  placeholder, blank and `REVIEW:` states, and the placeholder state failed on
+  the scan as it stood. metasalmon's scan has the same defect, which is hub
+  item **B-211**. A defect the two packages share is not a deliberate
+  difference, so this opens no `PARITY.md` row.
+
 * **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
   Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
   **B-111**, metasalmon pull request #119). `create_sdp()` writes three files of
