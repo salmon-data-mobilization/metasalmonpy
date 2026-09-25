@@ -667,6 +667,46 @@ and moving it is a separate outward act.
 
 ### Changed
 
+* **Context documents become the excerpts metasalmon builds.** Hub queue item
+  **B-364**, ruled 2026-09-25 when Brett took every recommendation in section
+  10 of the S16 execplan (decision 4, section 2.7): the two packages are about
+  to share one review-packet file, so a context document has to become the
+  same excerpts on both sides. `llm_review.py` now mirrors
+  `R/llm-semantic-helpers.R` step for step — metasalmon's extension list
+  (`.ipynb` is no longer read; an unsupported or empty file is skipped with a
+  warning, as R skips it); R's text extraction for text formats (UTF-8, then
+  Windows-1252 with its five undefined bytes dropped, then latin-1; a
+  byte-order mark discarded; CRLF and a bare CR to LF; front matter and fence
+  lines dropped for `.rmd` and `.qmd` only; no whitespace collapsing, where
+  this package used to fold every run into one space); 2200-character chunks
+  with 200 of overlap in place of 1400 with none; R's source labels (a
+  colliding basename gains its parent directory, then base R's
+  `make.unique(sep = " #")`, in place of a ` [2]` counter) and chunk ids
+  (`<source>#<n>`, `inline_context[<i>]#<n>`); token-overlap scoring over
+  lowercase ASCII tokens of three or more characters — the count of distinct
+  query tokens present in the chunk, drawn from the target's search query,
+  labels and descriptions **and the candidates' labels and definitions**, where
+  this package scored substring hits over the target text alone; ties broken
+  on the shorter chunk, then the source label in C collation, the radix order
+  metasalmon's scorer takes under hub item B-326; and four excerpts per
+  target, two on OpenRouter's free tier, in place of eight. A bundle's excerpts
+  are the union of its roles' picks in role order, deduplicated and cut to the
+  limit, as `.ms_semantic_bundle_context_chunks()` builds them.
+
+  Pinned by `tests/test_context_parity.py` on text-only fixtures under
+  `tests/data/context_parity/`: `expected.json` is what metasalmon's own
+  `.ms_collect_context_chunks()` and `.ms_score_context_chunks()` produced for
+  them (`expected-from-r.R` beside it, run against metasalmon `main` at
+  `98cb9e6`), the offline tests hold this package to it, and the `parity` job
+  re-runs the R script so a change on either side turns CI red. Measured
+  before the change on the same fixtures: 23 chunks of at most 1400 collapsed
+  characters against R's 21 of at most 2200; after it, the pool and every
+  scored ranking are identical. Library-specific extraction for PDF, DOCX,
+  spreadsheets and HTML is deliberately outside the pin and is **`PARITY.md`
+  row 62**, twinned in the hub's `knowledge/parity-deviations.md`.
+  `load_context_chunks()` keeps its signature; its `chunk_size` default moves
+  to 2200 and it gains `overlap=200`.
+
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
   Hub queue item **B-166**, the twin of the copy metasalmon made in its pull
   request #120. The change is Brett's ruling of 2026-09-14, landed upstream by
