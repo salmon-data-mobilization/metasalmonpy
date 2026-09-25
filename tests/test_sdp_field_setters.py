@@ -18,6 +18,7 @@ The contract this module is judged against, and the two tests that carry it:
 from __future__ import annotations
 
 import contextlib
+import copy
 import functools
 import json
 import re
@@ -40,6 +41,7 @@ from metasalmonpy import (
     validate_salmon_datapackage,
     write_salmon_datapackage,
 )
+from metasalmonpy import sdp_schema
 from metasalmonpy.sdp_field_setters import (
     MetadataReview,
     settable_required_fields,
@@ -415,6 +417,28 @@ class _NetworkReached(BaseException):
     """
 
 
+def _use_shipped_schema_defaults(monkeypatch) -> None:
+    """The schema settings a user gets, on a cold cache, for the calling test.
+
+    Both settings and both of their environment variables are cleared, as
+    metasalmon's ``local_shipped_schema_defaults()`` clears all three of its
+    options. The suite pins the source to ``"vendored"`` in
+    ``tests/conftest.py``, and a base URL left in the environment selects a
+    schema just as a source setting does.
+    """
+    monkeypatch.delenv("METASALMONPY_SDP_SCHEMA_SOURCE", raising=False)
+    monkeypatch.delenv("METASALMONPY_SDP_SCHEMA_BASE_URL", raising=False)
+    # Each of these setters also empties the loader's cache.
+    sdp_schema.set_sdp_schema_source(None)
+    sdp_schema.set_sdp_schema_base_url(None)
+    sdp_schema._vendored_schema_document.cache_clear()
+    assert sdp_schema.default_sdp_schema_source() == "auto"
+    assert (
+        sdp_schema.default_sdp_schema_base_url()
+        == sdp_schema.DEFAULT_SDP_SCHEMA_BASE_URL
+    )
+
+
 def test_review_metadata_makes_no_http_request_on_the_default_schema_source(
     raw_package, monkeypatch
 ):
@@ -515,6 +539,200 @@ def test_the_offline_path_opens_no_socket_at_all(raw_package, monkeypatch):
         )
     finally:
         sdp_schema.reset_schema_cache()
+
+
+# ---------------------------------------------------------------------------
+# A schema the settings select (hub B-215, the port of metasalmon's B-175)
+# ---------------------------------------------------------------------------
+#
+# The offline promise above holds under the shipped schema settings. Under any
+# other setting, the scan, the setters and the validator's blank-required
+# collector read the schema the settings select, as the writers do, because
+# that is the field contract the package was written to. These are the twins of
+# metasalmon's "a schema the options select is the one the scan and the setters
+# read", in tests/testthat/test-review-metadata-offline.R.
+
+_SELECTED_BASE_URL = "https://example.invalid/smn-data-pkg/sdp-9.9.9"
+
+
+#: Every way a user selects a schema other than the shipped one. Each of them
+#: reaches the writers, through ``load_sdp_schema()``.
+_SCHEMA_SELECTIONS = {
+    "set_sdp_schema_base_url": lambda mp: sdp_schema.set_sdp_schema_base_url(
+        _SELECTED_BASE_URL
+    ),
+    "METASALMONPY_SDP_SCHEMA_BASE_URL": lambda mp: mp.setenv(
+        "METASALMONPY_SDP_SCHEMA_BASE_URL", _SELECTED_BASE_URL
+    ),
+    "set_sdp_schema_source": lambda mp: sdp_schema.set_sdp_schema_source("remote"),
+    "METASALMONPY_SDP_SCHEMA_SOURCE": lambda mp: mp.setenv(
+        "METASALMONPY_SDP_SCHEMA_SOURCE", "remote"
+    ),
+}
+
+
+def _bundle_requiring_funding_source() -> dict:
+    """The bundled schema plus one required ``dataset.csv`` field, validated.
+
+    It stands in for a published schema that differs from the bundled copy in
+    the one way that matters here: a requirement the bundle does not declare.
+    """
+    bundled = sdp_schema._load_vendored_sdp_schema()
+    schemas = copy.deepcopy(bundled["metadata_schemas"])
+    schemas["dataset"]["fields"].append(
+        {
+            "name": "funding_source",
+            "type": "string",
+            "description": "Who funded the work.",
+            "constraints": {"required": True},
+        }
+    )
+    return sdp_schema._validate_sdp_schema(
+        {
+            "metadata_schemas": schemas,
+            "profile": bundled["profile"],
+            "rules": bundled["rules"],
+        }
+    )
+
+
+def _count_schema_fetches(monkeypatch, bundle: dict) -> list:
+    """Serve ``bundle`` from the loader's remote fetch, recording each call.
+
+    The socket API is blocked too, as in the offline test above, so a read that
+    reached the network by any other route fails the test rather than passing
+    unseen. The list returned holds the base URL of every fetch.
+    """
+    import socket
+
+    fetched: list = []
+
+    def fetch(base_url, timeout=2.0):
+        fetched.append(base_url)
+        return bundle
+
+    def explode(*args, **kwargs):  # pragma: no cover - must never run
+        raise _NetworkReached("a schema read opened a socket")
+
+    monkeypatch.setattr(sdp_schema, "_fetch_remote_sdp_schema", fetch)
+    monkeypatch.setattr(socket.socket, "connect", explode)
+    monkeypatch.setattr(socket.socket, "connect_ex", explode)
+    monkeypatch.setattr(socket, "create_connection", explode)
+    return fetched
+
+
+def _what_reads_funding_source(package: Path) -> dict:
+    """Whether the scan reports ``dataset.csv``'s ``funding_source``, and
+    whether the validator's blank-required collector names it.
+
+    Both are read from the named columns of the frames returned, never by
+    iterating a frame: iteration yields the column labels, and a probe built
+    that way reported "not named" whatever the collector returned.
+    """
+    from metasalmonpy.package_io import (
+        _collect_blank_required_metadata_fields,
+        read_salmon_datapackage,
+    )
+
+    rows = review_metadata(str(package)).rows
+    found = _collect_blank_required_metadata_fields(
+        read_salmon_datapackage(str(package))
+    )
+    return {
+        "the scan reports it": bool(
+            (
+                (rows["file"] == "dataset.csv")
+                & (rows["field"] == "funding_source")
+            ).any()
+        ),
+        "the collector names it": bool(
+            (
+                (found["file"] == "dataset.csv")
+                & (found["field"] == "funding_source")
+            ).any()
+        ),
+    }
+
+
+def _set_funding_source(package: Path):
+    """``True`` when ``set_sdp_dataset()`` accepts the field, else its refusal."""
+    try:
+        set_sdp_dataset(str(package), funding_source="A funder", quiet=True)
+    except ValueError as error:
+        return str(error)
+    return True
+
+
+@pytest.mark.parametrize("selection", sorted(_SCHEMA_SELECTIONS))
+def test_a_schema_the_settings_select_is_the_one_the_scan_and_the_setters_read(
+    raw_package, monkeypatch, selection
+):
+    """The twin of metasalmon's test of the same name (hub B-215 and B-175).
+
+    ``load_sdp_schema()`` gives the writers the schema the settings select.
+    Until B-215 the scan, the setters and the collector read the bundled copy
+    under every setting. So with a selected schema that declares one more
+    required ``dataset.csv`` field, the writers knew the field, the scan did not
+    report it, ``set_sdp_dataset()`` refused it as undeclared, and the collector
+    did not name it. Every one of the four settings was silently ignored.
+
+    Here the writers have already loaded the selected schema, so reading it
+    costs no fetch and opens no socket.
+    """
+    assert raw_package.is_dir()
+    _use_shipped_schema_defaults(monkeypatch)
+    _SCHEMA_SELECTIONS[selection](monkeypatch)
+    try:
+        selected = _bundle_requiring_funding_source()
+        # The writers' own read, served the selected bundle: the state that a
+        # package written under these settings leaves in the session cache.
+        sdp_schema.load_sdp_schema(
+            quiet=True, fetch_fn=lambda base_url, timeout: selected
+        )
+        assert "funding_source" in sdp_schema.sdp_schema_field_names("dataset")
+        fetched = _count_schema_fetches(monkeypatch, selected)
+
+        before = _what_reads_funding_source(raw_package)
+        before["set_sdp_dataset() accepts it"] = _set_funding_source(raw_package)
+        assert before == dict.fromkeys(before, True)
+        # Once filled it blocks nothing: the scan and the validator agree.
+        assert _what_reads_funding_source(raw_package) == {
+            "the scan reports it": False,
+            "the collector names it": False,
+        }
+        assert fetched == []
+    finally:
+        sdp_schema.set_sdp_schema_base_url(None)
+
+
+@pytest.mark.parametrize("selection", sorted(_SCHEMA_SELECTIONS))
+def test_a_selected_schema_nothing_has_loaded_is_loaded_once(
+    raw_package, monkeypatch, selection
+):
+    """The other half of the same contract: no writer has loaded it yet.
+
+    The scan asks the loader for the selected schema, as a writer would, rather
+    than silently reading the bundled copy instead. Selecting a schema is the
+    opt-in to reading it, and the shipped settings are the ones promised to
+    stay offline. It is fetched once, from where the settings point, and every
+    later read in the process, the setter's and the collector's included, is
+    served from the cache.
+    """
+    assert raw_package.is_dir()
+    _use_shipped_schema_defaults(monkeypatch)
+    _SCHEMA_SELECTIONS[selection](monkeypatch)
+    try:
+        fetched = _count_schema_fetches(
+            monkeypatch, _bundle_requiring_funding_source()
+        )
+        assert _what_reads_funding_source(raw_package) == {
+            "the scan reports it": True,
+            "the collector names it": True,
+        }
+        assert _set_funding_source(raw_package) is True
+        assert fetched == [sdp_schema.default_sdp_schema_base_url()]
+    finally:
+        sdp_schema.set_sdp_schema_base_url(None)
 
 
 def test_review_metadata_refuses_a_path_that_is_not_a_directory(tmp_path):
