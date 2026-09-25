@@ -703,8 +703,8 @@ and moving it is a separate outward act.
   call refuses it, and the test builds the coverage from the frame
   `validate_salmon_datapackage()` returns as `package`, which is the frame the
   builder receives. Its `calendarDate` must equal the `dataset.csv` cell. Both
-  pass on the code as it stands, and each fails when the two `calendarDate`
-  lines re-render the value.
+  pass on the code as it stands, and each fails under a mutation that
+  re-renders the value at the two `calendarDate` lines.
 
   They live in `tests/test_platform_determinism_guard.py`, after the twins of
   B-115's writer tests, as they do in metasalmon. The first needs the `[eml]`
