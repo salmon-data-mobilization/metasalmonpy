@@ -276,19 +276,22 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1136
-passed / 2 skipped with the extras installed, 995 / 143 with core dependencies
-only (2026-09-25, measured locally for hub B-201 with `main` `66ad1a3` merged
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1140
+passed / 2 skipped with the extras installed, 999 / 143 with core dependencies
+only (2026-09-25, measured locally for hub B-201 with `main` `0235487` merged
 in, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a machine where
 `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a full clone with
 every tag and with `METASALMON_PATH` unset, the same under `python -m pytest -q`
-and bare `pytest -q`; 1102 / 1 and 961 / 142 for B-234 on `f872f51`, branched
-from `main` `ba1b54a`, whose tests `main` `66ad1a3` merged unchanged; 1118 / 2
-and 977 / 143 for B-201 on `d1182e5`, branched from `main` `ba1b54a`; 1084 / 1
-and 943 / 142 on `main` `ba1b54a` before both, measured the same four ways;
-1066 / 1 and 925 / 142 for B-189 on `10750ec`, branched from `main` `dcafe28`;
-1064 / 1 and 923 / 142 on `main` `dcafe28` before it, as for B-212 on
-`351fed6`, branched from `main`
+and bare `pytest -q`; 1106 / 1 and 965 / 142 for B-243 on `d53f403`, its merge
+of `main` `66ad1a3`, whose tests `main` `0235487` merged unchanged, and
+1136 / 2 and 995 / 143 for B-201 on `1a2fd73`, its merge of the same `main`;
+1102 / 1 and 961 / 142 for B-234 on `f872f51`, whose tests `main` `66ad1a3`
+merged unchanged, 1088 / 1 and 947 / 142 for B-243 on `c4bdfb9`, and 1118 / 2
+and 977 / 143 for B-201 on `d1182e5`, each branched from `main` `ba1b54a`;
+1084 / 1 and 943 / 142 on `main` `ba1b54a` before them, measured the same four
+ways; 1066 / 1 and 925 / 142 for B-189 on `10750ec`, branched from `main`
+`dcafe28`; 1064 / 1 and 923 / 142 on `main` `dcafe28` before it, as for B-212
+on `351fed6`, branched from `main`
 `70fa8fd`; 1061 / 1
 and 920 / 142 for B-222 on `e3b8330`, branched from `main` `ed5e22e`; 1056 / 1
 and 915 / 142 on `main` `ed5e22e` before it, as for B-215 on `9577f35`, which
@@ -304,11 +307,11 @@ on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads five fewer
 passes in each leg for the same tree**: 1131 / 7 and 990 / 148 on B-201's head
 `1a2fd73`, read from its check logs on 2026-09-25, as its head `098030f`, before
 `main` `66ad1a3` was merged in, read 1113 / 7 and 972 / 148. Before B-201 it
-read two fewer, as B-241's head `5b83c27` read 1020 / 3 and 879 / 144 on 2026-09-24 and
-B-242's head `183f887` read 1010 / 3 and 869 / 144. Two of the five are
-`tests/test_roundtrip.py`, which runs only where both of those hold. CI's suite
-jobs have neither, so it skips there and runs in CI's `parity` job instead. The
-other three are `tests/test_check_changelog_window.py`'s replays of this
+read two fewer, as B-241's head `5b83c27` read 1020 / 3 and 879 / 144 on
+2026-09-24 and B-242's head `183f887` read 1010 / 3 and 869 / 144. Two of the
+five are `tests/test_roundtrip.py`, which runs only where both of those hold.
+CI's suite jobs have neither, so it skips there and runs in CI's `parity` job
+instead. The other three are `tests/test_check_changelog_window.py`'s replays of this
 repository's history, which need a full clone with the tags. CI's suite jobs
 check out one commit, so they skip there and run in the `changelog-window`
 workflow instead. The gap between the legs is the extras-gated EML, KNB and
