@@ -2,7 +2,7 @@
 
 import pandas as pd
 import pytest
-from validation import validate_semantics
+from metasalmonpy.validation import validate_semantics
 
 
 def test_validate_semantics_basic():

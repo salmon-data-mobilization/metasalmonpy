@@ -123,6 +123,26 @@ and moving it is a separate outward act.
   This changes how the suite finds the package and nothing the package does,
   so it opens no `PARITY.md` row.
 
+* **The documented `pip install -e ".[test]" && pytest -q` runs the whole
+  suite.** Hub queue item **B-227**. `tests/test_validation.py` and
+  `tests/test_term_deduplication.py` imported `validation` and
+  `term_deduplication` by top-level name, which resolves only when the checkout
+  root is on `sys.path`. `python -m pytest` from the root puts it there, which
+  is why CI, which runs that form, never saw the problem. Bare `pytest` does
+  not, and neither form does from inside `tests/`. Measured 2026-09-25 on
+  `25dc7f3`, bare `pytest` from the root and either form from inside `tests/`
+  stopped at two collection errors, *No module named 'validation'* and *No
+  module named 'term_deduplication'*, and ran nothing. Both modules now
+  import from `metasalmonpy.validation` and
+  `metasalmonpy.term_deduplication`. Each form, from the root and from inside
+  `tests/`, gives every test the outcome it had under `python -m pytest` from
+  the root. A third job in `.github/workflows/parity.yml`, `bare-pytest`, runs
+  the documented command on every pull request. It failed on the two imports
+  before they changed, so the next top-level import fails a pull request
+  rather than a contributor's first run. The two existing jobs are unchanged.
+  This changes how two test modules import the package and nothing the
+  package does, so it opens no `PARITY.md` row.
+
 * **A measurement column whose values all look like years is no longer typed
   `temporal`.** Ported from metasalmon pull request #152 (backlog **#53**),
   hub queue item **B-240**, the mirror half of **B-53**. This is
