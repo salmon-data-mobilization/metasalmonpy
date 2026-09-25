@@ -104,6 +104,94 @@ def _iso_seconds(value: _dt.datetime, sep: str = "T") -> str:
     )
 
 
+def iso_instant_text(value: Any) -> str:
+    """The **one** rendering of an instant as bytes this package writes.
+
+    ``AGENTS.md``'s "one value, one rendering" contract: a value that becomes
+    canonical bytes is coerced to text once, and every consumer of it reads
+    that one rendering. Two renderings of one value is the defect, and it is
+    the defect hub item **B-145** closes -- ``datapackage.json`` spelled a
+    metadata instant with ``_clean()``'s ``isoformat()`` while
+    ``metadata/dataset.csv`` got whatever ``to_csv`` chose for the column's
+    dtype, and the two disagreed about the separator, the zone marker, the
+    year, and whether an all-midnight column keeps its time at all.
+
+    So every instant that reaches package bytes comes through here:
+
+    * ``render_resource_frame`` -- a data resource's ``datetime64`` column and
+      its object column of ``datetime`` values;
+    * ``package_io._metadata_csv_bytes`` -- every SDP metadata CSV;
+    * ``package_io._descriptor_temporal_text`` -- ``datapackage.json``'s
+      ``temporal.start`` / ``temporal.end``;
+    * ``observation_structures._typed_character`` -- a typed dimension value.
+
+    The spelling is **ruled, not chosen** (Brett, 2026-09-14, once for both
+    implementations): readr's ISO instant form, the ``T`` separator and the
+    ``Z`` zone marker. metasalmon adopted it in hub item **B-115** by asking
+    ``readr::write_csv()`` for the bytes; this package cannot ask readr, so it
+    renders them itself -- which is why the renderer is one function rather
+    than an agreement between four call sites that nothing rechecks.
+
+    Three details are load bearing and each is silent when wrong:
+
+    * **UTC.** A tz-aware value is folded to UTC before rendering, because
+      ``Z`` is a claim about the instant and not decoration. Stamping ``Z`` on
+      a local wall clock moves the instant. ``readr::write_csv()`` folds the
+      same way, and ``observation_structures._typed_character`` already did.
+    * **The year is padded by construction**, via ``_iso_date``, never through
+      ``strftime``. ``tests/test_platform_determinism_guard.py`` exists for
+      this: glibc renders year 999 as ``999`` where BSD pads it, and the
+      difference is invisible to a macOS developer.
+    * **The fractional second is truncated**, as every caller already did.
+
+    *Retires when:* nothing. One rendering per value is the end state, not a
+    step toward one. The *spelling* changes only on a ruling that moves both
+    implementations at once, and the year-padding residual against
+    ``readr::write_csv()`` on Linux is hub item **B-161**, recorded in
+    ``PARITY.md`` row 56 rather than settled here.
+    """
+    if isinstance(value, pd.Timestamp):
+        value = value.to_pydatetime()
+    elif not isinstance(value, _dt.datetime):
+        value = pd.Timestamp(value).to_pydatetime()
+    if value.tzinfo is not None:
+        value = value.astimezone(_dt.timezone.utc).replace(tzinfo=None)
+    return _iso_seconds(value) + "Z"
+
+
+def is_instant(value: Any) -> bool:
+    """Is this a value :func:`iso_instant_text` can render?
+
+    ``pd.NaT`` is the trap, and it is not a hypothetical one: ``NaTType``
+    **subclasses** ``datetime.datetime``, so a bare ``isinstance(value,
+    datetime)`` accepts a missing value and ``iso_instant_text`` then raises
+    ``ValueError: cannot convert float NaN to integer``. That is exactly what
+    ``render_resource_frame``'s object-column branch did before B-145 --
+    measured, an object column holding one instant and one ``NaT`` raised --
+    while its own ``datetime64`` branch two lines above guarded with
+    ``pd.isna``. One function, two branches, two answers.
+
+    ``value is not pd.NaT`` rather than ``not pd.isna(value)`` on purpose: an
+    object column may hold anything, and ``pd.isna`` on a list or an array
+    returns an array whose truthiness raises. ``NaT`` is a singleton, so
+    identity is both exact and safe here.
+
+    A missing instant is left in place for the CSV writer's ``na_rep`` to
+    render, rather than aborting the write, because that is what metasalmon
+    does: ``readr::write_csv(na = .ms_csv_na_token())`` writes an ``NA``
+    POSIXct as the empty field (measured 2026-09-16, R 4.3.3 / readr 2.2.0,
+    with ``.ms_csv_na_token()`` being the empty string). **Stated with its
+    configuration on purpose** -- readr's *own* default ``na`` is the two
+    characters ``NA``, so "readr writes the empty field" would be a claim
+    stronger than the measurement. What is true of readr unconditionally, and
+    is the part this guard turns on, is that it renders a missing instant
+    rather than raising.
+
+    *Retires when:* nothing, unless ``NaTType`` stops subclassing ``datetime``.
+    """
+    return isinstance(value, _dt.datetime) and value is not pd.NaT
+
+
 def _is_blank(token: Any) -> bool:
     """R's ``!present``: NA, or text that is empty after trimming."""
     if token is None:
@@ -673,18 +761,14 @@ def render_resource_frame(frame: pd.DataFrame) -> pd.DataFrame:
             assign(column, [format_number_token(value) for value in series])
         elif pd.api.types.is_datetime64_any_dtype(series.dtype):
             assign(column, [
-                None
-                if pd.isna(value)
-                else _iso_seconds(pd.Timestamp(value).to_pydatetime()) + "Z"
+                None if pd.isna(value) else iso_instant_text(value)
                 for value in series
             ])
         elif series.dtype == object:
             values = list(series)
-            if any(isinstance(value, _dt.datetime) for value in values):
+            if any(is_instant(value) for value in values):
                 assign(column, [
-                    _iso_seconds(value) + "Z"
-                    if isinstance(value, _dt.datetime)
-                    else value
+                    iso_instant_text(value) if is_instant(value) else value
                     for value in values
                 ])
     return out
@@ -718,6 +802,8 @@ __all__ = [
     "double_spacing",
     "format_datetime_token",
     "format_number_token",
+    "is_instant",
+    "iso_instant_text",
     "numeric_token_exponent",
     "numeric_token_lossy",
     "numeric_token_precision",
