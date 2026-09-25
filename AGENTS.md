@@ -245,7 +245,7 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
 dependency configurations, and CI runs both (see *Dependency boundaries*): 1066
 passed / 1 skipped with the extras installed, 925 / 142 with core dependencies
-only (2026-09-25, measured locally for hub B-189 on `aa72ee2`, branched from
+only (2026-09-25, measured locally for hub B-189 on `10750ec`, branched from
 `main` `dcafe28`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
 machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, the same
 under `python -m pytest -q` and bare `pytest -q`; 1064 / 1 and 923 / 142 on
