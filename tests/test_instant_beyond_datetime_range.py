@@ -13,28 +13,29 @@ reads.** Measured 2026-09-25 under R 4.3.3 and readr 2.2.0 with ``TZ`` set to
 ``col_datetime()`` column return the same ``POSIXct``, with no parse problem,
 for each token:
 
-=========================  ============================  ===============
-token                      how R prints it               epoch second
-=========================  ============================  ===============
-0001-01-01T00:00:00+01     ``"0-12-31 23:00:00 UTC"``     -62135600400
-0001-01-01T00:30:00+01     ``"0-12-31 23:30:00 UTC"``     -62135598600
-9999-12-31T23:00:00-02     ``"10000-01-01 01:00:00 UTC"`` 253402304400
-=========================  ============================  ===============
+=========================  ==============================  ===============
+token                      how R prints it                 epoch second
+=========================  ==============================  ===============
+0001-01-01T00:00:00+01     ``"0-12-31 23:00:00 UTC"``      -62135600400
+0001-01-01T00:30:00+01     ``"0-12-31 23:30:00 UTC"``      -62135598600
+9999-12-31T23:00:00-02     ``"10000-01-01 01:00:00 UTC"``  253402304400
+=========================  ==============================  ===============
 
 R's year 0 is the proleptic Gregorian year before year 1. metasalmon, loaded
 from metasalmon ``main`` at ``9aeb0ec``, reads and validates the package below
 with each token, and keys each token as :data:`READR_READS` says. Its
 validator names that key when the value is missing from ``codes.csv``. The
-same session measured :data:`BOUNDARIES`, one second either side of each end
-of the years a ``datetime`` holds.
+same R, readr and metasalmon give :data:`BOUNDARIES`, one second either side of
+each end of the years a ``datetime`` holds.
 
 No ``datetime`` holds these instants, so this package returns a
 ``numpy.datetime64`` at microsecond resolution for them. That type exists under
 every pandas this package supports, including 1.5, where ``pd.Timestamp``
 cannot hold them. The tests pin the instant rather than the type, because the
 column a pandas version builds from these values differs. pandas 3 builds a
-``datetime64[us]`` column of ``Timestamp`` values, and older pandas keep an
-object column, the fallback ``typed_series()`` already used for year 1.
+``datetime64[us]`` column of ``Timestamp`` values, and older pandas keep the
+object column ``typed_series()`` already fell back to for an instant outside
+their nanosecond range.
 """
 
 from __future__ import annotations
