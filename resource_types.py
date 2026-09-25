@@ -514,9 +514,13 @@ def _epoch_seconds(value: _Instant) -> float:
 
     A ``numpy.datetime64`` is divided from whole microseconds, the same
     correctly rounded division ``timedelta.total_seconds()`` makes, so an
-    instant gets one epoch value whichever type holds it.
+    instant gets one epoch value whichever type holds it. Its NaT is NaN, as
+    ``pd.NaT``'s is: NaT's integer is the smallest ``int64``, which would
+    otherwise pass for an instant in the year -290308.
     """
     if isinstance(value, np.datetime64):
+        if np.isnat(value):
+            return math.nan
         return int(value.astype("datetime64[us]").astype("int64")) / 1_000_000
     return (value - _EPOCH).total_seconds()
 

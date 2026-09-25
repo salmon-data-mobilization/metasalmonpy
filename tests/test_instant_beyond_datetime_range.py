@@ -135,6 +135,22 @@ def test_either_side_of_the_datetime_range_reads_and_keys_like_metasalmon(token)
     assert rt.canonical_value_tokens([token], "datetime") == [key]
 
 
+def test_a_missing_numpy_instant_is_keyed_as_no_instant():
+    """``numpy.datetime64("NaT")`` must not key as a date in year -290308.
+
+    Its integer is the smallest ``int64``, which the epoch arithmetic would
+    otherwise read as an instant. Either answer a missing value can get here,
+    no key or the error ``pd.NaT`` gets, is left open, because what a missing
+    instant should key as is not this item's question.
+    """
+    for missing in (np.datetime64("NaT"), np.datetime64("NaT", "us")):
+        try:
+            key = rt.format_datetime_token(missing)
+        except ValueError:
+            key = None
+        assert key is None
+
+
 def test_an_instant_a_datetime_holds_is_still_a_datetime():
     """Only an instant before year 1 or after year 9999 changes representation.
 
