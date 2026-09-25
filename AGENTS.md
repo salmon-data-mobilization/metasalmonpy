@@ -243,16 +243,21 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1158
-passed / 1 skipped with the extras installed, 1017 / 142 with core dependencies
-only (2026-09-25, measured locally for hub B-362 on `7f9f79c`, branched from
-`main` `ba1b54a`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, on a
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1106
+passed / 1 skipped with the extras installed, 965 / 142 with core dependencies
+only (2026-09-25, measured locally for hub B-243 on `d53f403`, its merge of
+`main` `66ad1a3`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
 machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, the same
-under `python -m pytest -q` and bare `pytest -q`; 1084 / 1 and 943 / 142 on
-`main` `ba1b54a` before it; 1066 / 1 and 925 / 142 for B-189 on `10750ec`,
-branched from `main` `dcafe28`, under Python 3.11.15, pytest 9.1.1 and pandas
-3.0.6; 1064 / 1 and 923 / 142 on `main` `dcafe28` before it, as for B-212 on
-`351fed6`, branched from `main` `70fa8fd`; 1061 / 1
+under `python -m pytest -q` and bare `pytest -q`; 1158 / 1 and 1017 / 142 for B-362 on `7f9f79c`, branched from `main`
+`ba1b54a`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, measured the
+same three ways; 1102 / 1 and 961 / 142 for
+B-234 on `f872f51`, branched from `main` `ba1b54a`, and 1088 / 1 and 947 / 142
+for B-243 on `c4bdfb9`, branched from the same `main`, each measured the same
+way; 1084 / 1 and 943 / 142 on `main` `ba1b54a` before both, measured the same
+four ways; 1066 / 1 and 925 / 142
+for B-189 on `10750ec`, branched from `main` `dcafe28`; 1064 / 1 and 923 / 142
+on `main` `dcafe28` before it, as for B-212 on `351fed6`, branched from `main`
+`70fa8fd`; 1061 / 1
 and 920 / 142 for B-222 on `e3b8330`, branched from `main` `ed5e22e`; 1056 / 1
 and 915 / 142 on `main` `ed5e22e` before it, as for B-215 on `9577f35`, which
 has `main` `2405df2` merged in; 1032 / 1
