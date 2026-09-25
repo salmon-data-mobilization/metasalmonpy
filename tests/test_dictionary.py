@@ -59,7 +59,10 @@ class DictionaryTests(unittest.TestCase):
         self.assertIn("code_label", result.columns)
         self.assertIn("value_label", result.columns)
         self.assertTrue(isinstance(result["code_label"].dtype, pd.CategoricalDtype))
-        self.assertEqual(list(result["code_label"].cat.categories), ["A", "B"])
+        # The labels in code_label, as metasalmon's factor(levels = code_value,
+        # labels = code_label) gives them (hub item B-274).
+        self.assertEqual(list(result["code_label"].cat.categories), ["Alpha", "Beta"])
+        self.assertEqual(result["code_label"].tolist(), ["Alpha", "Beta"])
 
     def test_validation_warnings_for_missing_semantic_fields_non_strict(self):
         bad = pd.DataFrame(
@@ -196,7 +199,7 @@ class EraColumnRoleTests(unittest.TestCase):
         self.assertTrue(pd.isna(row["required"]))
 
 
-def _one_column_dictionary(column, value_type):
+def _one_column_dictionary(column, value_type, role="attribute"):
     return pd.DataFrame(
         {
             "dataset_id": ["d"],
@@ -204,7 +207,7 @@ def _one_column_dictionary(column, value_type):
             "column_name": [column],
             "column_label": [column],
             "column_description": ["c"],
-            "column_role": ["attribute"],
+            "column_role": [role],
             "value_type": [value_type],
             "required": [False],
         }
@@ -343,9 +346,11 @@ class ApplyDictionaryFailureReportTests(unittest.TestCase):
 
     def test_a_named_value_is_blanked_when_pandas_cannot_build_the_categorical(self):
         # A repeated code_value, or a missing one in a code list built by hand,
-        # makes pd.Categorical raise, and the fallback keeps the column as
-        # text. The unlisted value is blanked before that, so the report is
-        # true on that path too.
+        # made pd.Categorical raise, which sent the column to the fallback that
+        # keeps it as text; the name records that path. Since B-274 the labels
+        # are applied as R's factor() applies them, and neither list reaches
+        # the fallback. Either way the unlisted value is blanked first, so the
+        # report is true.
         frame = pd.DataFrame({"run": ["Early", "Late", "Summer"]})
         code_lists = {
             "a repeated code_value": _code_list("run", ["Early", "Early", "Late"]),
@@ -396,6 +401,146 @@ class ApplyDictionaryFailureReportTests(unittest.TestCase):
         self.assertIn("has 25 values not in its code list; they become missing:", message)
         self.assertIn("'v18', ..., 'v24', and 'v25'", message)
         self.assertNotIn("'v19'", message)
+
+
+class ApplyDictionaryCodeLabelTests(unittest.TestCase):
+    """Hub item B-274: a coded column carries the labels in ``code_label``.
+
+    metasalmon applies a code list with ``factor(x, levels = code_value,
+    labels = code_label)``, so a coded column's levels are its labels. Here the
+    relabel called ``rename_categories`` on a Series rather than on its
+    ``.cat`` accessor, and an ``except`` marked defensive swallowed the
+    ``AttributeError``, so every coded column became text, or, under the
+    ``categorical`` role, a Categorical of the code values. The R behaviour the
+    tests name was measured on metasalmon ``11c770c`` under R 4.3.3.
+    """
+
+    def _apply(self, frame, codes, role="attribute", value_type="string"):
+        column = frame.columns[0]
+        return _call_recording_warnings(
+            lambda: apply_salmon_dictionary(
+                frame, _one_column_dictionary(column, value_type, role), codes=codes
+            )
+        )
+
+    def test_a_coded_column_carries_its_labels_under_either_role(self):
+        frame = pd.DataFrame({"gear": ["N", "W", "N"]})
+        codes = _code_list("gear", ["N", "W"], ["Net", "Weir"])
+        for role in ("attribute", "categorical"):
+            with self.subTest(role=role):
+                result, reports, deprecations = self._apply(frame, codes, role)
+                self.assertIsInstance(result["gear"].dtype, pd.CategoricalDtype)
+                self.assertEqual(list(result["gear"].cat.categories), ["Net", "Weir"])
+                self.assertEqual(result["gear"].tolist(), ["Net", "Weir", "Net"])
+                self.assertEqual(reports, [])
+                self.assertEqual(deprecations, [])
+
+    def test_an_unlisted_value_is_still_named_and_still_becomes_missing(self):
+        frame = pd.DataFrame({"gear": ["N", "W", "X", None, ""]})
+        codes = _code_list("gear", ["N", "W"], ["Net", "Weir"])
+        for role in ("attribute", "categorical"):
+            with self.subTest(role=role):
+                result, reports, deprecations = self._apply(frame, codes, role)
+                # B-241's report, unchanged: it names the value as the data
+                # holds it, not a label.
+                self.assertEqual(
+                    reports, ["Column 'gear' has 1 value not in its code list; it becomes missing: 'X'"]
+                )
+                self.assertEqual(result["gear"].tolist()[:2], ["Net", "Weir"])
+                self.assertEqual(result["gear"].isna().tolist(), [False, False, True, True, True])
+                self.assertEqual(deprecations, [])
+
+    def test_a_categorical_of_integers_takes_its_labels_from_integer_code_values(self):
+        # The B-241 run's shape. Under the categorical role it came back
+        # [nan, nan, nan]: the listed values were blanked with the unlisted one.
+        frame = pd.DataFrame({"n": pd.Categorical([1, 2, 3])})
+        code_lists = {
+            "labelled": (_code_list("n", [1, 2], ["one", "two"]), ["one", "two"]),
+            "labelled with its values": (_code_list("n", [1, 2]), [1, 2]),
+        }
+        for role in ("attribute", "categorical"):
+            for name, (codes, labels) in code_lists.items():
+                with self.subTest(role=role, codes=name):
+                    result, reports, deprecations = self._apply(frame, codes, role, value_type=None)
+                    self.assertIsInstance(result["n"].dtype, pd.CategoricalDtype)
+                    self.assertEqual(list(result["n"].cat.categories), labels)
+                    self.assertEqual(result["n"].tolist()[:2], labels)
+                    self.assertTrue(pd.isna(result["n"].iloc[2]))
+                    self.assertEqual(reports, ["Column 'n' has 1 value not in its code list; it becomes missing: 3"])
+                    self.assertEqual(deprecations, [])
+
+    def test_codes_that_share_a_label_share_a_category_as_in_r(self):
+        # R's factor() merges labels that repeat into one level, where
+        # rename_categories refuses them.
+        frame = pd.DataFrame({"gear": ["N", "W", "T"]})
+        codes = _code_list("gear", ["N", "W", "T"], ["Fixed", "Fixed", "Trap"])
+        result, reports, _ = self._apply(frame, codes)
+        self.assertIsInstance(result["gear"].dtype, pd.CategoricalDtype)
+        self.assertEqual(list(result["gear"].cat.categories), ["Fixed", "Trap"])
+        self.assertEqual(result["gear"].tolist(), ["Fixed", "Fixed", "Trap"])
+        self.assertEqual(reports, [])
+
+    def test_a_repeated_code_value_takes_its_first_label_as_in_r(self):
+        # R's match() finds a value's first row, and every label is a level.
+        frame = pd.DataFrame({"run": ["E", "L", "S"]})
+        codes = _code_list("run", ["E", "E", "L"], ["Early", "Early again", "Late"])
+        result, reports, _ = self._apply(frame, codes)
+        self.assertIsInstance(result["run"].dtype, pd.CategoricalDtype)
+        self.assertEqual(list(result["run"].cat.categories), ["Early", "Early again", "Late"])
+        self.assertEqual(result["run"].tolist()[:2], ["Early", "Late"])
+        self.assertTrue(pd.isna(result["run"].iloc[2]))
+        self.assertEqual(reports, ["Column 'run' has 1 value not in its code list; it becomes missing: 'S'"])
+
+    def test_a_code_with_no_label_becomes_missing_as_in_r(self):
+        # R gives a code whose code_label is NA a missing level, so its values
+        # print and write as NA, and R's reader reads a blank label as NA.
+        # pandas holds no missing category, so here the value itself becomes
+        # missing. R does not report it, and neither does this.
+        frame = pd.DataFrame({"gear": ["N", "W", "T"]})
+        codes = _code_list("gear", ["N", "W", "T"], ["Net", None, ""])
+        result, reports, _ = self._apply(frame, codes)
+        self.assertIsInstance(result["gear"].dtype, pd.CategoricalDtype)
+        self.assertEqual(list(result["gear"].cat.categories), ["Net"])
+        self.assertEqual(result["gear"].isna().tolist(), [False, True, True])
+        self.assertEqual(reports, [])
+
+    def test_an_ordered_categorical_stays_ordered_as_in_r(self):
+        # R's factor() takes ordered from is.ordered(x).
+        frame = pd.DataFrame({"size": pd.Categorical(["L", "S"], categories=["S", "L"], ordered=True)})
+        codes = _code_list("size", ["S", "L"], ["Small", "Large"])
+        result, reports, _ = self._apply(frame, codes, value_type=None)
+        self.assertIsInstance(result["size"].dtype, pd.CategoricalDtype)
+        self.assertTrue(result["size"].cat.ordered)
+        self.assertEqual(list(result["size"].cat.categories), ["Small", "Large"])
+        self.assertEqual(result["size"].tolist(), ["Large", "Small"])
+        self.assertEqual(reports, [])
+
+    def test_a_code_list_that_cannot_be_applied_is_reported_and_its_values_kept(self):
+        # A column name the data repeats is the one input left that the codes
+        # step cannot apply a code list to. It used to blank every value of
+        # both columns, with no report but pandas 3's own deprecation warning.
+        # R refuses such a data frame outright. What this package should do
+        # with it is hub item B-397's; this pins only that it is reported and
+        # nothing is lost.
+        frame = pd.DataFrame([["N", "W"], ["W", "X"]], columns=["gear", "gear"])
+        result, reports, _ = self._apply(frame, _code_list("gear", ["N", "W"], ["Net", "Weir"]))
+        self.assertEqual(len(reports), 1, reports)
+        self.assertIn("Column 'gear'", reports[0])
+        self.assertIn("more than one column", reports[0])
+        self.assertEqual(result.iloc[:, 0].tolist(), ["N", "W"])
+        self.assertEqual(result.iloc[:, 1].tolist(), ["W", "X"])
+
+    def test_a_failure_to_apply_the_labels_is_reported_and_a_named_value_stays_missing(self):
+        frame = pd.DataFrame({"gear": ["N", "X"]})
+        codes = _code_list("gear", ["N", "W"], ["Net", "Weir"])
+        with mock.patch("metasalmonpy.dictionary._apply_code_labels", side_effect=ValueError("boom")):
+            result, reports, _ = self._apply(frame, codes)
+        self.assertEqual(len(reports), 2, reports)
+        self.assertIn("'X'", reports[0])
+        self.assertIn("Column 'gear'", reports[1])
+        self.assertIn("boom", reports[1])
+        self.assertEqual(result["gear"].tolist()[0], "N")
+        self.assertEqual(result["gear"].isna().tolist(), [False, True])
 
 
 if __name__ == "__main__":  # pragma: no cover
