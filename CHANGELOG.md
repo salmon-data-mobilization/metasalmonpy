@@ -511,6 +511,45 @@ and moving it is a separate outward act.
   item **B-211**. A defect the two packages share is not a deliberate
   difference, so this opens no `PARITY.md` row.
 
+* **`read_sssom_mapping_set()` now reads a canonical SSSOM/TSV file, which
+  leaves the built-in prefixes out of its `curie_map`.** Hub queue item
+  **B-234**, the mirror half of metasalmon's **B-233** (metasalmon pull
+  request #162). The reader looked every CURIE prefix up in the file's own
+  `curie_map` and refused any it did not find, so `skos:exactMatch` in a file
+  that did not declare `skos` stopped with *uses unknown CURIE prefix 'skos'*.
+  The SSSOM specification allows exactly that file: `owl`, `rdf`, `rdfs`,
+  `semapv`, `skos`, `sssom`, `xsd` and `linkml` are built-in, they "MAY be
+  omitted from the curie_map", and a canonical SSSOM/TSV writer "MUST NOT
+  include" them. As `mapping_justification` is required and is always a
+  `semapv:` CURIE, every canonical file with a mapping in it was refused. The
+  eight are now accepted undeclared. Every other prefix still has to be
+  declared, since SSSOM/TSV parsers "MUST reject a file with undeclared,
+  non-built-in prefix names", and the match is exact, so `SKOS` is not a
+  built-in.
+
+  One kind of file that used to be accepted is now refused: a `curie_map` that
+  declares a built-in prefix with a different expansion, such as `skos` with
+  `https://www.w3.org/2004/02/skos/core#`. The specification says a declared
+  built-in "MUST point to the same IRI prefixes" as its table, and the old
+  reader, which knew no built-ins, read such an entry as an ordinary
+  declaration. The rule sits with the other CURIE checks, so it holds in
+  `validate_sdp_sssom()` and for an in-memory set passed to `write_sdp_sssom()`,
+  which is refused before anything is written, and `validate=False` skips it
+  as it skips them. The rules are in the model's Identifiers section and the
+  table in the introduction's IRI prefixes section
+  (<https://mapping-commons.github.io/sssom/1.0/spec-model/#identifiers>,
+  <https://mapping-commons.github.io/sssom/1.0/spec-intro/#iri-prefixes>),
+  unchanged in the SSSOM 1.1 draft.
+
+  This applies B-233's reading of the specification rather than deciding it
+  again, and the two readers now accept the same set. Measured 2026-09-25 on
+  twenty files, among them the canonical fixture, each built-in left out, and
+  built-ins declared padded, quoted, redefined and unused: metasalmon `main`
+  `97db837` and this change gave the same verdict on every one. So it is a
+  port and opens no `PARITY.md` row. `tests/test_sssom.py` carries the twins
+  of the six tests B-233 added, on the same canonical fixture, and 14 of their
+  cases failed on `ba1b54a` before the fix.
+
 * **A line under a released `CHANGELOG.md` heading that the release does not
   contain now fails a check.** Hub queue item **B-201**, the pair of the hub's
   **B-200**. AGENTS.md's *Releases* section now carries the rule metasalmon's

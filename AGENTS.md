@@ -276,16 +276,19 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1118
-passed / 2 skipped with the extras installed, 977 / 143 with core dependencies
-only (2026-09-25, measured locally for hub B-201 on `d1182e5`, branched from
-`main` `ba1b54a`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
-machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a
-full clone with every tag and with `METASALMON_PATH` unset, the same under
-`python -m pytest -q` and bare `pytest -q`; 1084 / 1 and 943 / 142 on `main`
-`ba1b54a` before it; 1066 / 1 and 925 / 142 for B-189 on `10750ec`, branched
-from `main` `dcafe28`; 1064 / 1 and 923 / 142 on
-`main` `dcafe28` before it, as for B-212 on `351fed6`, branched from `main`
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1136
+passed / 2 skipped with the extras installed, 995 / 143 with core dependencies
+only (2026-09-25, measured locally for hub B-201 with `main` `66ad1a3` merged
+in, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a machine where
+`Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a full clone with
+every tag and with `METASALMON_PATH` unset, the same under `python -m pytest -q`
+and bare `pytest -q`; 1102 / 1 and 961 / 142 for B-234 on `f872f51`, branched
+from `main` `ba1b54a`, whose tests `main` `66ad1a3` merged unchanged; 1118 / 2
+and 977 / 143 for B-201 on `d1182e5`, branched from `main` `ba1b54a`; 1084 / 1
+and 943 / 142 on `main` `ba1b54a` before both, measured the same four ways;
+1066 / 1 and 925 / 142 for B-189 on `10750ec`, branched from `main` `dcafe28`;
+1064 / 1 and 923 / 142 on `main` `dcafe28` before it, as for B-212 on
+`351fed6`, branched from `main`
 `70fa8fd`; 1061 / 1
 and 920 / 142 for B-222 on `e3b8330`, branched from `main` `ed5e22e`; 1056 / 1
 and 915 / 142 on `main` `ed5e22e` before it, as for B-215 on `9577f35`, which
