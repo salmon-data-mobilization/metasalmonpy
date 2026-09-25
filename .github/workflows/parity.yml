@@ -125,3 +125,39 @@ jobs:
         env:
           R_LIBS: /tmp/metasalmon-lib
         run: python -m pytest -q tests/test_roundtrip.py
+
+  # The command AGENTS.md documents, run the way a contributor runs it: an
+  # editable install with the test extra, then bare `pytest -q` from the
+  # checkout root (hub queue B-227). The jobs above run `python -m pytest`, and
+  # `python -m` puts the working directory on sys.path, so a test module that
+  # imports a package module by its top-level name (`from validation import
+  # ...`) collects there and stops this command at a collection error. The
+  # `pytest` console script puts only its own directory on sys.path, which is
+  # the view a contributor's first run has, and the one this job gives CI.
+  #
+  # Its claim is the invocation form, not a dependency configuration. It
+  # installs what the documented command installs and asserts nothing about
+  # what that is, so a test body that runs only with an extra installed is not
+  # executed here, as it is not in a contributor's first run either.
+  #
+  # *Retires when:* the legs above run bare `pytest` themselves, which gives
+  # them this view and makes this job a copy of the core leg.
+  bare-pytest:
+    name: python suite (bare pytest, as AGENTS.md documents it)
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      METASALMON_LLM_API_KEY: ""
+      CHAPI_API_KEY: ""
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install the package as AGENTS.md documents
+        run: pip install -e ".[test]"
+      - name: Run the suite as AGENTS.md documents
+        run: pytest -q
