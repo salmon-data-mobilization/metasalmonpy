@@ -243,15 +243,15 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1054
-passed / 1 skipped with the extras installed, 913 / 142 with core dependencies
-only (2026-09-25, measured locally for hub B-215 with `main` `2405df2` merged
-in, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a machine where
-`Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists; 1052 / 1 and 911 / 142
-for B-215 on `73314b7`, 1032 / 1 and 891 / 142 for B-216 with `main` `fc5d16f`
-merged in, 1030 / 1 and 889 / 142 for B-220 on `acf243e` and 1024 / 1 and
-883 / 142 for B-216 on `f663c9b` earlier that day, 1022 / 1 and 881 / 142 for
-B-241 on the tree of its head `5b83c27` on 2026-09-24, 1012 / 1 and
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1055
+passed / 1 skipped with the extras installed, 914 / 142 with core dependencies
+only (2026-09-25, measured locally for hub B-215 on `a0cb42a`, which has `main`
+`2405df2` merged in, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
+machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists; 1032 / 1
+and 891 / 142 for B-216 with `main` `fc5d16f` merged in, 1030 / 1 and 889 / 142
+for B-220 on `acf243e` and 1024 / 1 and 883 / 142 for B-216 on `f663c9b`
+earlier that day, 1022 / 1 and 881 / 142 for B-241 on the tree of its head
+`5b83c27` on 2026-09-24, 1012 / 1 and
 871 / 142 for B-242 and 1007 / 1 and 866 / 142 for B-240 earlier that day,
 966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
