@@ -1,4 +1,8 @@
+import functools
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
@@ -470,6 +474,161 @@ class NoCandidateGapTests(unittest.TestCase):
 
         gaps = detect_semantic_term_gaps(out)
         self.assertEqual(len(gaps), 0)
+
+
+class HandPickedAcceptGapTests(unittest.TestCase):
+    """A recorded hand-picked accept is not ontology-gap evidence (hub B-216).
+
+    A gap row claims that retrieval found no ``smn`` term, and the term-request
+    pipeline acts on that claim: render_ontology_term_request() drafts the
+    request and submit_term_request_issues() files it. The row
+    apply_sdp_semantics() records for ``accept_suggestion(iri=...)``, whose
+    ``source`` is ``metadata_write._HAND_PICKED_SOURCE``, is a reviewer's
+    decision, not retrieval output. Counted, its blank ``search_query`` made it
+    a target of its own whose only candidate was not ``smn``, so a post-review
+    ``semantic_suggestions.csv`` reported a gap for the slot the reviewer had
+    just filled. Mirrors metasalmon's test-metadata-write.R test of the same
+    behaviour (hub B-176).
+    """
+
+    # Outside w3id.org/smn/ on purpose: the detector counts that namespace as
+    # smn whatever ``source`` says, so an smn IRI here never shows the false gap.
+    HANDPICKED_IRI = "https://example.org/Handpicked"
+
+    @staticmethod
+    def _non_smn_hits(query, role=None, sources=None):
+        # Retrieval finds only non-smn terms, and only for the variable slot, so
+        # that slot is a real gap before the review and must stay one after it.
+        if role != "variable":
+            return pd.DataFrame()
+        return pd.DataFrame(
+            {
+                "label": ["Fish count", "Tally"],
+                "iri": [
+                    "https://example.org/ols/FishCount",
+                    "https://example.org/ols/Tally",
+                ],
+                "source": ["ols", "ols"],
+                "ontology": ["ols", "ols"],
+                "role": [role, role],
+                "match_type": ["label_exact", "label_exact"],
+                "definition": ["A count.", "A count."],
+                "score": [4.5, 3.5],
+            }
+        )
+
+    def test_the_post_review_file_yields_the_pre_review_gaps(self):
+        from metasalmonpy import (
+            accept_suggestion,
+            apply_sdp_semantics,
+            create_sdp,
+            review_semantics,
+            semantic_suggestions,
+        )
+        from metasalmonpy import semantics as sem
+        from metasalmonpy.metadata_write import _HAND_PICKED_SOURCE
+
+        seeded = functools.partial(
+            sem.suggest_semantics, search_fn=self._non_smn_hits
+        )
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+            sem, "suggest_semantics", seeded
+        ):
+            path = str(
+                create_sdp(
+                    {"spawners": pd.DataFrame({"spawner_count": [120, 340]})},
+                    path=Path(tmp) / "pkg",
+                    dataset_id="demo-1",
+                    semantic_max_per_role=2,
+                    seed_semantics=True,
+                    seed_verbose=False,
+                    check_updates=False,
+                )
+            )
+            before = detect_semantic_term_gaps(
+                suggestions=semantic_suggestions(path)
+            )
+            # The premise: before the review the slot is one real non-smn gap.
+            self.assertEqual(before["top_non_smn_source"].tolist(), ["ols"])
+
+            review = accept_suggestion(
+                review_semantics(path),
+                "spawner_count",
+                "variable",
+                iri=self.HANDPICKED_IRI,
+            )
+            apply_sdp_semantics(path, review, quiet=True)
+            record = semantic_suggestions(path)
+            # The premise: what the detector is fed carries the recorded row.
+            recorded = record[record["iri"] == self.HANDPICKED_IRI]
+            self.assertEqual(recorded["source"].tolist(), [_HAND_PICKED_SOURCE])
+
+            after = detect_semantic_term_gaps(suggestions=record)
+
+        self.assertNotIn(self.HANDPICKED_IRI, after["top_non_smn_iri"].tolist())
+        # Exactly the pre-review gap rows: the real gap survives and nothing is
+        # added for the slot the reviewer filled.
+        pd.testing.assert_frame_equal(after, before)
+
+    def test_the_recorded_row_does_not_reach_the_embedded_assessments(self):
+        """The drop precedes the embedded LLM fields, not only the candidates.
+
+        apply_sdp_semantics() leaves a recorded row's LLM columns empty, so this
+        row is built by hand, and what it pins is the order: a row dropped only
+        from the candidate evidence would still reach the gap table as an
+        ``llm_request_new_term`` target through the embedded assessments.
+        """
+        from metasalmonpy.metadata_write import _HAND_PICKED_SOURCE
+
+        slot = {
+            "dataset_id": "demo-1",
+            "table_id": "spawners",
+            "column_name": "spawner_count",
+            "code_value": pd.NA,
+            "dictionary_role": "variable",
+            "target_scope": "column",
+            "target_sdp_file": "column_dictionary.csv",
+            "target_sdp_field": "term_iri",
+        }
+        suggestions = pd.DataFrame(
+            [
+                {
+                    **slot,
+                    "search_query": "spawner count",
+                    "label": "Fish count",
+                    "iri": "https://example.org/ols/FishCount",
+                    "source": "ols",
+                    "ontology": "ols",
+                    "match_type": "label_exact",
+                    "definition": "A count.",
+                    "score": 4.5,
+                    "llm_decision": "request_new_term",
+                },
+                {
+                    **slot,
+                    "search_query": pd.NA,
+                    "label": pd.NA,
+                    "iri": self.HANDPICKED_IRI,
+                    "source": _HAND_PICKED_SOURCE,
+                    "ontology": pd.NA,
+                    "match_type": pd.NA,
+                    "definition": pd.NA,
+                    "score": pd.NA,
+                    "llm_decision": "request_new_term",
+                },
+            ]
+        )
+
+        gaps = detect_semantic_term_gaps(suggestions=suggestions)
+
+        # The retrieved row's own embedded request is still read; the recorded
+        # row contributes nothing, as a candidate or as an assessment.
+        self.assertEqual(gaps["search_query"].tolist(), ["spawner count"])
+        self.assertEqual(
+            gaps["gap_detection_basis"].tolist(),
+            ["candidate_gap_and_llm_request_new_term"],
+        )
+        self.assertNotIn(self.HANDPICKED_IRI, gaps["top_non_smn_iri"].tolist())
 
 
 if __name__ == "__main__":  # pragma: no cover
