@@ -3,10 +3,11 @@
 The bundle under ``data/schema`` and ``data/profiles`` is a verbatim copy of
 the ``sdp-0.3.0`` git tag of ``salmon-data-mobilization/smn-data-pkg``, which
 is also what metasalmon vendors on its post-0.3.0 ``main`` (verified
-byte-for-byte when the bundle was swapped at S10 chunk A). It is deliberately
-taken from the release tag, never from that repository's ``main``: the pin
-and the bundle must name the same spec era, and sdp-0.3.0 itself removed
-``methods.schema.json`` from the specification.
+byte-for-byte when the bundle was swapped at S10 chunk A), save the one file
+``sdp_schema``'s module docstring names, with what retires it. It is
+deliberately taken from the release tag, not from that repository's ``main``,
+that one file apart: the pin and the bundle must name the same spec era, and
+sdp-0.3.0 itself removed ``methods.schema.json`` from the specification.
 
 These tests are the guard against the two ways a vendored bundle rots: the
 files silently disappearing from the wheel, and the code drifting away from
