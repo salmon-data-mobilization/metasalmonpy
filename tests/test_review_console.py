@@ -1416,6 +1416,71 @@ def _assert_same_bytes(before: dict, after: dict) -> None:
         assert after[name] == payload, name
 
 
+def test_hand_picking_a_lower_ranked_owl_class_candidates_iri_writes_its_term_type_and_a_rebuild_reapplies_the_same_bytes(
+    typed_package,
+):
+    package = typed_package()
+    review = review_semantics(str(package))
+    # The premise, asserted rather than assumed: the IRI is a candidate's below
+    # rank 1, that candidate is an ``owl_class``, and the rank-1 candidate is not.
+    slot = _variable_slot(review)
+    assert list(slot.loc[slot["iri"] == OWL_CLASS_IRI, "rank"]) == [2]
+    assert list(slot.loc[slot["iri"] == OWL_CLASS_IRI, "term_type"]) == ["owl_class"]
+    assert list(slot.loc[slot["rank"] == 1, "term_type"]) == ["skos_concept"]
+
+    apply_sdp_semantics(
+        str(package),
+        accept_suggestion(review, "spawner_count", "variable", iri=OWL_CLASS_IRI),
+        quiet=True,
+    )
+    assert _written_term(package) == (OWL_CLASS_IRI, "owl_class")
+    first_apply = _managed_bytes(package)
+
+    # The rebuilt review carries the decision, on the candidate's own row, so
+    # re-applying it is a second apply of the same decision.
+    rebuilt = review_semantics(str(package), include_filled=True)
+    replayed = _variable_slot(rebuilt)
+    replayed = replayed[replayed["decision"].notna()]
+    assert list(replayed["decision"]) == ["accept"]
+    assert list(replayed["decision_iri"]) == [OWL_CLASS_IRI]
+    assert list(replayed["rank"]) == [2]
+
+    apply_sdp_semantics(str(package), rebuilt, quiet=True)
+    # ``datapackage.json`` carries ``term_type`` too, so it has to hold still as
+    # well as ``column_dictionary.csv``.
+    _assert_same_bytes(first_apply, _managed_bytes(package))
+
+
+def _decided(review: SemanticReview) -> list:
+    """Where a review's decisions sit: slot, rank, decision and IRI of each."""
+    rows = review.rows
+    decided = rows[rows["decision"].notna()]
+    return list(
+        zip(
+            decided["slot_id"],
+            decided["rank"],
+            decided["decision"],
+            decided["decision_iri"],
+        )
+    )
+
+
+def test_accept_iri_naming_a_shortlisted_candidate_records_what_rank_records(
+    typed_package,
+):
+    review = review_semantics(str(typed_package()))
+    by_rank = accept_suggestion(review, "spawner_count", "variable", rank=2)
+    # The marker is stripped before the IRI is compared, so a marked spelling of
+    # the candidate's IRI is the same decision.
+    for iri in (OWL_CLASS_IRI, "REVIEW: " + OWL_CLASS_IRI):
+        by_iri = accept_suggestion(review, "spawner_count", "variable", iri=iri)
+        # Where the decision sits, first: ``assert_frame_equal`` raises a
+        # ``TypeError`` rather than a diff where a ``pd.NA`` faces a value
+        # (pandas 3.0.6), so this is the assertion that says what differs.
+        assert _decided(by_iri) == _decided(by_rank), iri
+        pd.testing.assert_frame_equal(by_iri.rows, by_rank.rows)
+
+
 def test_an_iri_no_candidate_carries_still_writes_skos_concept_whatever_the_first_candidate_is(
     typed_package,
 ):
