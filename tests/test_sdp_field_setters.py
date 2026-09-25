@@ -357,6 +357,82 @@ def test_a_prose_placeholder_is_not_reclassified_as_an_iri_gap(raw_package):
     assert creator["reason"].iloc[0] == "placeholder"
 
 
+#: Three ways to leave ``tables.csv``'s ``observation_unit_iri`` and a
+#: measurement column's ``unit_iri`` unfilled: the value planted in each, and
+#: the one reason the scan must give for each field.
+_UNFILLED_IRI_STATES = {
+    # Reported by the field loop, which reports a placeholder in any field.
+    "prose placeholder": (
+        "MISSING METADATA: add the observation unit IRI.",
+        "REVIEW REQUIRED: pick a unit.",
+        "placeholder",
+    ),
+    # What the observation-unit and measurement-IRI branches exist to catch.
+    "blank": (None, None, "iri"),
+    # Reported by the field loop's marker branch.
+    "REVIEW: marker": ("REVIEW:" + SPAWNER_IRI, "REVIEW:" + SPAWNER_IRI, "iri"),
+}
+
+
+@pytest.mark.parametrize("state", sorted(_UNFILLED_IRI_STATES))
+def test_an_unfilled_iri_field_is_reported_once_and_its_call_runs(
+    raw_package, state
+):
+    """One field, one gap row, one keyword in the printed call (hub B-212).
+
+    A prose placeholder in ``observation_unit_iri`` or a measurement IRI was
+    reported twice: as a placeholder by the field loop, then as an IRI by the
+    branch for that field, which asked ``_is_unfilled_metadata()`` and so
+    counted the placeholder as unfilled a second time. The printed
+    ``set_sdp_table()`` and ``set_sdp_column()`` calls then named the field
+    twice, and Python refuses a repeated keyword argument, so the calls could
+    not be run. The blank and ``REVIEW:`` states are the ones the fix must not
+    disturb: those branches exist to catch a blank field, and the loop reports
+    a marker once. metasalmon's half is hub B-211.
+    """
+    observation_unit_iri, unit_iri, reason = _UNFILLED_IRI_STATES[state]
+    tables_csv = raw_package / "metadata" / "tables.csv"
+    tables = pd.read_csv(tables_csv, dtype=str)
+    tables.loc[0, "observation_unit_iri"] = observation_unit_iri
+    tables.to_csv(tables_csv, index=False)
+    dict_csv = raw_package / "metadata" / "column_dictionary.csv"
+    dictionary = pd.read_csv(dict_csv, dtype=str)
+    measured = dictionary["column_name"] == "spawner_count"
+    assert list(dictionary.loc[measured, "column_role"]) == ["measurement"]
+    dictionary.loc[measured, "unit_iri"] = unit_iri
+    dictionary.to_csv(dict_csv, index=False)
+
+    planted = [
+        ("tables.csv", "", "observation_unit_iri"),
+        ("column_dictionary.csv", "spawner_count", "unit_iri"),
+    ]
+
+    def reasons(rows, file_name, column_name, field):
+        hit = rows[
+            (rows["file"] == file_name)
+            & (rows["column_name"] == column_name)
+            & (rows["field"] == field)
+        ]
+        return list(hit["reason"])
+
+    rows = review_metadata(str(raw_package)).rows
+    for file_name, column_name, field in planted:
+        assert reasons(rows, file_name, column_name, field) == [reason], field
+
+    # Run what was printed: a call that repeats a keyword fails here.
+    namespace = {
+        "pkg": str(raw_package),
+        "set_sdp_dataset": functools.partial(set_sdp_dataset, quiet=True),
+        "set_sdp_table": functools.partial(set_sdp_table, quiet=True),
+        "set_sdp_column": functools.partial(set_sdp_column, quiet=True),
+        "set_sdp_code": functools.partial(set_sdp_code, quiet=True),
+    }
+    assert _run_printed_calls(raw_package, namespace) > 0
+    rows = review_metadata(str(raw_package)).rows
+    for file_name, column_name, field in planted:
+        assert reasons(rows, file_name, column_name, field) == [], field
+
+
 def test_review_metadata_sees_a_required_column_the_file_does_not_have(
     raw_package,
 ):
