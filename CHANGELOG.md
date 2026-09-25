@@ -511,6 +511,102 @@ and moving it is a separate outward act.
   item **B-211**. A defect the two packages share is not a deliberate
   difference, so this opens no `PARITY.md` row.
 
+* **`read_sssom_mapping_set()` now reads a canonical SSSOM/TSV file, which
+  leaves the built-in prefixes out of its `curie_map`.** Hub queue item
+  **B-234**, the mirror half of metasalmon's **B-233** (metasalmon pull
+  request #162). The reader looked every CURIE prefix up in the file's own
+  `curie_map` and refused any it did not find, so `skos:exactMatch` in a file
+  that did not declare `skos` stopped with *uses unknown CURIE prefix 'skos'*.
+  The SSSOM specification allows exactly that file: `owl`, `rdf`, `rdfs`,
+  `semapv`, `skos`, `sssom`, `xsd` and `linkml` are built-in, they "MAY be
+  omitted from the curie_map", and a canonical SSSOM/TSV writer "MUST NOT
+  include" them. As `mapping_justification` is required and is always a
+  `semapv:` CURIE, every canonical file with a mapping in it was refused. The
+  eight are now accepted undeclared. Every other prefix still has to be
+  declared, since SSSOM/TSV parsers "MUST reject a file with undeclared,
+  non-built-in prefix names", and the match is exact, so `SKOS` is not a
+  built-in.
+
+  One kind of file that used to be accepted is now refused: a `curie_map` that
+  declares a built-in prefix with a different expansion, such as `skos` with
+  `https://www.w3.org/2004/02/skos/core#`. The specification says a declared
+  built-in "MUST point to the same IRI prefixes" as its table, and the old
+  reader, which knew no built-ins, read such an entry as an ordinary
+  declaration. The rule sits with the other CURIE checks, so it holds in
+  `validate_sdp_sssom()` and for an in-memory set passed to `write_sdp_sssom()`,
+  which is refused before anything is written, and `validate=False` skips it
+  as it skips them. The rules are in the model's Identifiers section and the
+  table in the introduction's IRI prefixes section
+  (<https://mapping-commons.github.io/sssom/1.0/spec-model/#identifiers>,
+  <https://mapping-commons.github.io/sssom/1.0/spec-intro/#iri-prefixes>),
+  unchanged in the SSSOM 1.1 draft.
+
+  This applies B-233's reading of the specification rather than deciding it
+  again, and the two readers now accept the same set. Measured 2026-09-25 on
+  twenty files, among them the canonical fixture, each built-in left out, and
+  built-ins declared padded, quoted, redefined and unused: metasalmon `main`
+  `97db837` and this change gave the same verdict on every one. So it is a
+  port and opens no `PARITY.md` row. `tests/test_sssom.py` carries the twins
+  of the six tests B-233 added, on the same canonical fixture, and 14 of their
+  cases failed on `ba1b54a` before the fix.
+
+* **`suggest_semantics()` searches each distinct query, role and sources
+  tuple once, where it searched once per target.** Hub queue item **B-243**,
+  the port of metasalmon's **B-56** (backlog #56, metasalmon pull request
+  #164). Targets repeat a tuple whenever tables share a column or columns
+  fall back to the same unit query: four tables carrying the same two columns
+  are 40 targets and 9 distinct tuples, and all 40 were searches. Now 9 are.
+  A `search_fn` you supply is therefore called fewer times, and a counting or
+  logging one will see it. What each target gets is unchanged. Measured
+  against `main` `ba1b54a`, the object `suggest_semantics()` returns, every
+  attribute included, is equal to before on that fixture and on the bundled
+  example package, whose 35 tuples are all distinct and still make 35 calls.
+  The saving lasts for one call only, so it is not a cache and never outlives
+  a change of settings. An answer whose diagnostics say a source did not
+  answer is never reused, and the next target with that tuple searches again,
+  as `find_terms()` already refuses to cache a degraded lookup. The LLM
+  review's retry searches are unchanged.
+
+  `tests/test_semantic_retrieval_dedup.py` is the twin of metasalmon's
+  `tests/testthat/test-semantic-retrieval-dedup.R`, and its dedup assertions
+  failed on `ba1b54a`: 40 calls for the 9 tuples. This closes R-shipped-first
+  lag and is not a deliberate difference, so it opens no `PARITY.md` row.
+
+* **A line under a released `CHANGELOG.md` heading that the release does not
+  contain now fails a check.** Hub queue item **B-201**, the pair of the hub's
+  **B-200**. AGENTS.md's *Releases* section now carries the rule metasalmon's
+  gained on 2026-09-16: a change merged after the commit that bumped the
+  version, and before that version's tag exists, goes under `## Unreleased`.
+  `scripts/check-changelog-window.py` is its mechanical form. For each
+  released heading it finds the bump commit, which is the `vX.Y.Z` tag or,
+  before the tag exists, the first commit on `main` whose `pyproject.toml`
+  reads the version. It reports every line under the heading that the section
+  did not hold there and that `git blame` gives to a commit that is not an
+  ancestor of it. The new `changelog-window` workflow runs it on every pull
+  request, and AGENTS.md names it as the step before dispatching the Release
+  workflow. `MANIFEST.in` keeps it and its tests out of the distributions.
+
+  Replayed over this repository's history, it finds both instances the
+  changelog has held. At `1e9245c` it reports B-144's 37 lines under
+  `## 0.5.0`, which pull request #35 later moved, and 24 lines under
+  `## 0.2.1` from `10d0616`, the calendar fix. Pull request #10 committed that
+  fix after the commit `v0.2.1` names, so the tag does not contain it, and the
+  lines were still under the tagged heading on `main`. Brett ruled on
+  2026-09-25 that the tag stays. The 0.2.1 entry now carries a dated
+  correction saying so, and the check exempts that one commit's lines for as
+  long as the correction names it. With both in place the check passes over
+  `main`; with either missing it does not.
+
+  The script is a port of the hub's copy rather than a vendored one, because
+  the hub's reads this repository only as a sibling checkout and has nowhere
+  to hold a ruling. `tests/test_check_changelog_window.py` compares every
+  definition the two copies share with the hub's `main`, and the workflow runs
+  that comparison, so neither copy can change alone. The tests build a
+  throwaway repository for each shape the hub's tests cover, and replay
+  `1e9245c` and `3f8349a`. Those replays need a full clone with the tags: CI's
+  suite jobs check out one commit and skip them, and the new workflow runs
+  them strictly.
+
 ### Changed
 
 * **Context documents become the excerpts metasalmon builds.** Hub queue item
@@ -1940,6 +2036,16 @@ rewrite it would have been the more error-prone route. PARITY.md rows 39 and 40 
   class of decay `KnbCoreDependencyTests` was written for. PARITY.md row 40
   registers the open question of whether metasalmon's own date key is
   portable; the hub owns that side.
+
+  *(Correction, 2026-09-25: this fix is not in the `v0.2.1` tag, and neither
+  is PARITY.md row 40, which this entry's first paragraph counts as new. The
+  tag names `f1d9b0e`, the release commit in pull request #10. The fix is
+  `10d0616`, which that pull request committed after it and merged with it as
+  `3fdd323`, the merge that made 0.2.1 the version on `main`. So `main` has
+  carried the fix since 0.2.1 became current there, and the first tag that
+  contains it is `v0.4.0`. The tag stays where it is (Brett, 2026-09-25), and
+  `scripts/check-changelog-window.py` exempts this commit's lines under this
+  heading for as long as this correction names it. Hub queue item B-201.)*
 
 - **Per-resource schema URLs in `datapackage.json` are derived from the loaded
   SDP bundle** rather than composed from a hardcoded constant. 0.2.0 did this
