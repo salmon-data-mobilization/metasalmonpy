@@ -243,19 +243,22 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1012
-passed / 1 skipped with the extras installed, 871 / 142 with core dependencies
-only (2026-09-24, measured locally for hub B-242 under Python 3.11.15, pytest
-9.1.1 and pandas 3.0.6, on a machine where `Rscript` is on `PATH` and
-`/tmp/metasalmon-lib` exists; 1007 / 1 and 866 / 142 for B-240 earlier that
-day, 966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1022
+passed / 1 skipped with the extras installed, 881 / 142 with core dependencies
+only (2026-09-24, measured locally for hub B-241 on the tree of its head
+`5b83c27`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a machine
+where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists; 1012 / 1 and
+871 / 142 for B-242 and 1007 / 1 and 866 / 142 for B-240 earlier that day,
+966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
 on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads two fewer
-passes in each leg for the same tree**: 1010 / 3 and 869 / 144 on B-242's head
-`183f887`. The two are `tests/test_roundtrip.py`, which runs only where both of
-those hold. CI's suite jobs have neither, so it skips there and runs in CI's
-`parity` job instead. The gap between the legs is the extras-gated EML, KNB and
-context-reader tests; the one that skips in both legs, locally and on CI, is
+passes in each leg for the same tree**: 1020 / 3 and 879 / 144 on B-241's head
+`5b83c27`, read from its check logs on 2026-09-24, as B-242's head `183f887`
+read 1010 / 3 and 869 / 144. The two are `tests/test_roundtrip.py`, which runs
+only where both of those hold. CI's suite jobs have neither, so it skips there
+and runs in CI's `parity` job instead. The gap between the legs is the
+extras-gated EML, KNB and context-reader tests; the one that skips in both legs,
+locally and on CI, is
 the Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1`
 is set. These counts are a dated measurement, not a target — update them when
 you add tests rather than treating a mismatch as a failure.
