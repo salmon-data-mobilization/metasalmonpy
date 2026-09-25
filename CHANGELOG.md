@@ -511,7 +511,201 @@ and moving it is a separate outward act.
   item **B-211**. A defect the two packages share is not a deliberate
   difference, so this opens no `PARITY.md` row.
 
+* **`read_sssom_mapping_set()` now reads a canonical SSSOM/TSV file, which
+  leaves the built-in prefixes out of its `curie_map`.** Hub queue item
+  **B-234**, the mirror half of metasalmon's **B-233** (metasalmon pull
+  request #162). The reader looked every CURIE prefix up in the file's own
+  `curie_map` and refused any it did not find, so `skos:exactMatch` in a file
+  that did not declare `skos` stopped with *uses unknown CURIE prefix 'skos'*.
+  The SSSOM specification allows exactly that file: `owl`, `rdf`, `rdfs`,
+  `semapv`, `skos`, `sssom`, `xsd` and `linkml` are built-in, they "MAY be
+  omitted from the curie_map", and a canonical SSSOM/TSV writer "MUST NOT
+  include" them. As `mapping_justification` is required and is always a
+  `semapv:` CURIE, every canonical file with a mapping in it was refused. The
+  eight are now accepted undeclared. Every other prefix still has to be
+  declared, since SSSOM/TSV parsers "MUST reject a file with undeclared,
+  non-built-in prefix names", and the match is exact, so `SKOS` is not a
+  built-in.
+
+  One kind of file that used to be accepted is now refused: a `curie_map` that
+  declares a built-in prefix with a different expansion, such as `skos` with
+  `https://www.w3.org/2004/02/skos/core#`. The specification says a declared
+  built-in "MUST point to the same IRI prefixes" as its table, and the old
+  reader, which knew no built-ins, read such an entry as an ordinary
+  declaration. The rule sits with the other CURIE checks, so it holds in
+  `validate_sdp_sssom()` and for an in-memory set passed to `write_sdp_sssom()`,
+  which is refused before anything is written, and `validate=False` skips it
+  as it skips them. The rules are in the model's Identifiers section and the
+  table in the introduction's IRI prefixes section
+  (<https://mapping-commons.github.io/sssom/1.0/spec-model/#identifiers>,
+  <https://mapping-commons.github.io/sssom/1.0/spec-intro/#iri-prefixes>),
+  unchanged in the SSSOM 1.1 draft.
+
+  This applies B-233's reading of the specification rather than deciding it
+  again, and the two readers now accept the same set. Measured 2026-09-25 on
+  twenty files, among them the canonical fixture, each built-in left out, and
+  built-ins declared padded, quoted, redefined and unused: metasalmon `main`
+  `97db837` and this change gave the same verdict on every one. So it is a
+  port and opens no `PARITY.md` row. `tests/test_sssom.py` carries the twins
+  of the six tests B-233 added, on the same canonical fixture, and 14 of their
+  cases failed on `ba1b54a` before the fix.
+
+* **`suggest_semantics()` searches each distinct query, role and sources
+  tuple once, where it searched once per target.** Hub queue item **B-243**,
+  the port of metasalmon's **B-56** (backlog #56, metasalmon pull request
+  #164). Targets repeat a tuple whenever tables share a column or columns
+  fall back to the same unit query: four tables carrying the same two columns
+  are 40 targets and 9 distinct tuples, and all 40 were searches. Now 9 are.
+  A `search_fn` you supply is therefore called fewer times, and a counting or
+  logging one will see it. What each target gets is unchanged. Measured
+  against `main` `ba1b54a`, the object `suggest_semantics()` returns, every
+  attribute included, is equal to before on that fixture and on the bundled
+  example package, whose 35 tuples are all distinct and still make 35 calls.
+  The saving lasts for one call only, so it is not a cache and never outlives
+  a change of settings. An answer whose diagnostics say a source did not
+  answer is never reused, and the next target with that tuple searches again,
+  as `find_terms()` already refuses to cache a degraded lookup. The LLM
+  review's retry searches are unchanged.
+
+  `tests/test_semantic_retrieval_dedup.py` is the twin of metasalmon's
+  `tests/testthat/test-semantic-retrieval-dedup.R`, and its dedup assertions
+  failed on `ba1b54a`: 40 calls for the 9 tuples. This closes R-shipped-first
+  lag and is not a deliberate difference, so it opens no `PARITY.md` row.
+
+* **A line under a released `CHANGELOG.md` heading that the release does not
+  contain now fails a check.** Hub queue item **B-201**, the pair of the hub's
+  **B-200**. AGENTS.md's *Releases* section now carries the rule metasalmon's
+  gained on 2026-09-16: a change merged after the commit that bumped the
+  version, and before that version's tag exists, goes under `## Unreleased`.
+  `scripts/check-changelog-window.py` is its mechanical form. For each
+  released heading it finds the bump commit, which is the `vX.Y.Z` tag or,
+  before the tag exists, the first commit on `main` whose `pyproject.toml`
+  reads the version. It reports every line under the heading that the section
+  did not hold there and that `git blame` gives to a commit that is not an
+  ancestor of it. The new `changelog-window` workflow runs it on every pull
+  request, and AGENTS.md names it as the step before dispatching the Release
+  workflow. `MANIFEST.in` keeps it and its tests out of the distributions.
+
+  Replayed over this repository's history, it finds both instances the
+  changelog has held. At `1e9245c` it reports B-144's 37 lines under
+  `## 0.5.0`, which pull request #35 later moved, and 24 lines under
+  `## 0.2.1` from `10d0616`, the calendar fix. Pull request #10 committed that
+  fix after the commit `v0.2.1` names, so the tag does not contain it, and the
+  lines were still under the tagged heading on `main`. Brett ruled on
+  2026-09-25 that the tag stays. The 0.2.1 entry now carries a dated
+  correction saying so, and the check exempts that one commit's lines for as
+  long as the correction names it. With both in place the check passes over
+  `main`; with either missing it does not.
+
+  The script is a port of the hub's copy rather than a vendored one, because
+  the hub's reads this repository only as a sibling checkout and has nowhere
+  to hold a ruling. `tests/test_check_changelog_window.py` compares every
+  definition the two copies share with the hub's `main`, and the workflow runs
+  that comparison, so neither copy can change alone. The tests build a
+  throwaway repository for each shape the hub's tests cover, and replay
+  `1e9245c` and `3f8349a`. Those replays need a full clone with the tags: CI's
+  suite jobs check out one commit and skip them, and the new workflow runs
+  them strictly.
+
+* **`review_metadata()`'s console counts an IRI field reported as a
+  placeholder as an IRI, so it points at `review_semantics()` whenever an IRI
+  field is a gap.** Hub queue item **B-244**, the port of the footer half of
+  metasalmon's **B-211** (metasalmon pull request #170). The scan keeps one
+  row per field (hub item **B-212**, above), so a placeholder in an IRI field
+  keeps its `placeholder` row and gets no `iri` row. The footer counted IRI
+  gaps by the reason a row kept, so that field fell out of the count, and when
+  every IRI gap was a placeholder the footer dropped its line pointing at
+  `review_semantics()`. Measured on `66ad1a3`, on a package whose only gaps
+  were `MISSING METADATA:` in `tables.csv`'s `observation_unit_iri` and
+  `REVIEW REQUIRED:` in a measurement column's `unit_iri`: both rows came back
+  as `placeholder`, and the footer read *2 fields still block strict
+  validation.* with no IRI line. It now counts the rows whose field ends in
+  `_iri`, as metasalmon's footer does, and adds *2 of them are IRIs --
+  review_semantics() shows candidates for any that have them.* Every row the
+  old count found has such a field, so the count only gains IRI fields
+  reported under another reason: a placeholder, or `required` under a selected
+  schema that calls an IRI field required. The rows `review_metadata()`
+  returns and the calls it prints do not change.
+  `tests/test_sdp_field_setters.py` twins metasalmon's test, with every IRI
+  gap a placeholder, and it failed on the footer as it stood. metasalmon fixed
+  the footer first, so this closes R-shipped-first lag and is not a deliberate
+  difference; it opens no `PARITY.md` row.
+
+* **`create_sdp()` with its defaults no longer raises once two targets get
+  search candidates.** Hub queue item **B-370**. Every `find_terms()` answer
+  carries its per-source diagnostics in `attrs["diagnostics"]`, a DataFrame.
+  The retrieval loop in `suggest_semantics()` copied each answer with its
+  `attrs`, and `pd.concat()` compares its inputs' `attrs` whenever every input
+  has some. A DataFrame there has no single truth value, so the call raised
+  `ValueError` as soon as two targets got candidates. `create_sdp()` and
+  `infer_dictionary(seed_semantics=True)` seed through that loop with
+  `find_terms()` as the search, so both raised on any table a search could
+  answer for two targets, and so did `suggest_semantics()` with its default
+  search or with a `search_fn` whose answers carry a DataFrame in `attrs`.
+  Measured on `main` `380a7a4`, with every search source patched and the
+  network refused, each of those raised under pandas 3.0.6 in both dependency
+  legs, and under 2.2.3 and 1.5.3 with core dependencies, and each now
+  completes.
+
+  The loop's own copy of each answer now drops the answer's `attrs`, so the
+  candidate frames reach `pd.concat()` without them. The answer itself is not
+  touched, and what a caller reads from `find_terms()`'s `attrs` is
+  unchanged. One consequence is observable: when exactly one target got
+  candidates, the `semantic_suggestions` frame inherited that one search's
+  diagnostics in its own `attrs`, and it now carries none, as it already did
+  whenever the answers carried no `attrs`. With `llm_assess=True`, the
+  review's retry merge raised the same way on `main` when the first pass left
+  one candidate frame. It completes now, because the frame it merges into no
+  longer carries `attrs`.
+
+  `tests/test_search_answer_attrs.py` pins `suggest_semantics()` and
+  `create_sdp()` with its defaults, and failed on `380a7a4`. The lasting
+  outage in `tests/test_semantic_retrieval_dedup.py` now answers with one
+  candidate per target, as metasalmon's twin does, which the crash had
+  prevented. There is no metasalmon half, because R has no counterpart of
+  pandas' `attrs` comparison.
+
 ### Changed
+
+* **Context documents become the excerpts metasalmon builds.** Hub queue item
+  **B-364**, ruled 2026-09-25 when Brett took every recommendation in section
+  10 of the S16 execplan (decision 4, section 2.7): the two packages are about
+  to share one review-packet file, so a context document has to become the
+  same excerpts on both sides. `llm_review.py` now mirrors
+  `R/llm-semantic-helpers.R` step for step — metasalmon's extension list
+  (`.ipynb` is no longer read; an unsupported or empty file is skipped with a
+  warning, as R skips it); R's text extraction for text formats (UTF-8, then
+  Windows-1252 with its five undefined bytes dropped, then latin-1; a
+  byte-order mark discarded; CRLF and a bare CR to LF; front matter and fence
+  lines dropped for `.rmd` and `.qmd` only; no whitespace collapsing, where
+  this package used to fold every run into one space); 2200-character chunks
+  with 200 of overlap in place of 1400 with none; R's source labels (a
+  colliding basename gains its parent directory, then base R's
+  `make.unique(sep = " #")`, in place of a ` [2]` counter) and chunk ids
+  (`<source>#<n>`, `inline_context[<i>]#<n>`); token-overlap scoring over
+  lowercase ASCII tokens of three or more characters — the count of distinct
+  query tokens present in the chunk, drawn from the target's search query,
+  labels and descriptions **and the candidates' labels and definitions**, where
+  this package scored substring hits over the target text alone; ties broken
+  on the shorter chunk, then the source label in C collation, the radix order
+  metasalmon's scorer takes under hub item B-326; and four excerpts per
+  target, two on OpenRouter's free tier, in place of eight. A bundle's excerpts
+  are the union of its roles' picks in role order, deduplicated and cut to the
+  limit, as `.ms_semantic_bundle_context_chunks()` builds them.
+
+  Pinned by `tests/test_context_parity.py` on text-only fixtures under
+  `tests/data/context_parity/`: `expected.json` is what metasalmon's own
+  `.ms_collect_context_chunks()` and `.ms_score_context_chunks()` produced for
+  them (`expected-from-r.R` beside it, run against metasalmon `main` at
+  `98cb9e6`), the offline tests hold this package to it, and the `parity` job
+  re-runs the R script so a change on either side turns CI red. Measured
+  before the change on the same fixtures: 23 chunks of at most 1400 collapsed
+  characters against R's 21 of at most 2200; after it, the pool and every
+  scored ranking are identical. Library-specific extraction for PDF, DOCX,
+  spreadsheets and HTML is deliberately outside the pin and is **`PARITY.md`
+  row 62**, twinned in the hub's `knowledge/parity-deviations.md`.
+  `load_context_chunks()` keeps its signature; its `chunk_size` default moves
+  to 2200 and it gains `overlap=200`.
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
   Hub queue item **B-166**, the twin of the copy metasalmon made in its pull
@@ -622,8 +816,38 @@ and moving it is a separate outward act.
   `codes.csv` row targets a non-categorical column, on every bundled example.
   The test that pinned the two date columns as a known residual is deleted.
   Apart from the one case above, this ports R's behaviour. That case is
-  `PARITY.md` row **62**, and Brett ruled on 2026-09-25 that R moves to match
+  `PARITY.md` row **64**, and Brett ruled on 2026-09-25 that R moves to match
   (hub B-310).
+
+### Parity evidence
+
+* **Two tests pin that the EML `calendarDate` carries the spelling
+  `metadata/dataset.csv` holds.** Hub queue item **B-245**, the mirror half of
+  the hub's **B-162**: these are the twins of the two tests B-162 added to
+  metasalmon's `tests/testthat/test-canonical-date-render.R`. No behaviour
+  changed. `eml._add_coverage()` writes `temporal_start` and `temporal_end`
+  through `_as_character()`, which reads like a third renderer beside the two
+  writers. B-162 answered for R that it is not one, and the same construction
+  holds here: `write_eml_from_sdp()` reads the package back from disk, where
+  `read_sdp_csv()` reads every column as `str`, so the EML copies the one
+  rendering a writer made. Nothing pinned that.
+
+  The first test writes `datetime.date(999, 1, 1)` and
+  `datetime.date(2024, 12, 31)` through `write_salmon_datapackage()` and
+  exports the package through `write_eml_from_sdp()`, schema check included.
+  Both `calendarDate` values must equal the `dataset.csv` cells and
+  `datapackage.json`'s `temporal`, and read `0999-01-01` and `2024-12-31`. The
+  second writes the text `999-06-05`. That is not an `xs:date`, so the exported
+  call refuses it, and the test builds the coverage from the frame
+  `validate_salmon_datapackage()` returns as `package`, which is the frame the
+  builder receives. Its `calendarDate` must equal the `dataset.csv` cell. Both
+  pass on the code as it stands, and each fails under a mutation that
+  re-renders the value at the two `calendarDate` lines.
+
+  They live in `tests/test_platform_determinism_guard.py`, after the twins of
+  B-115's writer tests, as they do in metasalmon. The first needs the `[eml]`
+  extra and skips without it; the second runs in both dependency legs. The EML
+  behaves here as it does in metasalmon, so this opens no `PARITY.md` row.
 
 ## 0.5.0
 
@@ -1940,6 +2164,16 @@ rewrite it would have been the more error-prone route. PARITY.md rows 39 and 40 
   class of decay `KnbCoreDependencyTests` was written for. PARITY.md row 40
   registers the open question of whether metasalmon's own date key is
   portable; the hub owns that side.
+
+  *(Correction, 2026-09-25: this fix is not in the `v0.2.1` tag, and neither
+  is PARITY.md row 40, which this entry's first paragraph counts as new. The
+  tag names `f1d9b0e`, the release commit in pull request #10. The fix is
+  `10d0616`, which that pull request committed after it and merged with it as
+  `3fdd323`, the merge that made 0.2.1 the version on `main`. So `main` has
+  carried the fix since 0.2.1 became current there, and the first tag that
+  contains it is `v0.4.0`. The tag stays where it is (Brett, 2026-09-25), and
+  `scripts/check-changelog-window.py` exempts this commit's lines under this
+  heading for as long as this correction names it. Hub queue item B-201.)*
 
 - **Per-resource schema URLs in `datapackage.json` are derived from the loaded
   SDP bundle** rather than composed from a hardcoded constant. 0.2.0 did this

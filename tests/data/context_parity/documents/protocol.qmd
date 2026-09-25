@@ -1,0 +1,14 @@
+---
+title: "Field protocol"
+format: html
+---
+
+# Fork length
+
+Fork length was measured in the field with a measuring board.
+
+```{r}
+summary(fish$fork_length_mm)
+```
+
+Water temperature was logged hourly at the weir.

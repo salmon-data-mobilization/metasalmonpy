@@ -1,0 +1,89 @@
+name: changelog-window
+
+# Why this workflow exists.
+#
+# AGENTS.md's Releases rule (Brett, 2026-09-16, for both packages): a change
+# that merges after the commit that bumped the version, and before that
+# version's tag exists, is filed under `## Unreleased` -- never under the
+# version it did not ship in -- and the tag stays on the bump commit. The
+# window between bump and tag opens on every release, because the tag is a
+# separate act from the bump, and here it was missed within a minute of
+# opening: B-144's merge b939fd9 landed 21 seconds after the bump merge
+# 67fb486 and carried its entry under `## 0.5.0`. Nothing said so until
+# somebody diffed a tag against its changelog.
+#
+# `scripts/check-changelog-window.py` is the rule's mechanical form (hub item
+# B-201; the hub's copy is B-200), and this job runs it on every pull request,
+# so a line filed under a released heading fails a check at the time rather
+# than surfacing weeks later.
+#
+# On every pull request, with no path filter, on purpose. The line that breaks
+# the rule arrives in CHANGELOG.md, but whether a heading is released is
+# decided by pyproject.toml and the tags, and the job is cheap. A path filter
+# is the one part of a guard its own tests cannot reach.
+#
+# It also clones the hub. The script is a port of the hub's copy, and the test
+# file compares every definition the two share with the hub's `main`, so a
+# change to either copy is red here until the other follows it. That is the
+# point, and the remedy for that red is a re-port, never a pinned clone.
+#
+# RETIREMENT CONDITION: delete this workflow with the script, whose docstring
+# says when that is -- once the changelog stops being written by hand, a line
+# can no longer be filed under a version it did not ship in.
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+# Read-only: this job reads history and writes nothing.
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-window-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  released-headings-hold-only-what-shipped:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # The whole history and the tags, because the check reads `git blame` and
+      # `git merge-base --is-ancestor` across every release and looks each
+      # version's tag up by name. A shallow clone is refused by the script with
+      # exit 2 rather than read as clean, so a later change to this depth fails
+      # loudly -- do not "fix" that by making the step continue-on-error.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 3.12 rather than the 3.11 the suite jobs use: run directly, an empty
+      # unittest run exits 5 on 3.12 and 0 on 3.11 (measured by the hub on
+      # 2026-09-25), so this is what makes a test file whose tests vanished
+      # fail here. Nothing is installed; the script and its tests need only
+      # the standard library and git.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # One commit is enough: the comparison reads one file at the hub's tip.
+      - name: Clone the hub, whose copy of the check this one must match
+        run: git clone --depth 1 https://github.com/salmon-data-mobilization/metasalmon /tmp/metasalmon
+
+      # The RED demonstrations, run before the script is trusted over this
+      # repository: throwaway repositories for each shape, this repository's
+      # own history at 1e9245c and 3f8349a, and the comparison with the hub's
+      # copy. CHANGELOG_WINDOW_STRICT turns every skip for want of history,
+      # tags or the hub's checkout into a failure, because in this job each of
+      # those is present by construction, and a guard that skips here has not
+      # run anywhere.
+      - name: The check turns red on the shapes it exists for, and matches the hub's copy
+        env:
+          CHANGELOG_WINDOW_STRICT: "1"
+          METASALMON_PATH: /tmp/metasalmon
+        run: python3 tests/test_check_changelog_window.py
+
+      - name: Released headings in CHANGELOG.md hold only what shipped
+        run: python3 scripts/check-changelog-window.py
