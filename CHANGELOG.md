@@ -511,6 +511,67 @@ and moving it is a separate outward act.
   item **B-211**. A defect the two packages share is not a deliberate
   difference, so this opens no `PARITY.md` row.
 
+* **`read_sssom_mapping_set()` now reads a canonical SSSOM/TSV file, which
+  leaves the built-in prefixes out of its `curie_map`.** Hub queue item
+  **B-234**, the mirror half of metasalmon's **B-233** (metasalmon pull
+  request #162). The reader looked every CURIE prefix up in the file's own
+  `curie_map` and refused any it did not find, so `skos:exactMatch` in a file
+  that did not declare `skos` stopped with *uses unknown CURIE prefix 'skos'*.
+  The SSSOM specification allows exactly that file: `owl`, `rdf`, `rdfs`,
+  `semapv`, `skos`, `sssom`, `xsd` and `linkml` are built-in, they "MAY be
+  omitted from the curie_map", and a canonical SSSOM/TSV writer "MUST NOT
+  include" them. As `mapping_justification` is required and is always a
+  `semapv:` CURIE, every canonical file with a mapping in it was refused. The
+  eight are now accepted undeclared. Every other prefix still has to be
+  declared, since SSSOM/TSV parsers "MUST reject a file with undeclared,
+  non-built-in prefix names", and the match is exact, so `SKOS` is not a
+  built-in.
+
+  One kind of file that used to be accepted is now refused: a `curie_map` that
+  declares a built-in prefix with a different expansion, such as `skos` with
+  `https://www.w3.org/2004/02/skos/core#`. The specification says a declared
+  built-in "MUST point to the same IRI prefixes" as its table, and the old
+  reader, which knew no built-ins, read such an entry as an ordinary
+  declaration. The rule sits with the other CURIE checks, so it holds in
+  `validate_sdp_sssom()` and for an in-memory set passed to `write_sdp_sssom()`,
+  which is refused before anything is written, and `validate=False` skips it
+  as it skips them. The rules are in the model's Identifiers section and the
+  table in the introduction's IRI prefixes section
+  (<https://mapping-commons.github.io/sssom/1.0/spec-model/#identifiers>,
+  <https://mapping-commons.github.io/sssom/1.0/spec-intro/#iri-prefixes>),
+  unchanged in the SSSOM 1.1 draft.
+
+  This applies B-233's reading of the specification rather than deciding it
+  again, and the two readers now accept the same set. Measured 2026-09-25 on
+  twenty files, among them the canonical fixture, each built-in left out, and
+  built-ins declared padded, quoted, redefined and unused: metasalmon `main`
+  `97db837` and this change gave the same verdict on every one. So it is a
+  port and opens no `PARITY.md` row. `tests/test_sssom.py` carries the twins
+  of the six tests B-233 added, on the same canonical fixture, and 14 of their
+  cases failed on `ba1b54a` before the fix.
+
+* **`suggest_semantics()` searches each distinct query, role and sources
+  tuple once, where it searched once per target.** Hub queue item **B-243**,
+  the port of metasalmon's **B-56** (backlog #56, metasalmon pull request
+  #164). Targets repeat a tuple whenever tables share a column or columns
+  fall back to the same unit query: four tables carrying the same two columns
+  are 40 targets and 9 distinct tuples, and all 40 were searches. Now 9 are.
+  A `search_fn` you supply is therefore called fewer times, and a counting or
+  logging one will see it. What each target gets is unchanged. Measured
+  against `main` `ba1b54a`, the object `suggest_semantics()` returns, every
+  attribute included, is equal to before on that fixture and on the bundled
+  example package, whose 35 tuples are all distinct and still make 35 calls.
+  The saving lasts for one call only, so it is not a cache and never outlives
+  a change of settings. An answer whose diagnostics say a source did not
+  answer is never reused, and the next target with that tuple searches again,
+  as `find_terms()` already refuses to cache a degraded lookup. The LLM
+  review's retry searches are unchanged.
+
+  `tests/test_semantic_retrieval_dedup.py` is the twin of metasalmon's
+  `tests/testthat/test-semantic-retrieval-dedup.R`, and its dedup assertions
+  failed on `ba1b54a`: 40 calls for the 9 tuples. This closes R-shipped-first
+  lag and is not a deliberate difference, so it opens no `PARITY.md` row.
+
 ### Changed
 
 * **A target's shortlist comes through one function, and a second retrieval
@@ -582,11 +643,16 @@ and moving it is a separate outward act.
   package had no retry pass, is amended in place; both halves had gone stale.
 
   **B-243** (`suggest_semantics()` searching each distinct query, role and
-  sources tuple once per call) touches this loop and had not landed when this
-  was written: it is `ready` and unclaimed in the hub queue, with no branch in
-  this repository. Whichever lands second rebases onto the other; the natural
-  seam is that B-243's once-per-call wrapper takes the place of `search_fn`
-  around the extracted function, as `.ms_search_once_per_call()` does in R.
+  sources tuple once per call) touches this loop. It had not landed when this
+  entry was first written, and it landed first, on `main` at `0235487` (pull
+  request #57, 2026-09-25), so this change is the one that took the other in:
+  `main` was merged into the branch, and B-243's once-per-call wrapper is
+  what `suggest_semantics()` now hands the extracted function as its
+  `search_fn`, as `.ms_search_once_per_call()` wraps
+  `.ms_retrieve_semantic_target_candidates()` in R. The pass-1 pin was
+  re-captured on `main` at `0235487` -- after B-243, before the move -- and
+  is identical to the capture at `ba1b54a`, the fixture's 26 targets being 26
+  distinct tuples, so the committed pin stands.
 
   The three pass-1 differences above were **found and left in place for pass
   1**, because the item requires pass-1 output unchanged and none is
