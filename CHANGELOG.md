@@ -817,6 +817,46 @@ and moving it is a separate outward act.
   opens no `PARITY.md` row. Row **53** is amended in place, because it described
   the defect as present on both sides.
 
+* **`create_sdp()` no longer seeds a code list for a date column.** Hub queue
+  item **B-188**. `pandas.read_csv` reads a column of ISO dates as text, and the
+  code-row seeder, `metadata.code_list_values()`, accepted any `object` or
+  string column. So on the bundled 30-row sample `START_DTT` and `END_DTT` each
+  carried fourteen `codes.csv` rows while the dictionary typed them `temporal`,
+  and the specification's validator (`scripts/validate_package.py` in
+  smn-data-pkg) reports every such row as targeting "a non-categorical or
+  unknown column". metasalmon cannot write those rows: `readr::read_csv()` reads
+  the same column as a `Date`, and its seeder selects only character and factor
+  columns.
+
+  The seeder now applies R's guard the way `apply_salmon_dictionary()` does
+  (hub B-241): a Categorical, a string column, or an `object` column of text. An
+  `object` column that mixes text with other values still seeds, as before,
+  because R holds any vector with text in it as character. An
+  `object` column of `datetime.date`, `datetime`, number or logical values
+  seeds nothing, as a `Date`, `POSIXct`, numeric or logical column seeds
+  nothing in R. Text that readr would read as a date or a date-time seeds
+  nothing either. That means every present value has the date shape readr
+  guesses (`2001-11-06`, `2001/11/06`), or every present value is a date-time
+  that `readr::parse_datetime()` accepts. The boundary was measured against
+  readr 2.2.0 and is pinned token by token in
+  `tests/test_codes_target_categorical.py`. A Categorical still seeds whatever
+  its values are, as a factor does in R. Text that readr reads as a time of day
+  still seeds a code list. One case now differs from R. metasalmon's seeder,
+  handed the same dates as a character vector rather than through readr, still
+  lists them, because its guard reads the class alone. This package cannot tell
+  that case apart, since `pandas.read_csv` gives it text either way.
+
+  The role heuristic reads the same predicate (hub B-125). So a column of date
+  text whose name has no time word is now typed `attribute`, where it was typed
+  `categorical` and given a code list. On the bundled sample `create_sdp()` now
+  seeds the same 129 rows over the same twelve columns as metasalmon, and
+  `tests/test_codes_target_categorical.py` asserts R's plain condition, that no
+  `codes.csv` row targets a non-categorical column, on every bundled example.
+  The test that pinned the two date columns as a known residual is deleted.
+  Apart from the one case above, this ports R's behaviour. That case is
+  `PARITY.md` row **64**, and Brett ruled on 2026-09-25 that R moves to match
+  (hub B-310).
+
 ### Parity evidence
 
 * **Two tests pin that the EML `calendarDate` carries the spelling
