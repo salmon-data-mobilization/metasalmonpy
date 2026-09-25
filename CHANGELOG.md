@@ -550,6 +550,30 @@ and moving it is a separate outward act.
   of the six tests B-233 added, on the same canonical fixture, and 14 of their
   cases failed on `ba1b54a` before the fix.
 
+* **`review_metadata()`'s console counts an IRI field reported as a
+  placeholder as an IRI, so it points at `review_semantics()` whenever an IRI
+  field is a gap.** Hub queue item **B-244**, the port of the footer half of
+  metasalmon's **B-211** (metasalmon pull request #170). The scan keeps one
+  row per field (hub item **B-212**, above), so a placeholder in an IRI field
+  keeps its `placeholder` row and gets no `iri` row. The footer counted IRI
+  gaps by the reason a row kept, so that field fell out of the count, and when
+  every IRI gap was a placeholder the footer dropped its line pointing at
+  `review_semantics()`. Measured on `66ad1a3`, on a package whose only gaps
+  were `MISSING METADATA:` in `tables.csv`'s `observation_unit_iri` and
+  `REVIEW REQUIRED:` in a measurement column's `unit_iri`: both rows came back
+  as `placeholder`, and the footer read *2 fields still block strict
+  validation.* with no IRI line. It now counts the rows whose field ends in
+  `_iri`, as metasalmon's footer does, and adds *2 of them are IRIs --
+  review_semantics() shows candidates for any that have them.* Every row the
+  old count found has such a field, so the count only gains IRI fields
+  reported under another reason: a placeholder, or `required` under a selected
+  schema that calls an IRI field required. The rows `review_metadata()`
+  returns and the calls it prints do not change.
+  `tests/test_sdp_field_setters.py` twins metasalmon's test, with every IRI
+  gap a placeholder, and it failed on the footer as it stood. metasalmon fixed
+  the footer first, so this closes R-shipped-first lag and is not a deliberate
+  difference; it opens no `PARITY.md` row.
+
 ### Changed
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
