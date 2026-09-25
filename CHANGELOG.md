@@ -262,8 +262,9 @@ and moving it is a separate outward act.
 * **`detect_semantic_term_gaps()` no longer reports an ontology gap for a slot
   the reviewer has just filled by hand.** Ported from metasalmon pull request
   #146 (hub queue item **B-176**), as hub queue item **B-216**.
-  `apply_sdp_semantics()` records an `accept_suggestion(iri=...)` decision as a
-  row of its own in `semantic_suggestions.csv`, with `source` `user`, and the
+  `apply_sdp_semantics()` records a hand-picked accept, an
+  `accept_suggestion(iri=...)` whose IRI no retrieved candidate carries, as a
+  row of its own in `semantic_suggestions.csv`, with `source` `user`. The
   detector counted that row as retrieval evidence. Its blank `search_query`
   made it a target of its own whose only candidate was not `smn`. So when the
   post-review file was passed as `suggestions`, the output gained one more
