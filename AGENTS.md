@@ -301,9 +301,10 @@ earlier that day, 1022 / 1 and 881 / 142 for B-241 on the tree of its head
 966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
 on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads five fewer
-passes in each leg for the same tree**: 1113 / 7 and 972 / 148 on B-201's head
-`098030f`, read from its check logs on 2026-09-25. Before B-201 it read two
-fewer, as B-241's head `5b83c27` read 1020 / 3 and 879 / 144 on 2026-09-24 and
+passes in each leg for the same tree**: 1131 / 7 and 990 / 148 on B-201's head
+`1a2fd73`, read from its check logs on 2026-09-25, as its head `098030f`, before
+`main` `66ad1a3` was merged in, read 1113 / 7 and 972 / 148. Before B-201 it
+read two fewer, as B-241's head `5b83c27` read 1020 / 3 and 879 / 144 on 2026-09-24 and
 B-242's head `183f887` read 1010 / 3 and 869 / 144. Two of the five are
 `tests/test_roundtrip.py`, which runs only where both of those hold. CI's suite
 jobs have neither, so it skips there and runs in CI's `parity` job instead. The
