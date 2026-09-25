@@ -107,6 +107,60 @@ def write_raw(path, text):
     return Path(path)
 
 
+def sssom_canonical_text(
+    curie_map=(
+        "#  gcdfo: https://w3id.org/gcdfo/salmon#",
+        "#  psc: https://w3id.org/psc/vocab/concept/",
+    ),
+    predicate_id="skos:exactMatch",
+):
+    """Mirror of the R test helper ``sssom_test_canonical_text``.
+
+    ``sssom_text()``'s mapping set, written in the canonical SSSOM/TSV form
+    (https://mapping-commons.github.io/sssom/1.0/spec-formats-tsv/#canonical-sssomtsv-format):
+    no space between ``#`` and the YAML, slots in the order of the MappingSet
+    "Slots" table (so ``curie_map`` second), plain scalars except
+    ``sssom_version``, which YAML's plain style would read as a number, and a
+    CURIE map holding only the prefixes the set uses, sorted, with no built-in
+    prefix in it, because a canonical writer "MUST NOT include in the CURIE
+    map the prefix names that are considered 'built-in'". So ``skos`` and
+    ``semapv`` are used and never declared.
+    """
+    lines = [
+        '#sssom_version: "1.1"',
+        "#curie_map:",
+        *curie_map,
+        "#mapping_set_id: https://example.org/mappings/psc-to-gcdfo",
+        "#mapping_set_version: 2026-07-31",
+        "#license: https://creativecommons.org/licenses/by/4.0/",
+        "#subject_source: https://w3id.org/psc/vocab/",
+        "#subject_source_version: v0.2.0",
+        "#object_source: https://w3id.org/gcdfo/salmon",
+        "#object_source_version: 0.0.8",
+        "\t".join(
+            (
+                "subject_id",
+                "subject_label",
+                "predicate_id",
+                "object_id",
+                "object_label",
+                "mapping_justification",
+            )
+        ),
+        "\t".join(
+            (
+                "psc:PSC-CV-000001",
+                "Net",
+                predicate_id,
+                "gcdfo:FixedSiteCensusManual",
+                "Fixed Site Census (Manual)",
+                "semapv:ManualMappingCuration",
+            )
+        ),
+    ]
+    return "\n".join(lines) + "\n"
+
+
 # --- byte parity against the R implementation --------------------------------
 
 
@@ -510,6 +564,185 @@ def test_rejects_unknown_prefixes_in_rows(tmp_path):
     path = write_raw(tmp_path / "unknown-prefix.sssom.tsv", text)
     with pytest.raises(ValueError, match="unknown CURIE prefix 'mystery'"):
         read_sssom_mapping_set(path)
+
+
+# --- SSSOM built-in prefixes (hub B-234, the mirror half of B-233) -------------
+#
+# The SSSOM model lets a mapping set omit the built-in prefixes from its
+# curie_map and requires any it declares to keep the built-in IRI prefix:
+# "By exception, prefix names listed in the table found in the IRI prefixes
+# section are considered 'built-in'. As such, they MAY be omitted from the
+# curie_map. If they are not omitted, they MUST point to the same IRI prefixes
+# as in the aforementioned table."
+# (https://mapping-commons.github.io/sssom/1.0/spec-model/#identifiers; the
+# same words on the 1.1 draft at
+# https://mapping-commons.github.io/sssom/dev/spec-model/). The reader used to
+# demand every prefix in the curie_map, so it refused every canonical file,
+# which never declares ``skos`` or ``semapv``. These are the twins of the six
+# tests metasalmon's B-233 added to ``tests/testthat/test-sssom.R``.
+
+# The table in the IRI prefixes section of the specification, in its order
+# (https://mapping-commons.github.io/sssom/1.0/spec-intro/#iri-prefixes,
+# unchanged on the 1.1 draft).
+SSSOM_BUILTIN_PREFIXES = {
+    "owl": "http://www.w3.org/2002/07/owl#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "semapv": "https://w3id.org/semapv/vocab/",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "sssom": "https://w3id.org/sssom/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "linkml": "https://w3id.org/linkml/",
+}
+
+# Every prefix the sets below use, declared, so that only the entry under test
+# decides whether the curie_map is accepted.
+DECLARED_PREFIXES = (
+    "#  gcdfo: https://w3id.org/gcdfo/salmon#",
+    "#  psc: https://w3id.org/psc/vocab/concept/",
+    "#  semapv: https://w3id.org/semapv/vocab/",
+)
+
+
+def test_reads_a_canonical_file_that_omits_the_builtin_prefixes(tmp_path):
+    path = write_raw(tmp_path / "psc-to-gcdfo.sssom.tsv", sssom_canonical_text())
+
+    result = read_sssom_mapping_set(path)
+
+    assert list(result.metadata["curie_map"]) == ["gcdfo", "psc"]
+    assert result.mappings["predicate_id"].tolist() == ["skos:exactMatch"]
+    assert result.mappings["mapping_justification"].tolist() == [
+        "semapv:ManualMappingCuration"
+    ]
+    assert validate_sdp_sssom(path) is True
+
+
+@pytest.mark.parametrize("prefix", list(SSSOM_BUILTIN_PREFIXES))
+def test_each_builtin_prefix_may_be_omitted_from_the_curie_map(tmp_path, prefix):
+    # The local name is a placeholder that nothing dereferences: the reader
+    # checks that a prefix resolves, not what a term means.
+    path = write_raw(
+        tmp_path / f"{prefix}.sssom.tsv",
+        sssom_canonical_text(predicate_id=f"{prefix}:placeholder"),
+    )
+    result = read_sssom_mapping_set(path)
+    assert result.mappings["predicate_id"].tolist() == [f"{prefix}:placeholder"]
+
+
+def test_the_builtin_prefix_table_is_the_specifications():
+    # Pinned because the reader's table is copied from the specification
+    # rather than derived from anything. Compared as items, so the
+    # specification's order is pinned as well.
+    assert list(sssom._BUILTIN_PREFIXES.items()) == list(
+        SSSOM_BUILTIN_PREFIXES.items()
+    )
+
+
+@pytest.mark.parametrize(
+    ("prefix", "text"),
+    [
+        # SSSOM/TSV: "parsers MUST reject a file with undeclared, non-built-in
+        # prefix names". ``dcterms`` is in the SSSOM LinkML schema's own
+        # ``prefixes:`` block and is not built-in, which is the distinction
+        # this pins.
+        ("dcterms", sssom_canonical_text(predicate_id="dcterms:placeholder")),
+        # Differs from a built-in only in case, and prefix names are
+        # case-sensitive.
+        ("SKOS", sssom_canonical_text(predicate_id="SKOS:placeholder")),
+        (
+            "psc",
+            sssom_canonical_text(
+                curie_map=("#  gcdfo: https://w3id.org/gcdfo/salmon#",)
+            ),
+        ),
+    ],
+    ids=["dcterms", "SKOS", "undeclared-psc"],
+)
+def test_an_undeclared_prefix_that_is_not_builtin_is_still_refused(
+    tmp_path, prefix, text
+):
+    path = write_raw(tmp_path / "undeclared.sssom.tsv", text)
+    with pytest.raises(ValueError, match=f"unknown CURIE prefix '{prefix}'"):
+        read_sssom_mapping_set(path)
+
+
+def test_a_curie_map_entry_may_repeat_a_builtin_prefix(tmp_path):
+    path = write_raw(
+        tmp_path / "repeated.sssom.tsv",
+        sssom_canonical_text(
+            curie_map=(
+                *DECLARED_PREFIXES,
+                "#  skos: http://www.w3.org/2004/02/skos/core#",
+            )
+        ),
+    )
+    result = read_sssom_mapping_set(path)
+    assert (
+        result.metadata["curie_map"]["skos"]
+        == "http://www.w3.org/2004/02/skos/core#"
+    )
+
+
+@pytest.mark.parametrize(
+    ("prefix", "entries"),
+    [
+        # The scheme alone is enough to make a different IRI prefix.
+        ("skos", ("#  skos: https://www.w3.org/2004/02/skos/core#",)),
+        # The rule is on the declaration, so it holds for a prefix nothing
+        # uses.
+        (
+            "owl",
+            (
+                "#  owl: https://example.org/owl#",
+                "#  skos: http://www.w3.org/2004/02/skos/core#",
+            ),
+        ),
+    ],
+    ids=["https-skos", "unused-owl"],
+)
+def test_a_curie_map_entry_may_not_redefine_a_builtin_prefix(
+    tmp_path, prefix, entries
+):
+    # Every prefix the set uses is declared, so the reader before hub B-234,
+    # which knew no built-ins, read each redefinition as an ordinary
+    # declaration and accepted the file.
+    path = write_raw(
+        tmp_path / "redefined.sssom.tsv",
+        sssom_canonical_text(curie_map=(*DECLARED_PREFIXES, *entries)),
+    )
+    with pytest.raises(ValueError, match=f"redefines built-in prefix '{prefix}'"):
+        read_sssom_mapping_set(path)
+
+
+def test_write_sdp_sssom_packages_a_canonical_mapping_set(tmp_path):
+    source = write_raw(tmp_path / "psc-to-gcdfo.sssom.tsv", sssom_canonical_text())
+    sdp = tmp_path / "sdp"
+    sdp.mkdir()
+
+    write_sdp_sssom(sdp, mapping_sets=source)
+
+    assert validate_sdp_sssom(sdp) is True
+    written = read_sssom_mapping_set(
+        sdp / "metadata" / "semantic" / "psc-to-gcdfo.sssom.tsv"
+    )
+    assert list(written.metadata["curie_map"]) == ["gcdfo", "psc"]
+
+
+def test_write_sdp_sssom_refuses_an_in_memory_set_that_redefines_a_builtin_prefix(
+    tmp_path,
+):
+    # A parsed set handed to the writer never passes back through the file
+    # parser, so the rule has to hold on the in-memory path as well, and
+    # before anything is written.
+    source = write_raw(tmp_path / "approved.sssom.tsv", sssom_text())
+    redefined = read_sssom_mapping_set(source)
+    redefined.metadata["curie_map"]["skos"] = "https://example.org/skos#"
+    sdp = tmp_path / "sdp"
+    sdp.mkdir()
+
+    with pytest.raises(ValueError, match="redefines built-in prefix 'skos'"):
+        write_sdp_sssom(sdp, mapping_sets=redefined)
+    assert not (sdp / "metadata" / "semantic").exists()
 
 
 def test_rejects_missing_required_columns(tmp_path):
