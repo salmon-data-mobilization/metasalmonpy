@@ -287,6 +287,15 @@ CI, whose checkout is always named `metasalmonpy`, sees a regression. Retire
 this note with the conftest's measures, when the package moves into its own
 `src/metasalmonpy/` directory.
 
+**A test imports the package's modules through the package**, as
+`from metasalmonpy.validation import validate_semantics`, never as
+`from validation import ...`. A top-level name resolves only when the checkout
+root is on `sys.path`: `python -m pytest` from the root puts it there, and bare
+`pytest` does not. So two test modules passed CI and stopped the documented
+`pytest -q` at two collection errors until 2026-09-25 (hub **B-227**).
+`parity.yml`'s `bare-pytest` job now runs that command, so the next import by
+top-level name fails a pull request.
+
 **A pytest run tests the tree it lives in, and nothing else does that for
 you.** `package-dir` makes an editable install register an import finder
 pinned to the *absolute path it was installed from*. That finder sits after
@@ -332,7 +341,8 @@ uv pip install --python /tmp/coreenv/bin/python -e .
 /tmp/coreenv/bin/python -m pytest tests/ -q      # must be green
 ```
 
-**CI runs the suite twice**, as the two legs of the `python` matrix in
+**CI runs the suite in both configurations**, as the two legs of the
+`python` matrix in
 `.github/workflows/parity.yml`: *core dependencies only* installs `.[test]` and
 is the run this recipe describes; *with `[eml]` and `[context]` extras* installs
 `.[test,eml,context]` and is the only run that executes the extras-gated tests
