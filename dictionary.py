@@ -14,6 +14,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 from .metadata import (
     READR_TRIM_CHARS,
+    _code_list_applies,
     ensure_resource_mapping,
     infer_codes_from_resources,
     infer_dataset_metadata_from_resources,
@@ -832,30 +833,6 @@ def _apply_dictionary_present(series: pd.Series) -> pd.Series:
     ``trimws()`` strips, for the reason ``validate_dictionary()`` gives.
     """
     return series.notna() & (series.astype(str).str.strip(READR_TRIM_CHARS) != "")
-
-
-def _code_list_applies(column) -> bool:
-    """R's guard on the codes step: ``inherits(x, "character") || inherits(x, "factor")``.
-
-    So a code list applies to a Categorical, a string column, or an ``object``
-    column whose values are text. A numeric, logical or date column keeps its
-    values and its dtype and is not reported, as in R. Matching its values
-    against the text of ``codes.csv`` would blank every one of them. The text
-    test reads the values rather than the dtype because the ``date`` value type
-    leaves an ``object`` column of ``datetime.date``, which R holds as a
-    ``Date``. ``metadata.code_list_values()`` mirrors the same R guard by dtype
-    alone, which is right there because it reads data before any coercion.
-
-    A column name the data repeats gives a DataFrame, which is let through to
-    the path it always took; the codes step says why.
-    """
-    if not isinstance(column, pd.Series):
-        return True
-    if isinstance(column.dtype, pd.CategoricalDtype):
-        return True
-    if pd.api.types.is_string_dtype(column.dtype) or pd.api.types.is_object_dtype(column.dtype):
-        return pd.api.types.infer_dtype(column, skipna=True) in ("string", "empty")
-    return False
 
 
 def _report_unlisted_code_values(column: str, series: pd.Series, code_values: Sequence) -> pd.Series:
