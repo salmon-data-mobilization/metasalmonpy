@@ -821,11 +821,14 @@ def test_validate_salmon_datapackage_never_evaluates_a_tag_in_sssom_metadata(
     The spy is the positive control. It shows the validator read the tagged
     file, so the absent side effect is not a read that never happened.
 
-    The value is compared with the text as written, tag included. R's reader
-    drops the ``!expr`` tag and returns the expression alone (yaml 2.3.12,
-    measured 2026-09-25), so the two readers already return different text
-    for this line. Nobody had ruled on that difference by that date; this
-    pins what this reader returns.
+    The title must come back as text carrying the sentinel's path, which
+    neither expression's value does: evaluating either returns ``None``. The
+    exact text is deliberately not pinned. metasalmon's reader drops the tag,
+    returning the expression for the first line and the path alone for the
+    second, where this one returns each line as written (measured 2026-09-25,
+    metasalmon 0.5.0 and yaml 2.3.12). Which is right was an unruled parity
+    question on that date, and this guard holds whichever way it is ruled;
+    once it is, the check can name the one text.
 
     *Retires when:* nothing validates a package somebody else wrote through
     this reader. It pins a property rather than a defect, so no fix retires it.
@@ -844,7 +847,7 @@ def test_validate_salmon_datapackage_never_evaluates_a_tag_in_sssom_metadata(
     installed = root / entry["path"]
 
     sentinel = tmp_path / "evaluated"
-    value = tagged.format(sentinel=json.dumps(str(sentinel)))
+    value = tagged.format(sentinel=json.dumps(sentinel.as_posix()))
     # The writer renders scalars double-quoted; the patch replaces that line.
     benign = '# mapping_set_title: "Approved mappings"\n'
     text = installed.read_bytes().decode("utf-8")
@@ -879,8 +882,10 @@ def test_validate_salmon_datapackage_never_evaluates_a_tag_in_sssom_metadata(
     assert not sentinel.exists(), f"validation evaluated {value!r}"
     assert verdict is None, f"validation refused the package: {verdict!r}"
     assert installed.resolve() in reached, "validation never read the mapping set"
-    # The tag reaches the package as the text it is, not as its value.
-    assert read_sssom_mapping_set(installed).metadata["mapping_set_title"] == value
+    # The tag reaches the package as text, not as its value; the docstring
+    # says why the text itself is not pinned.
+    title = read_sssom_mapping_set(installed).metadata["mapping_set_title"]
+    assert isinstance(title, str) and sentinel.as_posix() in title, repr(title)
     assert not sentinel.exists()
 
 
