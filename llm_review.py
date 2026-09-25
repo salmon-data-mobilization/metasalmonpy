@@ -1146,27 +1146,28 @@ def _retry_candidates(
     source_policy: dict,
     max_per_role: int,
 ) -> pd.DataFrame:
-    role = str(target["dictionary_role"])
-    result = search_fn(
-        query,
-        role=role,
-        sources=policy_sources(source_policy, role),
+    """The second-pass shortlist for one target.
+
+    Pass 2 goes through the same retriever as pass 1, as it does in metasalmon
+    (hub B-363): the explicit allowlist and the role-hint bonus apply, the
+    rows are deduplicated by candidate identity
+    (``semantics._semantic_candidate_identity()``, so IRI-less candidates
+    with different fingerprints all survive), a missing score stays missing
+    and sorts last, the depth is floored at 1, and every row carries
+    ``retrieval_pass`` 2 and the query it came from. Pass 1 keeps its own
+    ``(source, iri)`` key for now; the retriever's docstring says why and what
+    retires the split.
+    """
+    from .semantics import _retrieve_semantic_target_candidates
+
+    return _retrieve_semantic_target_candidates(
+        target,
+        source_policy,
+        max_per_role,
+        search_fn,
+        query=query,
+        retrieval_pass=2,
     )
-    if result is None or result.empty:
-        return pd.DataFrame()
-    result = result.copy()
-    result["retrieval_query"] = query
-    result["retrieval_pass"] = 2
-    for column, value in target.items():
-        result[column] = value
-    result["search_query"] = target["search_query"]
-    dedupe = [column for column in ("source", "iri", "label") if column in result]
-    if dedupe:
-        result = result.drop_duplicates(dedupe)
-    if "score" in result:
-        result["score"] = pd.to_numeric(result["score"], errors="coerce")
-        result = result.sort_values("score", ascending=False, na_position="last")
-    return result.head(max_per_role)
 
 
 def _merge_retry_candidates(
@@ -1175,37 +1176,38 @@ def _merge_retry_candidates(
     target,
     max_per_role,
 ) -> tuple[pd.DataFrame, int]:
-    before = _candidates_for_target(suggestions, target)
-    before_ids = {
-        _candidate_id(row, str(target["dictionary_role"]), position)
-        for position, (_, row) in enumerate(before.iterrows(), start=1)
-    }
-    combined = pd.concat([suggestions, retry_rows], ignore_index=True, sort=False)
-    key_mask = combined.apply(lambda row: _target_key(row) == _target_key(target), axis=1)
-    target_rows = combined.loc[key_mask].copy()
-    other_rows = combined.loc[~key_mask].copy()
-    dedupe = [
-        column for column in ("source", "iri", "label") if column in target_rows
-    ]
-    if dedupe:
-        target_rows = target_rows.drop_duplicates(dedupe, keep="first")
-    if "score" in target_rows:
-        target_rows["score"] = pd.to_numeric(
-            target_rows["score"], errors="coerce"
-        )
-        target_rows = target_rows.sort_values(
-            "score", ascending=False, na_position="last"
-        )
-    target_rows = target_rows.head(max_per_role)
-    after_ids = {
-        _candidate_id(row, str(target["dictionary_role"]), position)
-        for position, (_, row) in enumerate(target_rows.iterrows(), start=1)
-    }
-    gain = len(after_ids - before_ids)
-    return (
-        pd.concat([other_rows, target_rows], ignore_index=True, sort=False),
-        gain,
+    """Merge a target's second pass into the suggestions frame, R's way.
+
+    The target's own rows and the retry rows go through
+    ``semantics._merge_semantic_target_candidates()``; the gain is the number
+    of candidate identities in the merged shortlist that the target did not
+    have before, counted as ``.ms_semantic_bundle_retry()`` counts it. The
+    other targets' rows are untouched and the merged rows follow them.
+    """
+    from .semantics import (
+        _merge_semantic_target_candidates,
+        _semantic_candidate_identity,
     )
+
+    key = _target_key(target)
+    mask = pd.Series(
+        [_target_key(row) == key for _, row in suggestions.iterrows()],
+        index=suggestions.index,
+        dtype=bool,
+    )
+    before = suggestions.loc[mask].reset_index(drop=True)
+    other_rows = suggestions.loc[~mask]
+    merged_rows = _merge_semantic_target_candidates(before, retry_rows, max_per_role)
+    before_ids = set(_semantic_candidate_identity(before))
+    gain = sum(
+        1
+        for identity in _semantic_candidate_identity(merged_rows)
+        if identity not in before_ids
+    )
+    frames = [frame for frame in (other_rows, merged_rows) if len(frame)]
+    if not frames:
+        return suggestions.iloc[0:0].copy(), gain
+    return pd.concat(frames, ignore_index=True, sort=False), gain
 
 
 def _restore_target_candidates(current, original, target) -> pd.DataFrame:

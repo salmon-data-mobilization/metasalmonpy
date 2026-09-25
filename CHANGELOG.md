@@ -609,6 +609,92 @@ and moving it is a separate outward act.
 
 ### Changed
 
+* **A target's shortlist comes through one function, and a second retrieval
+  pass merges into the first the way metasalmon merges it.** Hub queue item
+  **B-363**, the metasalmonpy half of the S16 convergence that precedes the
+  shared review-packet contract (S16 execplan, sections 2.3 and 4, ruled by
+  Brett on 2026-09-25).
+
+  The loop `suggest_semantics()` ran inline over its discovered targets is now
+  `semantics._retrieve_semantic_target_candidates(target, source_policy,
+  max_per_role, search_fn, query=None, retrieval_pass=1)`, the counterpart of
+  `.ms_retrieve_semantic_target_candidates()`. It was moved, not changed:
+  `tests/test_semantic_retrieval.py` replays three retrieval configurations
+  over a multi-table fixture -- 26 targets, every role including
+  `statistical_modifier`, all four scopes, the explicit allowlist, a shortlist
+  without a score column, the role-collision block -- against a capture taken
+  on `main` `ba1b54a` before the move, row for row and column for column,
+  including the order and arguments of every `search_fn` call.
+
+  **What changes is the second pass.** `llm_review._retry_candidates()` now
+  retrieves through that same function with `retrieval_pass=2`, so a retry
+  shortlist is filtered by an explicit allowlist on the way out and ranked
+  with the role-hint bonus as pass 1 is; before, it searched and then sorted
+  on the raw score alone, with no allowlist filter and a `(source, iri,
+  label)` key. **On three points the second pass takes R's rule where today's
+  first pass does not, and the difference is deliberate and dated.** Pass 1
+  keeps one row per `(source, iri)`, so IRI-less candidates from one source
+  collapse to one; fills a missing score with 0 before the bonus, so an
+  unscored hinted candidate can outrank a scored one; and caps at
+  `max_per_role` as given. R deduplicates by candidate identity, leaves a
+  missing score missing (it sorts last, bonus or not) and floors the cap at
+  1. Pass 1 keeps today's rule because this item pins `suggest_semantics()`'s
+  output unchanged; pass 2 takes R's, because the second pass is what this
+  item converges and the retry code this replaced already kept distinct
+  IRI-less rows and missing scores -- the first push of this change routed
+  pass 2 through pass 1's rule and lost both, which the Codex review of that
+  push caught. The retriever's docstring names what retires the branch:
+  pass-1 retrieval converging on R, which the packet exporter needs (B-327).
+  Pinned against R by running it: `tests/data/semantics/r-retrieve-candidates.R`
+  drove `.ms_retrieve_semantic_target_candidates()` at pass 2 over four
+  shared cases (`retrieve-candidates-cases.json`; IRI-less rows differing
+  only in `match_type`, an exact IRI-less repeat, a second row for a seen IRI,
+  a missing score with a matching hint, an explicit allowlist with a padded
+  upper-case source, no score column, a zero depth) and the Python second
+  pass gives the same rows in the same order for all four. And the merge is
+  a port of `.ms_merge_semantic_target_candidates()`,
+  `semantics._merge_semantic_target_candidates()`: the two passes bound, sorted
+  in C order on seven keys -- `score` descending (or `role_hint_bonus` when
+  there is no score), then `source`, `ontology`, `label`, `iri`,
+  `retrieval_pass`, `retrieval_query`, missing values last -- deduplicated by
+  R's candidate identity (`_semantic_candidate_identity()`, ported with its
+  rolling text hash so an IRI-less candidate fingerprints as it does in R),
+  and capped at `max(1, max_per_role)`. Before, the merge sorted on score
+  alone and deduplicated on `(source, iri, label)`, so two rows for one IRI
+  with different labels both survived and a tie could land in either order.
+  The candidate gain a retry records in `llm_exploration_candidate_gain` is
+  counted as `.ms_semantic_bundle_retry()` counts it: identities in the merged
+  shortlist the target did not have before.
+
+  Pinned against R by **running** it: `tests/data/semantics/r-merge-candidates.R`
+  drove R's merge and identity over nine shared cases
+  (`merge-candidates-cases.json`; a rescored duplicate across passes, ties
+  broken in C order including a non-ASCII initial and two pass-2 rows for one
+  IRI, no score column, missing scores and strings, IRI-less fingerprints,
+  a zero cap, an empty pass on either side, a column only the second pass
+  carries) under R 4.5.2 with metasalmon `main` @ `98cb9e6`, and the Python
+  merge gives the same rows, the same identities and the same gain for all
+  nine. `PARITY.md` row 39, which said the merge had no counterpart and this
+  package had no retry pass, is amended in place; both halves had gone stale.
+
+  **B-243** (`suggest_semantics()` searching each distinct query, role and
+  sources tuple once per call) touches this loop. It had not landed when this
+  entry was first written, and it landed first, on `main` at `0235487` (pull
+  request #57, 2026-09-25), so this change is the one that took the other in:
+  `main` was merged into the branch, and B-243's once-per-call wrapper is
+  what `suggest_semantics()` now hands the extracted function as its
+  `search_fn`, as `.ms_search_once_per_call()` wraps
+  `.ms_retrieve_semantic_target_candidates()` in R. The pass-1 pin was
+  re-captured on `main` at `0235487` -- after B-243, before the move -- and
+  is identical to the capture at `ba1b54a`, the fixture's 26 targets being 26
+  distinct tuples, so the committed pin stands.
+
+  The three pass-1 differences above were **found and left in place for pass
+  1**, because the item requires pass-1 output unchanged and none is
+  registered; they are reported to the hub as the convergence the packet
+  exporter will need rather than registered here, and the `pass_one` branch
+  in the retriever is the whole of their footprint.
+
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
   Hub queue item **B-166**, the twin of the copy metasalmon made in its pull
   request #120. The change is Brett's ruling of 2026-09-14, landed upstream by

@@ -1,0 +1,1163 @@
+{
+  "provenance": {
+    "generator": "tests/data/semantics/r-merge-candidates.R",
+    "metasalmon_commit": "98cb9e6",
+    "metasalmon_version": "0.5.0",
+    "r_version": "R version 4.5.2 (2025-10-31)",
+    "locale": "en_CA"
+  },
+  "cases": [
+    {
+      "id": "basic-rescored-duplicate",
+      "exercises": "a pass-2 copy of a pass-1 candidate with a higher score wins the deduplication, so the kept row carries retrieval_pass 2; the gain counts only the identity that is new",
+      "max_per_role": 3,
+      "existing_columns": ["dataset_id", "table_id", "column_name", "dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "existing": [
+        {
+          "dataset_id": "demo",
+          "table_id": "fish",
+          "column_name": "fork_length",
+          "dictionary_role": "unit",
+          "label": "millimetre",
+          "iri": "https://w3id.org/smn/unit/millimetre",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "A unit of length.",
+          "match_type": "label",
+          "role_hints": "unit",
+          "role_hint_bonus": 0.35,
+          "score": 1.35,
+          "retrieval_query": "millimetre",
+          "retrieval_pass": 1
+        },
+        {
+          "dataset_id": "demo",
+          "table_id": "fish",
+          "column_name": "fork_length",
+          "dictionary_role": "unit",
+          "label": "mm",
+          "iri": "https://gcdfo.example/unit/mm",
+          "source": "gcdfo",
+          "ontology": "gcdfo",
+          "definition": "Millimetre.",
+          "match_type": "synonym",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "millimetre",
+          "retrieval_pass": 1
+        },
+        {
+          "dataset_id": "demo",
+          "table_id": "fish",
+          "column_name": "fork_length",
+          "dictionary_role": "unit",
+          "label": "millimeter",
+          "iri": "http://purl.obolibrary.org/obo/UO_0000016",
+          "source": "ols",
+          "ontology": "uo",
+          "definition": "A length unit.",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 0.9,
+          "retrieval_query": "millimetre",
+          "retrieval_pass": 1
+        }
+      ],
+      "extra_columns": ["dataset_id", "table_id", "column_name", "dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "extra": [
+        {
+          "dataset_id": "demo",
+          "table_id": "fish",
+          "column_name": "fork_length",
+          "dictionary_role": "unit",
+          "label": "millimetre",
+          "iri": "https://w3id.org/smn/unit/millimetre",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "A unit of length.",
+          "match_type": "label",
+          "role_hints": "unit",
+          "role_hint_bonus": 0.35,
+          "score": 1.6,
+          "retrieval_query": "precise millimetre unit",
+          "retrieval_pass": 2
+        },
+        {
+          "dataset_id": "demo",
+          "table_id": "fish",
+          "column_name": "fork_length",
+          "dictionary_role": "unit",
+          "label": "MilliM",
+          "iri": "http://qudt.org/vocab/unit/MilliM",
+          "source": "qudt",
+          "ontology": "qudt",
+          "definition": "Millimetre.",
+          "match_type": "label",
+          "role_hints": "unit",
+          "role_hint_bonus": 0.35,
+          "score": 1.5,
+          "retrieval_query": "precise millimetre unit",
+          "retrieval_pass": 2
+        },
+        {
+          "dataset_id": "demo",
+          "table_id": "fish",
+          "column_name": "fork_length",
+          "dictionary_role": "unit",
+          "label": "cm",
+          "iri": "https://gcdfo.example/unit/cm",
+          "source": "gcdfo",
+          "ontology": "gcdfo",
+          "definition": "Centimetre.",
+          "match_type": "synonym",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 0.8,
+          "retrieval_query": "precise millimetre unit",
+          "retrieval_pass": 2
+        }
+      ],
+      "merged": {
+        "columns": ["dataset_id", "table_id", "column_name", "dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+        "rows": [
+          {
+            "dataset_id": "demo",
+            "table_id": "fish",
+            "column_name": "fork_length",
+            "dictionary_role": "unit",
+            "label": "millimetre",
+            "iri": "https://w3id.org/smn/unit/millimetre",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "A unit of length.",
+            "match_type": "label",
+            "role_hints": "unit",
+            "role_hint_bonus": 0.35,
+            "score": 1.6,
+            "retrieval_query": "precise millimetre unit",
+            "retrieval_pass": 2
+          },
+          {
+            "dataset_id": "demo",
+            "table_id": "fish",
+            "column_name": "fork_length",
+            "dictionary_role": "unit",
+            "label": "MilliM",
+            "iri": "http://qudt.org/vocab/unit/MilliM",
+            "source": "qudt",
+            "ontology": "qudt",
+            "definition": "Millimetre.",
+            "match_type": "label",
+            "role_hints": "unit",
+            "role_hint_bonus": 0.35,
+            "score": 1.5,
+            "retrieval_query": "precise millimetre unit",
+            "retrieval_pass": 2
+          },
+          {
+            "dataset_id": "demo",
+            "table_id": "fish",
+            "column_name": "fork_length",
+            "dictionary_role": "unit",
+            "label": "mm",
+            "iri": "https://gcdfo.example/unit/mm",
+            "source": "gcdfo",
+            "ontology": "gcdfo",
+            "definition": "Millimetre.",
+            "match_type": "synonym",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 1,
+            "retrieval_query": "millimetre",
+            "retrieval_pass": 1
+          }
+        ]
+      },
+      "existing_identity": [
+        "smn::https://w3id.org/smn/unit/millimetre",
+        "gcdfo::https://gcdfo.example/unit/mm",
+        "ols::http://purl.obolibrary.org/obo/UO_0000016"
+      ],
+      "merged_identity": [
+        "smn::https://w3id.org/smn/unit/millimetre",
+        "qudt::http://qudt.org/vocab/unit/MilliM",
+        "gcdfo::https://gcdfo.example/unit/mm"
+      ],
+      "gain": 1,
+      "generic_path_gain": 1
+    },
+    {
+      "id": "ties-in-c-order",
+      "exercises": "equal scores are broken by source, ontology, label, iri, retrieval_pass and retrieval_query in C order: an uppercase initial sorts before lowercase, and a two-byte initial after both; the same iri at the same score keeps the pass-1 row, and two pass-2 rows for one iri keep the one whose query sorts first",
+      "max_per_role": 10,
+      "existing_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "existing": [
+        {
+          "dictionary_role": "entity",
+          "label": "gamma",
+          "iri": "https://w3id.org/smn/entity/gamma",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "g",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "fish",
+          "retrieval_pass": 1
+        },
+        {
+          "dictionary_role": "entity",
+          "label": "Beta",
+          "iri": "https://w3id.org/smn/entity/beta",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "b",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "fish",
+          "retrieval_pass": 1
+        },
+        {
+          "dictionary_role": "entity",
+          "label": "alpha",
+          "iri": "https://w3id.org/smn/entity/alpha",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "a",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "fish",
+          "retrieval_pass": 1
+        },
+        {
+          "dictionary_role": "entity",
+          "label": "Ärger",
+          "iri": "https://w3id.org/smn/entity/aerger",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "ae",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "fish",
+          "retrieval_pass": 1
+        },
+        {
+          "dictionary_role": "entity",
+          "label": "alpha",
+          "iri": "https://gcdfo.example/entity/alpha",
+          "source": "gcdfo",
+          "ontology": "gcdfo",
+          "definition": "a2",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "fish",
+          "retrieval_pass": 1
+        }
+      ],
+      "extra_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "extra": [
+        {
+          "dictionary_role": "entity",
+          "label": "alpha",
+          "iri": "https://w3id.org/smn/entity/alpha",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "a",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "salmon",
+          "retrieval_pass": 2
+        },
+        {
+          "dictionary_role": "entity",
+          "label": "delta",
+          "iri": "https://w3id.org/smn/entity/delta",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "d",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "salmon",
+          "retrieval_pass": 2
+        },
+        {
+          "dictionary_role": "entity",
+          "label": "delta",
+          "iri": "https://w3id.org/smn/entity/delta",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "d",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "anadromous fish",
+          "retrieval_pass": 2
+        },
+        {
+          "dictionary_role": "entity",
+          "label": "alpha",
+          "iri": "https://w3id.org/smn/entity/alpha",
+          "source": "smn",
+          "ontology": "obo",
+          "definition": "a",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "salmon",
+          "retrieval_pass": 2
+        }
+      ],
+      "merged": {
+        "columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+        "rows": [
+          {
+            "dictionary_role": "entity",
+            "label": "alpha",
+            "iri": "https://gcdfo.example/entity/alpha",
+            "source": "gcdfo",
+            "ontology": "gcdfo",
+            "definition": "a2",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 1,
+            "retrieval_query": "fish",
+            "retrieval_pass": 1
+          },
+          {
+            "dictionary_role": "entity",
+            "label": "alpha",
+            "iri": "https://w3id.org/smn/entity/alpha",
+            "source": "smn",
+            "ontology": "obo",
+            "definition": "a",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 1,
+            "retrieval_query": "salmon",
+            "retrieval_pass": 2
+          },
+          {
+            "dictionary_role": "entity",
+            "label": "Beta",
+            "iri": "https://w3id.org/smn/entity/beta",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "b",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 1,
+            "retrieval_query": "fish",
+            "retrieval_pass": 1
+          },
+          {
+            "dictionary_role": "entity",
+            "label": "delta",
+            "iri": "https://w3id.org/smn/entity/delta",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "d",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 1,
+            "retrieval_query": "anadromous fish",
+            "retrieval_pass": 2
+          },
+          {
+            "dictionary_role": "entity",
+            "label": "gamma",
+            "iri": "https://w3id.org/smn/entity/gamma",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "g",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 1,
+            "retrieval_query": "fish",
+            "retrieval_pass": 1
+          },
+          {
+            "dictionary_role": "entity",
+            "label": "Ärger",
+            "iri": "https://w3id.org/smn/entity/aerger",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "ae",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 1,
+            "retrieval_query": "fish",
+            "retrieval_pass": 1
+          }
+        ]
+      },
+      "existing_identity": [
+        "smn::https://w3id.org/smn/entity/gamma",
+        "smn::https://w3id.org/smn/entity/beta",
+        "smn::https://w3id.org/smn/entity/alpha",
+        "smn::https://w3id.org/smn/entity/aerger",
+        "gcdfo::https://gcdfo.example/entity/alpha"
+      ],
+      "merged_identity": [
+        "gcdfo::https://gcdfo.example/entity/alpha",
+        "smn::https://w3id.org/smn/entity/alpha",
+        "smn::https://w3id.org/smn/entity/beta",
+        "smn::https://w3id.org/smn/entity/delta",
+        "smn::https://w3id.org/smn/entity/gamma",
+        "smn::https://w3id.org/smn/entity/aerger"
+      ],
+      "gain": 1,
+      "generic_path_gain": 1
+    },
+    {
+      "id": "no-score-column",
+      "exercises": "without a score column the sort key is -role_hint_bonus, then the same six keys",
+      "max_per_role": 3,
+      "existing_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "retrieval_query", "retrieval_pass"],
+      "existing": [
+        {
+          "dictionary_role": "property",
+          "label": "mass",
+          "iri": "https://w3id.org/smn/property/mass",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "m",
+          "match_type": "label",
+          "role_hints": "variable",
+          "role_hint_bonus": -0.35,
+          "retrieval_query": "weight",
+          "retrieval_pass": 1
+        },
+        {
+          "dictionary_role": "property",
+          "label": "weight",
+          "iri": "https://gcdfo.example/property/weight",
+          "source": "gcdfo",
+          "ontology": "gcdfo",
+          "definition": "w",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "retrieval_query": "weight",
+          "retrieval_pass": 1
+        }
+      ],
+      "extra_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "retrieval_query", "retrieval_pass"],
+      "extra": [
+        {
+          "dictionary_role": "property",
+          "label": "body mass",
+          "iri": "https://w3id.org/smn/property/body-mass",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "bm",
+          "match_type": "label",
+          "role_hints": "property",
+          "role_hint_bonus": 0.35,
+          "retrieval_query": "body mass",
+          "retrieval_pass": 2
+        },
+        {
+          "dictionary_role": "property",
+          "label": "wet weight",
+          "iri": "https://gcdfo.example/property/wet-weight",
+          "source": "gcdfo",
+          "ontology": "gcdfo",
+          "definition": "ww",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "retrieval_query": "body mass",
+          "retrieval_pass": 2
+        }
+      ],
+      "merged": {
+        "columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "retrieval_query", "retrieval_pass"],
+        "rows": [
+          {
+            "dictionary_role": "property",
+            "label": "body mass",
+            "iri": "https://w3id.org/smn/property/body-mass",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "bm",
+            "match_type": "label",
+            "role_hints": "property",
+            "role_hint_bonus": 0.35,
+            "retrieval_query": "body mass",
+            "retrieval_pass": 2
+          },
+          {
+            "dictionary_role": "property",
+            "label": "weight",
+            "iri": "https://gcdfo.example/property/weight",
+            "source": "gcdfo",
+            "ontology": "gcdfo",
+            "definition": "w",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "retrieval_query": "weight",
+            "retrieval_pass": 1
+          },
+          {
+            "dictionary_role": "property",
+            "label": "wet weight",
+            "iri": "https://gcdfo.example/property/wet-weight",
+            "source": "gcdfo",
+            "ontology": "gcdfo",
+            "definition": "ww",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "retrieval_query": "body mass",
+            "retrieval_pass": 2
+          }
+        ]
+      },
+      "existing_identity": [
+        "smn::https://w3id.org/smn/property/mass",
+        "gcdfo::https://gcdfo.example/property/weight"
+      ],
+      "merged_identity": [
+        "smn::https://w3id.org/smn/property/body-mass",
+        "gcdfo::https://gcdfo.example/property/weight",
+        "gcdfo::https://gcdfo.example/property/wet-weight"
+      ],
+      "gain": 2,
+      "generic_path_gain": 2
+    },
+    {
+      "id": "missing-scores-sort-last",
+      "exercises": "a missing score sorts after every present score, and missing strings sort after present ones within a tier",
+      "max_per_role": 5,
+      "existing_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "existing": [
+        {
+          "dictionary_role": "variable",
+          "label": "count",
+          "iri": "https://w3id.org/smn/variable/count",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "c",
+          "match_type": "label",
+          "role_hints": "variable",
+          "role_hint_bonus": 0.35,
+          "score": null,
+          "retrieval_query": "count",
+          "retrieval_pass": 1
+        },
+        {
+          "dictionary_role": "variable",
+          "label": "abundance",
+          "iri": "https://gcdfo.example/variable/abundance",
+          "source": "gcdfo",
+          "ontology": null,
+          "definition": "a",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 0.5,
+          "retrieval_query": "count",
+          "retrieval_pass": 1
+        }
+      ],
+      "extra_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "extra": [
+        {
+          "dictionary_role": "variable",
+          "label": "abundance",
+          "iri": "https://gcdfo.example/variable/abundance-2",
+          "source": "gcdfo",
+          "ontology": "gcdfo",
+          "definition": "a2",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 0.5,
+          "retrieval_query": "fish count",
+          "retrieval_pass": 2
+        },
+        {
+          "dictionary_role": "variable",
+          "label": "tally",
+          "iri": "https://gcdfo.example/variable/tally",
+          "source": "gcdfo",
+          "ontology": "gcdfo",
+          "definition": "t",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": null,
+          "retrieval_query": "fish count",
+          "retrieval_pass": 2
+        }
+      ],
+      "merged": {
+        "columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+        "rows": [
+          {
+            "dictionary_role": "variable",
+            "label": "abundance",
+            "iri": "https://gcdfo.example/variable/abundance-2",
+            "source": "gcdfo",
+            "ontology": "gcdfo",
+            "definition": "a2",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 0.5,
+            "retrieval_query": "fish count",
+            "retrieval_pass": 2
+          },
+          {
+            "dictionary_role": "variable",
+            "label": "abundance",
+            "iri": "https://gcdfo.example/variable/abundance",
+            "source": "gcdfo",
+            "ontology": null,
+            "definition": "a",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 0.5,
+            "retrieval_query": "count",
+            "retrieval_pass": 1
+          },
+          {
+            "dictionary_role": "variable",
+            "label": "tally",
+            "iri": "https://gcdfo.example/variable/tally",
+            "source": "gcdfo",
+            "ontology": "gcdfo",
+            "definition": "t",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": null,
+            "retrieval_query": "fish count",
+            "retrieval_pass": 2
+          },
+          {
+            "dictionary_role": "variable",
+            "label": "count",
+            "iri": "https://w3id.org/smn/variable/count",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "c",
+            "match_type": "label",
+            "role_hints": "variable",
+            "role_hint_bonus": 0.35,
+            "score": null,
+            "retrieval_query": "count",
+            "retrieval_pass": 1
+          }
+        ]
+      },
+      "existing_identity": [
+        "smn::https://w3id.org/smn/variable/count",
+        "gcdfo::https://gcdfo.example/variable/abundance"
+      ],
+      "merged_identity": [
+        "gcdfo::https://gcdfo.example/variable/abundance-2",
+        "gcdfo::https://gcdfo.example/variable/abundance",
+        "gcdfo::https://gcdfo.example/variable/tally",
+        "smn::https://w3id.org/smn/variable/count"
+      ],
+      "gain": 2,
+      "generic_path_gain": 2
+    },
+    {
+      "id": "blank-iri-fingerprints",
+      "exercises": "a candidate with no iri is identified by a fingerprint of its role, source, ontology, label, definition, match_type, role_hints, resource_kind, type_iris and term_type: two blanks differing only in match_type are distinct, and a pass-2 blank identical to a pass-1 blank is a duplicate",
+      "max_per_role": 5,
+      "existing_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass", "resource_kind", "type_iris", "term_type"],
+      "existing": [
+        {
+          "dictionary_role": "constraint",
+          "label": "ocean phase",
+          "iri": null,
+          "source": "zooma",
+          "ontology": "smn",
+          "definition": "Ocean-phase fish.",
+          "match_type": "label",
+          "role_hints": "constraint",
+          "role_hint_bonus": 0.35,
+          "score": 1.35,
+          "retrieval_query": "ocean phase",
+          "retrieval_pass": 1,
+          "resource_kind": "concept",
+          "type_iris": null,
+          "term_type": null
+        },
+        {
+          "dictionary_role": "constraint",
+          "label": "ocean phase",
+          "iri": null,
+          "source": "zooma",
+          "ontology": "smn",
+          "definition": "Ocean-phase fish.",
+          "match_type": "synonym",
+          "role_hints": "constraint",
+          "role_hint_bonus": 0.35,
+          "score": 1.2,
+          "retrieval_query": "ocean phase",
+          "retrieval_pass": 1,
+          "resource_kind": "concept",
+          "type_iris": null,
+          "term_type": null
+        }
+      ],
+      "extra_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass", "resource_kind", "type_iris", "term_type"],
+      "extra": [
+        {
+          "dictionary_role": "constraint",
+          "label": "ocean phase",
+          "iri": null,
+          "source": "zooma",
+          "ontology": "smn",
+          "definition": "Ocean-phase fish.",
+          "match_type": "label",
+          "role_hints": "constraint",
+          "role_hint_bonus": 0.35,
+          "score": 1.35,
+          "retrieval_query": "marine phase",
+          "retrieval_pass": 2,
+          "resource_kind": "concept",
+          "type_iris": null,
+          "term_type": null
+        },
+        {
+          "dictionary_role": "constraint",
+          "label": "marine phase",
+          "iri": "https://w3id.org/smn/constraint/marine-phase",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "Marine phase.",
+          "match_type": "label",
+          "role_hints": "constraint",
+          "role_hint_bonus": 0.35,
+          "score": 1.4,
+          "retrieval_query": "marine phase",
+          "retrieval_pass": 2,
+          "resource_kind": "class",
+          "type_iris": "http://www.w3.org/2002/07/owl#Class",
+          "term_type": "class"
+        }
+      ],
+      "merged": {
+        "columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass", "resource_kind", "type_iris", "term_type"],
+        "rows": [
+          {
+            "dictionary_role": "constraint",
+            "label": "marine phase",
+            "iri": "https://w3id.org/smn/constraint/marine-phase",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "Marine phase.",
+            "match_type": "label",
+            "role_hints": "constraint",
+            "role_hint_bonus": 0.35,
+            "score": 1.4,
+            "retrieval_query": "marine phase",
+            "retrieval_pass": 2,
+            "resource_kind": "class",
+            "type_iris": "http://www.w3.org/2002/07/owl#Class",
+            "term_type": "class"
+          },
+          {
+            "dictionary_role": "constraint",
+            "label": "ocean phase",
+            "iri": null,
+            "source": "zooma",
+            "ontology": "smn",
+            "definition": "Ocean-phase fish.",
+            "match_type": "label",
+            "role_hints": "constraint",
+            "role_hint_bonus": 0.35,
+            "score": 1.35,
+            "retrieval_query": "ocean phase",
+            "retrieval_pass": 1,
+            "resource_kind": "concept",
+            "type_iris": null,
+            "term_type": null
+          },
+          {
+            "dictionary_role": "constraint",
+            "label": "ocean phase",
+            "iri": null,
+            "source": "zooma",
+            "ontology": "smn",
+            "definition": "Ocean-phase fish.",
+            "match_type": "synonym",
+            "role_hints": "constraint",
+            "role_hint_bonus": 0.35,
+            "score": 1.2,
+            "retrieval_query": "ocean phase",
+            "retrieval_pass": 1,
+            "resource_kind": "concept",
+            "type_iris": null,
+            "term_type": null
+          }
+        ]
+      },
+      "existing_identity": [
+        "blank::constraint::2b0dfdc91ec7d050",
+        "blank::constraint::0aac66c34afa5399"
+      ],
+      "merged_identity": [
+        "smn::https://w3id.org/smn/constraint/marine-phase",
+        "blank::constraint::2b0dfdc91ec7d050",
+        "blank::constraint::0aac66c34afa5399"
+      ],
+      "gain": 1,
+      "generic_path_gain": 1
+    },
+    {
+      "id": "cap-zero-keeps-one",
+      "exercises": "max_per_role below one keeps one row, as max(1L, max_per_role) does",
+      "max_per_role": 0,
+      "existing_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "existing": [
+        {
+          "dictionary_role": "unit",
+          "label": "gram",
+          "iri": "https://w3id.org/smn/unit/gram",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "g",
+          "match_type": "label",
+          "role_hints": "unit",
+          "role_hint_bonus": 0.35,
+          "score": 1.35,
+          "retrieval_query": "gram",
+          "retrieval_pass": 1
+        }
+      ],
+      "extra_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "extra": [
+        {
+          "dictionary_role": "unit",
+          "label": "kilogram",
+          "iri": "https://w3id.org/smn/unit/kilogram",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "kg",
+          "match_type": "label",
+          "role_hints": "unit",
+          "role_hint_bonus": 0.35,
+          "score": 1.5,
+          "retrieval_query": "mass unit",
+          "retrieval_pass": 2
+        }
+      ],
+      "merged": {
+        "columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+        "rows": [
+          {
+            "dictionary_role": "unit",
+            "label": "kilogram",
+            "iri": "https://w3id.org/smn/unit/kilogram",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "kg",
+            "match_type": "label",
+            "role_hints": "unit",
+            "role_hint_bonus": 0.35,
+            "score": 1.5,
+            "retrieval_query": "mass unit",
+            "retrieval_pass": 2
+          }
+        ]
+      },
+      "existing_identity": [
+        "smn::https://w3id.org/smn/unit/gram"
+      ],
+      "merged_identity": [
+        "smn::https://w3id.org/smn/unit/kilogram"
+      ],
+      "gain": 1,
+      "generic_path_gain": 1
+    },
+    {
+      "id": "extra-empty-resorts-existing",
+      "exercises": "with nothing to add the existing rows are still re-sorted and re-capped",
+      "max_per_role": 2,
+      "existing_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "existing": [
+        {
+          "dictionary_role": "unit",
+          "label": "low",
+          "iri": "https://w3id.org/smn/unit/low",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "l",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 0.2,
+          "retrieval_query": "u",
+          "retrieval_pass": 1
+        },
+        {
+          "dictionary_role": "unit",
+          "label": "high",
+          "iri": "https://w3id.org/smn/unit/high",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "h",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 0.9,
+          "retrieval_query": "u",
+          "retrieval_pass": 1
+        },
+        {
+          "dictionary_role": "unit",
+          "label": "mid",
+          "iri": "https://w3id.org/smn/unit/mid",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "m",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 0.5,
+          "retrieval_query": "u",
+          "retrieval_pass": 1
+        }
+      ],
+      "extra_columns": [],
+      "extra": [],
+      "merged": {
+        "columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+        "rows": [
+          {
+            "dictionary_role": "unit",
+            "label": "high",
+            "iri": "https://w3id.org/smn/unit/high",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "h",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 0.9,
+            "retrieval_query": "u",
+            "retrieval_pass": 1
+          },
+          {
+            "dictionary_role": "unit",
+            "label": "mid",
+            "iri": "https://w3id.org/smn/unit/mid",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "m",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 0.5,
+            "retrieval_query": "u",
+            "retrieval_pass": 1
+          }
+        ]
+      },
+      "existing_identity": [
+        "smn::https://w3id.org/smn/unit/low",
+        "smn::https://w3id.org/smn/unit/high",
+        "smn::https://w3id.org/smn/unit/mid"
+      ],
+      "merged_identity": [
+        "smn::https://w3id.org/smn/unit/high",
+        "smn::https://w3id.org/smn/unit/mid"
+      ],
+      "gain": 0,
+      "generic_path_gain": 0
+    },
+    {
+      "id": "existing-empty",
+      "exercises": "a first pass that found nothing merges to the second pass alone",
+      "max_per_role": 3,
+      "existing_columns": [],
+      "existing": [],
+      "extra_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "extra": [
+        {
+          "dictionary_role": "entity",
+          "label": "stock",
+          "iri": "https://w3id.org/smn/entity/stock",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "s",
+          "match_type": "label",
+          "role_hints": "entity",
+          "role_hint_bonus": 0.35,
+          "score": 1.35,
+          "retrieval_query": "salmon stock",
+          "retrieval_pass": 2
+        },
+        {
+          "dictionary_role": "entity",
+          "label": "population",
+          "iri": "https://gcdfo.example/entity/population",
+          "source": "gcdfo",
+          "ontology": "gcdfo",
+          "definition": "p",
+          "match_type": "label",
+          "role_hints": null,
+          "role_hint_bonus": 0,
+          "score": 1,
+          "retrieval_query": "salmon stock",
+          "retrieval_pass": 2
+        }
+      ],
+      "merged": {
+        "columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+        "rows": [
+          {
+            "dictionary_role": "entity",
+            "label": "stock",
+            "iri": "https://w3id.org/smn/entity/stock",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "s",
+            "match_type": "label",
+            "role_hints": "entity",
+            "role_hint_bonus": 0.35,
+            "score": 1.35,
+            "retrieval_query": "salmon stock",
+            "retrieval_pass": 2
+          },
+          {
+            "dictionary_role": "entity",
+            "label": "population",
+            "iri": "https://gcdfo.example/entity/population",
+            "source": "gcdfo",
+            "ontology": "gcdfo",
+            "definition": "p",
+            "match_type": "label",
+            "role_hints": null,
+            "role_hint_bonus": 0,
+            "score": 1,
+            "retrieval_query": "salmon stock",
+            "retrieval_pass": 2
+          }
+        ]
+      },
+      "existing_identity": [],
+      "merged_identity": [
+        "smn::https://w3id.org/smn/entity/stock",
+        "gcdfo::https://gcdfo.example/entity/population"
+      ],
+      "gain": 2,
+      "generic_path_gain": 2
+    },
+    {
+      "id": "column-union",
+      "exercises": "a column only the second pass carries is kept, empty on the first pass's rows",
+      "max_per_role": 4,
+      "existing_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass"],
+      "existing": [
+        {
+          "dictionary_role": "method",
+          "label": "seine",
+          "iri": "https://w3id.org/smn/method/seine",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "s",
+          "match_type": "label",
+          "role_hints": "method",
+          "role_hint_bonus": 0.35,
+          "score": 1.35,
+          "retrieval_query": "seine",
+          "retrieval_pass": 1
+        }
+      ],
+      "extra_columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass", "agreement_sources"],
+      "extra": [
+        {
+          "dictionary_role": "method",
+          "label": "beach seine",
+          "iri": "https://w3id.org/smn/method/beach-seine",
+          "source": "smn",
+          "ontology": "smn",
+          "definition": "bs",
+          "match_type": "label",
+          "role_hints": "method",
+          "role_hint_bonus": 0.35,
+          "score": 1.2,
+          "retrieval_query": "beach seine",
+          "retrieval_pass": 2,
+          "agreement_sources": "smn|gcdfo"
+        }
+      ],
+      "merged": {
+        "columns": ["dictionary_role", "label", "iri", "source", "ontology", "definition", "match_type", "role_hints", "role_hint_bonus", "score", "retrieval_query", "retrieval_pass", "agreement_sources"],
+        "rows": [
+          {
+            "dictionary_role": "method",
+            "label": "seine",
+            "iri": "https://w3id.org/smn/method/seine",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "s",
+            "match_type": "label",
+            "role_hints": "method",
+            "role_hint_bonus": 0.35,
+            "score": 1.35,
+            "retrieval_query": "seine",
+            "retrieval_pass": 1,
+            "agreement_sources": null
+          },
+          {
+            "dictionary_role": "method",
+            "label": "beach seine",
+            "iri": "https://w3id.org/smn/method/beach-seine",
+            "source": "smn",
+            "ontology": "smn",
+            "definition": "bs",
+            "match_type": "label",
+            "role_hints": "method",
+            "role_hint_bonus": 0.35,
+            "score": 1.2,
+            "retrieval_query": "beach seine",
+            "retrieval_pass": 2,
+            "agreement_sources": "smn|gcdfo"
+          }
+        ]
+      },
+      "existing_identity": [
+        "smn::https://w3id.org/smn/method/seine"
+      ],
+      "merged_identity": [
+        "smn::https://w3id.org/smn/method/seine",
+        "smn::https://w3id.org/smn/method/beach-seine"
+      ],
+      "gain": 1,
+      "generic_path_gain": 1
+    }
+  ]
+}
