@@ -563,26 +563,33 @@ _SCHEMA_SELECTIONS = {
 }
 
 
-def _bundle_requiring_funding_source(after: str = "") -> dict:
-    """The bundled schema plus one required ``dataset.csv`` field, validated.
+_FUNDING_SOURCE = {
+    "name": "funding_source",
+    "type": "string",
+    "description": "Who funded the work.",
+    "constraints": {"required": True},
+}
+_MEASUREMENT_NOTE = {
+    "name": "measurement_note",
+    "type": "string",
+    "description": "How the value was measured.",
+}
 
-    It stands in for a published schema that differs from the bundled copy in
-    the one way that matters here: a requirement the bundle does not declare.
-    The field goes last, or straight after the field named by ``after``.
+
+def _bundle_with_fields(*insertions) -> dict:
+    """The bundled schema with fields added, validated.
+
+    Each insertion is ``(table, after, field)``. The field goes straight after
+    the field named by ``after``, or last when ``after`` is empty.
     """
     bundled = sdp_schema._load_vendored_sdp_schema()
     schemas = copy.deepcopy(bundled["metadata_schemas"])
-    fields = schemas["dataset"]["fields"]
-    names = [field["name"] for field in fields]
-    fields.insert(
-        names.index(after) + 1 if after else len(fields),
-        {
-            "name": "funding_source",
-            "type": "string",
-            "description": "Who funded the work.",
-            "constraints": {"required": True},
-        },
-    )
+    for table, after, field in insertions:
+        fields = schemas[table]["fields"]
+        names = [declared["name"] for declared in fields]
+        fields.insert(
+            names.index(after) + 1 if after else len(fields), copy.deepcopy(field)
+        )
     return sdp_schema._validate_sdp_schema(
         {
             "metadata_schemas": schemas,
@@ -590,6 +597,24 @@ def _bundle_requiring_funding_source(after: str = "") -> dict:
             "rules": bundled["rules"],
         }
     )
+
+
+def _bundle_requiring_funding_source(after: str = "") -> dict:
+    """The bundled schema plus one required ``dataset.csv`` field, validated.
+
+    It stands in for a published schema that differs from the bundled copy in
+    the one way that matters here: a requirement the bundle does not declare.
+    The field goes last, or straight after the field named by ``after``.
+    """
+    return _bundle_with_fields(("dataset", after, _FUNDING_SOURCE))
+
+
+def _header(path: Path) -> list:
+    """The first row of a CSV file, as written."""
+    import csv
+
+    with path.open(newline="", encoding="utf-8") as stream:
+        return next(csv.reader(stream))
 
 
 def _count_schema_fetches(monkeypatch, bundle: dict) -> list:
@@ -744,8 +769,6 @@ def test_a_setter_writes_the_file_in_the_selected_schemas_field_order(
     the bundled schema the static lists and the declared order are the same
     list, so nothing changes there.
     """
-    import csv
-
     assert raw_package.is_dir()
     _use_shipped_schema_defaults(monkeypatch)
     _SCHEMA_SELECTIONS["set_sdp_schema_base_url"](monkeypatch)
@@ -758,11 +781,94 @@ def test_a_setter_writes_the_file_in_the_selected_schemas_field_order(
         assert declared.index("funding_source") == declared.index("creator") + 1
 
         assert _set_funding_source(raw_package) is True
-        with (raw_package / "metadata" / "dataset.csv").open(
-            newline="", encoding="utf-8"
-        ) as stream:
-            header = next(csv.reader(stream))
-        assert header == declared
+        assert _header(raw_package / "metadata" / "dataset.csv") == declared
+    finally:
+        sdp_schema.set_sdp_schema_base_url(None)
+
+
+def test_a_rebuild_and_an_apply_keep_the_order_a_setter_wrote(
+    raw_package, monkeypatch, tmp_path
+):
+    """A rebuild and an apply write a metadata file in the order a setter wrote
+    it, so the same package keeps the same bytes.
+
+    Under a selected schema that declares a field mid-list, a setter writes the
+    declared order. ``write_salmon_datapackage()`` and
+    ``apply_sdp_semantics()`` aligned to the static column lists, so a rebuild
+    from the package's own metadata, or an apply of one decision, moved that
+    field to the end of the header again (Codex review of pull request 47).
+    metasalmon's writers align to the session schema's fields
+    (``.ms_align_cols(df, .ms_dataset_meta_cols())``). Under the shipped
+    settings the rebuild reproduces all four metadata files byte for byte.
+    """
+    from metasalmonpy import accept_suggestion
+    from metasalmonpy.package_io import read_salmon_datapackage
+
+    assert raw_package.is_dir()
+    _use_shipped_schema_defaults(monkeypatch)
+    _SCHEMA_SELECTIONS["set_sdp_schema_base_url"](monkeypatch)
+    try:
+        selected = _bundle_with_fields(
+            ("dataset", "creator", _FUNDING_SOURCE),
+            ("column_dictionary", "column_description", _MEASUREMENT_NOTE),
+        )
+        sdp_schema.load_sdp_schema(
+            quiet=True, fetch_fn=lambda base_url, timeout: selected
+        )
+        declared = {
+            "dataset.csv": sdp_schema.sdp_schema_field_names("dataset"),
+            "column_dictionary.csv": sdp_schema.sdp_schema_field_names(
+                "column_dictionary"
+            ),
+        }
+        set_sdp_dataset(str(raw_package), funding_source="A funder", quiet=True)
+        set_sdp_column(
+            str(raw_package),
+            table="spawners",
+            column="spawner_count",
+            measurement_note="Counted from a tower.",
+            quiet=True,
+        )
+        metadata = raw_package / "metadata"
+        written = {name: (metadata / name).read_bytes() for name in declared}
+        after_setters = {name: _header(metadata / name) for name in declared}
+
+        package = read_salmon_datapackage(str(raw_package))
+        rebuilt = Path(
+            write_salmon_datapackage(
+                resources=package["resources"],
+                dataset_meta=package["dataset"],
+                table_meta=package["tables"],
+                dict_df=package["dictionary"],
+                codes=package["codes"],
+                path=str(tmp_path / "rebuilt"),
+            )
+        )
+        review = accept_suggestion(
+            review_semantics(str(raw_package)), "spawner_count", "property", rank=1
+        )
+        apply_sdp_semantics(str(raw_package), review, quiet=True)
+
+        assert {
+            "after the setters": after_setters,
+            "after a rebuild": {
+                name: _header(rebuilt / "metadata" / name) for name in declared
+            },
+            "after an apply": {
+                "column_dictionary.csv": _header(
+                    metadata / "column_dictionary.csv"
+                )
+            },
+        } == {
+            "after the setters": declared,
+            "after a rebuild": declared,
+            "after an apply": {
+                "column_dictionary.csv": declared["column_dictionary.csv"]
+            },
+        }
+        assert {
+            name: (rebuilt / "metadata" / name).read_bytes() for name in declared
+        } == written
     finally:
         sdp_schema.set_sdp_schema_base_url(None)
 
