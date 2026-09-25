@@ -36,9 +36,9 @@ violation like a failing test.
    2026-08-24. This package's version stays at the last delivered milestone
    until the next one lands — do **not** bump the number ahead of the
    functionality (Brett's decision, 2026-08-13: bump on parity, not on calendar).
-   The tree now reads 0.5.0; **tagging `v0.5.0` and publishing the GitHub
-   Release are separate outward acts and are Brett's**, so until he makes them
-   the newest tag here is still `v0.4.0`.
+   The tree reads 0.5.0, and measured 2026-09-24 the newest tag here is
+   `v0.5.0`: annotated, on the bump merge `67fb486`, made that day by the
+   Release workflow together with its GitHub Release.
 
    **That window was closed in two halves, and recording both is the point,
    because the second half is the one that gets skipped.** The behavioural half
@@ -227,8 +227,10 @@ Two further mentions of `0.1.6` are deliberately left alone, because they are
 about **tags** rather than about this claim: the install instructions in
 `README.md` and `getting-started.qmd` both say the `v0.1.6` tag is what a user
 can install. That is wrong — `v0.4.0` exists at `3b587e6` — but fixing it is a
-statement about which tag to install, so it waits on the tagging decision rather
-than riding along with a version bump.
+statement about which tag to install, so it waited on the tagging decision
+rather than riding along with a version bump. That decision was made on
+2026-09-24, when `v0.5.0` was tagged on `67fb486`, so the fix is no longer
+blocked and is still owed.
 
 The version is a **parity claim**, so it moves only when the mirrored behaviour
 actually lands; the mirror contract above governs what makes the claim true.
@@ -241,14 +243,25 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 966
-passed / 1 skipped with the extras installed, 825 / 142 with core dependencies
-only (2026-09-23, measured for hub B-191 under pytest 9.1.1; 951 / 1 and
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1022
+passed / 1 skipped with the extras installed, 881 / 142 with core dependencies
+only (2026-09-24, measured locally for hub B-241 on the tree of its head
+`5b83c27`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a machine
+where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists; 1012 / 1 and
+871 / 142 for B-242 and 1007 / 1 and 866 / 142 for B-240 earlier that day,
+966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
-on 2026-09-14, and 803 / 3 and 690 / 116 before that). The gap is the extras-gated
-EML, KNB and context-reader tests; the one that skips either way is a
-filesystem-symlink guard. These counts are a dated measurement, not a target —
-update them when you add tests rather than treating a mismatch as a failure.
+on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads two fewer
+passes in each leg for the same tree**: 1020 / 3 and 879 / 144 on B-241's head
+`5b83c27`, read from its check logs on 2026-09-24, as B-242's head `183f887`
+read 1010 / 3 and 869 / 144. The two are `tests/test_roundtrip.py`, which runs
+only where both of those hold. CI's suite jobs have neither, so it skips there
+and runs in CI's `parity` job instead. The gap between the legs is the
+extras-gated EML, KNB and context-reader tests; the one that skips in both legs,
+locally and on CI, is
+the Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1`
+is set. These counts are a dated measurement, not a target — update them when
+you add tests rather than treating a mismatch as a failure.
 
 **The suite runs from a checkout at any path.** It did not until 2026-09-23
 (hub **B-191**). The root `__init__.py` and a `tests/__init__.py` made pytest

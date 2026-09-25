@@ -4,15 +4,17 @@
 
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
-closed when it set `__version__` to `0.5.0`. Measured 2026-09-16: `v0.5.0` is
-not tagged and no GitHub Release exists for it, so that section describes a
-number that has been *claimed* rather than a release that has shipped. Anything
-merged after that claim belongs here, because filing it under `## 0.5.0` would
-make this file say a version contains a change that the commit making the
-version current does not. metasalmon's `NEWS.md` keeps the same shape with its
-*(development version)* heading, which is what this heading mirrors. **The
-number does not move here**: it is a parity claim, and moving it is a separate
-outward act.
+closed when it set `__version__` to `0.5.0`, and the commit that made that
+version current is B-153's merge, `67fb486` (#33). On 2026-09-16 `v0.5.0` was
+not tagged and no GitHub Release existed for it, so that section described a
+number that had been *claimed* rather than a release that had shipped. Measured
+2026-09-24, it has shipped: `v0.5.0` was tagged on `67fb486` that day and its
+GitHub Release published. Anything merged after `67fb486` belongs here, because
+filing it under `## 0.5.0` would make this file say a version contains a change
+that the commit making the version current does not. metasalmon's `NEWS.md`
+keeps the same shape with its *(development version)* heading, which is what
+this heading mirrors. **The number does not move here**: it is a parity claim,
+and moving it is a separate outward act.
 
 ### Fixed
 
@@ -120,6 +122,142 @@ outward act.
   the three measures above is removed. The wheel's file list is unchanged.
   This changes how the suite finds the package and nothing the package does,
   so it opens no `PARITY.md` row.
+
+* **A measurement column whose values all look like years is no longer typed
+  `temporal`.** Ported from metasalmon pull request #152 (backlog **#53**),
+  hub queue item **B-240**, the mirror half of **B-53**. This is
+  R-shipped-first lag being closed, not a deliberate difference, so it opens
+  no `PARITY.md` row.
+
+  `infer_column_role()` typed a column `temporal` whenever every value was a
+  four-digit number from 1800 to 2500, reading the values alone and ahead of
+  any measurement word in its name. So a small stock's `NATURAL_ADULT_SPAWNERS`
+  of 1850, 2003 and 1999 became a `temporal` column. `suggest_semantics()`
+  skips temporal columns, so the column left the whole semantic pipeline with
+  no variable, property, entity or unit target and no warning, while the same
+  column holding numbers outside that range was typed `measurement`.
+
+  The year shape now decides unless the name's words include a measurement
+  word (one the measurement check already reads: `count`, `total`, `spawners`,
+  `escapement`, `weight`, `depth` and the rest) or a sample or partition size,
+  and no date or time word. Then the year shape is not consulted, and the
+  column is typed by the checks that follow exactly as it would be with values
+  outside the year range. Words are split at whitespace, punctuation and case
+  changes, so `Water depth(mm)` and `adult/count` are measurement names, while
+  the year word in `Escapement (yr)` and `count/year`, or a plural one as in
+  `escapement_years`, keeps them `temporal`, as `count_year` always was. Whole
+  words rather than the broader measurement hint, because that hint's
+  substring and unit patterns match names that are not measurements: `temp`
+  inside `temporal_start`, and any parenthetical containing a `g`, such as
+  `Cohort (Aug)`.
+
+  **Not covered, as in R:** a name whose only measurement evidence is a
+  substring (`ADULTCOUNT`) or a unit in parentheses (`Mass (kg)`) is still
+  `temporal` when its values look like years. The words decide only whether the
+  year shape may decide, and the role checks after it read the name as before,
+  so a year-shaped `adult/spawners` or `fish/weight` is no longer `temporal` but
+  not `measurement` either: it gets the role it gets with any other values.
+  **Nor does it touch a `float64` column,** which never looks year-shaped here:
+  the values are rendered through `str()`, and `str(1850.0)` is `"1850.0"`. R
+  reads a double column of the same numbers as year-shaped. So a year column
+  that pandas reads as `float64`, as it reads any integer column with a missing
+  cell, is typed from its name alone here: `pd.read_csv()` on
+  `BY` / `2001` / (blank) / `2003` gives an `attribute`, where
+  `readr::read_csv()` on the same text gives R a `temporal` column. That was
+  true before this change and still is.
+
+  Pinned by `tests/test_year_shaped_measurement_role.py`, the port of
+  `tests/testthat/test-year-shaped-measurement-role.R`. It checks each fixture
+  against `_values_look_yearish()` before asserting its role, and follows one
+  column through `infer_dictionary()` and `suggest_semantics()` to its semantic
+  targets. Its fixtures are `int64`, nullable `Int64`, text and categorical,
+  the storage types this package reads as year-shaped. Measured 2026-09-24 by
+  running metasalmon `main` (`16976b1`) over the same 64 name and value pairs,
+  R and this package now agree on every year-shape verdict and every role,
+  where 18 of the 64 differed before. Over the 1,271 columns in the CSVs of
+  metasalmon, metasalmonpy, smn-data-pkg and salmon-domain-ontology, read with
+  `pd.read_csv()` defaults, no column's role changes.
+
+* **The call `review_semantics()` prints for a measurement column's own slot
+  now runs when the column has a code list.** Hub queue item **B-242**, the
+  mirror half of metasalmon's **B-151** (metasalmon pull request #153). A
+  measurement column's `entity_iri` and `constraint_iri` targets share their
+  roles with the `codes.csv` targets of its codes, and an omitted `code_value`
+  matches every code. So the column's own slot printed
+  `accept_suggestion(review, "spawner_count", "entity", rank=1, table="spawners")`,
+  which matched that slot and every code's slot and raised *"That column and
+  role match more than one review slot"*; its `reject_suggestion()` line did
+  the same. The refusal's list of arguments to add was no way out either,
+  because the option it offered for the column's slot was the `table=` the call
+  already carried. Measured through `create_sdp(semantic_code_scope="all")`
+  with two codes on a count column, on `e595752`: 6 of the 33 printed calls
+  raised.
+
+  `review_semantics()` now prints `code_value=""` whenever `table` alone would
+  not select the column's own slot, and the refusal offers it too. A blank
+  `code_value` (`""`, `pd.NA` or `NaN`) selects the slots that belong to no
+  code, while `None`, the default, still leaves it unconstrained, as R's
+  `NULL` does. The matcher already read a blank that way, where metasalmon's
+  raised, but it also matched a code slot whose `codes.csv` row leaves
+  `code_value` empty because it supplies `vocabulary_iri`, which the codes
+  schema allows.
+  Whether a slot is a code's is now read from its file, so a blank never
+  selects a code's slot. An omitted `code_value` still matches every code, and
+  no earlier version printed a blank one, so every call an earlier version
+  printed resolves as it did.
+
+  One case is not fixed, in either implementation. A code slot whose
+  `codes.csv` row has no code value has no call of its own that tells it apart
+  from another slot of the same column, role and table, such as the column's
+  own slot. Its printed call still refuses as ambiguous, as it did before, and
+  never decides the other slot.
+
+  Run through each package's `create_sdp()` on the same inputs, metasalmon
+  `main` (`71a9199`) and this package now print the same arguments for every
+  slot, resolve each printed call to the same slot, and offer the same options
+  when they refuse. This removes
+  `test_a_column_level_slot_sharing_a_role_with_its_codes_is_still_ambiguous`,
+  the pin pull request #28 added with this defect as its retirement condition,
+  and replaces it with mirrors of metasalmon's tests. It is R-shipped-first lag
+  being closed, not a deliberate difference, so it opens no `PARITY.md` row.
+
+* **`apply_salmon_dictionary()` names each code value it turns into a missing
+  value.** Hub queue item **B-241**, the mirror half of metasalmon backlog
+  **#55** (hub **B-55**, metasalmon pull request #154). A value that is present
+  in a column and absent from the column's code list has no category, so it
+  becomes missing, and until now it did that without a word. Under pandas 3 the
+  only signal was pandas' own `Pandas4Warning` that building a Categorical from
+  such a value "will raise in a future version". Under pandas 2.2 there was no
+  signal at all. Each such value is now named in one `RuntimeWarning` per
+  column, under either value of `strict`, because `strict` governs type
+  coercion. Missing and blank values are not named. Past twenty values the list
+  is shortened the way cli shortens R's (the first eighteen, an ellipsis, and
+  the last two), and the count is always given in full.
+
+  The value is blanked explicitly, before the Categorical is built, so the codes
+  step no longer relies on the construction pandas deprecates. That includes a
+  column that is already a Categorical, whose unused categories are dropped
+  first. One consequence goes beyond the report. A code list pandas cannot
+  build a Categorical from, because a `code_value` repeats or a hand-built one
+  is missing, used to send the column to the fallback that keeps it as text,
+  with every value kept, unlisted ones included. The unlisted values are now
+  blanked on that path too, so the report is true there as well. For a repeated
+  `code_value` that is what R does.
+
+  **A code list now applies only to a text or Categorical column, as in R**,
+  whose codes step runs only on a character or factor column. A column typed
+  `integer`, `number`, `boolean` or `date` keeps its values. Matching those
+  values against the text of `codes.csv` used to blank every one of them
+  without a report, where R leaves the column as it is.
+
+  **The other half of #55 owed a test and no fix.** metasalmon's
+  `strict = TRUE` let through a value that its coercion only warns about.
+  `_coerce_series()` has always raised on such a value, through
+  `errors="raise"`, so R moved to where this package already was. Nothing pinned
+  that behaviour, and `ApplyDictionaryFailureReportTests` in
+  `tests/test_dictionary.py` now does, the twin of metasalmon's
+  `tests/testthat/test-edge-cases.R`. This closes R-shipped-first lag and is not
+  a deliberate difference, so it opens no `PARITY.md` row.
 
 * **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
   Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
