@@ -31,10 +31,11 @@ from typing import Dict, List, Optional, Sequence, Union
 
 import pandas as pd
 
-# ``_iso_seconds`` is imported rather than re-spelled here because a
-# ``strftime`` year is not portable below year 1000; see the comment on
-# its definition. Both modules must render calendars the same way.
-from .resource_types import _iso_seconds, format_number_token
+# ``iso_instant_text`` is imported rather than re-spelled here because a
+# ``strftime`` year is not portable below year 1000, and because an instant
+# has exactly one rendering in this package; see the docstring on its
+# definition. Both modules must render calendars the same way.
+from .resource_types import format_number_token, iso_instant_text
 from .sdp_methods import (
     SDP_METHODS_PATH,
     SdpExtensionError,
@@ -463,7 +464,7 @@ def _normalize_typed_values(
             if parsed_datetime is None:
                 fail()
                 return normalized  # pragma: no cover - fail() always raises
-            normalized[index] = _iso_seconds(parsed_datetime) + "Z"
+            normalized[index] = iso_instant_text(parsed_datetime)
     elif declared != "string":
         fail()
     return normalized
@@ -548,9 +549,7 @@ def _typed_character(value: object) -> str:
     if isinstance(value, float):
         return format_number_token(value) or ""
     if isinstance(value, pd.Timestamp) or isinstance(value, _dt.datetime):
-        if value.tzinfo is not None:
-            value = value.astimezone(_dt.timezone.utc).replace(tzinfo=None)
-        return _iso_seconds(value) + "Z"
+        return iso_instant_text(value)
     return str(value)
 
 
