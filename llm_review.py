@@ -1448,68 +1448,171 @@ def _dictionary_row(target, dictionary) -> dict:
     return matches.iloc[0].to_dict() if not matches.empty else {}
 
 
-def _field_anchors(target, dictionary_row: dict) -> tuple[list[str], list[str]]:
-    weak = {
-        "age",
-        "code",
-        "count",
-        "length",
-        "method",
-        "number",
-        "phase",
-        "rate",
-        "sex",
-        "total",
-        "unit",
-        "value",
-        "weight",
+# --- The bundle validators ---------------------------------------------------
+#
+# Everything from here to `_apply_validators()` gives the verdicts metasalmon's
+# `R/semantic-bundle-validators.R` gives on the same input (hub queue B-360,
+# ruled 2026-09-25 with the S16 execplan, decision 9: converge on R's
+# validators, this package moving). The validators are surface 5 of the role
+# contract, and the shared review-packet fixtures (B-326 / B-327) fail until the
+# two sides agree, so this is convergence rather than a PARITY.md row.
+# tests/test_validator_parity.py holds the block to cases metasalmon itself
+# scored.
+#
+# Regex flags, because they decide word boundaries. R's `perl = TRUE` patterns
+# run PCRE without Unicode properties -- measured 2026-09-25 on R 4.5.2: `\b`,
+# `\s`, `\w` and `[[:punct:]]` are ASCII-only -- so their mirrors here carry
+# re.ASCII. R's default engine, which `_role_type_message()`'s explicit
+# native-type tests use, has a locale-aware `\b`; Python's default Unicode `\b`
+# is the closest match for that.
+
+_VALIDATOR_WEAK_SINGLETONS = frozenset(
+    {
+        "age", "code", "count", "length", "method", "number", "phase", "rate",
+        "sex", "total", "unit", "value", "weight",
     }
-    identifiers = []
-    phrases = []
-    column_name = _text(
-        dictionary_row.get("column_name"),
-        _text(target.get("column_name")),
-    )
-    if column_name:
-        normalized_identifier = column_name.strip().lower()
-        if re.fullmatch(r"[a-z0-9_]+", normalized_identifier):
-            identifiers.append(normalized_identifier)
-    for value in (
-        dictionary_row.get("column_label"),
-        target.get("column_label"),
-        column_name,
+)
+
+
+def _validator_trim(value) -> str:
+    """R's ``trimws()`` default: space, tab, CR and LF only. Hub B-364 adds a
+    general ``_r_trimws()`` to the context block; fold this into it once both
+    have merged."""
+    return str(value).strip(" \t\r\n")
+
+
+def _validator_scalar(value, default=None):
+    """``.ms_semantic_trim_string()``: the value trimmed as R trims it, else the default."""
+    if _missing(value):
+        return default
+    text = _validator_trim(value)
+    return text if text else default
+
+
+def _validator_values(values) -> list[str]:
+    """The pieces ``unlist(list(...))`` would yield, as text; missing ones dropped."""
+    flat = []
+    for value in values:
+        if isinstance(value, str):
+            flat.append(value)
+        elif isinstance(value, (list, tuple, pd.Series, pd.Index)):
+            flat.extend(_validator_values(value))
+        elif not _missing(value):
+            flat.append(str(value))
+    return flat
+
+
+def _validator_text(*values) -> str:
+    """``.ms_semantic_validator_text()``: the non-blank values, untrimmed, joined
+    by one space and lowercased. A missing or blank value is dropped, not
+    rendered, so no double space stands where one was."""
+    kept = [value for value in _validator_values(values) if _validator_trim(value)]
+    return " ".join(kept).lower()
+
+
+def _validator_tokens(text: str) -> list[str]:
+    """``.ms_context_tokens()`` as the anchor builder uses it: lowercase ASCII
+    runs of three or more characters. B-364 adds the general
+    ``_context_tokens()``; fold this into it once both have merged."""
+    text = re.sub(r"[^a-z0-9]+", " ", str(text).lower())
+    return [token for token in text.split(" ") if len(token) >= 3]
+
+
+def _field_anchors(target, dictionary_row: dict) -> list[str]:
+    """``.ms_semantic_validator_field_anchors()``: what a context chunk must
+    carry to count as evidence for this column.
+
+    The column names (the dictionary's, then the target's) are the candidates;
+    only when there is no column name at all do the column labels stand in. A
+    candidate makes an ``identifier:`` anchor when it is a plain identifier and
+    a ``phrase_start:`` anchor always -- unless it is one weak or short word,
+    which anchors nothing.
+    """
+    field_names = [
+        str(name)
+        for name in (dictionary_row.get("column_name"), target.get("column_name"))
+        if not _missing(name) and _validator_trim(name)
+    ]
+    labels = [dictionary_row.get("column_label"), target.get("column_label")]
+    candidates = field_names if field_names else labels
+    anchors = []
+    for candidate in dict.fromkeys(
+        str(candidate) for candidate in candidates if not _missing(candidate)
     ):
-        phrase = re.sub(r"[^a-z0-9]+", " ", _text(value, "").lower()).strip()
-        tokens = phrase.split()
-        if phrase and not (len(tokens) < 2 and (len(phrase) < 6 or phrase in weak)):
-            phrases.append(phrase)
-    return list(dict.fromkeys(identifiers)), list(dict.fromkeys(phrases))
+        identifier = _validator_trim(candidate).lower()
+        phrase = _validator_trim(re.sub(r"[^a-z0-9]+", " ", identifier))
+        tokens = _validator_tokens(phrase)
+        if not phrase or (
+            len(tokens) < 2
+            and (len(phrase) < 6 or phrase in _VALIDATOR_WEAK_SINGLETONS)
+        ):
+            continue
+        if field_names and re.fullmatch(r"[a-z0-9_]+", identifier):
+            anchors.append(f"identifier:{identifier}")
+        anchors.append(f"phrase_start:{phrase}")
+    return list(dict.fromkeys(anchors))
+
+
+def _chunk_has_anchor(text, anchor: str) -> bool:
+    """``.ms_semantic_validator_chunk_has_anchor()``.
+
+    An identifier anchor must be a whole ``[a-z0-9_]`` token of the chunk. A
+    phrase anchor must start the chunk once leading markup (ASCII punctuation
+    and digits) is stripped, and the chunk's leading token may not carry ``_``
+    or ``-``, so ``CATCH_COUNT_ESTIMATE ...`` does not vouch for
+    ``catch_count``. Both regexes are R's, quirks included: the leading-token
+    pattern spans to the end of the string, so on a multi-line chunk it does
+    not match, the whole chunk stands in as the leading token, and any ``_`` or
+    ``-`` in it fails the phrase anchor.
+    """
+    raw_text = "" if _missing(text) else str(text)
+    lowered = raw_text.lower()
+    anchor = _validator_trim(anchor).lower()
+    if not lowered or not anchor:
+        return False
+    if anchor.startswith("identifier:"):
+        identifier = anchor[len("identifier:"):]
+        return identifier in re.split(r"[^a-z0-9_]+", lowered)
+    phrase = re.sub(r"^phrase_start:", "", anchor)
+    unmarked = re.sub(
+        r"^\s*(?:[!-/:-@\[-`{-~0-9]+\s*)+", "", raw_text, flags=re.ASCII
+    )
+    leading_token = re.sub(
+        r"^\s*([a-zA-Z0-9][a-zA-Z0-9_-]*).*$", r"\1", unmarked, flags=re.ASCII
+    )
+    if re.search(r"[_-]", leading_token):
+        return False
+    normalized = _validator_trim(re.sub(r"[^a-z0-9]+", " ", unmarked.lower()))
+    return normalized == phrase or normalized.startswith(f"{phrase} ")
 
 
 def _anchored_context_text(target, dictionary_row: dict, context) -> list[str]:
+    """The context chunks that carry one of the column's anchors, in pool order."""
     if context is None or context.empty or "text" not in context:
         return []
-    identifiers, phrases = _field_anchors(target, dictionary_row)
+    anchors = _field_anchors(target, dictionary_row)
     selected = []
-    for value in context["text"].dropna().astype(str):
-        lowered = value.lower()
-        normalized = re.sub(r"[^a-z0-9]+", " ", lowered).strip()
-        identifier_match = any(
-            re.search(rf"(?<![a-z0-9_]){re.escape(anchor)}(?![a-z0-9_])", lowered)
-            for anchor in identifiers
-        )
-        phrase_match = any(
-            normalized == anchor or normalized.startswith(f"{anchor} ")
-            for anchor in phrases
-        )
-        if identifier_match or phrase_match:
-            selected.append(value)
+    for text in context["text"]:
+        if _missing(text):
+            continue
+        if any(_chunk_has_anchor(text, anchor) for anchor in anchors):
+            selected.append(str(text))
     return selected
 
 
 def _evidence_text(target, dictionary, context=None) -> str:
-    dictionary_row = _dictionary_row(target, dictionary)
-    values = [
+    """The bundle validator evidence for a target whose dictionary row is
+    looked up in ``dictionary``."""
+    return _bundle_validator_evidence(
+        target, _dictionary_row(target, dictionary), context
+    )
+
+
+def _bundle_validator_evidence(target, dictionary_row: dict, context=None) -> str:
+    """``.ms_semantic_bundle_validator_evidence()``: the target's query context
+    and labels, the dictionary row's name, labels and unit, and the anchored
+    context chunks, as one lowercase string."""
+    return _validator_text(
         target.get("target_query_context"),
         target.get("column_label"),
         target.get("column_description"),
@@ -1517,113 +1620,155 @@ def _evidence_text(target, dictionary, context=None) -> str:
         dictionary_row.get("column_label"),
         dictionary_row.get("column_description"),
         dictionary_row.get("unit_label"),
-        *_anchored_context_text(target, dictionary_row, context),
-    ]
-    return " ".join(_text(value, "") for value in values).lower()
+        _anchored_context_text(target, dictionary_row, context),
+    )
+
+
+_VALIDATOR_NEGATION = (
+    r"no|not|without|unknown|unspecified|missing|does not|did not|is not|was not"
+)
+_METHOD_TERMS = (
+    r"protocol|gear|instrument|assay|technique|field method|lab method|"
+    r"laboratory method|survey method|measurement method|estimation method|"
+    r"field procedure|lab procedure|laboratory procedure|"
+    r"measurement procedure|operational procedure"
+)
+_CONSTRAINT_TERMS = (
+    r"origin|life[ -]?cycle|life[ -]?stage|stage|run|season|age|sex|"
+    r"maturity|phase|terminal|ocean|freshwater|wild|hatchery|population|"
+    r"stock|species group|reporting unit|benchmark"
+)
 
 
 def _strip_negated_evidence(text: str, evidence_pattern: str) -> str:
-    negation = (
-        r"no|not|without|unknown|unspecified|missing|does not|did not|"
-        r"is not|was not"
-    )
+    """``.ms_semantic_validator_strip_negated_evidence()``: blank every
+    evidence term that a negation reaches within sixty characters."""
     return re.sub(
-        rf"\b(?:{negation})\b.{{0,60}}\b(?:{evidence_pattern})\b",
+        rf"\b({_VALIDATOR_NEGATION})\b.{{0,60}}\b({evidence_pattern})\b",
         " ",
         text,
+        flags=re.ASCII,
     )
 
 
-def _has_method_evidence(text: str) -> bool:
-    terms = (
-        r"protocol|gear|instrument|assay|technique|field method|lab method|"
-        r"laboratory method|survey method|measurement method|estimation method|"
-        r"field procedure|lab procedure|laboratory procedure|"
-        r"measurement procedure|operational procedure"
-    )
-    positive = _strip_negated_evidence(text, terms)
+def _has_method_evidence(text) -> bool:
+    """``.ms_semantic_validator_has_method_evidence()``: six alternatives -- a
+    method term, a measurement verb followed by ``using``/``with``/``via`` or
+    by ``by ... <method|protocol|procedure|observer|technician|instrument|gear>``,
+    ``using``/``with`` followed by an instrument, and an estimation verb
+    followed by ``using``/``with``/``from`` or by ``by ... <model|algorithm|
+    estimator|method|procedure>``."""
+    text = _validator_text(text)
+    if not text:
+        return False
+    positive = _strip_negated_evidence(text, _METHOD_TERMS)
     return bool(
         re.search(
-            rf"\b(?:{terms})\b|"
-            r"\b(?:measured|sampled|surveyed|enumerated|counted|weighed)\b"
-            r".{0,80}\b(?:using|with|via)\b|"
-            r"\b(?:using|with)\b.{0,80}\b(?:board|scale|net|sonar|weir|"
-            r"camera|call?iper|ruler|sensor|model)\b|"
-            r"\b(?:estimated|calculated|derived|modelled|modeled)\s+"
-            r"(?:using|with|from)\b",
+            rf"\b({_METHOD_TERMS})\b"
+            r"|\b(measured|sampled|surveyed|enumerated|counted|weighed)\b"
+            r".{0,80}\b(using|with|via)\b"
+            r"|\b(measured|sampled|surveyed|enumerated|counted|weighed)\b"
+            r".{0,80}\bby\b.{0,40}"
+            r"\b(method|protocol|procedure|observer|technician|instrument|gear)\b"
+            r"|\b(using|with)\b.{0,80}"
+            r"\b(board|scale|net|sonar|weir|camera|caliper|ruler|sensor|model)\b"
+            r"|\b(estimated|calculated|derived|modelled|modeled)\s+(using|with|from)\b"
+            r"|\b(estimated|calculated|derived|modelled|modeled)\b.{0,80}\bby\b"
+            r".{0,40}\b(model|algorithm|estimator|method|procedure)\b",
             positive,
+            flags=re.ASCII,
         )
     )
 
 
-def _has_modifier_evidence(text: str) -> bool:
-    # Underscores are not word boundaries, so `mean_weight` needs splitting;
-    # lowercased here because R's helper folds case itself
-    # (mirrors .ms_semantic_validator_has_modifier_evidence).
+def _has_modifier_evidence(text) -> bool:
+    """``.ms_semantic_validator_has_modifier_evidence()``. Underscores and dots
+    are not word boundaries, so ``mean_weight`` is split first."""
+    text = _validator_text(text)
+    if not text:
+        return False
     return bool(
         re.search(
-            r"\b(?:mean|average|median|max|maximum|min|minimum|total|"
+            r"\b(mean|average|median|max|maximum|min|minimum|total|"
             r"cumulative|sum|peak|aggregate|aggregated)\b",
-            re.sub(r"[_.]", " ", text.lower()),
+            re.sub(r"[_.]", " ", text),
+            flags=re.ASCII,
         )
     )
 
 
-def _has_constraint_evidence(text: str) -> bool:
-    terms = (
-        r"origin|life[ -]?cycle|life[ -]?stage|stage|run|season|age|sex|"
-        r"maturity|phase|terminal|ocean|freshwater|wild|hatchery|population|"
-        r"stock|species group|reporting unit|benchmark"
+def _has_constraint_evidence(text) -> bool:
+    """``.ms_semantic_validator_has_constraint_evidence()``."""
+    text = _validator_text(text)
+    if not text:
+        return False
+    return bool(
+        re.search(
+            rf"\b({_CONSTRAINT_TERMS})\b",
+            _strip_negated_evidence(text, _CONSTRAINT_TERMS),
+            flags=re.ASCII,
+        )
     )
-    return bool(re.search(rf"\b(?:{terms})\b", _strip_negated_evidence(text, terms)))
 
 
 def _candidate_type(candidate: dict) -> str:
-    return " ".join(
-        _text(candidate.get(field), "")
-        for field in ("term_type", "native_type", "resource_kind", "type_iris")
-    ).lower()
+    """``.ms_semantic_validator_candidate_type()``: the candidate's type fields
+    present, in this order, as validator text."""
+    return _validator_text(
+        *(
+            candidate.get(field)
+            for field in ("term_type", "native_type", "resource_kind", "type_iris")
+        )
+    )
 
 
-def _split_role_hints(value) -> set[str]:
+def _split_role_hints(value) -> list[str]:
+    """``.ms_semantic_split_role_hints()``: split on ``|`` only, each hint
+    trimmed, empties dropped, order and case kept. A comma or semicolon is
+    part of a hint, not a separator."""
     if _missing(value):
-        return set()
-    return {
-        hint.strip().lower()
-        for hint in re.split(r"[|,;]", str(value))
-        if hint.strip()
-    }
+        return []
+    return [
+        hint
+        for hint in (_validator_trim(part) for part in str(value).split("|"))
+        if hint
+    ]
 
 
 def _role_type_message(role: str, candidate: dict) -> Optional[str]:
+    """``.ms_validate_semantic_role_type()``'s message, or ``None`` when the
+    candidate may fill the role."""
     hints = _split_role_hints(candidate.get("role_hints"))
     if hints and role not in hints:
         return (
             f"Candidate role hints are incompatible with the {role} slot: "
-            f"{', '.join(sorted(hints))}."
+            f"{', '.join(hints)}."
         )
-    iri = _text(candidate.get("iri"), "").lower()
+    iri = _validator_scalar(candidate.get("iri"), "").lower()
     native_type = _candidate_type(candidate)
     if re.search(
         r"object\s*property|datatype\s*property|annotation\s*property|"
-        r"rdf\s*property|owl#(?:object|datatype|annotation)property",
+        r"rdf\s*property|owl#objectproperty|owl#datatypeproperty|"
+        r"owl#annotationproperty",
         native_type,
+        flags=re.ASCII,
     ):
         return (
             "Candidate is an ontology relation predicate, not a value that "
             f"can populate the {role} semantic slot."
         )
+    # R runs these four in its default engine, not PCRE: locale-aware \b.
     combined = f"{iri} {native_type}"
     explicit_role = None
-    if re.search(r"/vocab/unit/|\b(?:unit|unit of measure)\b", combined):
+    if re.search(r"/vocab/unit/|\b(unit|unit of measure)\b", combined):
         explicit_role = "unit"
-    elif re.search(r"/vocab/quantitykind/|\b(?:quantity kind|quantitykind)\b", combined):
+    elif re.search(r"/vocab/quantitykind/|\b(quantity kind|quantitykind)\b", combined):
         explicit_role = "property"
-    elif re.search(r"\b(?:method|procedure)\b", native_type):
+    elif re.search(r"\b(method|procedure)\b", native_type):
         explicit_role = "method"
     elif re.search(r"\bconstraint\b", native_type):
         explicit_role = "constraint"
-    if explicit_role and explicit_role != role:
+    if explicit_role is not None and explicit_role != role:
         return (
             f"Candidate native type is explicitly {explicit_role}-like and "
             f"is incompatible with the {role} slot."
@@ -1631,49 +1776,124 @@ def _role_type_message(role: str, candidate: dict) -> Optional[str]:
     return None
 
 
+_TIME_UNIT = r"(s|sec|second|min|minute|h|hr|hour|d|day|wk|week|mo|month|yr|year|season)"
+_DENOMINATOR_PATTERN = (
+    rf"(\bper\s+{_TIME_UNIT}\b"
+    rf"|/\s*{_TIME_UNIT}\b"
+    rf"|[-_]per[-_]{_TIME_UNIT}\b"
+    rf"|\b{_TIME_UNIT}\s*\^?\s*-\s*1\b)"
+)
+_POWERED_DENOMINATOR_PATTERN = (
+    rf"((\bper\s+|/\s*|[-_]per[-_]){_TIME_UNIT}\s*(\^?\s*[2-9]|squared|cubed)\b"
+    rf"|\b{_TIME_UNIT}\s*\^?\s*-\s*[2-9]\b)"
+)
+# A value that IS a compound unit, whole, names its dimension outright.
+_COMPOUND_DIMENSION_RULES = (
+    ("flow", r"^(cubic met(er|re)s? per second|m3/s|cumecs?|cms)$"),
+    ("speed", r"^(kilomet(er|re)s? per hour|met(er|re)s? per second|km/h|m/s|kph)$"),
+)
+_DIMENSION_RULES = (
+    ("flow", r"\b(flow|discharge)\b"),
+    ("speed", r"\b(speed|velocity)\b"),
+    ("temperature", r"\b(temperature|celsius|fahrenheit|kelvin|deg c)\b"),
+    ("area", r"\b(area|square[ -](milli|centi|kilo)?met(er|re)s?|m2|hectare)\b"),
+    (
+        "volume",
+        r"\b(volume|lit(er|re)s?|cubic[ -](milli|centi|kilo)?met(er|re)s?|m3)\b",
+    ),
+    (
+        "mass",
+        r"\b(mass|weight|kilograms?|grams?|tonnes?|pounds?|lbs?|kg|kilogm|gm)\b",
+    ),
+    (
+        "length",
+        r"\b(length|width|depth|height|fork length|millimet(er|re)s?|"
+        r"centimet(er|re)s?|met(er|re)s?|mm|cm|millim|centim)\b",
+    ),
+    ("count", r"\b(count|abundance|number|numerosity|individuals?|num)\b"),
+    (
+        "dimensionless",
+        r"\b(dimensionless|unitless|percentage|percent|proportion|ratio|"
+        r"fraction|decimal|dimensionlessratio)\b"
+        r"|\b(survival|exploitation|harvest|mortality) rate\b"
+        r"|/vocab/unit/(percent|one)\b",
+    ),
+    (
+        "rate",
+        r"\b(frequency|occurrences? per|individuals? per|fish per|"
+        r"events? per|per capita per)\b",
+    ),
+)
+_STRONG_PHYSICAL_DIMENSIONS = (
+    "flow", "speed", "temperature", "area", "volume", "mass", "length",
+)
+
+
 def _dimension(*values) -> Optional[str]:
-    text = " ".join(_text(value, "") for value in values).lower()
-    text = (
-        text.replace("\u2212", "-")
-        .replace("\u207b", "-")
-        .replace("\u00b2", "2")
-        .replace("\u00b3", "3")
-        .replace("\u00b7", " ")
-    )
-    text = re.sub(r"\s+", " ", text).strip()
-    if not text:
+    """``.ms_semantic_validator_dimension()``: the one dimension the values
+    name, or ``None`` when they name none or more than one.
+
+    Each value is lowercased, trimmed, its Unicode minus, superscripts and
+    middle dot normalised, and its whitespace collapsed. A value that is a
+    whole compound unit (``m3/s``, ``km/h``) decides on its own. A time
+    denominator (``per year``, ``/s``, ``yr^-1``) counted more than once, or
+    raised to a power, means a derived quantity this classifier does not name.
+    One time denominator adds ``rate``. Then: exactly one strong physical
+    dimension wins unless a rate is also present; more than one is ambiguous;
+    ``rate`` beats the weak classes; and a weak class stands only alone.
+    """
+    normalized = []
+    for value in _validator_values(values):
+        if not _validator_trim(value):
+            continue
+        value = _validator_trim(value).lower()
+        value = re.sub(r"\u2212|\u207b", "-", value)
+        value = (
+            value.replace("\u00b9", "1")
+            .replace("\u00b2", "2")
+            .replace("\u00b3", "3")
+            .replace("\u00b7", " ")
+        )
+        normalized.append(re.sub(r"\s+", " ", value, flags=re.ASCII))
+    if not normalized:
         return None
-    if re.fullmatch(r".*(?:cubic metres? per second|m3/s|cumecs?|cms).*", text):
-        return "flow"
-    if re.fullmatch(r".*(?:kilometres? per hour|metres? per second|km/h|m/s|kph).*", text):
-        return "speed"
-    denominator = re.search(
-        r"(?:\bper\s+|/\s*|[-_]per[-_])"
-        r"(?:s|sec|second|min|minute|h|hr|hour|d|day|week|month|yr|year|season)\b"
-        r"|(?:s|sec|second|min|minute|h|hr|hour|d|day|week|month|yr|year)"
-        r"\s*\^?\s*-\s*1\b",
-        text,
-    )
-    if denominator:
-        if re.search(
-            r"\b(?:frequency|occurrences?|individuals?|fish|events?)\s+per\b|"
-            r"\b(?:survival|exploitation|harvest|mortality) rate\b",
-            text,
-        ):
-            return "rate"
-        return None
-    rules = [
-        ("temperature", r"\b(?:temperature|celsius|fahrenheit|kelvin|deg c)\b"),
-        ("mass", r"\b(?:mass|weight|kilograms?|grams?|tonnes?|pounds?|lbs?|kg|kilogm)\b"),
-        ("length", r"\b(?:length|width|depth|height|fork length|millimetres?|centimetres?|metres?|mm|cm)\b"),
-        ("count", r"\b(?:count|abundance|number|numerosity|individuals?|num)\b"),
-        (
-            "dimensionless",
-            r"\b(?:dimensionless|unitless|percentage|percent|proportion|ratio|"
-            r"fraction|decimal)\b|/vocab/unit/(?:percent|one)\b",
-        ),
+    text = " ".join(normalized)
+
+    compound = [
+        name
+        for name, pattern in _COMPOUND_DIMENSION_RULES
+        if any(re.search(pattern, value, flags=re.ASCII) for value in normalized)
     ]
-    matched = [name for name, pattern in rules if re.search(pattern, text)]
+    if len(compound) == 1:
+        return compound[0]
+    if len(compound) > 1:
+        return None
+
+    denominator_count = max(
+        len(re.findall(_DENOMINATOR_PATTERN, value, flags=re.ASCII))
+        for value in normalized
+    )
+    powered_denominator = any(
+        re.search(_POWERED_DENOMINATOR_PATTERN, value, flags=re.ASCII)
+        for value in normalized
+    )
+    if denominator_count > 1 or powered_denominator:
+        return None
+
+    matched = [
+        name
+        for name, pattern in _DIMENSION_RULES
+        if re.search(pattern, text, flags=re.ASCII)
+    ]
+    if denominator_count == 1 and "rate" not in matched:
+        matched.append("rate")
+    strong_physical = [name for name in matched if name in _STRONG_PHYSICAL_DIMENSIONS]
+    if len(strong_physical) == 1:
+        return None if "rate" in matched else strong_physical[0]
+    if len(strong_physical) > 1:
+        return None
+    if "rate" in matched:
+        return "rate"
     return matched[0] if len(matched) == 1 else None
 
 
@@ -1705,16 +1925,45 @@ def _finding(row, code: str, message: str) -> dict:
     }
 
 
+def _candidate_dimension(candidate: dict) -> Optional[str]:
+    """``.ms_semantic_validator_candidate_dimension()``."""
+    return _dimension(
+        candidate.get("label"),
+        candidate.get("definition"),
+        candidate.get("iri"),
+    )
+
+
+def _current_selected_iris(rows, dictionary_row: dict) -> dict:
+    """``.ms_semantic_bundle_current_selected_iris()``: the IRI each slot holds
+    once the accepts are applied -- the dictionary's own filled slots (a
+    ``REVIEW:``-marked value does not count) overridden by every accepted
+    row's selected IRI. The paired-redundancy rule reads this, so a variable
+    the dictionary already carries pairs with a newly accepted constraint."""
+    selected = {role: None for role in BUNDLE_SLOT_FIELDS}
+    for role, field in BUNDLE_SLOT_FIELDS.items():
+        value = _validator_scalar(dictionary_row.get(field), "")
+        if value and not re.match(r"REVIEW:", value, flags=re.IGNORECASE):
+            selected[role] = value
+    for row in rows:
+        iri = _validator_scalar(row.get("llm_selected_iri"), "")
+        if _validator_scalar(row.get("llm_decision"), "") == "accept" and iri:
+            selected[str(row.get("dictionary_role"))] = iri
+    return selected
+
+
 def _downgrade(row, findings: list[dict]) -> None:
+    """Turn the accept into a review, clear the selection, keep the confidence
+    and append ``[CODE] message`` for each finding to the rationale."""
     row["llm_decision"] = "review"
     row["llm_selected_candidate_index"] = pd.NA
     row["llm_selected_iri"] = pd.NA
     row["llm_selected_label"] = pd.NA
-    rationale = _text(row.get("llm_rationale"), "")
     notes = " ".join(
         f"[{finding['code']}] {finding['message']}" for finding in findings
     )
-    row["llm_rationale"] = f"{rationale} {notes}".strip()
+    rationale = _validator_scalar(row.get("llm_rationale"), None)
+    row["llm_rationale"] = notes if rationale is None else f"{rationale} {notes}"
 
 
 def _apply_validators(
@@ -1724,31 +1973,49 @@ def _apply_validators(
     suggestions,
     context,
 ) -> tuple[list[dict], list[dict]]:
-    by_role = {str(row["dictionary_role"]): row for row in rows}
+    """``.ms_semantic_apply_bundle_validators()``: run the seven deterministic
+    validators over every accepted row of one bundle, in R's order, and
+    downgrade the rows that fail.
+
+    The selected candidates and the current slot IRIs are read once, before
+    any row is downgraded, so a pair or a redundancy is judged on what the
+    model accepted rather than on what an earlier validator left standing.
+    """
     target_by_role = {
         str(target["dictionary_role"]): target
         for _, target in targets.iterrows()
     }
-    selected = {
-        role: _selected_candidate(row, target_by_role[role], suggestions)
-        for role, row in by_role.items()
-        if _text(row.get("llm_decision")) == "accept"
-    }
-    selected_iris = {
-        role: _text(candidate.get("iri"))
-        for role, candidate in selected.items()
-        if candidate is not None
-    }
-    all_findings = []
-    for role, row in by_role.items():
-        if _text(row.get("llm_decision")) != "accept":
+    bundle_dictionary_row = (
+        _dictionary_row(targets.iloc[0], dictionary) if len(targets) else {}
+    )
+    selected = {}
+    for row in rows:
+        role = str(row.get("dictionary_role"))
+        if (
+            _validator_scalar(row.get("llm_decision"), "") != "accept"
+            or role not in target_by_role
+        ):
             continue
-        target = target_by_role[role]
-        candidate = selected.get(role)
+        candidate = _selected_candidate(row, target_by_role[role], suggestions)
+        if candidate is not None:
+            selected[role] = candidate
+    selected_iris = _current_selected_iris(rows, bundle_dictionary_row)
+
+    all_findings = []
+    for row in rows:
+        if _validator_scalar(row.get("llm_decision"), "") != "accept":
+            continue
+        role = str(row.get("dictionary_role"))
+        target = target_by_role.get(role)
+        if target is None:
+            continue
+        candidate = _selected_candidate(row, target, suggestions)
         if candidate is None:
             continue
-        evidence = _evidence_text(target, dictionary, context)
+        dictionary_row = _dictionary_row(target, dictionary)
+        evidence = _bundle_validator_evidence(target, dictionary_row, context)
         row_findings = []
+
         if role == "method" and not _has_method_evidence(evidence):
             row_findings.append(
                 _finding(
@@ -1756,6 +2023,16 @@ def _apply_validators(
                     "SEM_METHOD_EVIDENCE_REQUIRED",
                     "The accepted method candidate lacks explicit field, "
                     "protocol, gear, instrument, or estimation-procedure evidence.",
+                )
+            )
+        if role == "constraint" and not _has_constraint_evidence(evidence):
+            row_findings.append(
+                _finding(
+                    row,
+                    "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+                    "The accepted constraint candidate lacks an explicit "
+                    "qualifier such as origin, life stage, phase, season, age, "
+                    "sex, stock, or reporting unit.",
                 )
             )
         if role == "statistical_modifier" and not _has_modifier_evidence(
@@ -1777,16 +2054,6 @@ def _apply_validators(
                     "minimum, total, or peak).",
                 )
             )
-        if role == "constraint" and not _has_constraint_evidence(evidence):
-            row_findings.append(
-                _finding(
-                    row,
-                    "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
-                    "The accepted constraint candidate lacks an explicit "
-                    "qualifier such as origin, life stage, phase, season, age, "
-                    "sex, stock, or reporting unit.",
-                )
-            )
         role_message = _role_type_message(role, candidate)
         if role_message:
             row_findings.append(
@@ -1794,16 +2061,11 @@ def _apply_validators(
             )
 
         if role in {"property", "unit"}:
-            dictionary_row = _dictionary_row(target, dictionary)
             expected = _dimension(
                 dictionary_row.get("unit_label"),
                 dictionary_row.get("unit_iri"),
             )
-            actual = _dimension(
-                candidate.get("label"),
-                candidate.get("definition"),
-                candidate.get("iri"),
-            )
+            actual = _candidate_dimension(candidate) if expected else None
             if expected and actual and expected != actual:
                 row_findings.append(
                     _finding(
@@ -1816,17 +2078,13 @@ def _apply_validators(
 
         property_candidate = selected.get("property")
         unit_candidate = selected.get("unit")
-        if role in {"property", "unit"} and property_candidate and unit_candidate:
-            property_dimension = _dimension(
-                property_candidate.get("label"),
-                property_candidate.get("definition"),
-                property_candidate.get("iri"),
-            )
-            unit_dimension = _dimension(
-                unit_candidate.get("label"),
-                unit_candidate.get("definition"),
-                unit_candidate.get("iri"),
-            )
+        if (
+            role in {"property", "unit"}
+            and property_candidate is not None
+            and unit_candidate is not None
+        ):
+            property_dimension = _candidate_dimension(property_candidate)
+            unit_dimension = _candidate_dimension(unit_candidate)
             if (
                 property_dimension
                 and unit_dimension
@@ -1845,9 +2103,9 @@ def _apply_validators(
 
         if (
             role == "constraint"
-            and _text(candidate.get("iri"))
+            and _validator_scalar(candidate.get("iri"), "")
             == "https://w3id.org/smn/CatchContext"
-            and selected_iris.get("variable")
+            and _validator_scalar(selected_iris.get("variable"), "")
             == "https://w3id.org/smn/CatchAbundance"
             and not _has_constraint_evidence(evidence)
         ):
