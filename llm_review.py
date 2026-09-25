@@ -1149,9 +1149,14 @@ def _retry_candidates(
     """The second-pass shortlist for one target.
 
     Pass 2 goes through the same retriever as pass 1, as it does in metasalmon
-    (hub B-363): the explicit allowlist, the ``(source, iri)`` deduplication,
-    the role-hint bonus and the sort all apply, and every row carries
-    ``retrieval_pass`` 2 and the query it came from.
+    (hub B-363): the explicit allowlist and the role-hint bonus apply, the
+    rows are deduplicated by candidate identity
+    (``semantics._semantic_candidate_identity()``, so IRI-less candidates
+    with different fingerprints all survive), a missing score stays missing
+    and sorts last, the depth is floored at 1, and every row carries
+    ``retrieval_pass`` 2 and the query it came from. Pass 1 keeps its own
+    ``(source, iri)`` key for now; the retriever's docstring says why and what
+    retires the split.
     """
     from .semantics import _retrieve_semantic_target_candidates
 
