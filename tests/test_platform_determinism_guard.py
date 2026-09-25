@@ -24,15 +24,20 @@ import ast
 import datetime as _dt
 import json
 import re
+import shutil
 import tempfile
 import warnings
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
+from metasalmonpy import eml
 from metasalmonpy import observation_structures as obs
 from metasalmonpy import package_io
 from metasalmonpy import resource_types as rt
+from metasalmonpy import write_eml_from_sdp
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -449,3 +454,132 @@ def test_a_date_is_not_an_instant_and_keeps_its_own_spelling():
         .splitlines()[1]
         == "0999-06-05"
     )
+
+
+# --- the third copy: the EML calendarDate -----------------------------------
+#
+# Hub item **B-245**, the metasalmonpy half of **B-162**. metasalmon keeps
+# B-162's two EML tests beside B-115's writer tests, in
+# ``tests/testthat/test-canonical-date-render.R``. The twins of B-115's tests
+# are the B-145 section above, so the twins of B-162's follow them here.
+#
+# ``eml._add_coverage()`` writes ``temporal_start`` and ``temporal_end`` into
+# ``calendarDate`` through ``_as_character()``, which reads like a third
+# renderer beside the two writers. It is not one, and these two tests check
+# that it stays that way. The builder has a single entry,
+# ``write_eml_from_sdp(path)``, and it reads the package back from disk as
+# text: ``metadata/dataset.csv`` through ``metadata.read_sdp_csv()``, every
+# column ``str``, or ``datapackage.json`` when there is no canonical metadata.
+# So the value is rendered once, by a writer, and ``_as_character()`` of that
+# text is the identity. THE BASELINE IS THE FILE THE EML IS READ FROM.
+# ``_written_instants()`` above reads that file as text whatever the value's
+# type, so it serves here too.
+#
+# WHAT THESE DELIBERATELY DO NOT PIN: a typed instant. Its three copies agree
+# today (``2024-01-01T00:00:00Z`` in both files and in the ``calendarDate``,
+# measured 2026-09-25), but EML 2.2.0's ``calendarDate`` is
+# ``xs:gYear | xs:date``, so ``write_eml_from_sdp()`` refuses that document at
+# its schema check. An EML that carries an instant has to differ from the CSV
+# there, so a byte-agreement pin would make that fix look like a regression.
+#
+# *Retires when:* the EML stops being built from the package on disk. A builder
+# that takes a typed frame is a writer, and has to render through the CSV's
+# baseline; the pin then moves to that renderer.
+
+EML_FIXTURE = Path(__file__).resolve().parent / "data" / "eml" / "sdp-default"
+
+
+def _eml_extra_available() -> bool:
+    try:
+        import lxml.etree  # noqa: F401
+        import yaml  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _eml_package_with_temporal(tmpdir: str, start: object, end: object) -> Path:
+    """The EML export fixture, rewritten through the real writer.
+
+    Only ``temporal_start`` and ``temporal_end`` change. The mapping sidecar and
+    the two files whose digests it records are not package-managed, so the
+    rewrite leaves them as they were and the package still exports.
+    """
+    target = Path(tmpdir) / "sdp"
+    shutil.copytree(EML_FIXTURE, target)
+    package = package_io.read_salmon_datapackage(str(target))
+    package_io.write_salmon_datapackage(
+        resources=package["resources"],
+        dataset_meta=package["dataset"].assign(
+            temporal_start=[start], temporal_end=[end]
+        ),
+        table_meta=package["tables"],
+        dict_df=package["dictionary"],
+        codes=package["codes"],
+        path=str(target),
+        overwrite=True,
+    )
+    return target
+
+
+def _calendar_dates(document: ET.Element) -> list:
+    """The begin and end ``calendarDate`` of a coverage or a whole document."""
+    return [
+        document.find(".//rangeOfDates/beginDate/calendarDate").text,
+        document.find(".//rangeOfDates/endDate/calendarDate").text,
+    ]
+
+
+# The skip retires when lxml and PyYAML move from the ``[eml]`` extra into the
+# core dependencies, or when ``write_eml_from_sdp()`` stops needing them.
+@pytest.mark.skipif(
+    not _eml_extra_available(), reason="requires the metasalmonpy[eml] extra"
+)
+def test_eml_calendar_date_is_the_dataset_csv_spelling_of_a_typed_date():
+    """Through the exported builder and its schema check.
+
+    EML can carry a date, so here all three copies agree byte for byte. The
+    pre-1000 year is the one whose spelling depends on which renderer ran:
+    ``date.isoformat()`` pads it, and glibc's ``strftime`` does not.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target = _eml_package_with_temporal(
+            tmpdir, _dt.date(999, 1, 1), _dt.date(2024, 12, 31)
+        )
+        result = write_eml_from_sdp(str(target))
+        calendar = _calendar_dates(ET.parse(result["path"]).getroot())
+        descriptor, csv = _written_instants(target)
+
+    assert result["validation"] is True
+    assert calendar == [csv["start"], csv["end"]]
+    assert calendar == [descriptor["start"], descriptor["end"]]
+    assert calendar == ["0999-01-01", "2024-12-31"]
+
+
+def test_eml_calendar_date_keeps_the_dataset_csv_spelling_of_short_year_text():
+    """Text that a re-rendering EML would change: an unpadded year.
+
+    The exported call stops at its schema check, since ``999-06-05`` is not an
+    ``xs:date``, so the coverage is built from the frame
+    ``validate_salmon_datapackage()`` returns as ``package``, which is the frame
+    ``write_eml_from_sdp()`` hands the builder. That also keeps this half free
+    of the ``[eml]`` extra. As in metasalmon, the descriptor is not asserted:
+    how a writer spells off-profile text is not this test's question.
+
+    Because ``999-06-05`` is off-profile, a validator that enforces the
+    schema's temporal pattern (the subject of hub item **B-205**) would refuse
+    it before returning the frame. If that happens, take the frame from
+    ``read_salmon_datapackage()``, as metasalmon's twin does: validation
+    returns that frame unchanged.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target = _eml_package_with_temporal(tmpdir, "999-06-05", "2024-12-31")
+        package = package_io.validate_salmon_datapackage(
+            str(target), require_iris=True
+        )["package"]
+        coverage = ET.Element("dataset")
+        eml._add_coverage(coverage, package["dataset"], {})
+        _, csv = _written_instants(target)
+
+    assert _calendar_dates(coverage) == [csv["start"], csv["end"]]
+    assert _calendar_dates(coverage)[0] == "999-06-05"

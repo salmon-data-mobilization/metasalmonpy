@@ -705,6 +705,36 @@ and moving it is a separate outward act.
   opens no `PARITY.md` row. Row **53** is amended in place, because it described
   the defect as present on both sides.
 
+### Parity evidence
+
+* **Two tests pin that the EML `calendarDate` carries the spelling
+  `metadata/dataset.csv` holds.** Hub queue item **B-245**, the mirror half of
+  the hub's **B-162**: these are the twins of the two tests B-162 added to
+  metasalmon's `tests/testthat/test-canonical-date-render.R`. No behaviour
+  changed. `eml._add_coverage()` writes `temporal_start` and `temporal_end`
+  through `_as_character()`, which reads like a third renderer beside the two
+  writers. B-162 answered for R that it is not one, and the same construction
+  holds here: `write_eml_from_sdp()` reads the package back from disk, where
+  `read_sdp_csv()` reads every column as `str`, so the EML copies the one
+  rendering a writer made. Nothing pinned that.
+
+  The first test writes `datetime.date(999, 1, 1)` and
+  `datetime.date(2024, 12, 31)` through `write_salmon_datapackage()` and
+  exports the package through `write_eml_from_sdp()`, schema check included.
+  Both `calendarDate` values must equal the `dataset.csv` cells and
+  `datapackage.json`'s `temporal`, and read `0999-01-01` and `2024-12-31`. The
+  second writes the text `999-06-05`. That is not an `xs:date`, so the exported
+  call refuses it, and the test builds the coverage from the frame
+  `validate_salmon_datapackage()` returns as `package`, which is the frame the
+  builder receives. Its `calendarDate` must equal the `dataset.csv` cell. Both
+  pass on the code as it stands, and each fails under a mutation that
+  re-renders the value at the two `calendarDate` lines.
+
+  They live in `tests/test_platform_determinism_guard.py`, after the twins of
+  B-115's writer tests, as they do in metasalmon. The first needs the `[eml]`
+  extra and skips without it; the second runs in both dependency legs. The EML
+  behaves here as it does in metasalmon, so this opens no `PARITY.md` row.
+
 ## 0.5.0
 
 **The `0.4.0 → 0.5.0` catch-up window is closed** (roadmap S5; hub queue
