@@ -665,6 +665,44 @@ and moving it is a separate outward act.
   prevented. There is no metasalmon half, because R has no counterpart of
   pandas' `attrs` comparison.
 
+* **`apply_salmon_dictionary()` gives a coded column the labels in
+  `codes.csv`'s `code_label`.** Hub queue item **B-274**. metasalmon applies a
+  code list with `factor(x, levels = code_value, labels = code_label)`, so a
+  coded column's levels are its labels. Here no coded column ever carried one.
+  The relabel called `rename_categories` on the Series rather than on its
+  `.cat` accessor, and the `AttributeError` fell into an `except` marked
+  defensive, which turned the column into text holding the code values. Under
+  the `categorical` role the block after it then rebuilt the categories from
+  the code values, which would have blanked every label had one been applied.
+  Measured on `main` `e089b86` under pandas 3.0.6, 2.2.3 and 1.5.3, codes `N`
+  and `W` labelled `Net` and `Weir` came back as `N` and `W`, and a Categorical
+  of integers `[1, 2, 3]` against integer code values `[1, 2]` came back
+  `[nan, nan, nan]` under the `categorical` role, the listed values blanked with
+  the unlisted one.
+
+  A coded column is now a Categorical whose categories are its labels, in
+  code-list order, under either role, and the `categorical` role keeps them.
+  Where pandas and R part, it follows R's `factor()`, measured on metasalmon
+  `11c770c`: two codes sharing a label share one category, a repeated code
+  value takes its first row's label, and an ordered Categorical stays ordered.
+  A code whose label is missing or blank gets a missing level in R, which
+  prints and writes as `NA`; pandas has no missing category, so its values
+  become missing, unreported, as in R. A value missing from the code list still
+  becomes missing, and B-241's warning still names it. Without a `code_label`
+  column the code values serve as labels.
+
+  A failure that is left is reported. The one found is a data frame that
+  repeats the column's name, whose values in both columns were all blanked;
+  they are now kept, as text, with a `RuntimeWarning` naming the column. R
+  refuses such a data frame, and what this package should do with one is hub
+  item **B-397**'s.
+
+  `ApplyDictionaryCodeLabelTests` in `tests/test_dictionary.py` pins each of
+  these and failed on `e089b86`, and `test_apply_salmon_dictionary_with_codes`,
+  which asserted that the categories were the code values, now asserts the
+  labels. There is no metasalmon half and no `PARITY.md` row, because metasalmon
+  already applies the labels.
+
 ### Changed
 
 * **Context documents become the excerpts metasalmon builds.** Hub queue item

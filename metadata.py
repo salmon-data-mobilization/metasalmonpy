@@ -620,8 +620,8 @@ def _code_list_applies(column) -> bool:
     alone until hub B-188 and also passes a column that mixes text with other
     values (:func:`_holds_text_among_other_values`).
 
-    A column name the data repeats gives a DataFrame, which is let through to
-    the path it always took; the codes step says why.
+    A column name the data repeats gives a DataFrame, which is let through;
+    the codes step says what becomes of it.
     """
     if not isinstance(column, pd.Series):
         return True
