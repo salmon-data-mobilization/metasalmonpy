@@ -310,7 +310,8 @@ and moving it is a separate outward act.
 
 * **`review_metadata()`, the four `set_sdp_*()` setters and the blank-required
   check in `validate_salmon_datapackage()` read the schema the settings
-  select.** Hub queue item **B-215**, the port of metasalmon's **B-175**
+  select, and the metadata files are written in that schema's field order.**
+  Hub queue item **B-215**, the port of metasalmon's **B-175**
   (metasalmon pull request #145). They read the bundled schema under every
   setting. So a schema selected with `set_sdp_schema_source()` or
   `set_sdp_schema_base_url()`, or with `METASALMONPY_SDP_SCHEMA_SOURCE` or
@@ -321,14 +322,28 @@ and moving it is a separate outward act.
   blank-required check did not name it. All four settings were silently
   ignored. Now they read the schema the settings select, as the writers do:
   from this process's schema cache once a writer has loaded it, and otherwise
-  by loading it once. A setter also writes the file's columns in that schema's
-  field order, as metasalmon's setter does; under the bundled schema the order
-  is the one it always wrote. Under the shipped settings they still read the
-  bundled copy and contact no network, as `review_metadata()` documents. One
-  consequence follows the writers too: with `set_sdp_schema_source("remote")`
-  and no network, these now raise `SdpSchemaError` where they used to read the
-  bundled copy. This closes R-shipped-first lag and is not a deliberate
-  difference, so it opens no `PARITY.md` row.
+  by loading it once.
+
+  Under a selected schema, the metadata files are now also written the way
+  metasalmon writes them. The setters, `write_salmon_datapackage()` and
+  `apply_sdp_semantics()` all align each file to the fields that schema
+  declares, in its order, with any other column after them. So a field the
+  schema declares mid-list is written in place rather than last, and a setter
+  call, a fresh write or an apply adds any declared column the file lacks, as
+  an empty column. A rebuild or an apply therefore keeps the bytes a setter
+  wrote.
+
+  Under the shipped settings, no written byte changes, because the declared
+  order is the order these files always had. `review_metadata()` and the
+  setters still read the bundled copy and contact no network, as
+  `review_metadata()` documents.
+
+  One consequence follows the writers' loader. With
+  `set_sdp_schema_source("remote")` and no network, `review_metadata()`, the
+  setters, `validate_salmon_datapackage()` and `apply_sdp_semantics()` now
+  raise `SdpSchemaError` where they used to read the bundled copy. This closes
+  R-shipped-first lag and is not a deliberate difference, so it opens no
+  `PARITY.md` row.
 
 ## 0.5.0
 
