@@ -180,6 +180,39 @@ it stood at that commit, as the release body. It exists because agent sessions
 cannot push tags. Running it is still an outward act, and it is Brett's
 decision: an agent dispatches it only on his word.
 
+**A change that merges after the commit that bumped the version and before
+that version's tag exists is filed under `## Unreleased`, never under the
+version it did not ship in, and the tag stays on the bump commit** (Brett,
+2026-09-16: *"Regarding the agents.md change log entry. I will take your
+recommendation."*). metasalmon's `AGENTS.md` states the same rule for its
+`NEWS.md`. A dated correction to a shipped entry may still be appended in
+place, because it makes the entry describe what shipped more accurately rather
+than adding to what shipped; a change, a fix or an addition goes under
+`## Unreleased`. The instance that produced the rule is this repository's.
+B-144's branch filed its entry under `## Unreleased`, and its merge `b939fd9`
+(#32), 21 seconds after the bump merge `67fb486` (#33, B-153), carried it under
+`## 0.5.0` with no conflict to say so. Pull request #35 moved it back
+(`3f8349a`). The window is real on every release, because the tag is a separate
+act from the bump.
+
+**The pre-tag step is `python3 scripts/check-changelog-window.py`, run on an
+up-to-date `main` in a full clone before the Release workflow is dispatched.**
+Until the tag exists it measures the version against its bump commit, the
+first commit on `main`'s first-parent history whose `pyproject.toml` reads it,
+which is the commit the workflow must be given. It fails on any line under that
+heading added by a commit that is not an ancestor of it. A correction passes
+only in a marked, dated form: a `*(Correction, YYYY-MM-DD: …)*` paragraph or a
+`[corrected YYYY-MM-DD: …]` bracket. A red run before tagging means an entry
+moves to `## Unreleased` first. It also runs on every pull request
+(`.github/workflows/changelog-window.yml`), and its docstring states what it
+does not cover. **One commit is exempt by ruling:** `10d0616`, the calendar fix
+under `## 0.2.1`, which pull request #10 merged after the commit `v0.2.1`
+names. Brett ruled on 2026-09-25 that the tag does not move and that the entry
+says so, and the exemption holds only while the entry's dated correction names
+the commit. The script is a port of the hub's copy (hub item B-200; B-201
+here). Its test file fails when a definition the two copies share stops
+matching, so a change to either has to reach the other.
+
 **The version number lives in six places and they drift.** A bump moves all
 six in the same change, and **every one of them is pinned by a test in
 `tests/test_public_api.py`**, so a bump that misses one turns the suite red
@@ -243,23 +276,25 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1180
-passed / 1 skipped with the extras installed, 1039 / 142 with core dependencies
-only (2026-09-25, measured locally for hub B-362 on `99de1c3`, its merge of
-`main` `0235487`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, on a
-machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, the same
-under `python -m pytest -q` and bare `pytest -q`; 1106 / 1 and 965 / 142 on
-`main` `0235487`, as B-243 measured it on `d53f403`, its merge of `main`
-`66ad1a3`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, the same three
-ways; 1158 / 1 and 1017 / 142 for B-362 on `7f9f79c`, branched from `main`
-`ba1b54a`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, measured the
-same three ways; 1102 / 1 and 961 / 142 for
-B-234 on `f872f51`, branched from `main` `ba1b54a`, and 1088 / 1 and 947 / 142
-for B-243 on `c4bdfb9`, branched from the same `main`, each measured the same
-way; 1084 / 1 and 943 / 142 on `main` `ba1b54a` before both, measured the same
-four ways; 1066 / 1 and 925 / 142
-for B-189 on `10750ec`, branched from `main` `dcafe28`; 1064 / 1 and 923 / 142
-on `main` `dcafe28` before it, as for B-212 on `351fed6`, branched from `main`
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1140
+passed / 2 skipped with the extras installed, 999 / 143 with core dependencies
+only (2026-09-25, measured locally for hub B-201 with `main` `0235487` merged
+in, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a machine where
+`Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a full clone with
+every tag and with `METASALMON_PATH` unset, the same under `python -m pytest -q`
+and bare `pytest -q`; 1180 / 1 and 1039 / 142 for B-362 on `99de1c3`, its merge of `main`
+`0235487`, and 1158 / 1 and 1017 / 142 for B-362 on `7f9f79c`, branched from
+`main` `ba1b54a`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, each
+measured the same three ways; 1106 / 1 and 965 / 142 for B-243 on `d53f403`, its merge
+of `main` `66ad1a3`, whose tests `main` `0235487` merged unchanged, and
+1136 / 2 and 995 / 143 for B-201 on `1a2fd73`, its merge of the same `main`;
+1102 / 1 and 961 / 142 for B-234 on `f872f51`, whose tests `main` `66ad1a3`
+merged unchanged, 1088 / 1 and 947 / 142 for B-243 on `c4bdfb9`, and 1118 / 2
+and 977 / 143 for B-201 on `d1182e5`, each branched from `main` `ba1b54a`;
+1084 / 1 and 943 / 142 on `main` `ba1b54a` before them, measured the same four
+ways; 1066 / 1 and 925 / 142 for B-189 on `10750ec`, branched from `main`
+`dcafe28`; 1064 / 1 and 923 / 142 on `main` `dcafe28` before it, as for B-212
+on `351fed6`, branched from `main`
 `70fa8fd`; 1061 / 1
 and 920 / 142 for B-222 on `e3b8330`, branched from `main` `ed5e22e`; 1056 / 1
 and 915 / 142 on `main` `ed5e22e` before it, as for B-215 on `9577f35`, which
@@ -271,17 +306,24 @@ earlier that day, 1022 / 1 and 881 / 142 for B-241 on the tree of its head
 871 / 142 for B-242 and 1007 / 1 and 866 / 142 for B-240 earlier that day,
 966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
-on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads two fewer
-passes in each leg for the same tree**: 1020 / 3 and 879 / 144 on B-241's head
-`5b83c27`, read from its check logs on 2026-09-24, as B-242's head `183f887`
-read 1010 / 3 and 869 / 144. The two are `tests/test_roundtrip.py`, which runs
-only where both of those hold. CI's suite jobs have neither, so it skips there
-and runs in CI's `parity` job instead. The gap between the legs is the
-extras-gated EML, KNB and context-reader tests; the one that skips in both legs,
-locally and on CI, is
-the Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1`
-is set. These counts are a dated measurement, not a target — update them when
-you add tests rather than treating a mismatch as a failure.
+on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads five fewer
+passes in each leg for the same tree**: 1131 / 7 and 990 / 148 on B-201's head
+`1a2fd73`, read from its check logs on 2026-09-25, as its head `098030f`, before
+`main` `66ad1a3` was merged in, read 1113 / 7 and 972 / 148. Before B-201 it
+read two fewer, as B-241's head `5b83c27` read 1020 / 3 and 879 / 144 on
+2026-09-24 and B-242's head `183f887` read 1010 / 3 and 869 / 144. Two of the
+five are `tests/test_roundtrip.py`, which runs only where both of those hold.
+CI's suite jobs have neither, so it skips there and runs in CI's `parity` job
+instead. The other three are `tests/test_check_changelog_window.py`'s replays of this
+repository's history, which need a full clone with the tags. CI's suite jobs
+check out one commit, so they skip there and run in the `changelog-window`
+workflow instead. The gap between the legs is the extras-gated EML, KNB and
+context-reader tests. Two tests skip in both legs, locally and on CI: the
+Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1` is
+set, and the comparison of `scripts/check-changelog-window.py` with the hub's
+copy, which runs only when `METASALMON_PATH` names a metasalmon checkout. These
+counts are a dated measurement, not a target — update them when you add tests
+rather than treating a mismatch as a failure.
 
 **The suite runs from a checkout at any path.** It did not until 2026-09-23
 (hub **B-191**). The root `__init__.py` and a `tests/__init__.py` made pytest
