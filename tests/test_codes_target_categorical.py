@@ -26,6 +26,7 @@ assert on the validator. *Retires when:* that lands.
 
 from __future__ import annotations
 
+import datetime as _dt
 import warnings
 from pathlib import Path
 
@@ -35,7 +36,7 @@ import pytest
 import metasalmonpy
 from metasalmonpy import create_sdp, infer_salmon_datapackage_artifacts
 from metasalmonpy.dictionary import infer_column_role
-from metasalmonpy.metadata import CODE_LIST_LIMIT, read_sdp_csv
+from metasalmonpy.metadata import CODE_LIST_LIMIT, code_list_values, read_sdp_csv
 
 DATA = Path(metasalmonpy.__file__).parent / "data"
 
@@ -265,14 +266,15 @@ def test_the_role_heuristic_and_the_code_row_seeder_share_one_decision():
 @pytest.mark.parametrize(
     "example", bundled_example_data(), ids=lambda path: path.stem
 )
-def test_create_sdp_seeds_no_code_row_for_a_column_typed_attribute(example, tmp_path):
-    """The assertion hub B-125's ``retires_when`` names, over every bundled example.
+def test_create_sdp_seeds_no_code_row_for_a_non_categorical_column(example, tmp_path):
+    """R's plain assertion, over every bundled example.
 
-    Measured on the 30-row sample: **twelve** columns were typed ``attribute``
-    and carried seeded ``codes.csv`` rows before this port (AREA, POPULATION,
-    SPECIES, RUN_TYPE, WATERBODY, WATERSHED_CDE, RELIABILITY, FULL_CU_IN,
-    ENUMERATION_METHODS, ESTIMATE_METHOD, ESTIMATE_CLASSIFICATION,
-    ESTIMATE_STAGE); **zero** after it.
+    Every ``codes.csv`` row names a column the dictionary typed
+    ``categorical``, which is ``nrow(got$offending) == 0`` in metasalmon's
+    ``tests/testthat/test-codes-target-categorical.R``. Until hub B-188 this
+    package could assert only the weaker "no seeded column is typed
+    ``attribute``" (hub B-125), because ``START_DTT`` and ``END_DTT`` on the
+    30-row sample were seeded and typed ``temporal``.
     """
     package_path = _build_example_sdp(example, tmp_path)
     got = _codes_rows_off_categorical(package_path)
@@ -280,64 +282,30 @@ def test_create_sdp_seeds_no_code_row_for_a_column_typed_attribute(example, tmp_
     # The check cannot pass by seeding nothing.
     assert len(got["codes"]) > 0
 
-    roles = {
-        name: got["dict"]
-        .loc[got["dict"]["column_name"] == name, "column_role"]
-        .iloc[0]
-        for name in sorted(set(got["codes"]["column_name"]))
-    }
-    seeded_attributes = sorted(
-        name for name, role in roles.items() if role == "attribute"
-    )
-    assert seeded_attributes == [], (
-        "codes.csv rows targeting columns typed attribute: "
-        + ", ".join(seeded_attributes)
+    offending = sorted(set(got["offending"]["column_name"]))
+    assert offending == [], (
+        "codes.csv rows targeting non-categorical columns: " + ", ".join(offending)
     )
 
 
-def test_the_only_seeded_non_categorical_columns_are_the_known_date_residual(tmp_path):
-    """What is left over, pinned rather than left to be rediscovered.
+def test_the_30_row_sample_seeds_exactly_its_categorical_columns(tmp_path):
+    """Seeded and categorical are the same twelve columns, and the dates are neither.
 
-    R's helper asserts that **no** ``codes.csv`` row targets a non-categorical
-    column, and R reaches that on this example. This package does not, for two
-    columns, and the cause is **not** the ported role heuristic:
-
-    * ``readr::read_csv()`` parses ``START_DTT`` / ``END_DTT`` into a ``Date``
-      vector, and R's seeder selects on ``inherits(v, "factor") ||
-      inherits(v, "character")``, so a ``Date`` never reaches it;
-    * ``pandas.read_csv`` leaves them as strings, and even parsed to
-      ``datetime.date`` they stay **object** dtype -- which the seeder's own
-      dtype test accepts. So they are seeded, while the temporal branch (which
-      runs ahead of the code-list check, in both implementations) types them
-      ``temporal``.
-
-    Measured 2026-09-16 on the pristine tree: these same two were seeded and
-    typed ``temporal`` **before** this port, so B-125 neither caused nor
-    widened it, and B-125's ``retires_when`` speaks of a column typed
-    *attribute*, which this is not. Filed as a candidate rather than absorbed
-    (see ``.hub/workpads/B-125.md``). This test exists so the residual is a
-    pinned, named two rather than an open-ended "some". *Retires when:* the
-    seeder's dtype test stops accepting a date-like object column, at which
-    point this expects an empty set and R's plain assertion can replace it.
+    ``pandas.read_csv`` leaves ``START_DTT`` and ``END_DTT`` as text, where
+    ``readr::read_csv()`` gives R a ``Date`` that R's seeder never selects.
+    They stay ``temporal``, because the temporal branch runs ahead of the
+    code-list check in both implementations, and they carry no ``codes.csv``
+    rows (hub B-188). On ``main`` at ``85ebbb0`` each carried fourteen.
     """
-    example = DATA / "nuseds-fraser-coho-sample.csv"
-    package_path = _build_example_sdp(example, tmp_path)
+    package_path = _build_example_sdp(DATA / "nuseds-fraser-coho-sample.csv", tmp_path)
     got = _codes_rows_off_categorical(package_path)
+    dictionary = got["dict"]
 
-    roles = {
-        name: got["dict"]
-        .loc[got["dict"]["column_name"] == name, "column_role"]
-        .iloc[0]
-        for name in sorted(set(got["codes"]["column_name"]))
-    }
-    non_categorical = sorted(
-        name for name, role in roles.items() if role != "categorical"
+    seeded = sorted(set(got["codes"]["column_name"]))
+    categorical = sorted(
+        dictionary.loc[dictionary["column_role"] == "categorical", "column_name"]
     )
-    assert non_categorical == ["END_DTT", "START_DTT"]
-    assert {roles[name] for name in non_categorical} == {"temporal"}
-
-    # Everything else is categorical, which is the half B-125 owns.
-    assert sorted(name for name, role in roles.items() if role == "categorical") == [
+    assert seeded == categorical == [
         "AREA",
         "ENUMERATION_METHODS",
         "ESTIMATE_CLASSIFICATION",
@@ -351,3 +319,126 @@ def test_the_only_seeded_non_categorical_columns_are_the_known_date_residual(tmp
         "WATERBODY",
         "WATERSHED_CDE",
     ]
+    for name in ("START_DTT", "END_DTT"):
+        role = dictionary.loc[dictionary["column_name"] == name, "column_role"].iloc[0]
+        assert role == "temporal", name
+
+
+# The type ``readr::read_csv()``, R's documented reader, gives a column of one
+# date-shaped or date-time-shaped value. Measured 2026-09-24 under R 4.3.3,
+# readr 2.2.0 and vroom 1.7.1, by reading ``x\n"<token>"`` with
+# ``readr::read_csv(I(...))``. R's seeder never selects a ``Date`` or
+# ``POSIXct`` column, because its guard is ``inherits(v, "factor") ||
+# inherits(v, "character")``. So the same text read by ``pandas.read_csv`` must
+# not seed a code list here. The date guess goes by shape alone: ``2001-02-30``
+# and ``2001-13-06`` are guessed ``Date`` and then fail to parse. The date-time
+# guess checks every field, so ``T25:00:00`` and ``2001-02-30T10:00:00`` stay
+# character.
+READR_GUESSES = [
+    ("2001-11-06", "Date"),
+    ("2001/11/06", "Date"),
+    ("2001-11/06", "Date"),
+    ("0999-06-05", "Date"),
+    ("2001-02-30", "Date"),
+    ("2001-13-06", "Date"),
+    (" 2001-11-06", "Date"),
+    ("2001-11-06T10:00:00", "POSIXct"),
+    ("2001-11-06 10:00:00", "POSIXct"),
+    ("2001-11-06T10:00", "POSIXct"),
+    ("2001-11-06 10", "POSIXct"),
+    ("2001-11-06T10:00:00Z", "POSIXct"),
+    ("2001-11-06T10:00:00+02:00", "POSIXct"),
+    ("2001-11-06T10:00:00-08", "POSIXct"),
+    ("2001-11-06T10:00:00.123", "POSIXct"),
+    ("20011106T100000", "POSIXct"),
+    ("2001-11-06T10+02", "POSIXct"),
+    ("2001-11-6", "character"),
+    ("2001-1-06", "character"),
+    ("2001.11.06", "character"),
+    ("11/06/2001", "character"),
+    ("Nov 6 2001", "character"),
+    ("2001-11", "character"),
+    ("12001-11-06", "character"),
+    ("2001-11-06Z", "character"),
+    ("2001-11-06T25:00:00", "character"),
+    ("2001-11-06T23:60:00", "character"),
+    ("2001-02-30T10:00:00", "character"),
+    ("2001-13-06T10:00:00", "character"),
+    ("2001/11/06 10:00:00", "character"),
+    ("2001-11-06t10:00:00", "character"),
+    ("2001-11-06T10:00:00 UTC", "character"),
+    ("2001-11-06T1:00:00", "character"),
+    ("2001-11-06T10:00:00,5", "character"),
+]
+
+
+@pytest.mark.parametrize(
+    "token,readr_class", READR_GUESSES, ids=[token for token, _ in READR_GUESSES]
+)
+def test_text_readr_reads_as_a_date_or_date_time_seeds_no_code_list(token, readr_class):
+    series = pd.Series([token, token])
+    expected = [] if readr_class in ("Date", "POSIXct") else [token]
+    assert code_list_values(series) == expected
+    assert code_list_values(series.astype(object)) == expected
+
+
+# readr guesses one type for the whole column, so a mixed column is a date only
+# when every present value fits the same guess. Measured as above.
+READR_COLUMN_GUESSES = [
+    (["2001-11-06", "2001-11-06T10:00:00"], "POSIXct"),
+    (["2001-11-06", "2001/11/07"], "Date"),
+    (["2001-11-06", " "], "Date"),
+    (["2001/11/07", "2001-11-06T10:00:00"], "character"),
+    (["2001-02-30", "2001-11-06T10:00:00"], "character"),
+    (["2001-11-06", "10:00"], "character"),
+    (["2001-11-06", "unknown"], "character"),
+]
+
+
+@pytest.mark.parametrize(
+    "tokens,readr_class",
+    READR_COLUMN_GUESSES,
+    ids=[" | ".join(tokens) for tokens, _ in READR_COLUMN_GUESSES],
+)
+def test_a_column_is_a_date_only_when_every_present_value_is(tokens, readr_class):
+    expected = [] if readr_class in ("Date", "POSIXct") else tokens
+    assert code_list_values(pd.Series(tokens)) == expected
+
+
+def test_date_objects_seed_no_code_list_and_a_categorical_of_dates_still_does():
+    # R holds these as Date and POSIXct, and its seeder never selects either.
+    dates = [_dt.date(2001, 11, 6), None, _dt.date(2001, 11, 13)]
+    assert code_list_values(pd.Series(dates, dtype=object)) == []
+    stamps = [_dt.datetime(2001, 11, 6, 10, 30), pd.Timestamp("2001-11-13")]
+    assert code_list_values(pd.Series(stamps, dtype=object)) == []
+    assert code_list_values(pd.to_datetime(pd.Series(["2001-11-06", "2001-11-13"]))) == []
+    # A factor passes R's guard whatever its levels are, and so does a
+    # Categorical here, because declaring one is the caller's code-list intent.
+    assert code_list_values(
+        pd.Series(["2001-11-06", "2001-11-13"], dtype="category")
+    ) == ["2001-11-06", "2001-11-13"]
+
+
+def test_a_date_column_is_neither_seeded_nor_typed_categorical():
+    # The role heuristic reads the seeder's predicate (hub B-125), so a column
+    # of date text whose name has no time word is not left typed categorical
+    # with no code list. R holds that column as a Date and types it temporal
+    # by class. That role difference is not this test's subject.
+    resources = {
+        "surveys": pd.DataFrame(
+            {
+                "SURVEY_WAVE": ["2001-11-06", "2001-11-13", "2001-11-06"],
+                "AREA": ["29F", "29G", "29F"],
+            }
+        )
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        artifacts = infer_salmon_datapackage_artifacts(
+            resources, dataset_id="b188-demo", seed_semantics=False, seed_verbose=False
+        )
+    dictionary = artifacts["dict"]
+    assert set(artifacts["codes"]["column_name"]) == {"AREA"}
+    role = dictionary.loc[dictionary["column_name"] == "SURVEY_WAVE", "column_role"].iloc[0]
+    assert role != "categorical"
+    assert infer_column_role("START_DTT", pd.Series(["2001-11-06", None])) == "temporal"
