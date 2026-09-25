@@ -563,21 +563,25 @@ _SCHEMA_SELECTIONS = {
 }
 
 
-def _bundle_requiring_funding_source() -> dict:
+def _bundle_requiring_funding_source(after: str = "") -> dict:
     """The bundled schema plus one required ``dataset.csv`` field, validated.
 
     It stands in for a published schema that differs from the bundled copy in
     the one way that matters here: a requirement the bundle does not declare.
+    The field goes last, or straight after the field named by ``after``.
     """
     bundled = sdp_schema._load_vendored_sdp_schema()
     schemas = copy.deepcopy(bundled["metadata_schemas"])
-    schemas["dataset"]["fields"].append(
+    fields = schemas["dataset"]["fields"]
+    names = [field["name"] for field in fields]
+    fields.insert(
+        names.index(after) + 1 if after else len(fields),
         {
             "name": "funding_source",
             "type": "string",
             "description": "Who funded the work.",
             "constraints": {"required": True},
-        }
+        },
     )
     return sdp_schema._validate_sdp_schema(
         {
@@ -723,6 +727,42 @@ def test_a_selected_schema_nothing_has_loaded_is_loaded_once(
         }
         assert _set_funding_source(raw_package) is True
         assert fetched == [sdp_schema.default_sdp_schema_base_url()]
+    finally:
+        sdp_schema.set_sdp_schema_base_url(None)
+
+
+def test_a_setter_writes_the_file_in_the_selected_schemas_field_order(
+    raw_package, monkeypatch
+):
+    """A setter writes the columns in the order of the schema it checked the
+    fields against, as metasalmon's does since B-175.
+
+    R aligns the written frame to ``declared`` (``.ms_align_cols(frame,
+    declared)``). Aligning to the static column lists instead sent a field
+    that a selected schema declares mid-list to the end of the header, so the
+    two packages' setters wrote different bytes for the same package. Under
+    the bundled schema the static lists and the declared order are the same
+    list, so nothing changes there.
+    """
+    import csv
+
+    assert raw_package.is_dir()
+    _use_shipped_schema_defaults(monkeypatch)
+    _SCHEMA_SELECTIONS["set_sdp_schema_base_url"](monkeypatch)
+    try:
+        selected = _bundle_requiring_funding_source(after="creator")
+        sdp_schema.load_sdp_schema(
+            quiet=True, fetch_fn=lambda base_url, timeout: selected
+        )
+        declared = sdp_schema.sdp_schema_field_names("dataset")
+        assert declared.index("funding_source") == declared.index("creator") + 1
+
+        assert _set_funding_source(raw_package) is True
+        with (raw_package / "metadata" / "dataset.csv").open(
+            newline="", encoding="utf-8"
+        ) as stream:
+            header = next(csv.reader(stream))
+        assert header == declared
     finally:
         sdp_schema.set_sdp_schema_base_url(None)
 

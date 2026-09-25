@@ -58,10 +58,6 @@ from typing import Optional, Sequence
 import pandas as pd
 
 from .metadata import (
-    CODES_COLUMNS,
-    DATASET_META_COLUMNS,
-    DICTIONARY_COLUMNS,
-    TABLE_META_COLUMNS,
     align_columns,
     is_review_placeholder,
     read_sdp_csv,
@@ -127,13 +123,6 @@ METADATA_KEY_FIELDS = {
 #: validator would make :func:`review_metadata` report a clean package that
 #: still fails.
 MEASUREMENT_IRI_FIELDS = ("term_iri", "property_iri", "entity_iri", "unit_iri")
-
-_ALIGN_COLUMNS = {
-    "dataset.csv": DATASET_META_COLUMNS,
-    "tables.csv": TABLE_META_COLUMNS,
-    "column_dictionary.csv": DICTIONARY_COLUMNS,
-    "codes.csv": CODES_COLUMNS,
-}
 
 
 def _schema_source() -> Optional[str]:
@@ -1085,11 +1074,11 @@ def _set_sdp_metadata(
             frame[field] = pd.NA
         frame.at[index, field] = value
 
-    writes = {
-        located: _metadata_csv_bytes(
-            align_columns(frame, _ALIGN_COLUMNS[file_name])
-        )
-    }
+    # Ordered by ``declared``, the names the field check above was made
+    # against, as metasalmon's setter orders by them since B-175. Under a
+    # selected schema that is the selected order; under the bundled one it is
+    # the order the static column lists also give.
+    writes = {located: _metadata_csv_bytes(align_columns(frame, declared))}
 
     descriptor_path = target / "datapackage.json"
     if descriptor_path.is_file():

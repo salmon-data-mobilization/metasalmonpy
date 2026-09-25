@@ -321,8 +321,10 @@ and moving it is a separate outward act.
   blank-required check did not name it. All four settings were silently
   ignored. Now they read the schema the settings select, as the writers do:
   from this process's schema cache once a writer has loaded it, and otherwise
-  by loading it once. Under the shipped settings they still read the bundled
-  copy and contact no network, as `review_metadata()` documents. One
+  by loading it once. A setter also writes the file's columns in that schema's
+  field order, as metasalmon's setter does; under the bundled schema the order
+  is the one it always wrote. Under the shipped settings they still read the
+  bundled copy and contact no network, as `review_metadata()` documents. One
   consequence follows the writers too: with `set_sdp_schema_source("remote")`
   and no network, these now raise `SdpSchemaError` where they used to read the
   bundled copy. This closes R-shipped-first lag and is not a deliberate
