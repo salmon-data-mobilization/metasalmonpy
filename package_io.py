@@ -65,7 +65,22 @@ from .sdp_schema import (
 # remain for a bundle that omits them, and for callers importing them by name.
 SDP_PROFILE_URL = _SDP_PROFILE_URL
 SDP_RULES_URL = _SDP_RULES_URL
-PACKAGE_SENTINEL = ".metasalmonpy-package"
+
+# The package-ownership sentinel: one file name and one content line, shared by
+# metasalmonpy and metasalmon (hub item B-127, the mirror of metasalmon's
+# B-113; Brett's Q14 ruling, 2026-08-24). Neither names an implementation,
+# because what owns the directory is the SDP tooling rather than one language's
+# copy of it. metasalmon chose both and recorded them in parity row 51, and this
+# package takes them from there, so they are a cross-repository contract that
+# ``tests/test_package_ownership_sentinel.py`` pins. The content line is
+# ``_package_ownership_bytes()``.
+#
+# The per-language ``.metasalmonpy-package`` this replaced is no longer
+# written, managed or recognised. Q14 accepted that break, and a package that
+# still has its SDP metadata is recognised by that. Nothing removes or renames
+# an old sentinel: Q14 rules out either writer removing the other's file, and
+# no migration is owed.
+PACKAGE_SENTINEL = ".sdp-package"
 METADATA_CSV_NAMES = (
     "dataset.csv",
     "tables.csv",
@@ -264,9 +279,13 @@ def _datapackage_json_bytes(datapackage: Dict[str, object]) -> bytes:
 
 
 def _package_ownership_bytes() -> bytes:
-    """Byte-identical to the ``write_text("metasalmonpy-owned\\n")`` call that
-    wrote the sentinel before the write path became transactional."""
-    return "metasalmonpy-owned\n".encode("utf-8")
+    """The content of the shared ``PACKAGE_SENTINEL``: ``sdp-owned`` and one LF.
+
+    Mirrors ``.ms_package_ownership_bytes()``. A fixed ASCII line ending in LF,
+    so it has one byte encoding on every platform and in either language, and
+    the file is the same ten bytes whichever implementation wrote it.
+    """
+    return b"sdp-owned\n"
 
 
 def _text_file_bytes(text: str) -> bytes:
@@ -325,6 +344,14 @@ def _metadata_path(target: Path, name: str) -> Path:
 
 
 def _is_owned_package_dir(target: Path) -> bool:
+    """Whether ``overwrite=True`` may replace ``target``.
+
+    The shared ``PACKAGE_SENTINEL`` on its own is enough, so a package
+    metasalmon wrote is recognised by it; without the sentinel the SDP-CSV test
+    below decides. A per-language ``.metasalmonpy-package`` or
+    ``.metasalmon-package`` on its own is not recognised, which is the break
+    Brett's Q14 ruling accepted.
+    """
     if (target / PACKAGE_SENTINEL).exists():
         return True
     canonical = target / "metadata"
@@ -1073,6 +1100,12 @@ def write_salmon_datapackage(
     and EDH XML, ``eml-mapping.yml``, review notes, ``publication/`` artifacts,
     and the reproducibility manifest. A read → edit → write loop used to delete
     all of them.
+
+    Replacement is only allowed for a directory recognised as a package: one
+    holding the ``.sdp-package`` ownership sentinel, which metasalmon writes
+    too, or its SDP metadata. An older ``.metasalmonpy-package`` sentinel on
+    its own is not recognised, and a rewrite leaves one where it is unless
+    ``prune=True`` empties the directory.
 
     ``prune=True`` restores the previous behaviour, deleting every entry in the
     directory first. It requires ``overwrite=True``.
