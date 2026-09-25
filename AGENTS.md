@@ -252,9 +252,9 @@ its head `5b83c27`, 1012 / 1 and 871 / 142 for B-242 and 1007 / 1 and 866 / 142
 for B-240 on 2026-09-24, 966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
 on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads two fewer
-passes in each leg for the same tree**: 1020 / 3 and 879 / 144 on B-241's head
-`5b83c27`, read from its check logs on 2026-09-24, as B-242's head `183f887`
-read 1010 / 3 and 869 / 144. The two are `tests/test_roundtrip.py`, which runs
+passes in each leg for the same tree**: 1063 / 3 and 922 / 144 on B-188's head
+`9855083`, read from its check logs on 2026-09-25, as B-241's head `5b83c27`
+read 1020 / 3 and 879 / 144. The two are `tests/test_roundtrip.py`, which runs
 only where both of those hold. CI's suite jobs have neither, so it skips there
 and runs in CI's `parity` job instead. The gap between the legs is the
 extras-gated EML, KNB and context-reader tests; the one that skips in both legs,
