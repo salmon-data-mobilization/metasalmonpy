@@ -17,6 +17,7 @@ metasalmon's ``tests/testthat/test-sssom.R``.
 import hashlib
 import json
 import unittest
+import warnings
 from pathlib import Path
 
 import pytest
@@ -30,7 +31,7 @@ if pd is None:
     raise unittest.SkipTest("pandas not installed")
 
 import metasalmonpy
-from metasalmonpy import sssom
+from metasalmonpy import sssom, validate_salmon_datapackage
 from metasalmonpy.sssom import (
     SssomMappingSet,
     read_sssom_mapping_set,
@@ -782,6 +783,110 @@ def test_validate_detects_missing_referenced_file(written_sdp):
     (written_sdp / "metadata" / "semantic" / "approved.sssom.tsv").unlink()
     with pytest.raises(FileNotFoundError, match="missing file"):
         validate_sdp_sssom(written_sdp)
+
+
+# --- validate_salmon_datapackage never evaluates the embedded metadata --------------
+
+
+@pytest.mark.parametrize(
+    "tagged",
+    [
+        # R's evaluating tag, as in the R test. The expression is Python, so a
+        # loader taught to evaluate the tag, as R's yaml can be, would run it.
+        '!expr open({sentinel}, "x").close()',
+        # The tag PyYAML's permissive loaders (yaml.Loader, yaml.UnsafeLoader,
+        # yaml.unsafe_load) execute, so swapping one of them in trips the side
+        # effect below rather than only an unknown-tag error.
+        "!!python/object/apply:os.mkdir [{sentinel}]",
+    ],
+    ids=["expr", "python-object-apply"],
+)
+def test_validate_salmon_datapackage_never_evaluates_a_tag_in_sssom_metadata(
+    tmp_path, monkeypatch, tagged
+):
+    """Twin of metasalmon's "validate_salmon_datapackage never evaluates an
+    !expr tag in SSSOM metadata" (``tests/testthat/test-sssom.R``), hub B-189.
+
+    **A guard, not a fix.** ``_parse_yaml_subset()`` evaluates nothing and
+    never calls PyYAML, so this passes on the tree it was written against.
+    Hub B-124 made ``validate_salmon_datapackage()`` reach this reader while
+    validating a package somebody else wrote, so a later swap of the subset
+    parser for a loader that evaluates tags would run that author's bytes
+    during ordinary validation. R needed ``eval.expr = FALSE`` because
+    ``yaml::yaml.load()`` can evaluate ``!expr``; a Python loader's way to
+    run code is a ``!!python/...`` tag, hence the second case.
+
+    The manifest is rehashed after the patch, as in R: a matching hash shows
+    only that the manifest and the file agree, and one author writes both.
+    The spy is the positive control. It shows the validator read the tagged
+    file, so the absent side effect is not a read that never happened.
+
+    The title must come back as text carrying the sentinel's path, which
+    neither expression's value does: evaluating either returns ``None``. The
+    exact text is deliberately not pinned. metasalmon's reader drops the tag,
+    returning the expression for the first line and the path alone for the
+    second, where this one returns each line as written (measured 2026-09-25,
+    metasalmon 0.5.0 and yaml 2.3.12). Which is right was an unruled parity
+    question on that date, and this guard holds whichever way it is ruled;
+    once it is, the check can name the one text.
+
+    *Retires when:* nothing validates a package somebody else wrote through
+    this reader. It pins a property rather than a defect, so no fix retires it.
+    """
+    # tests/ is not a package (tests/conftest.py says why), so a sibling test
+    # module is imported by its top-level name, not relatively.
+    from test_validation_hardening import _build_example
+
+    root = _build_example(tmp_path / "sdp")
+    source = write_raw(
+        tmp_path / "approved.sssom.tsv",
+        sssom_text(extra_metadata=("# mapping_set_title: Approved mappings",)),
+    )
+    manifest_path = Path(write_sdp_sssom(root, mapping_sets=source))
+    entry = json.loads(manifest_path.read_text("utf-8"))["mapping_sets"][0]
+    installed = root / entry["path"]
+
+    sentinel = tmp_path / "evaluated"
+    value = tagged.format(sentinel=json.dumps(sentinel.as_posix()))
+    # The writer renders scalars double-quoted; the patch replaces that line.
+    benign = '# mapping_set_title: "Approved mappings"\n'
+    text = installed.read_bytes().decode("utf-8")
+    assert benign in text
+    text = text.replace(benign, f"# mapping_set_title: {value}\n")
+    write_raw(installed, text)
+
+    def rehash(manifest):
+        manifest["mapping_sets"][0]["sha256"] = hashlib.sha256(
+            text.encode("utf-8")
+        ).hexdigest()
+
+    _tamper_manifest(root, rehash)
+
+    reached = []
+    reader = sssom.read_sssom_mapping_set
+
+    def spy(path, *args, **kwargs):
+        reached.append(Path(path).resolve())
+        return reader(path, *args, **kwargs)
+
+    verdict = None
+    with monkeypatch.context() as patch:
+        patch.setattr(sssom, "read_sssom_mapping_set", spy)
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                validate_salmon_datapackage(str(root))
+        except Exception as error:  # asserted after the side effect, as in R
+            verdict = error
+
+    assert not sentinel.exists(), f"validation evaluated {value!r}"
+    assert verdict is None, f"validation refused the package: {verdict!r}"
+    assert installed.resolve() in reached, "validation never read the mapping set"
+    # The tag reaches the package as text, not as its value; the docstring
+    # says why the text itself is not pinned.
+    title = read_sssom_mapping_set(installed).metadata["mapping_set_title"]
+    assert isinstance(title, str) and sentinel.as_posix() in title, repr(title)
+    assert not sentinel.exists()
 
 
 # --- multi-valued reference columns ------------------------------------------------
