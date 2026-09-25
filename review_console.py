@@ -1211,8 +1211,6 @@ def accept_suggestion(
 
     if iri is not None:
         accepted_iri = _text(iri)
-        if not accepted_iri:
-            raise ValueError("iri must be a non-empty IRI.")
         target_index = rows.index[in_slot][0]
     else:
         hits = list(rows.index[in_slot & (rows["rank"] == int(rank))])
@@ -1229,6 +1227,19 @@ def accept_suggestion(
         accepted_iri = _text(rows.at[target_index, "iri"])
 
     accepted_iri = _strip_review_iri(accepted_iri)
+
+    # The non-empty check reads the stripped value, because that is the value
+    # the decision records. Run before the strip, it let ``iri="REVIEW:"``, and
+    # every other spelling the strip removes, record an accept that named no
+    # term (hub item B-220, the mirror of metasalmon's B-219).
+    if iri is not None and not accepted_iri:
+        message = "iri must be a non-empty IRI."
+        if _text(iri):
+            message += (
+                " An accepted IRI is recorded without its REVIEW: marker, and "
+                "nothing follows the marker here."
+            )
+        raise ValueError(message)
 
     rows.loc[in_slot, ["decision", "decision_iri", "decision_reason"]] = pd.NA
     rows.at[target_index, "decision"] = "accept"

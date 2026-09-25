@@ -259,6 +259,55 @@ and moving it is a separate outward act.
   `tests/testthat/test-edge-cases.R`. This closes R-shipped-first lag and is not
   a deliberate difference, so it opens no `PARITY.md` row.
 
+* **`accept_suggestion()` refuses an `iri` that is only the `REVIEW:`
+  marker.** Hub queue item **B-220**, the mirror half of metasalmon's
+  **B-219** (metasalmon pull request #165). It checked that `iri` was not empty
+  before stripping the marker, so
+  `accept_suggestion(review, column, role, iri="REVIEW:")` passed the check.
+  So did every other spelling `_strip_review_iri()` removes: in any case, after
+  leading spaces, tabs or newlines, and with whitespace after the colon. The
+  accept recorded an IRI that named no term. Measured on `85ebbb0`,
+  `apply_sdp_semantics()` then cleared the slot's `term_iri`, leaving its
+  `term_type` in place, marked the retrieved candidate `not_selected`, and
+  wrote an `accepted` row with an empty `iri` to `semantic_suggestions.csv`.
+  The next `review_semantics()` does not queue that row, so the slot came back
+  undecided. The check now reads the value after the strip, which is the value
+  the decision records, and the refusal says that the marker was removed and
+  nothing followed it. An `iri` with a term after the marker is accepted as
+  before and recorded without the marker. `apply_sdp_semantics()` is
+  unchanged.
+
+  The two packages' strips still remove different spellings, so they still
+  refuse different ones. metasalmon's also removes a space or a tab before the
+  colon, as in `"REVIEW :"`, which this package records as the IRI verbatim,
+  and this package's also removes some whitespace after the colon that
+  metasalmon's leaves, such as a no-break space. Which spellings both should
+  recognise is hub question **Q-63**, and this
+  change settles none of them. This closes R-shipped-first lag and is not a
+  deliberate difference, so it opens no `PARITY.md` row.
+
+* **`detect_semantic_term_gaps()` no longer reports an ontology gap for a slot
+  the reviewer has just filled by hand.** Ported from metasalmon pull request
+  #146 (hub queue item **B-176**), as hub queue item **B-216**.
+  `apply_sdp_semantics()` records a hand-picked accept, an
+  `accept_suggestion(iri=...)` whose IRI no retrieved candidate carries, as a
+  row of its own in `semantic_suggestions.csv`, with `source` `user`. The
+  detector counted that row as retrieval evidence. Its blank `search_query`
+  made it a target of its own whose only candidate was not `smn`. So when the
+  post-review file was passed as `suggestions`, the output gained one more
+  gap row than the pre-review file gave, carrying the hand-picked IRI as
+  `top_non_smn_iri`. `render_ontology_term_request()` drafts a term request
+  from a gap row and `submit_term_request_issues()` files it, so a false gap
+  could have been sent to an ontology's maintainers.
+  The detector now drops recorded rows before it derives anything from the
+  table, embedded LLM assessments included, so the post-review file yields
+  exactly the gap rows the pre-review file did, and a real non-`smn` gap on the
+  same slot is still reported. A hand-picked IRI under `w3id.org/smn/` never
+  showed the defect, because the detector counts that namespace as `smn`.
+  `HandPickedAcceptGapTests` in `tests/test_term_requests.py` failed on the
+  detector as it stood. R shipped this behaviour first and the difference was
+  not deliberate, so the port opens no `PARITY.md` row.
+
 * **`create_sdp()` no longer seeds a code list for a date column.** Hub queue
   item **B-188**. `pandas.read_csv` reads a column of ISO dates as text, and the
   code-row seeder, `metadata.code_list_values()`, accepted any `object` or
