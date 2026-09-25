@@ -618,9 +618,10 @@ and moving it is a separate outward act.
   `find_terms()` as the search, so both raised on any table a search could
   answer for two targets, and so did `suggest_semantics()` with its default
   search or with a `search_fn` whose answers carry a DataFrame in `attrs`.
-  Measured on `main` `380a7a4` (pandas 3.0.6, both dependency legs), with
-  every search source patched and the network refused, each of those raised,
-  and each now completes.
+  Measured on `main` `380a7a4`, with every search source patched and the
+  network refused, each of those raised under pandas 3.0.6 in both dependency
+  legs, and under 2.2.3 and 1.5.3 with core dependencies, and each now
+  completes.
 
   The loop's own copy of each answer now drops the answer's `attrs`, so the
   candidate frames reach `pd.concat()` without them. The answer itself is not
