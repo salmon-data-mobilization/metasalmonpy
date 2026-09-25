@@ -1313,6 +1313,130 @@ def test_applying_a_hand_picked_accept_twice_produces_identical_bytes(
     assert len(_handpicked_slot(seeded_package)) == 2
 
 
+# ---------------------------------------------------------------------------
+# One decision, one ``term_type`` (hub queue B-222, the mirror of metasalmon's
+# B-221)
+#
+# ``term_type`` says what kind of thing ``term_iri`` names.
+# ``apply_sdp_semantics()`` takes it from the review row a decision sits on when
+# that row carries the accepted IRI, and writes ``skos_concept`` when it does
+# not. ``accept_suggestion(iri=...)`` put every decision on the slot's first
+# row, so naming the IRI of a lower-ranked candidate wrote ``skos_concept``
+# whatever that candidate was. The review rebuilt from the package replays the
+# same decision on the candidate's own row, and re-applying it wrote the
+# candidate's type: one decision, two ``term_type``s, and
+# ``column_dictionary.csv`` changed between two applies of it.
+# ---------------------------------------------------------------------------
+
+OWL_CLASS_IRI = "https://example.org/ols/SpawnerCount"
+OWL_CLASS_TYPE_IRI = "http://www.w3.org/2002/07/owl#Class"
+
+
+@pytest.fixture
+def typed_package(tmp_path, monkeypatch):
+    """Build packages whose ``spawner_count`` variable slot holds two candidates.
+
+    An ``smn`` term and then ``OWL_CLASS_IRI``. ``type_iris`` is each one's type
+    evidence, and a candidate with none reads as ``skos_concept``. Each call
+    writes a fresh package.
+    """
+    from metasalmonpy import semantics as sem
+
+    original = sem.suggest_semantics
+    built = []
+
+    def build(type_iris=(None, OWL_CLASS_TYPE_IRI)) -> Path:
+        hits = pd.DataFrame(
+            {
+                "label": ["Spawner Abundance", "Spawner count"],
+                "iri": [SPAWNER_IRI, OWL_CLASS_IRI],
+                "source": ["smn", "ols"],
+                "ontology": ["smn", "ols"],
+                "match_type": ["label_exact", "label_exact"],
+                "definition": [
+                    "Mature salmon returning to spawn.",
+                    "A count of spawners.",
+                ],
+                "score": [4.9, 3.2],
+                "type_iris": list(type_iris),
+            }
+        )
+
+        def search(query, role=None, sources=None):
+            if role != "variable":
+                return pd.DataFrame()
+            return hits.assign(role=role)
+
+        monkeypatch.setattr(
+            sem, "suggest_semantics", functools.partial(original, search_fn=search)
+        )
+        built.append(
+            create_sdp(
+                {"spawners": pd.DataFrame({"spawner_count": [120, 340]})},
+                path=tmp_path / f"typed-{len(built)}",
+                dataset_id="demo-1",
+                semantic_max_per_role=2,
+                seed_semantics=True,
+                seed_verbose=False,
+                check_updates=False,
+            )
+        )
+        return Path(built[-1])
+
+    return build
+
+
+def _variable_slot(review: SemanticReview) -> pd.DataFrame:
+    rows = review.rows
+    return rows[(rows["column_name"] == "spawner_count") & (rows["role"] == "variable")]
+
+
+def _written_term(package: Path) -> tuple:
+    """The ``spawner_count`` row's ``term_iri`` and ``term_type``, as written."""
+    dictionary = _dictionary_csv(package)
+    row = dictionary[dictionary["column_name"] == "spawner_count"].iloc[0]
+    return row["term_iri"], row["term_type"]
+
+
+def _managed_bytes(package: Path) -> dict:
+    """The bytes of every file an apply manages, as metasalmon's
+    ``managed_digests()`` reads them."""
+    targets = [
+        package / "metadata" / "column_dictionary.csv",
+        package / "metadata" / "tables.csv",
+        package / "datapackage.json",
+        package / "semantic_suggestions.csv",
+    ]
+    return {path.name: path.read_bytes() for path in targets if path.is_file()}
+
+
+def _assert_same_bytes(before: dict, after: dict) -> None:
+    assert sorted(after) == sorted(before)
+    for name, payload in before.items():
+        assert after[name] == payload, name
+
+
+def test_an_iri_no_candidate_carries_still_writes_skos_concept_whatever_the_first_candidate_is(
+    typed_package,
+):
+    # B-176's case, ported here by B-216, which this must not move. Nothing is
+    # known about a term the reviewer typed, so the type of the row its decision
+    # is recorded on is not evidence about it. Every candidate here is an
+    # ``owl_class``, so a writer that took the first row's type regardless would
+    # write ``owl_class``.
+    package = typed_package(type_iris=(OWL_CLASS_TYPE_IRI, OWL_CLASS_TYPE_IRI))
+    review = review_semantics(str(package))
+    assert set(_variable_slot(review)["term_type"]) == {"owl_class"}
+    assert HANDPICKED_IRI not in set(review.rows["iri"])
+
+    apply_sdp_semantics(
+        str(package),
+        accept_suggestion(review, "spawner_count", "variable", iri=HANDPICKED_IRI),
+        quiet=True,
+    )
+    assert _written_term(package) == (HANDPICKED_IRI, "skos_concept")
+
+
 def test_a_decision_survives_being_put_down_and_picked_up_again(seeded_package):
     """The round trip is the point of persisting the decision at all.
 
