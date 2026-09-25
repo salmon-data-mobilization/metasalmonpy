@@ -550,6 +550,28 @@ and moving it is a separate outward act.
   of the six tests B-233 added, on the same canonical fixture, and 14 of their
   cases failed on `ba1b54a` before the fix.
 
+* **`suggest_semantics()` searches each distinct query, role and sources
+  tuple once, where it searched once per target.** Hub queue item **B-243**,
+  the port of metasalmon's **B-56** (backlog #56, metasalmon pull request
+  #164). Targets repeat a tuple whenever tables share a column or columns
+  fall back to the same unit query: four tables carrying the same two columns
+  are 40 targets and 9 distinct tuples, and all 40 were searches. Now 9 are.
+  A `search_fn` you supply is therefore called fewer times, and a counting or
+  logging one will see it. What each target gets is unchanged. Measured
+  against `main` `ba1b54a`, the object `suggest_semantics()` returns, every
+  attribute included, is equal to before on that fixture and on the bundled
+  example package, whose 35 tuples are all distinct and still make 35 calls.
+  The saving lasts for one call only, so it is not a cache and never outlives
+  a change of settings. An answer whose diagnostics say a source did not
+  answer is never reused, and the next target with that tuple searches again,
+  as `find_terms()` already refuses to cache a degraded lookup. The LLM
+  review's retry searches are unchanged.
+
+  `tests/test_semantic_retrieval_dedup.py` is the twin of metasalmon's
+  `tests/testthat/test-semantic-retrieval-dedup.R`, and its dedup assertions
+  failed on `ba1b54a`: 40 calls for the 9 tuples. This closes R-shipped-first
+  lag and is not a deliberate difference, so it opens no `PARITY.md` row.
+
 ### Changed
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
