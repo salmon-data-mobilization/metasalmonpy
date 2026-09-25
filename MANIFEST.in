@@ -1,3 +1,7 @@
 exclude scripts/manual_score_adjustments.py
 exclude scripts/score_results_alignment.py
 exclude scripts/transform_results_network.py
+# Repository checks, not part of the package (hub item B-201). The check reads
+# this checkout's git history, so a copy installed with the package has none to read.
+exclude scripts/check-changelog-window.py
+exclude tests/test_check_changelog_window.py
