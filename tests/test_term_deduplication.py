@@ -2,7 +2,7 @@
 
 import pandas as pd
 import pytest
-from term_deduplication import deduplicate_proposed_terms, suggest_facet_schemes
+from metasalmonpy.term_deduplication import deduplicate_proposed_terms, suggest_facet_schemes
 
 
 def test_deduplicate_empty_dataframe():
