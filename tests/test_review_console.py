@@ -825,6 +825,58 @@ def test_accept_takes_an_iri_that_was_never_shortlisted():
     assert review["decision_iri"].dropna().iloc[0] == "https://example.org/Handpicked"
 
 
+# An ``iri=`` that is empty once its ``REVIEW:`` marker is stripped (hub item
+# B-220, the mirror of metasalmon's B-219). The non-empty check read ``iri``
+# before the strip, so the bare marker passed it and the accept recorded an IRI
+# that named no term. ``apply_sdp_semantics()`` then cleared the field and
+# wrote an ``accepted`` row with an empty ``iri`` into
+# ``semantic_suggestions.csv``.
+#
+# One case per spelling ``_strip_review_iri()`` removes, because the check has
+# to agree with the strip. Which spellings count as the marker is hub question
+# Q-63, so this list is what the strip removes today, not a ruling, and it
+# follows the strip: when Q-63 is ruled, a spelling the ruling drops leaves the
+# list and one it adds joins it. Each case asserts that premise first, so a
+# change to the strip fails here and names the spelling rather than leaving a
+# test that checks nothing.
+MARKER_ONLY_IRIS = {
+    "the bare marker": "REVIEW:",
+    "the marker as metasalmon writes it": "REVIEW: ",
+    "lower case": "review:",
+    "mixed case": "Review:",
+    "leading spaces": "  REVIEW:",
+    # ``scalar_text()`` trims spaces, tabs and newlines. A form feed survives
+    # the trim, and only the strip's ``str.strip()`` removes it.
+    "a form feed after the colon": "REVIEW:\f",
+    # The strip compares ``str.upper()``, which folds a dotless i onto I.
+    "a dotless i": "REVıEW:",
+}
+
+
+@pytest.mark.parametrize(
+    "marker", list(MARKER_ONLY_IRIS.values()), ids=list(MARKER_ONLY_IRIS)
+)
+def test_accept_refuses_an_iri_that_is_only_the_review_marker(marker):
+    assert _strip_review_iri(marker) == ""
+
+    review = review_semantics(_dictionary_with([_suggestion_row()]))
+    with pytest.raises(ValueError, match="non-empty IRI") as refused:
+        accept_suggestion(review, "spawner_count", "variable", iri=marker)
+    assert "nothing follows the marker" in str(refused.value)
+
+
+def test_accept_takes_a_marked_iri_and_records_it_without_the_marker():
+    review = accept_suggestion(
+        review_semantics(_dictionary_with([_suggestion_row()])),
+        "spawner_count",
+        "variable",
+        iri="review: https://w3id.org/smn/WaterTemperature",
+    )
+    assert review["decision_iri"].dropna().tolist() == [
+        "https://w3id.org/smn/WaterTemperature"
+    ]
+
+
 def test_accept_refuses_a_rank_that_is_not_there():
     review = review_semantics(_dictionary_with([_suggestion_row()]))
     with pytest.raises(ValueError, match="No candidate with that rank"):
