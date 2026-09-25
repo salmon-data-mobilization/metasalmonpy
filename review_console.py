@@ -1195,7 +1195,9 @@ def accept_suggestion(
         it is needed.
     iri
         Optional IRI to accept instead of a shortlisted candidate -- for the
-        case where the right term exists but retrieval did not surface it.
+        case where the right term exists but retrieval did not surface it. An
+        ``iri`` that a shortlisted candidate in the slot carries is recorded as
+        that candidate, exactly as its ``rank`` would be.
 
     Returns
     -------
@@ -1211,7 +1213,6 @@ def accept_suggestion(
 
     if iri is not None:
         accepted_iri = _text(iri)
-        target_index = rows.index[in_slot][0]
     else:
         hits = list(rows.index[in_slot & (rows["rank"] == int(rank))])
         if len(hits) != 1:
@@ -1240,6 +1241,23 @@ def accept_suggestion(
                 "nothing follows the marker here."
             )
         raise ValueError(message)
+
+    if iri is not None:
+        # An ``iri`` that a shortlisted candidate carries names that candidate,
+        # so the decision goes on the candidate's row, where ``rank=`` would put
+        # it. That row is where :func:`apply_sdp_semantics` reads the
+        # candidate's ``term_type`` and where the rebuilt review replays the
+        # decision. On the slot's first row instead, one decision wrote
+        # ``skos_concept`` when first applied and the candidate's own type once
+        # rebuilt (hub item B-222, the mirror of metasalmon's B-221). Candidate
+        # IRIs are compared as a decision records them, through
+        # ``_strip_review_iri()``, and the first carrier wins. An IRI no
+        # candidate in this review carries still goes on the first row, whose
+        # different IRI tells the writer nothing is known about its type.
+        carried = rows.index[
+            in_slot & (rows["iri"].map(_strip_review_iri) == accepted_iri)
+        ]
+        target_index = carried[0] if len(carried) else rows.index[in_slot][0]
 
     rows.loc[in_slot, ["decision", "decision_iri", "decision_reason"]] = pd.NA
     rows.at[target_index, "decision"] = "accept"
