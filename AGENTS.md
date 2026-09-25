@@ -297,17 +297,23 @@ earlier that day, 1022 / 1 and 881 / 142 for B-241 on the tree of its head
 871 / 142 for B-242 and 1007 / 1 and 866 / 142 for B-240 earlier that day,
 966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
 810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
-on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads two fewer
-passes in each leg for the same tree**: 1020 / 3 and 879 / 144 on B-241's head
-`5b83c27`, read from its check logs on 2026-09-24, as B-242's head `183f887`
-read 1010 / 3 and 869 / 144. The two are `tests/test_roundtrip.py`, which runs
-only where both of those hold. CI's suite jobs have neither, so it skips there
-and runs in CI's `parity` job instead. The gap between the legs is the
-extras-gated EML, KNB and context-reader tests; the one that skips in both legs,
-locally and on CI, is
-the Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1`
-is set. These counts are a dated measurement, not a target — update them when
-you add tests rather than treating a mismatch as a failure.
+on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads five fewer
+passes in each leg for the same tree**: 1113 / 7 and 972 / 148 on B-201's head
+`098030f`, read from its check logs on 2026-09-25. Before B-201 it read two
+fewer, as B-241's head `5b83c27` read 1020 / 3 and 879 / 144 on 2026-09-24 and
+B-242's head `183f887` read 1010 / 3 and 869 / 144. Two of the five are
+`tests/test_roundtrip.py`, which runs only where both of those hold. CI's suite
+jobs have neither, so it skips there and runs in CI's `parity` job instead. The
+other three are `tests/test_check_changelog_window.py`'s replays of this
+repository's history, which need a full clone with the tags. CI's suite jobs
+check out one commit, so they skip there and run in the `changelog-window`
+workflow instead. The gap between the legs is the extras-gated EML, KNB and
+context-reader tests. Two tests skip in both legs, locally and on CI: the
+Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1` is
+set, and the comparison of `scripts/check-changelog-window.py` with the hub's
+copy, which runs only when `METASALMON_PATH` names a metasalmon checkout. These
+counts are a dated measurement, not a target — update them when you add tests
+rather than treating a mismatch as a failure.
 
 **The suite runs from a checkout at any path.** It did not until 2026-09-23
 (hub **B-191**). The root `__init__.py` and a `tests/__init__.py` made pytest
