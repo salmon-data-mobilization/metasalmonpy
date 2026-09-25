@@ -159,6 +159,32 @@ def _schema_source() -> Optional[str]:
     return "vendored" if _sdp_schema_options_are_default() else None
 
 
+def _declared_metadata_fields(file_name: str) -> list:
+    """The fields the selected schema declares for one metadata file, in order.
+
+    Read through :func:`_schema_source`, so under the shipped settings it is
+    the bundled schema, read offline.
+    """
+    return sdp_schema_field_names(
+        METADATA_SCHEMA_TABLES[file_name], source=_schema_source()
+    )
+
+
+def _in_declared_order(frame: pd.DataFrame, file_name: str) -> pd.DataFrame:
+    """One metadata frame, aligned to the fields the selected schema declares.
+
+    The declared fields come first, in the schema's order, and a declared
+    field the frame lacks is added empty. Any other column follows. This is
+    metasalmon's `.ms_align_cols(df, .ms_dataset_meta_cols())` and its
+    siblings. The setters, ``write_salmon_datapackage()`` and
+    ``apply_sdp_semantics()`` all write through it, so a package keeps its
+    bytes from one of them to the next (hub B-215). Under the bundled schema
+    the declared order is the order of the static column lists in
+    ``metadata.py``, so under the shipped settings no written byte changes.
+    """
+    return align_columns(frame, _declared_metadata_fields(file_name))
+
+
 _PLACEHOLDER_PREFIX = re.compile(
     r"^\s*(MISSING METADATA|MISSING DESCRIPTION|REVIEW REQUIRED)\s*:\s*",
     re.IGNORECASE,

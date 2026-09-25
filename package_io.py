@@ -1181,11 +1181,25 @@ def write_salmon_datapackage(
 
     # Render canonical SDP metadata after any file_name defaults were resolved.
     metadata_dir = target / "metadata"
-    writes[metadata_dir / "dataset.csv"] = _metadata_csv_bytes(dataset_meta)
-    writes[metadata_dir / "tables.csv"] = _metadata_csv_bytes(table_meta)
-    writes[metadata_dir / "column_dictionary.csv"] = _metadata_csv_bytes(dict_valid)
+    # Each file in the order of the schema the settings select, as the
+    # setters write it and as metasalmon's writers align through
+    # `.ms_dataset_meta_cols()` and its siblings, which read the session
+    # schema. Deferred for the reason the blank-required collector gives.
+    from .sdp_field_setters import _in_declared_order
+
+    writes[metadata_dir / "dataset.csv"] = _metadata_csv_bytes(
+        _in_declared_order(dataset_meta, "dataset.csv")
+    )
+    writes[metadata_dir / "tables.csv"] = _metadata_csv_bytes(
+        _in_declared_order(table_meta, "tables.csv")
+    )
+    writes[metadata_dir / "column_dictionary.csv"] = _metadata_csv_bytes(
+        _in_declared_order(dict_valid, "column_dictionary.csv")
+    )
     if codes is not None:
-        writes[metadata_dir / "codes.csv"] = _metadata_csv_bytes(codes)
+        writes[metadata_dir / "codes.csv"] = _metadata_csv_bytes(
+            _in_declared_order(codes, "codes.csv")
+        )
 
     if write_datapackage:
         writes[target / "datapackage.json"] = _datapackage_json_bytes(datapackage)
