@@ -198,6 +198,24 @@ class IcesFailedRequestTests(unittest.TestCase):
                 self.assertEqual([str(w.message) for w in caught], [])
                 self.assert_empty_frame(result)
 
+    def test_a_failure_recorded_for_another_call_never_replaces_an_answer(self):
+        # The failure sinks are one stack for the process, so a call on another
+        # thread can record its failure in this call's sink. Simulated here by
+        # recording one while this call's own request answers with rows.
+        rows = [{"key": "BMT", "description": "Beam trawl"}]
+
+        def answered_while_another_call_failed(url, headers=None, timeout=30):
+            ts._signal_search_failure("https://example.org/another-call", "HTTP 503")
+            return rows
+
+        with mock.patch.object(
+            iv, "_safe_json", answered_while_another_call_failed
+        ), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            result = iv.ices_codes("Gear")
+        self.assertEqual([str(w.message) for w in caught], [])
+        self.assertEqual(list(result["key"]), ["BMT"])
+
     def test_the_warning_names_what_metasalmon_names_in_its_order(self):
         # metasalmon's cli warning, measured on its main at 14f6d4f, is a
         # heading and three bullets: the request, the failure, and what the

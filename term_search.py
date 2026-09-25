@@ -116,12 +116,17 @@ def _empty_terms(role=None) -> pd.DataFrame:
     )
 
 
-# Per-call sinks installed by find_terms() around each source function, so a
-# failed vocabulary lookup can be *recorded* without discarding the rows that
-# did resolve. Mirrors metasalmon's `.ms_signal_search_failure()` +
-# withCallingHandlers pair: R signals a classed condition that is silent when
-# nobody handles it, so outside find_terms() a failure stays quiet here too.
+# Per-call sinks, so a failed vocabulary lookup can be *recorded* without
+# discarding the rows that did resolve. find_terms() installs one around each
+# source function, and ices_vocab one around each request it makes. Mirrors
+# metasalmon's `.ms_signal_search_failure()` + withCallingHandlers pair: R
+# signals a classed condition that is silent when nobody handles it, so where
+# no sink is installed a failure stays quiet here too.
 _search_failure_sinks: List[List[str]] = []
+
+# How every recorded failure begins. What follows it is the detail, which R's
+# condition carries on its own as `detail`, and which ices_vocab names.
+_SEARCH_FAILURE_PREFIX = "Vocabulary API request failed: "
 
 
 def _signal_search_failure(url: str, detail: str) -> None:
@@ -136,9 +141,7 @@ def _signal_search_failure(url: str, detail: str) -> None:
     ontology gaps (metasalmon 0.2.2).
     """
     if _search_failure_sinks:
-        _search_failure_sinks[-1].append(
-            f"Vocabulary API request failed: {detail}"
-        )
+        _search_failure_sinks[-1].append(f"{_SEARCH_FAILURE_PREFIX}{detail}")
 
 
 _TIMEOUT_ERROR_PATTERN = re.compile(
