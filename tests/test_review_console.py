@@ -26,6 +26,7 @@ from metasalmonpy import (
     semantic_llm_assessments,
     semantic_suggestions,
 )
+from metasalmonpy.metadata import read_sdp_csv
 from metasalmonpy.review_console import (
     SemanticReview,
     _accept_call,
@@ -1479,6 +1480,42 @@ def test_accept_iri_naming_a_shortlisted_candidate_records_what_rank_records(
         # (pandas 3.0.6), so this is the assertion that says what differs.
         assert _decided(by_iri) == _decided(by_rank), iri
         pd.testing.assert_frame_equal(by_iri.rows, by_rank.rows)
+
+
+@pytest.mark.parametrize(
+    "decide", [{"iri": OWL_CLASS_IRI}, {"rank": 2}], ids=["by-iri", "by-rank"]
+)
+def test_a_candidate_whose_stored_iri_carries_the_review_marker_writes_its_own_term_type(
+    typed_package, decide
+):
+    # Whether the decision row IS the accepted candidate is decided by comparing
+    # IRIs. The writer compared the stored IRI, marker and all, with a decision
+    # recorded without the marker, so a marked candidate never matched and wrote
+    # ``skos_concept`` by ``rank=`` as much as by ``iri=``.
+    marked_iri = "REVIEW: " + OWL_CLASS_IRI
+    package = typed_package()
+    suggestions_path = package / "semantic_suggestions.csv"
+    suggestions = read_sdp_csv(suggestions_path)
+    suggestions.loc[suggestions["iri"] == OWL_CLASS_IRI, "iri"] = marked_iri
+    suggestions.to_csv(suggestions_path, index=False)
+    review = review_semantics(str(package))
+    # The premise: the rank-2 candidate is stored marked, and is an ``owl_class``.
+    slot = _variable_slot(review)
+    assert list(slot.loc[slot["rank"] == 2, "iri"]) == [marked_iri]
+    assert list(slot.loc[slot["rank"] == 2, "term_type"]) == ["owl_class"]
+
+    apply_sdp_semantics(
+        str(package),
+        accept_suggestion(review, "spawner_count", "variable", **decide),
+        quiet=True,
+    )
+    assert _written_term(package) == (OWL_CLASS_IRI, "owl_class")
+
+    first_apply = _managed_bytes(package)
+    apply_sdp_semantics(
+        str(package), review_semantics(str(package), include_filled=True), quiet=True
+    )
+    _assert_same_bytes(first_apply, _managed_bytes(package))
 
 
 def test_an_iri_no_candidate_carries_still_writes_skos_concept_whatever_the_first_candidate_is(
