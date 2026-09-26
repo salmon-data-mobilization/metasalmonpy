@@ -973,6 +973,43 @@ and moving it is a separate outward act.
 
 ### Changed
 
+* **The first retrieval pass gives the shortlist metasalmon gives.** Hub queue
+  item **B-382**, the last of the S16 convergence items that precede the
+  shared review-packet contract: B-327's exporter re-retrieves each pass-1
+  target through the same retriever, so a pass-1 shortlist has to be the one
+  metasalmon builds. B-363 moved retrieval into
+  `semantics._retrieve_semantic_target_candidates()` and gave the second pass
+  metasalmon's rule. The first pass now takes it too, on the three points where
+  it differed.
+
+  1. **Duplicates are candidates, not `(source, iri)` pairs.** A shortlist is
+     deduplicated by metasalmon's candidate identity
+     (`_semantic_candidate_identity()`), so two IRI-less candidates from one
+     source that differ in any fingerprint column (label, definition, match
+     type, role hints and the rest) are both kept, where the old key kept the
+     first. An exact repeat is still dropped.
+  2. **A missing score stays missing and sorts last.** It used to be filled
+     with 0 before the role-hint bonus was added, so an unscored candidate
+     carrying a matching hint (0 + 0.35) outranked a scored one at 0.30.
+  3. **The depth is floored at 1.** `max_per_role=0` used to keep no
+     candidate for any target; it keeps one, as metasalmon does.
+
+  So `suggest_semantics()` returns different shortlists wherever a search
+  answer holds IRI-less candidates or an unscored one, and wherever the depth
+  is 0. Pinned both ways. `tests/data/semantics/r-retrieve-candidates.R` now
+  drives metasalmon's retriever at both passes, and this package matches what
+  it gives at both (run on metasalmon `main` @ `33e65e4` under R 4.5.2; pass 2
+  came out byte-identical to the fixture B-363 took at `98cb9e6`).
+  `suggest_semantics()`'s pinned output was re-captured with two
+  configurations the existing three never exercised, `rule-shapes-top3` and
+  `rule-shapes-top0`, and both fail on `main` before the change. The existing
+  three came out byte-identical, which is the measurement that a shortlist
+  without one of those shapes does not change.
+
+  Not a new `PARITY.md` row: this closes a difference that was reported to the
+  hub rather than registered. Row 39, which recorded pass 1 as still
+  differing, is amended to say it no longer does.
+
 * **A target's shortlist comes through one function, and a second retrieval
   pass merges into the first the way metasalmon merges it.** Hub queue item
   **B-363**, the metasalmonpy half of the S16 convergence that precedes the
