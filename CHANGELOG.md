@@ -728,14 +728,27 @@ and moving it is a separate outward act.
   and reads curl's empty output as no answer rather than as a failure, where
   metasalmon warns. That fallback is not changed here.
 
+  **The sinks `_safe_json()` records a failure into are now per thread.** They
+  were one stack for the process, so on two threads one call could remove the
+  other's sink, and a failure reached whichever sink had been installed last.
+  A failed request could then lose its warning, and, by reading, a concurrent
+  `find_terms()` call could record a source that failed as answered. A failure
+  now reaches only a sink installed on the thread that signalled it, which is
+  the scope an R handler has.
+
   `IcesFailedRequestTests` in `tests/test_ices_vocab.py` mocks `urlopen` and the
   curl fallback before any helper runs, and records every URL asked for. For
   each of the four helpers it pins a refused connection, with curl on `PATH`
   and without it, an HTTP 503, and an answer of `[]`. For `ices_codes()` it
   pins the whole message, and that a secret in the request or in the failure
-  does not reach it. It failed on `c7be120`. The timeout and the answer that is
-  not JSON were measured rather than pinned. It is the port metasalmon's B-377
-  owed here, and it opens no `PARITY.md` row.
+  does not reach it. It also holds two requests on two threads in an
+  interleaving that lost the warning, and pins that the one that failed warns
+  and the other keeps its rows. `tests/test_term_search_diagnostics.py` pins
+  that a failure signalled on another thread never reaches this thread's sink.
+  Each of these failed on `c7be120`, apart from the answer of `[]`, which was
+  already silent. The timeout and the answer that is not JSON were measured
+  rather than pinned. It is the port metasalmon's B-377 owed here, and it opens
+  no `PARITY.md` row.
 
 ### Changed
 
