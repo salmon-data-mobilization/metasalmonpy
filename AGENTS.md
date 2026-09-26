@@ -276,28 +276,37 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1451
-passed / 2 skipped with the extras installed, 1309 / 144 with core dependencies
-only (2026-09-25, measured locally for hub B-360 on `848c281`, its merge of
-`main` `cae3d83`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
-worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
-in isolated environments built from `.[test]` and `.[test,eml,context]`; the
-jump over `main` is `tests/test_validator_parity.py`'s 285 parametrised cases;
-1425 / 2 and 1284 / 143 for B-360 on `ddaae54`, its merge of `main` `380a7a4`;
-1369 / 1 and 1228 / 142 for B-360 on `350126c`, branched from `main` `ba1b54a`;
-1166 / 2 and 1024 / 144 for hub B-364 on `2fbde1e`, its merge of
-`main` `e089b86`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
-worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
-in isolated environments built from `.[test]` and `.[test,eml,context]`; 1161 /
-2 and 1020 / 143 for B-364 on `6c91919`, its merge of `main` `380a7a4`; 1105 / 1
-and 964 / 142 for B-364 on `ac96fb7`, branched from `main` `ba1b54a`; 1145 / 2
-and 1003 / 144 for hub B-370 on `6881aa0`, its merge of
-`main` `6700062`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
-machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a full
-clone with every tag and with `METASALMON_PATH` unset, the same under
-`python -m pytest -q` and bare `pytest -q`; 1143 / 2 and 1002 / 143 for B-370 on
-`dd43cd2`, its merge of `main` `056fccc`, and 1143 / 2 and 1001 / 144 for B-245
-on `08291c2`, its merge of the same `main`, whose tests `main` `6700062` merged
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1291
+passed / 2 skipped with the extras installed, 1149 / 144 with core dependencies
+only (2026-09-26, measured locally for hub B-388 on `1168574`, its merge of
+`main` `a8e87a9`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
+machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a
+worktree of a full clone with every tag and with `METASALMON_PATH` unset, the
+same under `python -m pytest -q` and bare `pytest -q`; 1270 / 2 and 1128 / 144
+for hub B-247 on `60144a1`, branched from `main` `c7be120`, measured the same
+four ways; 1243 / 2 and 1101 / 144 for B-388 on `c5c58b4` and 1242 / 2 and
+1100 / 144 on `b364d57`, each branched from the same `main` and measured the
+same four ways; 1222 / 2 and 1080 / 144 on `main` `c7be120` before them,
+measured the same four ways on 2026-09-25 and again on 2026-09-26, as for hub
+B-274 on its merge of `main` `6f1a191`, whose tests `main` `c7be120` merged
+unchanged; 1213 / 2 and 1071 / 144 for hub
+B-188 on its merge of `main` `cae3d83`, measured the same four ways; 1175 / 2
+and 1033 / 144 for B-274 on `e671772`, its merge of the same `main`, and
+1166 / 2 and 1024 / 144 on `main` `cae3d83` before them; 1154 / 2 and
+1012 / 144 for B-274 on `188769b`, branched from `main` `e089b86`, and
+1145 / 2 and 1003 / 144 on `main` `e089b86` before it, as for B-370 on
+`6881aa0`, its merge of `main` `6700062`, whose tests `main` `e089b86` merged
+unchanged, each measured the same four ways; 1166 / 2 and 1024 / 144 for hub
+B-364 on `2fbde1e`, its merge of `main` `e089b86`, under Python 3.13.11,
+pytest 9.1.1 and pandas 3.0.5, in a worktree of a full clone with
+`METASALMON_PATH` unset, by `python -m pytest -q` in isolated environments
+built from `.[test]` and `.[test,eml,context]`; 1161 / 2 and 1020 / 143 for
+B-364 on `6c91919`, its merge of `main` `380a7a4`; 1105 / 1 and 964 / 142 for
+B-364 on `ac96fb7`, branched from `main` `ba1b54a`; and, under the conditions
+of the first measurement above, 1143 / 2 and 1002 / 143 for B-370 on
+`dd43cd2`, its merge of `main` `056fccc`,
+and 1143 / 2 and 1001 / 144 for B-245 on `08291c2`, its merge of the same
+`main`, whose tests `main` `6700062` merged
 unchanged; 1141 / 2 and 1000 / 143 on `main` `056fccc` before them, measured the
 same four ways, as for B-244 on `4722f17`, its merge of `main` `380a7a4`, whose
 tests `main` `056fccc` merged unchanged; 1142 / 2 and 1001 / 143 for B-370 on
