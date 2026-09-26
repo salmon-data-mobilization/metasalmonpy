@@ -112,6 +112,44 @@ def _target_key(row) -> tuple:
     return tuple(_text(row.get(column), "") for column in TARGET_JOIN_COLUMNS)
 
 
+_LOGICAL_TRUE_TOKENS = frozenset({"true", "t", "1"})
+_LOGICAL_FALSE_TOKENS = frozenset({"false", "f", "0"})
+
+
+def _cast_logical_cell(value, column: str) -> bool:
+    """One cell of a logical assessment column, read as metasalmon reads it.
+
+    Mirrors ``.ms_llm_cast_assessment_column()`` (``R/llm-review-adapter.R``):
+    a boolean stays itself, text is trimmed and lowercased and must name a
+    boolean -- ``true``/``t``/``1`` or ``false``/``f``/``0`` -- and anything
+    else is refused rather than guessed. A missing cell reads as ``False``,
+    which has always been this normalizer's default for the column. Before
+    hub item B-362 the column went through ``.astype(bool)``, so the string
+    ``"FALSE"`` -- what a persisted assessment CSV carries -- read as ``True``.
+    """
+    if _missing(value):
+        return False
+    if pd.api.types.is_bool(value):
+        return bool(value)
+    if pd.api.types.is_number(value):
+        # as.character(1) is "1" and as.character(0) is "0"; every other
+        # number renders to text that names no boolean.
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+    else:
+        text = str(value).strip().lower()
+        if text in _LOGICAL_TRUE_TOKENS:
+            return True
+        if text in _LOGICAL_FALSE_TOKENS:
+            return False
+    raise ValueError(
+        f"Assessment column {column!r} contains values that cannot be "
+        f"normalized to the required type: {value!r}."
+    )
+
+
 def normalize_assessment_rows(rows=None) -> pd.DataFrame:
     """Return assessment rows with the stable 30-column public schema."""
     frame = pd.DataFrame(rows).copy() if rows is not None else pd.DataFrame()
@@ -132,7 +170,9 @@ def normalize_assessment_rows(rows=None) -> pd.DataFrame:
             frame["llm_selected_candidate_index"], errors="coerce"
         ).astype("Int64")
         frame["llm_exploration_used"] = (
-            frame["llm_exploration_used"].fillna(False).astype(bool)
+            frame["llm_exploration_used"]
+            .map(lambda value: _cast_logical_cell(value, "llm_exploration_used"))
+            .astype(bool)
         )
         frame["llm_exploration_candidate_gain"] = pd.to_numeric(
             frame["llm_exploration_candidate_gain"], errors="coerce"
@@ -1359,19 +1399,121 @@ def _assess_bundle(
     return rows
 
 
-def _normalize_query(value) -> str:
-    return re.sub(r"\s+", " ", _text(value, "")).strip().casefold()
+# --- the retry-query classifier ---------------------------------------------
+#
+# Ported from metasalmon's ``.ms_llm_normalize_query_text()``,
+# ``.ms_llm_query_looks_like_identifier()`` and
+# ``.ms_llm_classify_retry_query()`` (``R/llm-semantic-helpers.R``) for hub
+# item B-362, so that a retry query written into the shared review record gets
+# one verdict in both packages. The verdicts are pinned against R's own in
+# ``tests/test_retry_query_classifier.py``. The one place this departs from
+# *current* R on purpose is the case fold, which R moves to under B-361 (5).
+
+# ``trimws()``'s default class: space, tab, CR and LF, and nothing else.
+_R_TRIMWS_CHARS = " \t\r\n"
+
+# What R's ``\s`` collapses, measured character by character under R 4.5.2 in
+# a UTF-8 locale (metasalmon main @ 98cb9e6): the ASCII whitespace plus the
+# Unicode spaces ``iswspace()`` accepts. Python's ``\s`` is wider -- it also
+# swallows U+001C-U+001F, NEL (U+0085) and the no-break spaces U+00A0, U+2007
+# and U+202F -- so the class is written out rather than borrowed.
+_R_WHITESPACE_RUN = re.compile(
+    "[\\t\\n\\x0b\\x0c\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a"
+    "\\u2028\\u2029\\u205f\\u3000]+"
+)
+
+# R's ``tolower()`` folds non-ASCII letters by locale, so the same pair of
+# queries can be a duplicate in one locale and not in another. The ruled
+# duplicate check folds ASCII letters only, the same everywhere (S16 execplan,
+# decisions 11 and 12); metasalmon adopts it under B-361 point (5).
+_ASCII_LOWER = str.maketrans(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"
+)
+
+_IDENTIFIER_SCHEME_PREFIX = re.compile(r"(?:https?://|urn:|doi:)", re.IGNORECASE)
+# R's second alternative is ``^[A-Za-z][A-Za-z0-9._+-]*:[^\\s]+$``, compiled
+# by TRE, whose bracket expressions have no escapes: ``[^\s]`` there means
+# "neither a backslash nor the letter s", not "non-whitespace". So after the
+# colon R wants one or more characters other than ``\`` and ``s``; a space is
+# allowed and ``smn:species`` is not identifier-like. Measured, not read
+# (``abc:d e`` is TRUE, ``abc:s`` is FALSE, ``abc:S`` is TRUE), and reproduced
+# here on purpose, because the review record needs one verdict in both
+# packages. *Retires when* metasalmon rewrites that class as ``[^[:space:]]``
+# or compiles it with ``perl = TRUE``: this class then becomes ``\S`` in the
+# same stream, and the R-computed fixture flips with it.
+_IDENTIFIER_CURIE = re.compile(r"[A-Za-z][A-Za-z0-9._+-]*:[^\\s]+")
 
 
-def _classify_retry_query(retry_query, original_query) -> Optional[str]:
-    normalized = _normalize_query(retry_query)
-    if not normalized:
-        return "missing_retry_query"
-    if normalized == _normalize_query(original_query):
-        return "duplicate_original_query"
-    if re.fullmatch(r"(?:https?://\S+|[A-Za-z]+:[^\s]+)", normalized):
-        return "identifier_like_query"
-    return None
+def _first_scalar(value):
+    if isinstance(value, pd.Series):
+        return _first_scalar(value.iloc[0]) if len(value) else None
+    if isinstance(value, (list, tuple)):
+        return _first_scalar(value[0]) if value else None
+    return value
+
+
+def _non_empty_string(value) -> Optional[str]:
+    """``.ms_llm_non_empty_string()``: the first scalar, trimmed as R trims."""
+    value = _first_scalar(value)
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    text = str(value).strip(_R_TRIMWS_CHARS)
+    return text if text else None
+
+
+def _normalize_query_text(value) -> Optional[str]:
+    """Collapse whitespace runs to one space and trim, as R does."""
+    text = _non_empty_string(value)
+    if text is None:
+        return None
+    return _R_WHITESPACE_RUN.sub(" ", text).strip(_R_TRIMWS_CHARS)
+
+
+def _query_looks_like_identifier(value) -> bool:
+    text = _normalize_query_text(value)
+    if text is None:
+        return False
+    return bool(
+        _IDENTIFIER_SCHEME_PREFIX.match(text) or _IDENTIFIER_CURIE.fullmatch(text)
+    )
+
+
+def _classify_retry_query(retry_query, original_query) -> dict:
+    """Classify a model's retry query the way metasalmon does.
+
+    Returns the four members of ``.ms_llm_classify_retry_query()``'s list:
+    ``query`` and ``original_query`` (both normalized; ``None`` when empty),
+    ``disposition`` -- ``invalid``, ``duplicate_original_query``,
+    ``identifier_like`` or ``use_query`` -- and ``rejection_reason``, set only
+    for a duplicate.
+    """
+    retry = _normalize_query_text(retry_query)
+    original = _normalize_query_text(original_query)
+    if retry is None:
+        disposition = "invalid"
+    elif original is not None and retry.translate(_ASCII_LOWER) == original.translate(
+        _ASCII_LOWER
+    ):
+        disposition = "duplicate_original_query"
+    elif _query_looks_like_identifier(retry):
+        disposition = "identifier_like"
+    else:
+        disposition = "use_query"
+    return {
+        "query": retry,
+        "original_query": original,
+        "disposition": disposition,
+        "rejection_reason": (
+            "duplicate_original_query"
+            if disposition == "duplicate_original_query"
+            else None
+        ),
+    }
 
 
 def _generated_retry_query(target, row, config) -> Optional[str]:
@@ -1415,15 +1557,10 @@ def _generated_retry_query(target, row, config) -> Optional[str]:
         values = [values]
     if not isinstance(values, list):
         return None
-    original = _normalize_query(target.get("search_query"))
     for value in values:
-        query = re.sub(r"\s+", " ", _text(value, "")).strip()
-        if (
-            query
-            and _normalize_query(query) != original
-            and _classify_retry_query(query, target.get("search_query")) is None
-        ):
-            return query
+        classification = _classify_retry_query(value, target.get("search_query"))
+        if classification["disposition"] == "use_query" and classification["query"]:
+            return classification["query"]
     return None
 
 
@@ -1564,21 +1701,22 @@ def _apply_bundle_retry(
         target = targets.loc[
             targets.apply(lambda value: _target_key(value) == _target_key(row), axis=1)
         ].iloc[0]
-        reason = _classify_retry_query(
+        classification = _classify_retry_query(
             row.get("llm_retry_query"),
             target.get("search_query"),
         )
-        if reason == "duplicate_original_query":
+        disposition = classification["disposition"]
+        if disposition == "duplicate_original_query":
             _reject_duplicate_retry(row)
             continue
-        if reason == "identifier_like_query":
+        if disposition == "identifier_like":
             query = _generated_retry_query(target, row, config)
             if query is None:
                 continue
-        elif reason:
+        elif disposition != "use_query":
             continue
         else:
-            query = str(row["llm_retry_query"])
+            query = classification["query"]
         role = str(target["dictionary_role"])
         gains[role] = 0
         retry_queries[role] = query
@@ -1662,21 +1800,22 @@ def _apply_generic_retry(
 ) -> tuple[pd.DataFrame, dict]:
     if _text(row.get("llm_decision")) != "retry_search":
         return suggestions, row
-    reason = _classify_retry_query(
+    classification = _classify_retry_query(
         row.get("llm_retry_query"),
         target.get("search_query"),
     )
-    if reason == "duplicate_original_query":
+    disposition = classification["disposition"]
+    if disposition == "duplicate_original_query":
         _reject_duplicate_retry(row)
         return suggestions, row
-    if reason == "identifier_like_query":
+    if disposition == "identifier_like":
         query = _generated_retry_query(target, row, config)
         if query is None:
             return suggestions, row
-    elif reason:
+    elif disposition != "use_query":
         return suggestions, row
     else:
-        query = str(row["llm_retry_query"])
+        query = classification["query"]
 
     extra = _retry_candidates(
         target,
