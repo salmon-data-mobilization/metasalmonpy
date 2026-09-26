@@ -849,5 +849,153 @@ class ReviewedExemptFromAutoApplyGateTests(unittest.TestCase):
         self.assertEqual(self._apply("top"), "")
 
 
+class CodesRowWithNoCodeValueTests(unittest.TestCase):
+    """A ``codes.csv`` row with no code value gets no semantic target.
+
+    Hub item **B-277**, the mirror half of metasalmon's **B-276**, ruled by
+    Brett on 2026-09-25. The codes schema lets a row leave ``code_value`` empty
+    when it supplies ``vocabulary_iri``, and defines ``term_iri`` as "the
+    specific term that code_value represents", so such a row has no code value
+    for a term to represent. A row of the same column that has a code value
+    keeps its targets. Each test mirrors one in metasalmon's
+    ``tests/testthat/test-semantic-suggestions.R``.
+    """
+
+    # Each spelling is held as itself, in an object column. Under pandas 3,
+    # ``iterrows()`` reads a row of text and missing values as strings, so
+    # ``None`` and ``pd.NA`` reach the codes loop as NaN; the predicate's own
+    # test below reads each one as itself.
+    EMPTY = {
+        "NaN": float("nan"),
+        "pd.NA": pd.NA,
+        "None": None,
+        "empty text": "",
+        "blank text": "  ",
+    }
+
+    @staticmethod
+    def _dictionary():
+        return pd.DataFrame(
+            [
+                {
+                    "dataset_id": "d1",
+                    "table_id": "survey",
+                    "column_name": "count",
+                    "column_label": "Count",
+                    "column_description": "Spawner count",
+                    "column_role": "measurement",
+                    "value_type": "integer",
+                }
+            ]
+        )
+
+    @staticmethod
+    def _codes(code_value, vocabulary_iri="https://example.org/vocab/count-categories"):
+        """The column's two ``codes.csv`` rows: the first names a vocabulary
+        and carries ``code_value``, the second is the code ``-9``. Mirrors R's
+        ``vocabulary_backed_codes()``."""
+        return pd.DataFrame(
+            {
+                "dataset_id": ["d1", "d1"],
+                "table_id": ["survey", "survey"],
+                "column_name": ["count", "count"],
+                "code_value": [code_value, "-9"],
+                "code_label": ["Count categories", "Not surveyed"],
+                "code_description": [
+                    "Counts are recorded against a published category vocabulary.",
+                    "The reach was not surveyed.",
+                ],
+                "vocabulary_iri": [vocabulary_iri, pd.NA],
+                "term_iri": [pd.NA, pd.NA],
+            },
+            dtype=object,
+        )
+
+    @staticmethod
+    def _search(query, role=None, sources=None):
+        """Two candidates per role. Mirrors R's ``test_shortlist_search()``."""
+        return pd.DataFrame(
+            {
+                "label": [f"{role} best", f"{role} alt"],
+                "iri": [
+                    f"https://example.org/{role}/best",
+                    f"https://example.org/{role}/alt",
+                ],
+                "source": ["smn", "smn"],
+                "ontology": ["demo", "demo"],
+                "role": [role, role],
+                "match_type": ["label_partial", "label_partial"],
+                "definition": [
+                    "Best match from retrieved shortlist",
+                    "Alternative match from retrieved shortlist",
+                ],
+                "score": [0.9, 0.5],
+            }
+        )
+
+    def _code_rows(self, codes, attribute):
+        enriched = suggest_semantics(
+            None,
+            self._dictionary(),
+            sources=["smn"],
+            max_per_role=1,
+            search_fn=self._search,
+            codes=codes,
+        )
+        frame = enriched.attrs[attribute]
+        return frame[frame["target_sdp_file"] == "codes.csv"]
+
+    def test_a_codes_row_with_no_code_value_gets_no_semantic_target_and_a_coded_row_of_its_column_keeps_its_own(self):
+        for label, empty in self.EMPTY.items():
+            with self.subTest(code_value=label):
+                targets = self._code_rows(self._codes(empty), "semantic_targets")
+                self.assertEqual(set(targets["code_value"]), {"-9"})
+                self.assertEqual(set(targets["target_row_key"]), {"d1/survey/count/-9"})
+                self.assertEqual(
+                    set(targets["dictionary_role"]), {"constraint", "entity", "method"}
+                )
+
+                # The same rule reaches the suggestions, which carry none for
+                # the row, rather than only a target list nobody searches. So
+                # no key spells the empty value, as ``nan`` or otherwise.
+                suggestions = self._code_rows(self._codes(empty), "semantic_suggestions")
+                self.assertGreater(len(suggestions), 0)
+                self.assertEqual(set(suggestions["code_value"]), {"-9"})
+                self.assertEqual(
+                    set(suggestions["target_row_key"]), {"d1/survey/count/-9"}
+                )
+
+    def test_a_code_whose_value_is_the_text_nan_or_na_keeps_its_semantic_target(self):
+        # A code value, not a missing one: ``read_sdp_csv()`` reads only an
+        # empty field as missing, so a code list read from a package can carry
+        # either text. R keys each the same way, since ``paste()`` renders the
+        # text as it is. U+00A0 is a code value too, because R's ``trimws()``
+        # strips only spaces, tabs and line ends (``READR_TRIM_CHARS``).
+        for text in ("nan", "NA", " "):
+            with self.subTest(code_value=repr(text)):
+                targets = self._code_rows(
+                    self._codes(text, vocabulary_iri=pd.NA), "semantic_targets"
+                )
+                self.assertEqual(set(targets["code_value"]), {text, "-9"})
+                self.assertEqual(
+                    set(targets["target_row_key"]),
+                    {f"d1/survey/count/{text}", "d1/survey/count/-9"},
+                )
+
+    def test_an_empty_code_value_is_a_missing_value_or_text_blank_once_trimmed(self):
+        # The one predicate discovery and the review both read, and R's
+        # ``.ms_semantic_code_value_is_empty()``: missing, or blank once the
+        # characters R's ``trimws()`` strips are stripped.
+        from metasalmonpy import semantics
+
+        is_empty = semantics._semantic_code_value_is_empty
+        for label, empty in {**self.EMPTY, "tab and line ends": " \t\r\n"}.items():
+            with self.subTest(code_value=label):
+                self.assertTrue(is_empty(empty))
+        for value in ("nan", "NA", "-9", 0, -9.0, " ", "　"):
+            with self.subTest(code_value=repr(value)):
+                self.assertFalse(is_empty(value))
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

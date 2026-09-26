@@ -814,7 +814,12 @@ def _render_metadata_lines(review: MetadataReview, path_expr: str) -> list:
         lines.extend("   " + line for line in _setter_call(group, path_expr))
         lines.append("")
 
-    iri_rows = int((rows["reason"] == "iri").sum())
+    # Counted by the field, not by the reason its row kept. The scan keeps one
+    # row per field, so an IRI field holding a placeholder is reported as a
+    # placeholder, and it is still an IRI ``review_semantics()`` may have
+    # candidates for (hub B-244; metasalmon's half is B-211). The suffix test
+    # is the one the scan's marker branch applies.
+    iri_rows = sum(str(field).endswith("_iri") for field in rows["field"])
     total = len(rows)
     lines.extend(
         [

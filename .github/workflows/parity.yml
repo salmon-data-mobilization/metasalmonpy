@@ -121,10 +121,15 @@ jobs:
         run: mkdir -p /tmp/metasalmon-lib
       - name: Install metasalmon package
         run: R CMD INSTALL /tmp/metasalmon -l /tmp/metasalmon-lib
+      # `tests/test_*_parity.py` are the shared-fixture pins (context excerpts
+      # under hub B-364, bundle validators under B-360). Their offline tests
+      # run in every job; each file's last test re-runs the R oracle script
+      # beside its fixture against the metasalmon installed above, so a change
+      # on the R side turns this job red instead of drifting.
       - name: Run parity test (R↔Python)
         env:
           R_LIBS: /tmp/metasalmon-lib
-        run: python -m pytest -q tests/test_roundtrip.py
+        run: python -m pytest -q tests/test_roundtrip.py tests/test_*_parity.py
 
   # The command AGENTS.md documents, run the way a contributor runs it: an
   # editable install with the test extra, then bare `pytest -q` from the

@@ -1,0 +1,1148 @@
+{
+  "dimension": [
+    "count",
+    "mass",
+    "length",
+    "mass",
+    "mass",
+    "count",
+    "count",
+    "dimensionless",
+    null,
+    "dimensionless",
+    "temperature",
+    "temperature",
+    null,
+    "temperature",
+    "mass",
+    "dimensionless",
+    "dimensionless",
+    "rate",
+    "rate",
+    "dimensionless",
+    null,
+    "rate",
+    "flow",
+    "flow",
+    "speed",
+    "speed",
+    "speed",
+    "speed",
+    "speed",
+    "speed",
+    "flow",
+    "flow",
+    "flow",
+    "flow",
+    null,
+    "flow",
+    "flow",
+    "speed",
+    "speed",
+    "speed",
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    "rate",
+    "rate",
+    "rate",
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    "area",
+    "area",
+    "area",
+    null,
+    "area",
+    null,
+    "volume",
+    "volume",
+    "volume",
+    null,
+    "volume",
+    "flow",
+    "flow",
+    null,
+    null,
+    "length",
+    "rate",
+    "rate",
+    "rate",
+    "rate",
+    "rate",
+    "rate",
+    "rate",
+    null,
+    "length",
+    null,
+    null,
+    null,
+    null,
+    "mass",
+    "count",
+    "mass",
+    "count",
+    "dimensionless",
+    "length",
+    "length",
+    "mass",
+    "mass",
+    "dimensionless",
+    null,
+    null,
+    "rate",
+    "count",
+    "length",
+    null,
+    "length",
+    "length",
+    null,
+    "rate",
+    null,
+    "dimensionless",
+    "rate",
+    null,
+    "rate",
+    "area",
+    "volume",
+    "rate"
+  ],
+  "method_evidence": [
+    false,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "constraint_evidence": [
+    false,
+    true,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    false,
+    true,
+    false,
+    true,
+    true
+  ],
+  "modifier_evidence": [
+    true,
+    true,
+    false,
+    true,
+    true,
+    false,
+    true,
+    false,
+    true,
+    true,
+    true,
+    true,
+    true,
+    false,
+    true,
+    true
+  ],
+  "role_hints": [
+    [
+      "constraint",
+      "statistical_modifier"
+    ],
+    [
+      "a",
+      "b"
+    ],
+    [
+      "a,b;c"
+    ],
+    [],
+    [],
+    [],
+    [
+      "property",
+      "entity"
+    ],
+    [
+      "Variable",
+      "property"
+    ],
+    [
+      "unit"
+    ],
+    [],
+    [
+      "a"
+    ],
+    [
+      "b"
+    ],
+    [
+      "entity ; property"
+    ],
+    [
+      "method",
+      "method"
+    ]
+  ],
+  "role_type": {
+    "hinted_property_for_variable": "Candidate role hints are incompatible with the variable slot: property.",
+    "qudt_unit_for_property": "Candidate native type is explicitly unit-like and is incompatible with the property slot.",
+    "unknown_type_is_allowed": null,
+    "object_property_predicate": "Candidate is an ontology relation predicate, not a value that can populate the method semantic slot.",
+    "smn_modifier_with_two_hints": null,
+    "hints_keep_their_order": "Candidate role hints are incompatible with the variable slot: property, entity, constraint.",
+    "comma_is_part_of_a_hint": "Candidate role hints are incompatible with the statistical_modifier slot: constraint,statistical_modifier.",
+    "hint_case_is_kept": "Candidate role hints are incompatible with the variable slot: Variable.",
+    "quantitykind_for_unit": "Candidate native type is explicitly property-like and is incompatible with the unit slot.",
+    "procedure_type_for_variable": "Candidate native type is explicitly method-like and is incompatible with the variable slot.",
+    "constraint_type_for_entity": "Candidate native type is explicitly constraint-like and is incompatible with the entity slot.",
+    "unit_of_measure_type_for_unit": null,
+    "lone_pipe_is_no_hint": null,
+    "spaced_datatype_property": "Candidate is an ontology relation predicate, not a value that can populate the property semantic slot.",
+    "rdf_property_in_native_type": "Candidate is an ontology relation predicate, not a value that can populate the entity semantic slot.",
+    "unit_word_in_iri_only": "Candidate native type is explicitly unit-like and is incompatible with the property slot.",
+    "hint_beats_type": "Candidate role hints are incompatible with the unit slot: property.",
+    "whitespace_hints": null
+  },
+  "evidence": {
+    "unrelated_fields_are_excluded": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. catch_count is the number of fish retained in a trawl catch.",
+    "local_phrase_anchor": "catch count number of fish in the catch. catch_count catch count number of fish in the catch. catch count was enumerated using a visual survey protocol.",
+    "weak_singleton_anchors_nothing": "count number of fish in the catch. count count number of fish in the catch.",
+    "suffixed_identifier_is_not_the_field": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "markup_*_suffix": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "markup_+_suffix": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "markup_|_suffix": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "markup_-_suffix": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "markup_1._suffix": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "markup_###_suffix": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "markup_>_suffix": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "markup_*_local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. * catch count was enumerated using a visual survey protocol during the ocean phase.",
+    "markup_+_local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. + catch count was enumerated using a visual survey protocol during the ocean phase.",
+    "markup_|_local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. | catch count was enumerated using a visual survey protocol during the ocean phase.",
+    "markup_-_local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. - catch count was enumerated using a visual survey protocol during the ocean phase.",
+    "markup_1._local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. 1. catch count was enumerated using a visual survey protocol during the ocean phase.",
+    "markup_###_local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. ### catch count was enumerated using a visual survey protocol during the ocean phase.",
+    "markup_>_local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. > catch count was enumerated using a visual survey protocol during the ocean phase.",
+    "labels_stand_in_without_a_column_name": "fork length length to the fork. fork length fork length was measured with a board.",
+    "multiline_chunk_phrase_anchor_quirk": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "multiline_chunk_identifier_anchor": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. catch_count was enumerated using a visual survey protocol.\nsecond line.",
+    "nbsp_leading_chunk": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.  catch count was enumerated using a visual survey protocol.",
+    "missing_fields_leave_no_double_space": "catch_count catch count count",
+    "untrimmed_values_are_kept_as_they_are": "  catch count   fish\tcounted catch_count  count    catch_count enumerated  ",
+    "identifier_with_digits": "fork length fl_mm_2 fork length fl_mm_2 was measured with a board.",
+    "long_single_word_anchors": "escapement escapement escapement was estimated by a mark-recapture model. the escapement estimate",
+    "accented_chunk_boundary": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. café catch_count enumerated catch_counté enumerated",
+    "tab_and_digit_markup": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. \t12) catch count was enumerated using a visual survey protocol. 2024-06-01 catch count was enumerated using a visual survey protocol."
+  },
+  "bundles": {
+    "constraint_without_evidence_is_the_only_downgrade": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/variable",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/property",
+          "llm_selected_label": "Count",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "entity",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/entity",
+          "llm_selected_label": "Fish",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "unit",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/unit",
+          "llm_selected_label": "Count",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_CONSTRAINT_EVIDENCE_REQUIRED] The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "statistical_modifier",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/statistical_modifier",
+          "llm_selected_label": "Total value",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "incompatible_property_unit_pair": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_PROPERTY_UNIT_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "property",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted property is count-dimensional, while the accepted unit is mass-dimensional; both require review as a pair."
+        },
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_PROPERTY_UNIT_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "unit",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted property is count-dimensional, while the accepted unit is mass-dimensional; both require review as a pair."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Fixture decision.",
+          "llm_confidence": 0.5
+        },
+        {
+          "dictionary_role": "property",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_PROPERTY_UNIT_DIMENSION_MISMATCH] The accepted property is count-dimensional, while the accepted unit is mass-dimensional; both require review as a pair.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "entity",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Fixture decision.",
+          "llm_confidence": 0.5
+        },
+        {
+          "dictionary_role": "unit",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_PROPERTY_UNIT_DIMENSION_MISMATCH] The accepted property is count-dimensional, while the accepted unit is mass-dimensional; both require review as a pair.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Fixture decision.",
+          "llm_confidence": 0.5
+        }
+      ]
+    },
+    "candidate_dimension_against_dictionary_unit": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "property",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "Candidate appears mass-dimensional, but the dictionary unit is count-dimensional."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_DIMENSION_MISMATCH] Candidate appears mass-dimensional, but the dictionary unit is count-dimensional.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "area_property_matches_area_unit": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/WettedArea",
+          "llm_selected_label": "Wetted area",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "volume_property_against_area_unit": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "property",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "Candidate appears volume-dimensional, but the dictionary unit is area-dimensional."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_DIMENSION_MISMATCH] Candidate appears volume-dimensional, but the dictionary unit is area-dimensional.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "flow_property_matches_compound_flow_unit": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/StreamDischarge",
+          "llm_selected_label": "Stream discharge",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "flow_property_against_speed_unit": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "property",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "Candidate appears flow-dimensional, but the dictionary unit is speed-dimensional."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_DIMENSION_MISMATCH] Candidate appears flow-dimensional, but the dictionary unit is speed-dimensional.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "catch_context_pairs_with_the_dictionary_variable": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+        },
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_REDUNDANT_CATCH_CONTEXT",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "CatchContext duplicates the accepted CatchAbundance framing when no additional constraint evidence is present."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_CONSTRAINT_EVIDENCE_REQUIRED] The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit. [SEM_REDUNDANT_CATCH_CONTEXT] CatchContext duplicates the accepted CatchAbundance framing when no additional constraint evidence is present.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "catch_context_pairs_with_the_accepted_variable": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+        },
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_REDUNDANT_CATCH_CONTEXT",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "CatchContext duplicates the accepted CatchAbundance framing when no additional constraint evidence is present."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchAbundance",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_CONSTRAINT_EVIDENCE_REQUIRED] The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit. [SEM_REDUNDANT_CATCH_CONTEXT] CatchContext duplicates the accepted CatchAbundance framing when no additional constraint evidence is present.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "review_marked_variable_does_not_pair": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_CONSTRAINT_EVIDENCE_REQUIRED] The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "catch_context_with_lifecycle_evidence_stands": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchContext",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "role_hints_keep_their_order_in_the_message": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_ROLE_TYPE_MISMATCH",
+          "severity": "warning",
+          "role": "variable",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "Candidate role hints are incompatible with the variable slot: property, entity."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_ROLE_TYPE_MISMATCH] Candidate role hints are incompatible with the variable slot: property, entity.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "comma_joined_hints_are_one_hint": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_ROLE_TYPE_MISMATCH",
+          "severity": "warning",
+          "role": "statistical_modifier",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "Candidate role hints are incompatible with the statistical_modifier slot: constraint,statistical_modifier."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "statistical_modifier",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_ROLE_TYPE_MISMATCH] Candidate role hints are incompatible with the statistical_modifier slot: constraint,statistical_modifier.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "method_evidence_by_observer_alternative": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/VisualCountProcedure",
+          "llm_selected_label": "Visual count procedure",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "method_without_evidence": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "CATCH_COUNT",
+          "code": "SEM_METHOD_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "method",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted method candidate lacks explicit field, protocol, gear, instrument, or estimation-procedure evidence."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_METHOD_EVIDENCE_REQUIRED] The accepted method candidate lacks explicit field, protocol, gear, instrument, or estimation-procedure evidence.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "anchored_context_supplies_method_and_constraint_evidence": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/VisualCountProcedure",
+          "llm_selected_label": "Visual count procedure",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchContext",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "unanchored_context_is_not_evidence": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "CATCH_COUNT",
+          "code": "SEM_METHOD_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "method",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted method candidate lacks explicit field, protocol, gear, instrument, or estimation-procedure evidence."
+        },
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "CATCH_COUNT",
+          "code": "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_METHOD_EVIDENCE_REQUIRED] The accepted method candidate lacks explicit field, protocol, gear, instrument, or estimation-procedure evidence.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_CONSTRAINT_EVIDENCE_REQUIRED] The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "weak_column_name_anchors_nothing": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "count",
+          "code": "SEM_METHOD_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "method",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted method candidate lacks explicit field, protocol, gear, instrument, or estimation-procedure evidence."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_METHOD_EVIDENCE_REQUIRED] The accepted method candidate lacks explicit field, protocol, gear, instrument, or estimation-procedure evidence.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "modifier_without_aggregation_evidence": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "water_temp",
+          "code": "SEM_MODIFIER_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "statistical_modifier",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted statistical-modifier candidate lacks explicit aggregation evidence (mean, median, maximum, minimum, total, or peak)."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "statistical_modifier",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Accepted. [SEM_MODIFIER_EVIDENCE_REQUIRED] The accepted statistical-modifier candidate lacks explicit aggregation evidence (mean, median, maximum, minimum, total, or peak).",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "predicate_candidate_cannot_fill_a_slot": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "CATCH_COUNT",
+          "code": "SEM_ROLE_TYPE_MISMATCH",
+          "severity": "warning",
+          "role": "method",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "Candidate is an ontology relation predicate, not a value that can populate the method semantic slot."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_ROLE_TYPE_MISMATCH] Candidate is an ontology relation predicate, not a value that can populate the method semantic slot.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "out_of_range_index_is_skipped": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 5,
+          "llm_selected_iri": "https://example.org/variable",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "non_accept_rows_are_skipped": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Fixture decision.",
+          "llm_confidence": 0.5
+        }
+      ]
+    },
+    "notes_stand_alone_without_a_rationale": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "[SEM_CONSTRAINT_EVIDENCE_REQUIRED] The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "rationale_is_trimmed_before_the_notes": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Padded rationale. [SEM_CONSTRAINT_EVIDENCE_REQUIRED] The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "unit_candidate_dimension_against_dictionary_unit": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "unit",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "Candidate appears count-dimensional, but the dictionary unit is mass-dimensional."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "unit",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_DIMENSION_MISMATCH] Candidate appears count-dimensional, but the dictionary unit is mass-dimensional.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "dimension_and_pair_findings_in_r_order": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "property",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "Candidate appears count-dimensional, but the dictionary unit is mass-dimensional."
+        },
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_PROPERTY_UNIT_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "property",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted property is count-dimensional, while the accepted unit is mass-dimensional; both require review as a pair."
+        },
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_PROPERTY_UNIT_DIMENSION_MISMATCH",
+          "severity": "warning",
+          "role": "unit",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted property is count-dimensional, while the accepted unit is mass-dimensional; both require review as a pair."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_DIMENSION_MISMATCH] Candidate appears count-dimensional, but the dictionary unit is mass-dimensional. [SEM_PROPERTY_UNIT_DIMENSION_MISMATCH] The accepted property is count-dimensional, while the accepted unit is mass-dimensional; both require review as a pair.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "unit",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_PROPERTY_UNIT_DIMENSION_MISMATCH] The accepted property is count-dimensional, while the accepted unit is mass-dimensional; both require review as a pair.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "second_candidate_is_the_selected_one": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/variable",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 2,
+          "llm_selected_iri": "https://w3id.org/smn/Abundance",
+          "llm_selected_label": "Abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "no_labels_at_all_finds_no_evidence": {
+      "findings": [
+        {
+          "dataset_id": "d1",
+          "table_id": "t1",
+          "column_name": "spawner_count",
+          "code": "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+          "severity": "warning",
+          "role": "constraint",
+          "before_decision": "accept",
+          "after_decision": "review",
+          "message": "The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+        }
+      ],
+      "rows": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "The candidate fits. [SEM_CONSTRAINT_EVIDENCE_REQUIRED] The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "constraint_with_evidence_stands": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/constraint",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    },
+    "entity_with_a_second_hint_stands": {
+      "findings": [],
+      "rows": [
+        {
+          "dictionary_role": "entity",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/Population",
+          "llm_selected_label": "Population",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ]
+    }
+  }
+}

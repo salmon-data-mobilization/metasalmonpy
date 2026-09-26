@@ -11,7 +11,13 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 import re
 
-from .metadata import normalize_codes, normalize_dataset_meta, normalize_dictionary, normalize_table_meta
+from .metadata import (
+    normalize_codes,
+    normalize_dataset_meta,
+    normalize_dictionary,
+    normalize_table_meta,
+    scalar_text,
+)
 from .term_search import _search_failed_sources, find_terms
 from .dwc_dp import suggest_dwc_mappings
 
@@ -38,6 +44,32 @@ def _is_missing(value) -> bool:
     except Exception:
         pass
     return isinstance(value, str) and value.strip() == ""
+
+
+def _semantic_code_value_is_empty(code_value) -> bool:
+    """Whether a ``codes.csv`` row's ``code_value`` is empty, which gives the
+    row no semantic target in any role.
+
+    Hub item B-277, the mirror half of metasalmon's B-276, ruled by Brett
+    2026-09-25. The codes schema defines ``term_iri`` as "the specific term
+    that code_value represents" and lets a row leave ``code_value`` empty when
+    it supplies ``vocabulary_iri`` instead, so such a row has no code value for
+    a term to represent.
+
+    Empty is a missing value (``NaN``, ``pd.NA``, ``None``), or text that is
+    blank once trimmed: the review console reads a code value trimmed, so a
+    blank one had no address there either. The trim is :func:`scalar_text`'s,
+    which strips what R's ``trimws()`` strips and nothing more, so U+00A0 is a
+    code value here as it is in R. :func:`_is_missing` strips all Unicode
+    whitespace, which would read that code as empty. The texts ``NA`` and
+    ``nan`` are code values, not empty ones.
+
+    One predicate for both places the rule is applied: target discovery in
+    :func:`suggest_semantics`, which forms no target for such a row, and
+    ``review_semantics()``, which drops one from suggestions recorded before
+    the rule existed. Mirrors R's ``.ms_semantic_code_value_is_empty()``.
+    """
+    return not scalar_text(code_value)
 
 
 def _first_non_empty(*values) -> str:
@@ -383,7 +415,8 @@ def _retrieve_semantic_target_candidates(
     frame, without searching, when there is no role or no query.
 
     The body is the loop ``suggest_semantics()`` ran inline before hub item
-    B-363, kept step for step so pass-1 output is unchanged: the explicit
+    B-363, kept step for step so pass-1 output is unchanged: the search
+    answer's ``attrs`` dropped from the copy (hub B-370), the explicit
     allowlist applied on the way out as well as in (metasalmon 0.1.7), one
     row per ``(source, iri)``, the role-hint status and bonus, the sort on
     score (or bonus) then source, ontology, label and iri, the cap, and the
@@ -421,7 +454,16 @@ def _retrieve_semantic_target_candidates(
     res = search_fn(query_text, role=search_role, sources=target_sources)
     if res is None or res.empty:
         return pd.DataFrame()
+    # The copy is a candidate table, not a search answer, so it drops the
+    # answer's attrs (hub B-370). find_terms() keeps a diagnostics DataFrame
+    # there, and the pd.concat() that suggest_semantics() and
+    # _merge_semantic_target_candidates() run over shortlists compares its
+    # inputs' attrs whenever every input has some: a DataFrame has no single
+    # truth value, so two targets with candidates raised. The answer itself is
+    # not touched, so find_terms()'s caller, and _search_once_per_call(), which
+    # has already read the diagnostics, see them as before.
     res = res.copy()
+    res.attrs = {}
     # metasalmon v0.1.7 made an explicit source list a strict allowlist on
     # the way *out* as well as the way in: results are filtered to the
     # allowed sources, so an injected search_fn cannot widen a deliberately
@@ -1151,6 +1193,10 @@ def suggest_semantics(
     if codes_df is not None and not codes_df.empty:
         for _, row in codes_df.iterrows():
             if not _is_missing(row.get("term_iri")):
+                continue
+            # No code value, no target in any role (hub item B-277, the mirror
+            # of metasalmon's B-276); the other rows of this column keep theirs.
+            if _semantic_code_value_is_empty(row.get("code_value")):
                 continue
             dataset_id = row.get("dataset_id")
             table_id = row.get("table_id")

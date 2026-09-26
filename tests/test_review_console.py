@@ -27,9 +27,11 @@ from metasalmonpy import (
     semantic_suggestions,
 )
 from metasalmonpy.metadata import read_sdp_csv
+from metasalmonpy.package_io import _suggestions_csv_bytes
 from metasalmonpy.review_console import (
     SemanticReview,
     _accept_call,
+    _is_review_iri,
     _reject_call,
     _strip_review_iri,
 )
@@ -527,10 +529,16 @@ def _vocabulary_code_review() -> SemanticReview:
     """A code slot whose ``codes.csv`` row has no code value.
 
     The codes schema lets a row leave ``code_value`` empty when it supplies
-    ``vocabulary_iri``, and discovery still gives it a code-level target, with
-    the three roles a measurement parent gives its codes. Its ``code_value`` is
-    as empty as the column's own slot's, so only the file tells the two apart.
-    Mirrors R's ``vocabulary_code_review()``.
+    ``vocabulary_iri``, and discovery gave it a code-level target, with the
+    three roles a measurement parent gives its codes. Its ``code_value`` is as
+    empty as the column's own slot's, so only the file tells the two apart.
+
+    Since hub item B-277 such a row gets no target and :func:`review_semantics`
+    queues no slot for it, so this is a review an earlier version built, or one
+    rebuilt by hand. It is made the way that version made it, by queueing the
+    code rows under a placeholder value and emptying ``code_value`` afterwards,
+    because the current :func:`review_semantics` drops them. Mirrors R's
+    ``vocabulary_code_review()``.
     """
     dictionary = _dictionary_with(
         [
@@ -548,7 +556,7 @@ def _vocabulary_code_review() -> SemanticReview:
             ),
             *[
                 _suggestion_row(
-                    code_value=pd.NA,
+                    code_value="placeholder",
                     dictionary_role=role,
                     target_scope="code",
                     target_sdp_file="codes.csv",
@@ -561,7 +569,11 @@ def _vocabulary_code_review() -> SemanticReview:
             ],
         ]
     )
-    return review_semantics(dictionary)
+    review = review_semantics(dictionary)
+    rows = review.rows
+    # The review reads every code value as text, so an empty one is "".
+    rows.loc[rows["target_file"] == "codes.csv", "code_value"] = ""
+    return review._replace(rows)
 
 
 def test_a_blank_code_value_never_selects_a_code_slot_whose_codes_row_has_no_code_value():
@@ -571,9 +583,10 @@ def test_a_blank_code_value_never_selects_a_code_slot_whose_codes_row_has_no_cod
 
     # The column's own slots print calls that run and decide them. The code
     # slot's own calls may still refuse, because no argument tells a code slot
-    # with no code value apart from the column's own slot; that is a separate
-    # defect, recorded in metasalmon's .hub/workpads/B-151.md. What no call may
-    # do is decide the other slot.
+    # with no code value apart from the column's own slot (metasalmon's
+    # .hub/workpads/B-151.md). Hub item B-277 closed that by giving such a row
+    # no slot at all, so only a review built before it holds one. What no call
+    # may do is decide the other slot.
     _assert_printed_calls_decide_their_own_slots(review, must_run=column_slots)
     for blank in ("", pd.NA, float("nan")):
         decided = accept_suggestion(
@@ -599,6 +612,110 @@ def test_a_blank_code_value_never_selects_a_code_slot_whose_codes_row_has_no_cod
     assert set(decided.loc[decided["decision"].notna(), "slot_id"]) == {
         MEASUREMENT_COLUMN_SLOT
     }
+
+
+# ---------------------------------------------------------------------------
+# A codes.csv row with no code value gets no semantic target: hub queue B-277,
+# the mirror half of metasalmon's B-276, ruled by Brett 2026-09-25. So the
+# review queues no slot for it, including from suggestions recorded before the
+# ruling, and a coded row of the same column keeps its slot. Each test mirrors
+# one in metasalmon's tests/testthat/test-review-console.R.
+# ---------------------------------------------------------------------------
+
+#: An empty code value, spelled each way it can arrive: the four the ruling
+#: names, and blank text, which R's predicate reads as empty too. A test that
+#: builds a frame by hand holds each one as itself, in an object column,
+#: because pandas 3 reads a column of text and missing values as strings and
+#: turns ``None`` and ``pd.NA`` into NaN.
+EMPTY_CODE_VALUES = {
+    "NaN": float("nan"),
+    "pd.NA": pd.NA,
+    "None": None,
+    "empty text": "",
+    "blank text": "  ",
+}
+
+CODED_SLOT = "codes.csv|demo-1/spawners/spawner_count/-9|term_iri"
+
+
+def _keyed_code_values(keys) -> set:
+    """The code value each target row key or slot id is keyed on.
+
+    A code's key is ``dataset/table/column/code``, and a column's or a table's
+    has no fourth part. So the empty value's old spellings, ``nan`` where R
+    spells ``NA``, or nothing at all, show up here, where a count of
+    ``codes.csv`` slots would not tell them from a real code.
+    """
+    found = set()
+    for key in keys:
+        text = str(key)
+        if "|" in text:
+            text = text.split("|")[1]
+        parts = text.split("/", 3)
+        if len(parts) == 4:
+            found.add(parts[3])
+    return found
+
+
+@pytest.mark.parametrize(
+    "empty", list(EMPTY_CODE_VALUES.values()), ids=list(EMPTY_CODE_VALUES)
+)
+def test_review_semantics_queues_no_slot_for_a_codes_row_with_no_code_value_from_suggestions_recorded_before_b277(
+    empty,
+):
+    def code_rows(code, key):
+        return [
+            _suggestion_row(
+                code_value=code,
+                dictionary_role=role,
+                target_scope="code",
+                target_sdp_file="codes.csv",
+                target_sdp_field="term_iri",
+                target_row_key=f"demo-1/spawners/spawner_count/{key}",
+                label=f"{role} term for {key}",
+                iri=f"https://example.org/{role}/{key}",
+            )
+            for role in ("constraint", "entity", "method")
+        ]
+
+    # Keyed the way the codes loop keyed each spelling before B-277, by
+    # formatting it: ``nan``, ``<NA>``, ``None``, nothing, or the blank itself.
+    # The review finds the row by its file and its code value, not its key.
+    suggestions = [
+        _suggestion_row(
+            dictionary_role="entity",
+            target_sdp_field="entity_iri",
+            label="Spawner",
+            iri="https://w3id.org/smn/Spawner",
+        ),
+        _suggestion_row(
+            dictionary_role="constraint",
+            target_sdp_field="constraint_iri",
+            label="Wild origin",
+            iri="https://example.org/constraint/column",
+        ),
+        *code_rows(empty, f"{empty}"),
+        *code_rows("-9", "-9"),
+    ]
+    dictionary = _dictionary_with(suggestions)
+    dictionary.attrs["semantic_suggestions"] = pd.DataFrame(suggestions, dtype=object)
+    review = review_semantics(dictionary)
+    rows = review.rows
+
+    assert set(rows.loc[rows["target_file"] == "codes.csv", "slot_id"]) == {CODED_SLOT}
+    assert _keyed_code_values(rows["slot_id"]) == {"-9"}
+    _assert_printed_calls_decide_their_own_slots(review)
+    for blank in ("", pd.NA, float("nan")):
+        decided = accept_suggestion(
+            review, "spawner_count", "entity", rank=1, code_value=blank
+        ).rows
+        assert set(decided.loc[decided["decision"].notna(), "slot_id"]) == {
+            MEASUREMENT_COLUMN_SLOT
+        }, repr(blank)
+    decided = accept_suggestion(
+        review, "spawner_count", "entity", rank=1, code_value="-9"
+    ).rows
+    assert set(decided.loc[decided["decision"].notna(), "slot_id"]) == {CODED_SLOT}
 
 
 def _measurement_code_package(tmp_path, monkeypatch, codes, name) -> Path:
@@ -653,10 +770,14 @@ def _measurement_code_package(tmp_path, monkeypatch, codes, name) -> Path:
     )
 
 
-def _assert_column_call_writes_the_dictionary(path: Path, review: SemanticReview):
+def _assert_column_call_writes_the_dictionary(
+    path: Path, review: SemanticReview, blank_code_value: bool = True
+):
     """Paste the column's own entity call, apply it, and check it wrote the
-    column's ``entity_iri`` and left ``codes.csv`` alone. Mirrors R's
-    ``expect_column_call_writes_the_dictionary()``."""
+    column's ``entity_iri`` and left ``codes.csv`` alone. The call names
+    ``code_value=""`` exactly when a code slot shares the column's entity role;
+    with none queued, the short call is the one that selects the column's slot.
+    Mirrors R's ``expect_column_call_writes_the_dictionary()``."""
 
     def read(file_name: str) -> pd.DataFrame:
         return pd.read_csv(
@@ -666,7 +787,10 @@ def _assert_column_call_writes_the_dictionary(path: Path, review: SemanticReview
     rows = review.rows
     codes_before = read("codes.csv")
     call = _accept_call(rows, MEASUREMENT_COLUMN_SLOT, 1)
-    assert 'code_value=""' in call
+    if blank_code_value:
+        assert 'code_value=""' in call
+    else:
+        assert "code_value" not in call, call
     decided = eval(  # noqa: S307
         call, {"accept_suggestion": accept_suggestion, "review": review}
     )
@@ -720,39 +844,155 @@ def test_a_measurement_column_with_a_code_list_round_trips_from_create_sdp_to_di
     _assert_column_call_writes_the_dictionary(path, review)
 
 
+@pytest.mark.parametrize(
+    "empty", list(EMPTY_CODE_VALUES.values()), ids=list(EMPTY_CODE_VALUES)
+)
 def test_a_measurement_column_whose_codes_row_names_a_vocabulary_round_trips_from_create_sdp_to_disk(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, empty
 ):
     # The vocabulary-backed row through the real pipeline: the column's only
-    # codes.csv row supplies vocabulary_iri and no code value.
+    # codes.csv row supplies vocabulary_iri and no code value. Such a row gets
+    # no semantic target (hub item B-277, ruled 2026-09-25), so create_sdp()
+    # writes no suggestion for it and the review queues no slot for it, however
+    # its empty code value is spelled.
     codes = pd.DataFrame(
         {
             "dataset_id": ["demo-1"],
             "table_id": ["spawners"],
             "column_name": ["spawner_count"],
-            "code_value": [pd.NA],
+            "code_value": [empty],
             "code_label": ["Count categories"],
             "code_description": [
                 "Counts are recorded against a published category vocabulary."
             ],
             "vocabulary_iri": ["https://example.org/vocab/count-categories"],
-        }
+        },
+        dtype=object,
     )
     path = _measurement_code_package(tmp_path, monkeypatch, codes, "vocabulary-codes")
+
+    # No key is formed for the row, so none spells its empty value ``nan``
+    # where R would spell it ``NA``: the nan slot key, ruled 2026-09-25.
+    written = semantic_suggestions(str(path))
+    assert not (written["target_sdp_file"] == "codes.csv").any()
+    assert _keyed_code_values(written["target_row_key"]) == set()
+
     review = review_semantics(str(path))
     rows = review.rows
+    assert MEASUREMENT_COLUMN_SLOT in set(rows.loc[rows["role"] == "entity", "slot_id"])
+    assert not (rows["target_file"] == "codes.csv").any()
+    assert _keyed_code_values(rows["slot_id"]) == set()
 
-    # Counted, not named: the slot is keyed on the code value's text, and R and
-    # Python spell a missing value differently there ("NA" against "nan").
-    code_slots = set(rows.loc[rows["target_file"] == "codes.csv", "slot_id"])
-    assert len(code_slots) == 1
-    assert {MEASUREMENT_COLUMN_SLOT} | code_slots <= set(
+    # Every call printed for the column runs and decides its own slot.
+    _assert_printed_calls_decide_their_own_slots(review)
+    _assert_column_call_writes_the_dictionary(path, review, blank_code_value=False)
+
+
+@pytest.mark.parametrize(
+    "empty", list(EMPTY_CODE_VALUES.values()), ids=list(EMPTY_CODE_VALUES)
+)
+def test_a_coded_row_beside_a_vocabulary_row_keeps_its_slot_through_create_sdp_and_the_review(
+    tmp_path, monkeypatch, empty
+):
+    codes = pd.DataFrame(
+        {
+            "dataset_id": ["demo-1", "demo-1"],
+            "table_id": ["spawners", "spawners"],
+            "column_name": ["spawner_count", "spawner_count"],
+            "code_value": [empty, "-9"],
+            "code_label": ["Count categories", "Not surveyed"],
+            "code_description": [
+                "Counts are recorded against a published category vocabulary.",
+                "The reach was not surveyed.",
+            ],
+            "vocabulary_iri": ["https://example.org/vocab/count-categories", pd.NA],
+        },
+        dtype=object,
+    )
+    path = _measurement_code_package(tmp_path, monkeypatch, codes, "vocabulary-and-code")
+
+    written = semantic_suggestions(str(path))
+    written_codes = written[written["target_sdp_file"] == "codes.csv"]
+    assert set(written_codes["target_row_key"]) == {"demo-1/spawners/spawner_count/-9"}
+    assert _keyed_code_values(written["target_row_key"]) == {"-9"}
+
+    review = review_semantics(str(path))
+    rows = review.rows
+    assert set(rows.loc[rows["target_file"] == "codes.csv", "slot_id"]) == {CODED_SLOT}
+    assert {MEASUREMENT_COLUMN_SLOT, CODED_SLOT} <= set(
         rows.loc[rows["role"] == "entity", "slot_id"]
     )
 
-    column_slots = set(rows.loc[rows["target_file"] != "codes.csv", "slot_id"])
-    _assert_printed_calls_decide_their_own_slots(review, must_run=column_slots)
+    _assert_printed_calls_decide_their_own_slots(review)
     _assert_column_call_writes_the_dictionary(path, review)
+
+
+def test_a_semantic_suggestions_csv_written_before_b277_queues_no_slot_for_a_codes_row_with_no_code_value(
+    tmp_path, monkeypatch
+):
+    codes = pd.DataFrame(
+        {
+            "dataset_id": ["demo-1", "demo-1"],
+            "table_id": ["spawners", "spawners"],
+            "column_name": ["spawner_count", "spawner_count"],
+            "code_value": [pd.NA, "-9"],
+            "code_label": ["Count categories", "Not surveyed"],
+            "code_description": [
+                "Counts are recorded against a published category vocabulary.",
+                "The reach was not surveyed.",
+            ],
+            "vocabulary_iri": ["https://example.org/vocab/count-categories", pd.NA],
+        },
+        dtype=object,
+    )
+    path = _measurement_code_package(
+        tmp_path, monkeypatch, codes, "vocabulary-codes-old-csv"
+    )
+
+    # Write back the rows an earlier version wrote for the vocabulary row: the
+    # coded row's three roles, with the code value empty. This package keyed
+    # them ``.../nan``, or ``.../`` for empty text; metasalmon keyed the same
+    # row ``.../NA``. One is recorded as rejected, which a later review replays.
+    suggestions_path = path / "semantic_suggestions.csv"
+    written = read_sdp_csv(suggestions_path)
+    template = written[
+        (written["target_sdp_file"] == "codes.csv") & (written["code_value"] == "-9")
+    ]
+    assert len(template) > 0
+    earlier = []
+    for key in ("nan", "", "NA"):
+        rows = template.copy()
+        rows["code_value"] = pd.NA
+        rows["target_row_key"] = f"demo-1/spawners/spawner_count/{key}"
+        rows["code_label"] = "Count categories"
+        rows["code_description"] = (
+            "Counts are recorded against a published category vocabulary."
+        )
+        rows["decision"] = "rejected" if key == "nan" else pd.NA
+        earlier.append(rows)
+    suggestions_path.write_bytes(
+        _suggestions_csv_bytes(pd.concat([written, *earlier], ignore_index=True))
+    )
+    on_disk = semantic_suggestions(str(path))
+    old_rows = on_disk[
+        (on_disk["target_sdp_file"] == "codes.csv") & (on_disk["code_value"] == "")
+    ]
+    assert set(old_rows["target_row_key"]) == {
+        f"demo-1/spawners/spawner_count/{key}" for key in ("nan", "", "NA")
+    }
+    assert (old_rows["decision"] == "rejected").any()
+
+    review = review_semantics(str(path))
+    queued = review.rows
+    assert set(queued.loc[queued["target_file"] == "codes.csv", "slot_id"]) == {CODED_SLOT}
+    _assert_printed_calls_decide_their_own_slots(review)
+
+    # Nor as a decided slot: the recorded rejection is not replayed for it.
+    everything = review_semantics(str(path), include_filled=True).rows
+    assert set(
+        everything.loc[everything["target_file"] == "codes.csv", "slot_id"]
+    ) == {CODED_SLOT}
+    assert _keyed_code_values(everything["slot_id"]) == {"-9"}
 
 
 def test_a_table_level_slot_never_names_a_column_that_does_not_exist():
@@ -876,6 +1116,271 @@ def test_accept_takes_a_marked_iri_and_records_it_without_the_marker():
     assert review["decision_iri"].dropna().tolist() == [
         "https://w3id.org/smn/WaterTemperature"
     ]
+
+
+# The routes B-220 left open to a decision that names no term (hub item B-247,
+# the mirror of metasalmon's B-246). A shortlisted candidate whose ``iri`` is
+# only the marker was queued, because the queue tested only that the text of
+# ``iri`` was not empty, so ``rank=`` accepted it with an empty
+# ``decision_iri``, and a recorded accept of one replayed the same way. The
+# strip removes one marker, so a doubled one left a marker in the decision on
+# either route. No producer writes such a candidate; a hand-edited or external
+# suggestions table does. The spellings are ``MARKER_ONLY_IRIS`` above, which
+# follows the strip, and each test asserts its premise first for the same
+# reason those tests do.
+
+
+def _decided_iris(review: SemanticReview) -> list:
+    rows = review.rows
+    return rows.loc[rows["decision"].notna(), "decision_iri"].tolist()
+
+
+@pytest.mark.parametrize(
+    "marker", list(MARKER_ONLY_IRIS.values()), ids=list(MARKER_ONLY_IRIS)
+)
+def test_a_candidate_that_is_only_the_marker_is_not_queued_so_rank_cannot_accept_it(
+    marker, capsys
+):
+    assert _strip_review_iri(marker) == ""
+
+    alone = review_semantics(_dictionary_with([_suggestion_row(iri=marker)]))
+    assert len(alone) == 0
+    with pytest.raises(ValueError, match="No review slot matches"):
+        accept_suggestion(alone, "spawner_count", "variable", rank=1)
+    capsys.readouterr()
+
+    # Ahead of a real candidate it does not take rank 1 from it, and dropping it
+    # is not reported as a field the review cannot decide.
+    review = review_semantics(
+        _dictionary_with(
+            [_suggestion_row(label="Marker only", iri=marker), _suggestion_row()]
+        )
+    )
+    assert "cannot decide" not in capsys.readouterr().out
+    review = accept_suggestion(review, "spawner_count", "variable", rank=1)
+    assert _decided_iris(review) == [SPAWNER_IRI]
+
+
+@pytest.mark.parametrize(
+    "marker", list(MARKER_ONLY_IRIS.values()), ids=list(MARKER_ONLY_IRIS)
+)
+def test_a_recorded_accept_of_a_candidate_that_is_only_the_marker_replays_no_empty_iri(
+    marker,
+):
+    assert _strip_review_iri(marker) == ""
+
+    dictionary = _dictionary_with(
+        [
+            _suggestion_row(label="Marker only", iri=marker, decision="accepted"),
+            _suggestion_row(decision="not_selected"),
+        ]
+    )
+    rebuilt = review_semantics(dictionary, include_filled=True)
+    assert not (
+        (rebuilt.rows["decision"] == "accept") & (rebuilt.rows["decision_iri"] == "")
+    ).any()
+    # That accept named no term, so it decided nothing: the slot is asked again.
+    queued = review_semantics(dictionary)
+    assert queued["iri"].tolist() == [SPAWNER_IRI]
+    assert queued["decision"].isna().all()
+
+
+# What each of these leaves once ``_strip_review_iri()`` has run is still read
+# as a marker by ``_is_review_iri()``. The spellings are this package's own:
+# metasalmon's twin of "in two cases" puts a space before each colon, which
+# ``_strip_review_iri()`` does not read as the marker today. Which spellings
+# count is Q-63's.
+DOUBLED_MARKER_IRIS = {
+    "twice, with nothing after": "REVIEW: REVIEW:",
+    "twice, with no space between": "REVIEW:REVIEW:",
+    "twice, in two cases": "review: Review:",
+    "twice, before a term": "REVIEW: REVIEW: https://w3id.org/smn/WaterTemperature",
+}
+
+
+@pytest.mark.parametrize(
+    "doubled", list(DOUBLED_MARKER_IRIS.values()), ids=list(DOUBLED_MARKER_IRIS)
+)
+def test_no_accept_records_an_iri_that_is_still_a_marker_once_one_is_stripped(
+    doubled,
+):
+    assert _is_review_iri(_strip_review_iri(doubled))
+
+    review = review_semantics(_dictionary_with([_suggestion_row()]))
+    with pytest.raises(ValueError, match="not a REVIEW: marker"):
+        accept_suggestion(review, "spawner_count", "variable", iri=doubled)
+
+    # On a shortlisted candidate it is not queued, so neither ``rank=`` nor a
+    # recorded accept of it can put it in a decision.
+    suggestions = [
+        _suggestion_row(label="Doubled marker", iri=doubled),
+        _suggestion_row(),
+    ]
+    review = accept_suggestion(
+        review_semantics(_dictionary_with(suggestions)),
+        "spawner_count",
+        "variable",
+        rank=1,
+    )
+    decided = _decided_iris(review)
+    assert not any(_is_review_iri(value) for value in decided)
+    assert decided == [SPAWNER_IRI]
+
+    suggestions[0]["decision"] = "accepted"
+    suggestions[1]["decision"] = "not_selected"
+    rebuilt = review_semantics(_dictionary_with(suggestions), include_filled=True)
+    replayed = rebuilt.rows.loc[rebuilt.rows["decision"] == "accept", "decision_iri"]
+    assert not any(_is_review_iri(value) for value in replayed)
+
+
+# A review the current ``review_semantics()`` did not build can still hold such
+# a candidate: one saved by an earlier version, or edited by hand. ``rank=``
+# refuses it there too, rather than trusting the queue to have left it out.
+NAMES_NO_TERM_IRIS = {**MARKER_ONLY_IRIS, **DOUBLED_MARKER_IRIS}
+
+
+@pytest.mark.parametrize(
+    "value", list(NAMES_NO_TERM_IRIS.values()), ids=list(NAMES_NO_TERM_IRIS)
+)
+def test_rank_refuses_a_candidate_in_the_review_whose_iri_names_no_term(value):
+    stripped = _strip_review_iri(value)
+    assert not stripped or _is_review_iri(stripped)
+
+    review = review_semantics(_dictionary_with([_suggestion_row()]))
+    rows = review.rows
+    rows.at[rows.index[0], "iri"] = value
+    edited = SemanticReview(rows, review.path)
+    with pytest.raises(ValueError, match="names no term"):
+        accept_suggestion(edited, "spawner_count", "variable", rank=1)
+
+
+# Rejecting a slot does not depend on any candidate's IRI, so a recorded reject
+# is replayed from a row whose IRI names no term, which the queue otherwise
+# leaves out. Without that, a slot whose only candidate is such a row lost its
+# rejection, and the reason, from ``include_filled=True``.
+EMPTY_IRIS = {"an empty string": "", "a missing value": pd.NA}
+NO_TERM_OR_EMPTY_IRIS = {**NAMES_NO_TERM_IRIS, **EMPTY_IRIS}
+
+
+@pytest.mark.parametrize(
+    "value", list(NO_TERM_OR_EMPTY_IRIS.values()), ids=list(NO_TERM_OR_EMPTY_IRIS)
+)
+def test_a_recorded_reject_is_replayed_from_a_candidate_whose_iri_names_no_term(
+    value,
+):
+    dictionary = _dictionary_with(
+        [
+            _suggestion_row(
+                iri=value,
+                decision="rejected",
+                decision_reason="no candidate describes a wild-origin count",
+            )
+        ]
+    )
+    revisited = review_semantics(dictionary, include_filled=True)
+    assert revisited["decision"].tolist() == ["reject"]
+    assert revisited["decision_reason"].tolist() == [
+        "no candidate describes a wild-origin count"
+    ]
+    assert len(review_semantics(dictionary)) == 0
+    with pytest.raises(ValueError, match="names no term"):
+        accept_suggestion(revisited, "spawner_count", "variable", rank=1)
+
+
+# The console prints a call only where the call runs. A candidate whose IRI
+# names no term is refused by ``accept_suggestion()``, so it gets no accept
+# call, while its slot keeps its reject call and every other candidate keeps
+# its own.
+CONSOLE_NO_TERM_IRIS = {
+    "the bare marker": "REVIEW:",
+    "a doubled marker": "REVIEW: REVIEW:",
+    **EMPTY_IRIS,
+}
+
+
+@pytest.mark.parametrize(
+    "value", list(CONSOLE_NO_TERM_IRIS.values()), ids=list(CONSOLE_NO_TERM_IRIS)
+)
+def test_the_console_prints_no_accept_call_for_a_candidate_whose_iri_names_no_term(
+    value,
+):
+    abundance = "https://w3id.org/smn/Abundance"
+    dictionary = _dictionary_with(
+        [
+            _suggestion_row(
+                iri=value,
+                decision="rejected",
+                decision_reason="no candidate describes a wild-origin count",
+            ),
+            _suggestion_row(
+                dictionary_role="property",
+                target_sdp_field="property_iri",
+                label="Abundance",
+                iri=abundance,
+            ),
+        ]
+    )
+    review = review_semantics(dictionary, include_filled=True)
+    lines = review.render_lines(object_name="review")
+    assert any("DECIDED: reject" in line for line in lines)
+    assert any("names no term" in line for line in lines)
+
+    namespace = {
+        "accept_suggestion": accept_suggestion,
+        "reject_suggestion": reject_suggestion,
+        "review": review,
+    }
+    accepts = [
+        line.strip()[len("review = "):]
+        for line in lines
+        if line.strip().startswith("review = accept_suggestion(")
+    ]
+    assert len(accepts) == 1
+    for call in accepts:
+        decided = eval(call, namespace).rows  # noqa: S307 - the call is the contract
+        accepted = decided.loc[decided["decision"] == "accept", "decision_iri"]
+        assert accepted.tolist() == [abundance]
+    rejects = [
+        line.strip().split("# ")[0].strip()[len("review = "):]
+        for line in lines
+        if line.strip().startswith("review = reject_suggestion(")
+    ]
+    assert len(rejects) == 2
+    for call in rejects:
+        assert isinstance(eval(call, namespace), SemanticReview)  # noqa: S307
+
+
+# A row with no IRI targets a field the review does decide, so it is not one of
+# the fields "this review cannot decide", and editing the metadata CSV by hand
+# is not what it needs. The shape B-220 left in a package: a hand-picked
+# ``accepted`` row with an empty ``iri`` at the head of its slot.
+@pytest.mark.parametrize("empty", list(EMPTY_IRIS.values()), ids=list(EMPTY_IRIS))
+def test_review_semantics_does_not_report_a_row_with_no_iri_as_a_field_it_cannot_decide(
+    empty, capsys
+):
+    suggestions = [
+        _suggestion_row(iri=empty, source="user", decision="accepted"),
+        _suggestion_row(decision="not_selected"),
+    ]
+    review = review_semantics(_dictionary_with(suggestions))
+    assert "cannot decide" not in capsys.readouterr().out
+    assert review["iri"].tolist() == [SPAWNER_IRI]
+    assert review["decision"].isna().all()
+
+    # A field the review cannot decide is still reported, and alone.
+    suggestions.append(
+        _suggestion_row(
+            target_scope="dataset",
+            target_sdp_file="dataset.csv",
+            target_sdp_field="keywords",
+            target_row_key="demo-1",
+        )
+    )
+    review_semantics(_dictionary_with(suggestions))
+    reported = capsys.readouterr().out
+    assert "cannot decide" in reported
+    assert "dataset.csv" in reported
+    assert "column_dictionary.csv" not in reported
 
 
 def test_accept_refuses_a_rank_that_is_not_there():

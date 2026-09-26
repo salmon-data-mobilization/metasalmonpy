@@ -14,6 +14,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 from .metadata import (
     READR_TRIM_CHARS,
+    _code_list_applies,
     ensure_resource_mapping,
     infer_codes_from_resources,
     infer_dataset_metadata_from_resources,
@@ -834,30 +835,6 @@ def _apply_dictionary_present(series: pd.Series) -> pd.Series:
     return series.notna() & (series.astype(str).str.strip(READR_TRIM_CHARS) != "")
 
 
-def _code_list_applies(column) -> bool:
-    """R's guard on the codes step: ``inherits(x, "character") || inherits(x, "factor")``.
-
-    So a code list applies to a Categorical, a string column, or an ``object``
-    column whose values are text. A numeric, logical or date column keeps its
-    values and its dtype and is not reported, as in R. Matching its values
-    against the text of ``codes.csv`` would blank every one of them. The text
-    test reads the values rather than the dtype because the ``date`` value type
-    leaves an ``object`` column of ``datetime.date``, which R holds as a
-    ``Date``. ``metadata.code_list_values()`` mirrors the same R guard by dtype
-    alone, which is right there because it reads data before any coercion.
-
-    A column name the data repeats gives a DataFrame, which is let through to
-    the path it always took; the codes step says why.
-    """
-    if not isinstance(column, pd.Series):
-        return True
-    if isinstance(column.dtype, pd.CategoricalDtype):
-        return True
-    if pd.api.types.is_string_dtype(column.dtype) or pd.api.types.is_object_dtype(column.dtype):
-        return pd.api.types.infer_dtype(column, skipna=True) in ("string", "empty")
-    return False
-
-
 def _report_unlisted_code_values(column: str, series: pd.Series, code_values: Sequence) -> pd.Series:
     """Warn naming each present value the code list does not name; return the listed mask.
 
@@ -884,6 +861,53 @@ def _report_unlisted_code_values(column: str, series: pd.Series, code_values: Se
     return listed
 
 
+def _apply_code_labels(series: pd.Series, code_values: Sequence, code_labels: Sequence) -> pd.Categorical:
+    """R's ``factor(x, levels = code_value, labels = code_label)``, for the codes step.
+
+    Each value becomes the label of its code, and the categories are the
+    distinct labels in code-list order, which is what R's levels are (hub item
+    B-274). Where pandas and R part, this follows R:
+
+    * two codes sharing a label share one category, as ``factor()`` merges a
+      repeated label into one level. ``rename_categories`` refuses that, which
+      is why it is not used here;
+    * a repeated code value takes the label of its first row, as ``match()``
+      finds it, and the later row's label is still a category, unused;
+    * a code value that is missing or blank is no code at all, as ``factor()``
+      drops a missing level and R's reader reads a blank one as missing;
+    * a code whose label is missing or blank becomes a missing value. R gives
+      it a missing level, which prints and writes as ``NA``, and pandas holds no
+      missing category. Neither reports it;
+    * an ordered Categorical stays ordered, as ``factor()`` takes ``ordered``
+      from ``is.ordered(x)``.
+
+    The caller has already blanked every present value the code list does not
+    name, so every present value here has a code; one that does not is an
+    error, which the caller reports. A blank value is missing, as everywhere in
+    this module.
+    """
+    if not isinstance(series, pd.Series):
+        raise TypeError("the data has more than one column with this name")
+    rows = pd.DataFrame({"value": list(code_values), "label": list(code_labels)}, dtype=object)
+    rows = rows[_apply_dictionary_present(rows["value"])]
+    codes = rows.drop_duplicates(subset="value")
+    categories = rows.loc[_apply_dictionary_present(rows["label"]), "label"].drop_duplicates().tolist()
+    ordered = bool(series.cat.ordered) if _is_categorical(series) else False
+
+    values = series.where(_apply_dictionary_present(series)).astype(object)
+    code_of_value = pd.Index(codes["value"].tolist(), dtype=object).get_indexer(pd.Index(values, dtype=object))
+    unmatched = int((values.notna().to_numpy() & (code_of_value < 0)).sum())
+    if unmatched:
+        raise ValueError(f"{unmatched} of its values matched no code value")
+    # Each code's label as a position among the categories, or -1 for a code
+    # with no label. The -1 appended last is what a missing value's -1 picks.
+    label_of_code = pd.Index(categories, dtype=object).get_indexer(codes["label"].tolist())
+    lookup = pd.Series([*label_of_code, -1], dtype="int64")
+    return pd.Categorical.from_codes(
+        lookup.iloc[code_of_value].to_numpy(), categories=categories, ordered=ordered
+    )
+
+
 def apply_salmon_dictionary(
     df: pd.DataFrame,
     dict_df: pd.DataFrame,
@@ -892,6 +916,12 @@ def apply_salmon_dictionary(
 ) -> pd.DataFrame:
     """
     Rename columns, coerce types, and apply codes using a validated dictionary.
+
+    A column a code list applies to becomes a Categorical whose categories are
+    the list's labels, from ``code_label``, as metasalmon's ``factor(levels =
+    code_value, labels = code_label)`` gives them: two codes sharing a label
+    share a category, and a code with no label becomes missing. Without a
+    ``code_label`` column the code values are the labels.
 
     A value that is not in its column's code list has no category, so it
     becomes missing. Each such value is named in a ``RuntimeWarning``, whatever
@@ -952,34 +982,43 @@ def apply_salmon_dictionary(
                 # A value the code list does not name has no category, so it
                 # becomes missing. That happened silently until hub item B-241,
                 # the mirror of metasalmon's B-55: it is now named whatever
-                # ``strict`` is, and blanked here, before the constructor, for
-                # two reasons. pandas deprecates building a Categorical from a
-                # value outside its categories, or from a Categorical carrying
-                # such a category even unused, so neither can reach it; and
-                # when the constructor raises (a missing or a repeated
-                # code_value), the fallback below would otherwise keep a value
-                # the warning has just said becomes missing.
+                # ``strict`` is, and blanked here, before the labels, so that
+                # what is named is what is blanked on either path below. The
+                # labels are built only for values that have a code, and the
+                # fallback would otherwise keep a value the warning has just
+                # said becomes missing.
                 #
                 # A column name the data repeats makes ``result[new_name]`` a
-                # DataFrame, which is left to the path it always took rather
-                # than failing inside the report. Retires when a repeated
-                # column name is refused, or read as R's ``[[`` reads it.
+                # DataFrame, which is kept out of the report rather than
+                # failing inside it, and reaches the fallback. Retires with hub
+                # item B-397, when a repeated column name is refused, or read
+                # as R's ``[[`` reads it.
                 if isinstance(result[new_name], pd.Series):
                     listed = _report_unlisted_code_values(original_name, result[new_name], code_values)
-                    blanked = result[new_name].where(listed)
-                    if _is_categorical(blanked):
-                        blanked = blanked.cat.remove_unused_categories()
-                    result[new_name] = blanked
+                    result[new_name] = result[new_name].where(listed)
+                # The labels, as R's factor(levels = code_value, labels =
+                # code_label) gives them (hub item B-274). This used to call
+                # rename_categories on the Series rather than on its ``.cat``
+                # accessor, so it always raised, and an ``except`` marked
+                # defensive turned every coded column into text in silence. A
+                # failure that is left is reported, and the column kept as text.
                 try:
-                    result[new_name] = pd.Categorical(result[new_name], categories=code_values)
-                    result[new_name] = result[new_name].rename_categories(dict(zip(code_values, code_labels)))
-                except Exception:  # pragma: no cover - defensive
+                    result[new_name] = _apply_code_labels(result[new_name], code_values, code_labels)
+                except Exception as exc:
+                    warnings.warn(
+                        f"Column {original_name!r} keeps its values as text, because the labels "
+                        f"in its code list could not be applied: {exc}",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
                     result[new_name] = result[new_name].astype("string")
 
-        if row.get("column_role") == "categorical":
-            # Ensure categorical dtype even if codes are not provided
-            if code_values is None:
-                code_values = pd.unique(result[new_name].dropna())
+        if row.get("column_role") == "categorical" and code_values is None:
+            # Ensure categorical dtype when no code list applies. A column one
+            # did apply to carries its labels as its categories already, and
+            # rebuilding them from the code values would blank every labelled
+            # value (hub item B-274).
+            code_values = pd.unique(result[new_name].dropna())
             try:
                 result[new_name] = pd.Categorical(result[new_name], categories=code_values)
             except Exception:  # pragma: no cover - defensive

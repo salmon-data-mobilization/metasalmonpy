@@ -1,0 +1,255 @@
+{
+  "pool": [
+    {
+      "source": "notes.md",
+      "chunk_id": "notes.md#1",
+      "text": "---\ntitle: Escapement monitoring notes\nseason: 2024\n---\n\n# Escapement monitoring notes\n\nThese notes describe how spawner abundance was estimated for the Nechako\nand Stuart systems in 2024.  Two spaces follow that full stop on purpose,\nand\tthis line carries a tab, because the excerpt contract keeps whitespace\nexactly as the document has it.\n\n## Spawner counts\n\nSpawner counts were made by visual survey from the bank and by mark-recapture\nat the counting fence. The SpawnerCount column holds the daily total; the\ncamelCase name is deliberate, because R lowercases before it would split it.\n\nAdult sockeye were enumerated at the weir every morning. Peak spawner\nabundance was reached in the second week of September, and the run was\njudged complete when three consecutive surveys found no live fish.\n\n## Water temperature\n\nWater temperature was logged hourly with a submerged sensor near the weir.\nTemperatures above 18 degrees Celsius were flagged for the migration\ndelay analysis, and the sensor was calibrated against a hand-held\nthermometer each week.\n\n```r\nsummary(fish$fork_length_mm)\n```\n\nThe fence above is kept for a Markdown file: only .rmd and .qmd files have\ntheir fences and front matter dropped.\n\n## Juvenile sampling\n\nJuvenile abundance was estimated at a rotary screw trap operated from\nApril to June. Smolt counts were expanded by daily trap efficiency,\nmeasured by releasing marked fish upstream of the trap.\n\nFork length was measured with a measuring board to the nearest millimetre\nand weight with a spring scale to the nearest gram. Fish were held in a\nrecovery bucket before release.\n\n## Field crew notes\n\nThe crew stopped for café au lait at the Río Fraser lookout; those two\nwords carry accented letters so the fixture pins ASCII tokenisation.\n\nEscapement estimates were reconciled against the hatchery broodstock\ncollection records at the end of the season, and any discrepancy larger\nthan five percent was investigated before the estimate was finalised.\n\n## Data handling\n\nCounts were entered into the field database each evening and checked\nagainst the paper tally sheets the following morning. Missing days were\ninterpolated with the area-under-the-curve method used since"
+    },
+    {
+      "source": "notes.md",
+      "chunk_id": "notes.md#2",
+      "text": "ounts were entered into the field database each evening and checked\nagainst the paper tally sheets the following morning. Missing days were\ninterpolated with the area-under-the-curve method used since 1998.\n\nThe final spawner abundance estimate is the sum of the daily counts\nadjusted for observer efficiency and residence time, and it is reported\nwith its bootstrap confidence interval.\n\n## Methods in detail\n\nVisual surveys followed the regional escapement protocol: two observers\nwalked opposite banks, each recording live fish, carcasses and redds in a\nwaterproof notebook, and the pair reconciled their tallies at the end of\nevery reach. Polarised glasses were worn on bright days, and a survey was\nabandoned when visibility fell below one metre.\n\nMark-recapture at the counting fence used a two-event design. Fish were\nmarked with an opercular punch on the first event and examined for the\nmark on the second; the Petersen estimator with the Chapman correction\ngave the abundance and its variance.\n\nThe rotary screw trap was fished for the full migration window except on\nnights when debris loads made it unsafe, and those nights were flagged in\nthe effort table so the expansion could account for them.\n\n## Quality assurance\n\nEvery tally sheet was photographed before it left the field, and the\nphotographs were archived with the season's data package. A second\ntechnician re-entered ten percent of the sheets to estimate the keying\nerror rate, which was below one percent in 2024.\n\nTemperature loggers were downloaded fortnightly and the series inspected\nfor drift; a logger whose readings diverged from the hand-held reference\nby more than half a degree was replaced and its series truncated at the\nlast agreeing check.\n\n## Reporting\n\nThe season summary reports spawner abundance by stock and by week, the\njuvenile abundance by trap with its efficiency, and the water temperature\nseries as daily means with the number of hours above the 18 degree\nthreshold. All three are delivered as CSV files with a column dictionary.\n\nThe narrative closes with the crew's recommendations for the next season,\nwhich in 2024 were to move the counting fence fifty metres upstream, to\nadd a third observer on"
+    },
+    {
+      "source": "notes.md",
+      "chunk_id": "notes.md#3",
+      "text": "les with a column dictionary.\n\nThe narrative closes with the crew's recommendations for the next season,\nwhich in 2024 were to move the counting fence fifty metres upstream, to\nadd a third observer on the widest reach, and to replace the oldest\ntemperature logger before the pre-season calibration."
+    },
+    {
+      "source": "protocol.qmd",
+      "chunk_id": "protocol.qmd#1",
+      "text": "# Fork length\n\nFork length was measured in the field with a measuring board.\n\nsummary(fish$fork_length_mm)\n\nWater temperature was logged hourly at the weir."
+    },
+    {
+      "source": "log.txt",
+      "chunk_id": "log.txt#1",
+      "text": "2024-06-01\tspawner count 120\n2024-06-02\tspawner count 135\nMark-recapture protocol applied at the counting fence."
+    },
+    {
+      "source": "a/dictionary.csv",
+      "chunk_id": "a/dictionary.csv#1",
+      "text": "field,description\ncount,café au lait\nsite,Río Fraser"
+    },
+    {
+      "source": "b/dictionary.csv",
+      "chunk_id": "b/dictionary.csv#1",
+      "text": "field,description\nlength,measuring board"
+    },
+    {
+      "source": "q/field-guide.md",
+      "chunk_id": "q/field-guide.md#1",
+      "text": "Field guide one: escapement survey by visual count."
+    },
+    {
+      "source": "q/field-guide.md #1",
+      "chunk_id": "q/field-guide.md #1#1",
+      "text": "Field guide two: escapement survey by sonar count."
+    },
+    {
+      "source": "Zeta.txt",
+      "chunk_id": "Zeta.txt#1",
+      "text": "Spawner abundance was estimated with a mark-recapture protocol."
+    },
+    {
+      "source": "alpha.txt",
+      "chunk_id": "alpha.txt#1",
+      "text": "Spawner abundance was estimated with a mark-recapture protocol."
+    },
+    {
+      "source": "sites.tsv",
+      "chunk_id": "sites.tsv#1",
+      "text": "site_id\tsite_name\nF01\tFraser mainstem\nS02\tStuart outlet"
+    },
+    {
+      "source": "config.yaml",
+      "chunk_id": "config.yaml#1",
+      "text": "species: sockeye\nlife_stage: adult\nsurvey: escapement"
+    },
+    {
+      "source": "meta.json",
+      "chunk_id": "meta.json#1",
+      "text": "{\"dataset\": \"escapement\", \"unit\": \"count\", \"method\": \"visual survey\"}"
+    },
+    {
+      "source": "analysis.R",
+      "chunk_id": "analysis.R#1",
+      "text": "# Estimate escapement from daily counts\nescapement <- sum(counts)  # total spawners"
+    },
+    {
+      "source": "readme.rst",
+      "chunk_id": "readme.rst#1",
+      "text": "Escapement\n==========\n\nDaily spawner counts at the weir."
+    },
+    {
+      "source": "inline_context",
+      "chunk_id": "inline_context[1]#1",
+      "text": "Spawner abundance was estimated using a mark-recapture protocol at the weir."
+    },
+    {
+      "source": "inline_context",
+      "chunk_id": "inline_context[2]#1",
+      "text": "Water temperature logged hourly at the weir."
+    },
+    {
+      "source": "inline_context",
+      "chunk_id": "inline_context[3]#1",
+      "text": "Water temperature logged hourly at the weir."
+    },
+    {
+      "source": "inline_context",
+      "chunk_id": "inline_context[4]#1",
+      "text": "Paragraph 1: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 2: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 3: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 4: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 5: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 6: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 7: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 8: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 9: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 10: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 11: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 12: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 13: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 14: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 15: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 16: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 17: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 18: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 19:"
+    },
+    {
+      "source": "inline_context",
+      "chunk_id": "inline_context[4]#2",
+      "text": "corded at the rotary screw trap and expanded by trap efficiency. Paragraph 18: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 19: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 20: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 21: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 22: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 23: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 24: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency."
+    }
+  ],
+  "targets": {
+    "spawner": [
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#2",
+        "context_score": 8
+      },
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#1",
+        "context_score": 7
+      },
+      {
+        "source": "inline_context",
+        "chunk_id": "inline_context[1]#1",
+        "context_score": 5
+      },
+      {
+        "source": "log.txt",
+        "chunk_id": "log.txt#1",
+        "context_score": 5
+      }
+    ],
+    "temperature": [
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#1",
+        "context_score": 8
+      },
+      {
+        "source": "protocol.qmd",
+        "chunk_id": "protocol.qmd#1",
+        "context_score": 5
+      },
+      {
+        "source": "inline_context",
+        "chunk_id": "inline_context[2]#1",
+        "context_score": 4
+      },
+      {
+        "source": "inline_context",
+        "chunk_id": "inline_context[3]#1",
+        "context_score": 4
+      }
+    ],
+    "no_tokens": [
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#1",
+        "context_score": null
+      },
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#2",
+        "context_score": null
+      },
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#3",
+        "context_score": null
+      },
+      {
+        "source": "protocol.qmd",
+        "chunk_id": "protocol.qmd#1",
+        "context_score": null
+      }
+    ],
+    "tie": [
+      {
+        "source": "Zeta.txt",
+        "chunk_id": "Zeta.txt#1",
+        "context_score": 3
+      },
+      {
+        "source": "alpha.txt",
+        "chunk_id": "alpha.txt#1",
+        "context_score": 3
+      },
+      {
+        "source": "inline_context",
+        "chunk_id": "inline_context[1]#1",
+        "context_score": 3
+      },
+      {
+        "source": "log.txt",
+        "chunk_id": "log.txt#1",
+        "context_score": 3
+      }
+    ],
+    "limit_two": [
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#2",
+        "context_score": 7
+      },
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#1",
+        "context_score": 6
+      }
+    ],
+    "accented": [
+      {
+        "source": "a/dictionary.csv",
+        "chunk_id": "a/dictionary.csv#1",
+        "context_score": 1
+      },
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#1",
+        "context_score": 1
+      },
+      {
+        "source": "b/dictionary.csv",
+        "chunk_id": "b/dictionary.csv#1",
+        "context_score": 0
+      },
+      {
+        "source": "inline_context",
+        "chunk_id": "inline_context[2]#1",
+        "context_score": 0
+      }
+    ],
+    "camel_case": [
+      {
+        "source": "notes.md",
+        "chunk_id": "notes.md#1",
+        "context_score": 1
+      },
+      {
+        "source": "b/dictionary.csv",
+        "chunk_id": "b/dictionary.csv#1",
+        "context_score": 0
+      },
+      {
+        "source": "inline_context",
+        "chunk_id": "inline_context[2]#1",
+        "context_score": 0
+      },
+      {
+        "source": "inline_context",
+        "chunk_id": "inline_context[3]#1",
+        "context_score": 0
+      }
+    ]
+  }
+}

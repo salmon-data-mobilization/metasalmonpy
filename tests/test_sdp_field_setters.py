@@ -433,6 +433,43 @@ def test_an_unfilled_iri_field_is_reported_once_and_its_call_runs(
         assert reasons(rows, file_name, column_name, field) == [], field
 
 
+def test_an_iri_field_reported_as_a_placeholder_still_counts_as_an_iri(
+    filled_package,
+):
+    """The console counts an IRI gap by its field, not by its row's reason.
+
+    One field is one gap row (hub B-212), so an IRI field holding a prose
+    placeholder keeps its ``placeholder`` row and gets no ``iri`` row. The
+    console counts the IRI gaps and, when there are any, points at
+    ``review_semantics()``. The count has to be taken by the field for that row
+    to be one of them. Every IRI gap here is a placeholder, so a count by
+    reason finds none and drops the pointer (hub B-244). This twins
+    metasalmon's test for its half, hub B-211.
+    """
+    observation_unit_iri, unit_iri, _ = _UNFILLED_IRI_STATES["prose placeholder"]
+    tables_csv = filled_package / "metadata" / "tables.csv"
+    tables = pd.read_csv(tables_csv, dtype=str)
+    tables.loc[0, "observation_unit_iri"] = observation_unit_iri
+    tables.to_csv(tables_csv, index=False)
+    dict_csv = filled_package / "metadata" / "column_dictionary.csv"
+    dictionary = pd.read_csv(dict_csv, dtype=str)
+    measured = dictionary["column_name"] == "spawner_count"
+    assert list(dictionary.loc[measured, "column_role"]) == ["measurement"]
+    dictionary.loc[measured, "unit_iri"] = unit_iri
+    dictionary.to_csv(dict_csv, index=False)
+
+    review = review_metadata(str(filled_package))
+    assert sorted(review.rows["field"]) == ["observation_unit_iri", "unit_iri"]
+    assert list(review.rows["reason"]) == ["placeholder", "placeholder"]
+
+    lines = review.render_lines(path_expr="pkg")
+    assert "   2 fields still block strict validation." in lines
+    assert (
+        "   2 of them are IRIs -- review_semantics() shows candidates for any"
+        " that have them."
+    ) in lines
+
+
 def test_review_metadata_sees_a_required_column_the_file_does_not_have(
     raw_package,
 ):
