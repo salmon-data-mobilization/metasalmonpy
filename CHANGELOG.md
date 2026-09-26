@@ -703,6 +703,51 @@ and moving it is a separate outward act.
   labels. There is no metasalmon half and no `PARITY.md` row, because metasalmon
   already applies the labels.
 
+* **The semantic review no longer records, by any route, an accept whose IRI is
+  empty or still a `REVIEW:` marker.** Hub queue item **B-247**, the mirror half
+  of metasalmon's **B-246** (metasalmon pull request #199). **B-220** closed one
+  route, `accept_suggestion(iri=...)`. Three more stayed open, and one message
+  misdirected. Each was measured on `main` `c7be120`:
+
+  - `review_semantics()` queued a shortlisted candidate whose `iri` was only the
+    marker, because it tested only that the text of `iri` was not empty, and
+    `accept_suggestion(rank=1)` then recorded `decision_iri` `''` for
+    `"REVIEW:"`, `"REVIEW: "` and `"review:"`. Such a candidate is no longer
+    queued. In a slot that held one, the candidates after it now rank one place
+    higher, as they already did after a candidate with an empty `iri`. A review
+    saved by an earlier version, or edited by hand, can still hold one, so
+    `rank=` now refuses a candidate whose IRI names no term.
+  - A recorded `accepted` row whose `iri` was only the marker came back in the
+    next review as an accept with `decision_iri` `''`, and its slot left the
+    default queue as decided. This had been read and not run; that is its first
+    measurement here. It is no longer replayed, so the slot is asked again. A
+    recorded reject is still replayed from such a row, and now from one whose
+    `iri` is empty too, because rejecting a slot names no candidate: a slot whose
+    only candidate had an empty `iri` used to lose its rejection and reason from
+    `include_filled=True`. The console prints no accept call for such a
+    candidate, since the call would be refused.
+  - The strip removes one marker, so `accept_suggestion(iri="REVIEW:REVIEW:")`
+    recorded the IRI `REVIEW:`, and so did `rank=1` on a candidate carrying it,
+    although the docstring of `_strip_review_iri()` says the marker never
+    survives a decision. An `iri` that is still a marker once one is removed is
+    now refused, with its own message, a shortlisted candidate carrying one is
+    not queued, and `rank=` refuses one that a review still holds.
+  - `review_semantics()` listed a suggestion row with no IRI under *"Some
+    suggestions target fields this review cannot decide"*, naming a field the
+    review does decide, and said to edit it in the metadata CSVs directly. A
+    package where an accept before B-220 recorded an empty IRI printed that on
+    every review. A row with no IRI offers nothing to accept, and it is now
+    dropped without a message. Fields the review cannot decide are still listed.
+
+  Which spellings count as the marker is unchanged: these checks use the same
+  `_strip_review_iri()` and `_is_review_iri()` as before, so the two packages
+  still refuse different spellings where their strips differ. Which spellings
+  both should recognise is hub question **Q-63**'s, and this change implements
+  none of its ruling. The tests are the twins of B-246's in
+  `tests/testthat/test-review-console.R`, each asserting its spelling premise
+  against this package's own strip and detector. This closes R-shipped-first
+  lag and is not a deliberate difference, so it opens no `PARITY.md` row.
+
 * **A declared `datetime` value that its offset carries before year 1 or after
   year 9999 is read, where reading or validating its package raised.** Hub
   queue item **B-388**. `parse_datetime_token()` builds the wall clock a token
