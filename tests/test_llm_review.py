@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 import pandas as pd
 
 from metasalmonpy import infer_dictionary, suggest_semantics
@@ -877,3 +879,58 @@ def test_context_decodes_cp1252_and_disambiguates_duplicate_basenames(tmp_path):
         "first/dictionary.csv",
         "second/dictionary.csv",
     }
+
+
+def test_persisted_true_and_false_strings_read_as_the_booleans_they_name():
+    # A persisted assessment CSV read back as text (the metadata readers read
+    # every column as a string) carries "TRUE"/"FALSE"; before hub B-362 the
+    # normalizer's `.astype(bool)` made the non-empty string "FALSE" True.
+    frame = normalize_assessment_rows(
+        [
+            {"llm_exploration_used": "FALSE"},
+            {"llm_exploration_used": "TRUE"},
+            {"llm_exploration_used": "false"},
+            {"llm_exploration_used": "true"},
+            {"llm_exploration_used": "F"},
+            {"llm_exploration_used": "T"},
+            {"llm_exploration_used": "0"},
+            {"llm_exploration_used": "1"},
+            {"llm_exploration_used": False},
+            {"llm_exploration_used": True},
+            {"llm_exploration_used": pd.NA},
+            {"llm_exploration_used": None},
+        ]
+    )
+    assert frame["llm_exploration_used"].tolist() == [
+        False, True, False, True, False, True, False, True, False, True, False, False,
+    ]
+    assert frame["llm_exploration_used"].dtype == bool
+
+
+def test_assessment_rows_survive_a_csv_round_trip_read_as_text(tmp_path):
+    written = normalize_assessment_rows(
+        [
+            {"dataset_id": "demo", "llm_exploration_used": False, "llm_exploration_candidate_gain": 0},
+            {"dataset_id": "demo", "llm_exploration_used": True, "llm_exploration_candidate_gain": 2},
+        ]
+    )
+    path = tmp_path / "semantic-llm-assessments.csv"
+    written.to_csv(path, index=False)
+    # R writes logicals as TRUE/FALSE; pandas writes True/False. Both must
+    # read back, so rewrite the pandas spelling to R's before reading.
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(",False,", ",FALSE,").replace(",True,", ",TRUE,"),
+        encoding="utf-8",
+    )
+    read_back = normalize_assessment_rows(
+        pd.read_csv(path, dtype=str, keep_default_na=False)
+    )
+    assert read_back["llm_exploration_used"].tolist() == [False, True]
+    assert read_back["llm_exploration_candidate_gain"].tolist() == [0, 2]
+
+
+def test_a_string_that_names_no_boolean_is_refused():
+    # Mirrors .ms_llm_cast_assessment_column(), which aborts rather than
+    # guessing; "yes" used to normalize to True by truthiness.
+    with pytest.raises(ValueError, match="llm_exploration_used"):
+        normalize_assessment_rows([{"llm_exploration_used": "yes"}])
