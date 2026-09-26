@@ -748,6 +748,50 @@ and moving it is a separate outward act.
   against this package's own strip and detector. This closes R-shipped-first
   lag and is not a deliberate difference, so it opens no `PARITY.md` row.
 
+* **A declared `datetime` value that its offset carries before year 1 or after
+  year 9999 is read, where reading or validating its package raised.** Hub
+  queue item **B-388**. `parse_datetime_token()` builds the wall clock a token
+  spells and then applies the token's UTC offset, and a `datetime` holds years
+  1 to 9999. So `0001-01-01T00:00:00+01`, an hour before year 1, and
+  `9999-12-31T23:00:00-02`, an hour after year 9999, raised
+  `OverflowError: date value out of range`. `convert_declared_tokens()` raised
+  with it, and so did `read_salmon_datapackage()` and
+  `validate_salmon_datapackage()` on a package whose declared `datetime`
+  column held one, with a message that named neither the column nor the value.
+  Measured on `main` `c7be120` under pandas 3.0.6, 2.2.3 and 1.5.3.
+
+  readr reads these tokens. Under R 4.3.3 and readr 2.2.0,
+  `readr::parse_datetime()` and `readr::read_csv()` with a `col_datetime()`
+  column agree, with no parse problem: `0001-01-01T00:00:00+01` is the POSIXct
+  R prints as `"0-12-31 23:00:00 UTC"`, `0001-01-01T00:30:00+01` is
+  `"0-12-31 23:30:00 UTC"`, and `9999-12-31T23:00:00-02` is
+  `"10000-01-01 01:00:00 UTC"`. metasalmon, on its `main` at `9aeb0ec`, reads
+  and validates a package holding each.
+
+  Such a token now parses to that instant, as a `numpy.datetime64` at
+  microsecond resolution. No `datetime` holds it, and pandas 1.5 cannot hold it
+  in a `Timestamp`. What a read returns depends on pandas. pandas 3 reads the
+  column as `datetime64[us]`, where the value prints as
+  `Timestamp('0-12-31 23:00:00')`. Older pandas keep the object column the
+  reader already used for an instant outside their nanosecond range, with the
+  `numpy.datetime64` in it. A token whose instant a `datetime` holds reads as
+  it did.
+
+  A coded `datetime` column is compared with its codes by metasalmon's key for
+  these instants, `0000-12-31T23:00:00.000000Z` and
+  `10000-01-01T01:00:00.000000Z`, and the validator names that key when a code
+  is missing, as metasalmon's does. `format_datetime_token()` now reads the
+  calendar fields of every instant after moving it into the 400-year Gregorian
+  cycle that starts at the epoch, which leaves the key of every instant a
+  `datetime` holds unchanged.
+
+  `tests/test_instant_beyond_datetime_range.py` pins each of these, and 18 of
+  its 21 tests failed on `c7be120`. Two paths do not yet handle such a value:
+  writing it back out, and validating an observation structure that binds its
+  column. Both go through `iso_instant_text()`, and neither is part of this
+  fix. There is no metasalmon half and no `PARITY.md` row, because readr
+  already reads these tokens.
+
 ### Changed
 
 * **Context documents become the excerpts metasalmon builds.** Hub queue item

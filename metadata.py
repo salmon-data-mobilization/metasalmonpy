@@ -655,14 +655,20 @@ def _readr_reads_as_date_time(text: str) -> bool:
     """Whether ``readr::parse_datetime()`` accepts one present token.
 
     :func:`~metasalmonpy.resource_types.parse_datetime_token` mirrors that
-    parser and returns a ``datetime``, whose years run from 1 to 9999. R's run
-    further. So a token whose offset carries it past either end, such as
-    ``0001-01-01T00:00:00+01``, raised ``OverflowError`` here and aborted
-    ``create_sdp()`` (Codex, second review of metasalmonpy pull request 44).
-    The overflow comes only from applying a parsed offset to valid fields, and
-    readr reads such a token as ``POSIXct``: measured under R 4.3.3 and readr
-    2.2.0 for that token, ``0001-01-01T00:30:00+01`` and
-    ``9999-12-31T23:00:00-02``. So it counts as a date-time.
+    parser. Until hub B-388 it returned only a ``datetime``, whose years run
+    from 1 to 9999 where R's run further, so a token whose offset carries it
+    past either end, such as ``0001-01-01T00:00:00+01``, raised
+    ``OverflowError`` here and aborted ``create_sdp()`` (Codex, second review
+    of metasalmonpy pull request 44). The overflow comes only from applying a
+    parsed offset to valid fields, and readr reads such a token as
+    ``POSIXct``: measured under R 4.3.3 and readr 2.2.0 for that token,
+    ``0001-01-01T00:30:00+01`` and ``9999-12-31T23:00:00-02``. So it counts as
+    a date-time.
+
+    *Retires when:* nothing reaches the ``except``, which has held since
+    B-388: the parser returns such a token's instant as a
+    ``numpy.datetime64`` instead of raising. Deleting the ``except`` is left
+    to a change of its own.
     """
     try:
         return parse_datetime_token(text) is not None
