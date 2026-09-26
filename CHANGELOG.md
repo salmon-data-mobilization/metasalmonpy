@@ -785,8 +785,8 @@ and moving it is a separate outward act.
   cycle that starts at the epoch, which leaves the key of every instant a
   `datetime` holds unchanged.
 
-  `tests/test_instant_beyond_datetime_range.py` pins each of these, and 17 of
-  its 20 tests failed on `c7be120`. Two paths do not yet handle such a value:
+  `tests/test_instant_beyond_datetime_range.py` pins each of these, and 18 of
+  its 21 tests failed on `c7be120`. Two paths do not yet handle such a value:
   writing it back out, and validating an observation structure that binds its
   column. Both go through `iso_instant_text()`, and neither is part of this
   fix. There is no metasalmon half and no `PARITY.md` row, because readr
