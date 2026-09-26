@@ -436,9 +436,15 @@ def fill_review_placeholders_dataset_meta(dataset_meta: pd.DataFrame) -> pd.Data
 
     Prose and coverage were converged on current metasalmon by differential
     run (S10 chunk D), retiring PARITY.md row 48: R fills ``creator``,
-    ``contact_name``, ``contact_email`` and ``license`` with ``MISSING
-    METADATA:`` guidance, titleizes a blank ``title`` from ``dataset_id``, and
-    writes dataset-specific ``MISSING DESCRIPTION:`` prose.
+    ``contact_name`` and ``contact_email`` with ``MISSING METADATA:``
+    guidance, titleizes a blank ``title`` from ``dataset_id``, and writes
+    dataset-specific ``MISSING DESCRIPTION:`` prose.
+
+    A blank ``license`` gets no placeholder, in either implementation. The SDP
+    specification makes it recommended rather than required (smn-data-pkg pull
+    request 12; Brett, 2026-09-26: most datasets assign none), and only the
+    rights holder can grant one, so a blank licence is itself the statement
+    that none was granted. Every prompt here fills a field the schema requires.
     """
     out = dataset_meta.copy()
 
@@ -462,7 +468,6 @@ def fill_review_placeholders_dataset_meta(dataset_meta: pd.DataFrame) -> pd.Data
         ("creator", "MISSING METADATA: add creator, team, or originating program."),
         ("contact_name", "MISSING METADATA: add primary contact name or team."),
         ("contact_email", "MISSING METADATA: add primary contact email."),
-        ("license", "MISSING METADATA: add dataset license (for example, CC-BY-4.0)."),
     ):
         if column in out.columns:
             blank = _blank_mask(out[column])

@@ -873,6 +873,34 @@ and moving it is a separate outward act.
 
 ### Changed
 
+* **`create_sdp()` and `write_salmon_datapackage()` no longer write a licence
+  placeholder.** A blank `license` in `metadata/dataset.csv` used to be filled
+  with *"MISSING METADATA: add dataset license (for example, CC-BY-4.0)."*, and
+  it now stays blank. This is the writer half of making the dataset licence
+  recommended rather than required in the SDP specification
+  ([smn-data-pkg PR 12](https://github.com/salmon-data-mobilization/smn-data-pkg/pull/12);
+  Brett, 2026-09-26: most datasets assign none). A blank licence states that
+  none was granted, and `datapackage.json` then carries no `licenses`, just as
+  it carried none for the placeholder. The other prompts are unchanged, because
+  they fill fields the schema requires. metasalmon makes the same change on
+  its `spec/licence-optional` branch, so this mirrors it and opens no
+  `PARITY.md` row.
+
+  **Strict validation still requires a licence for now.** metasalmonpy reads
+  the requirement from its bundled SDP schema, which moves only with
+  `SDP_SPEC_TAG`, from a specification release (hub item B-199). Until that
+  release arrives here, `validate_salmon_datapackage(require_iris=True)` reports
+  a blank licence as a blank schema-required field rather than as a
+  placeholder, and `review_metadata()` prints the `set_sdp_dataset()` call that
+  fills it.
+
+  **A package written before this change keeps its placeholder,** and strict
+  validation refuses it, as it always has. State the licence the publisher
+  granted, or clear the field with `set_sdp_dataset(path, license=pandas.NA)`,
+  which passes once the licence is optional. Neither a placeholder nor a
+  `REVIEW:` marker ever becomes a `datapackage.json` `licenses` entry: the
+  placeholder is left out, and the writer refuses the marker.
+
 * **Context documents become the excerpts metasalmon builds.** Hub queue item
   **B-364**, ruled 2026-09-25 when Brett took every recommendation in section
   10 of the S16 execplan (decision 4, section 2.7): the two packages are about
