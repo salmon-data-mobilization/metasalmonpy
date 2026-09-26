@@ -52,7 +52,7 @@ from typing import Iterable, Mapping, Optional, Sequence, Union
 import pandas as pd
 
 from .metadata import read_sdp_csv, scalar_text
-from .semantics import _infer_term_type
+from .semantics import _infer_term_type, _semantic_code_value_is_empty
 
 __all__ = [
     "SemanticReview",
@@ -623,6 +623,21 @@ def review_semantics(
     else:
         rejected = pd.Series(False, index=suggestions.index)
     keep = decidable & (has_iri | rejected)
+    # A ``codes.csv`` row with no code value gets no semantic target (hub item
+    # B-277, the mirror of metasalmon's B-276), and discovery forms none for it.
+    # Suggestions recorded before that, in a ``semantic_suggestions.csv`` an
+    # earlier version wrote or an attribute built from one, can still carry its
+    # candidates, so they are dropped here, where every queued slot passes. The
+    # row is found by its file and its code value, never by its key, which
+    # spells the empty value ``nan`` or nothing from this package and ``NA``
+    # from R. Nothing is said, as for a candidate naming no term: the row has
+    # no code value for a term to represent, so the review has nothing to
+    # decide for it. Retires when no suggestions file written before B-277, or
+    # by a metasalmon without its half (B-276), is still read.
+    keep &= ~(
+        target_files.map(_is_code_slot)
+        & suggestions["code_value"].map(_semantic_code_value_is_empty)
+    )
     # Only a field the review cannot decide is reported as one. A row dropped
     # for naming no term targets a field the review does decide, and listing it
     # here told the user to edit that field by hand (hub item B-247); it offers
@@ -859,8 +874,11 @@ def _match_slot_rows(
     "Belongs to no code" is decided by the slot's file, not by an empty
     ``code_value``. A ``codes.csv`` row may leave ``code_value`` empty when it
     supplies ``vocabulary_iri``, which the codes schema allows, and discovery
-    still gives it a code-level target; read as "no code", a blank would match
-    that slot and the column's own slot together and settle nothing.
+    gave it a code-level target; read as "no code", a blank would match that
+    slot and the column's own slot together and settle nothing. Since hub item
+    B-277 such a row gets no target and :func:`review_semantics` queues no slot
+    for it, so only a review built before that holds one; the file test keeps a
+    blank from deciding it there.
     """
     if rows.empty:
         return rows
@@ -898,7 +916,8 @@ def _review_call_args(rows: pd.DataFrame, slot_id: str) -> dict:
     all (hub queue B-151). A code's slot with an empty ``code_value`` gets
     neither: ``""`` selects the slots that belong to no code, so printing it
     there would decide the column's own slot instead of this one. That slot's
-    call stays ambiguous, and refuses rather than deciding the wrong slot.
+    call stays ambiguous, and refuses rather than deciding the wrong slot. Only
+    a review built before hub item B-277 holds such a slot.
     """
     row = rows[rows["slot_id"] == slot_id].iloc[0]
     column = _text(row["column_name"])
@@ -1255,10 +1274,11 @@ def accept_suggestion(
         and ``NaN`` mean the same) to select a column's own slot when codes of
         that column have slots with the same role, as a measurement column's
         codes do: leaving ``code_value`` out, which is what ``None`` means,
-        matches those code slots too. A blank never selects a code's slot, even
-        for a ``codes.csv`` row that leaves ``code_value`` empty because it
-        supplies ``vocabulary_iri``. :func:`review_semantics` prints it whenever
-        it is needed.
+        matches those code slots too. A blank never selects a code's slot. A
+        ``codes.csv`` row that leaves ``code_value`` empty because it supplies
+        ``vocabulary_iri`` has no slot at all: it gets no semantic target,
+        having no code value for a term to represent. :func:`review_semantics`
+        prints ``code_value`` whenever it is needed.
     iri
         Optional IRI to accept instead of a shortlisted candidate -- for the
         case where the right term exists but retrieval did not surface it. An
