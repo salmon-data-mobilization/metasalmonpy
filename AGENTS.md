@@ -276,9 +276,9 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): XEXT
-passed / 2 skipped with the extras installed, XCORE / 144 with core
-dependencies only (2026-09-26, measured locally for hub B-378 on its merge of
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1278
+passed / 2 skipped with the extras installed, 1136 / 144 with core dependencies
+only (2026-09-26, measured locally for hub B-378 on its merge of
 `main` `a8e87a9`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
 machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a
 worktree of a full clone with every tag and with `METASALMON_PATH` unset, the
