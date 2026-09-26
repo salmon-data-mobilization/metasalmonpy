@@ -276,9 +276,16 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1291
-passed / 2 skipped with the extras installed, 1149 / 144 with core dependencies
-only (2026-09-26, measured locally for hub B-388 on `1168574`, its merge of
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1586
+passed / 2 skipped with the extras installed, 1444 / 144 with core dependencies
+only (2026-09-25, measured locally for hub B-360 on `c01b527`, its merge of
+`main` `2d2ab2c`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
+in isolated environments built from `.[test]` and `.[test,eml,context]`; the
+jump over `main` is `tests/test_validator_parity.py`'s 285 parametrised cases;
+1451 / 2 and 1309 / 144 for B-360 on `848c281`, its merge of `main` `cae3d83`;
+1425 / 2 and 1284 / 143 for B-360 on `ddaae54`, its merge of `main` `380a7a4`;
+1291 / 2 and 1149 / 144 for hub B-388 on `1168574`, its merge of
 `main` `a8e87a9`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
 machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a
 worktree of a full clone with every tag and with `METASALMON_PATH` unset, the

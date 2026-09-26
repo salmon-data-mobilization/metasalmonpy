@@ -1,0 +1,3311 @@
+{
+  "dimension": [
+    [
+      "count"
+    ],
+    [
+      "kg"
+    ],
+    [
+      "millimetre"
+    ],
+    [
+      "grams"
+    ],
+    [
+      "tonnes"
+    ],
+    [
+      "individuals"
+    ],
+    [
+      "number of fish"
+    ],
+    [
+      "percent"
+    ],
+    [
+      "%"
+    ],
+    [
+      "ratio"
+    ],
+    [
+      "water temperature"
+    ],
+    [
+      "deg c"
+    ],
+    [
+      "°C"
+    ],
+    [
+      "Celsius",
+      "http://qudt.org/vocab/unit/DEG_C"
+    ],
+    [
+      "Fish weight",
+      "Mass of a fish",
+      "https://w3id.org/smn/FishWeight"
+    ],
+    [
+      "Female proportion",
+      "A dimensionless ratio.",
+      "https://example.org/FemaleProportion"
+    ],
+    [
+      "Percent",
+      "A dimensionless percentage unit.",
+      "http://qudt.org/vocab/unit/PERCENT"
+    ],
+    [
+      "Observation frequency",
+      "Frequency of observations per assessment period.",
+      "https://example.org/ObservationFrequency"
+    ],
+    [
+      "Per year",
+      "Events per year.",
+      "https://example.org/unit/PER-YR"
+    ],
+    [
+      "Survival rate",
+      "A dimensionless survival proportion.",
+      "https://example.org/SurvivalRate"
+    ],
+    [
+      "generic rate"
+    ],
+    [
+      "Instantaneous mortality rate per year"
+    ],
+    [
+      "cubic metres per second"
+    ],
+    [
+      "cubic meters per second"
+    ],
+    [
+      "kilometres per hour"
+    ],
+    [
+      "kilometers per hour"
+    ],
+    [
+      "metres per second"
+    ],
+    [
+      "m/s"
+    ],
+    [
+      "km/h"
+    ],
+    [
+      "kph"
+    ],
+    [
+      "m3/s"
+    ],
+    [
+      "cms"
+    ],
+    [
+      "cumecs"
+    ],
+    [
+      "cumec"
+    ],
+    [
+      "flow in cubic metres per second"
+    ],
+    [
+      "Stream discharge",
+      "Volumetric flow through a channel.",
+      "https://example.org/StreamDischarge"
+    ],
+    [
+      "Cubic metres per second",
+      "A volumetric flow unit.",
+      "https://example.org/unit/M3-PER-SEC"
+    ],
+    [
+      "Swimming speed",
+      "Distance travelled per unit time.",
+      "https://example.org/SwimmingSpeed"
+    ],
+    [
+      "velocity"
+    ],
+    [
+      "swimming speed"
+    ],
+    [
+      "kilograms per year"
+    ],
+    [
+      "square metres per second"
+    ],
+    [
+      "cubic kilometres per hour"
+    ],
+    [
+      "metres per second squared"
+    ],
+    [
+      "kg/year"
+    ],
+    [
+      "http://qudt.org/vocab/unit/KiloGM-PER-YR"
+    ],
+    [
+      "Mortality rate / year"
+    ],
+    [
+      "Mortality rate yr^-1"
+    ],
+    [
+      "Mortality rate yr−1"
+    ],
+    [
+      "square-metre per second"
+    ],
+    [
+      "cubic-metre per second"
+    ],
+    [
+      "m/s^2"
+    ],
+    [
+      "m/s²"
+    ],
+    [
+      "kilometres per hour per year"
+    ],
+    [
+      "km/h/s"
+    ],
+    [
+      "kg / year"
+    ],
+    [
+      "kg yr^-1"
+    ],
+    [
+      "kg·yr⁻¹"
+    ],
+    [
+      "metres s^-2"
+    ],
+    [
+      "metres·s⁻²"
+    ],
+    [
+      "square metres"
+    ],
+    [
+      "hectare"
+    ],
+    [
+      "m2"
+    ],
+    [
+      "square kilometres"
+    ],
+    [
+      "square-centimetre"
+    ],
+    [
+      "Wetted area",
+      "The area of the wetted channel.",
+      "https://example.org/WettedArea"
+    ],
+    [
+      "cubic metres"
+    ],
+    [
+      "litres"
+    ],
+    [
+      "liter"
+    ],
+    [
+      "m3"
+    ],
+    [
+      "cubic millimetres"
+    ],
+    [
+      "Water volume",
+      "Volume of water in the pool.",
+      "https://example.org/WaterVolume"
+    ],
+    [
+      "flow"
+    ],
+    [
+      "discharge"
+    ],
+    [
+      "discharge in m3"
+    ],
+    [
+      "length per year"
+    ],
+    [
+      "length per fish"
+    ],
+    [
+      "wk^-1"
+    ],
+    [
+      "mo^-1"
+    ],
+    [
+      "per season"
+    ],
+    [
+      "per year"
+    ],
+    [
+      "fish per day"
+    ],
+    [
+      "per capita per year"
+    ],
+    [
+      "events per season"
+    ],
+    [
+      "individuals per hectare"
+    ],
+    [
+      "mean length in millimetres"
+    ],
+    [
+      "dimensionless ratio",
+      "count"
+    ],
+    [
+      "",
+      null
+    ],
+    [
+      "  "
+    ],
+    [
+      null
+    ],
+    [
+      "Kilogram",
+      "A unit of mass.",
+      "http://qudt.org/vocab/unit/KiloGM"
+    ],
+    [
+      "Count",
+      "The number of items.",
+      "http://qudt.org/vocab/quantitykind/Count"
+    ],
+    [
+      "KiloGM"
+    ],
+    [
+      "http://qudt.org/vocab/unit/NUM"
+    ],
+    [
+      "http://qudt.org/vocab/unit/ONE"
+    ],
+    [
+      "millim"
+    ],
+    [
+      "centim"
+    ],
+    [
+      "gm"
+    ],
+    [
+      "lbs"
+    ],
+    [
+      "dimensionlessratio"
+    ],
+    [
+      "per-year"
+    ],
+    [
+      "kg-per-year"
+    ],
+    [
+      "kg_per_year"
+    ],
+    [
+      "count per_day"
+    ],
+    [
+      "metres",
+      "seconds"
+    ],
+    [
+      "m",
+      "s"
+    ],
+    [
+      "Depth",
+      "Depth of water at the transect, in metres."
+    ],
+    [
+      "Fork length",
+      "Length from snout to fork of tail, mm",
+      "http://qudt.org/vocab/quantitykind/Length"
+    ],
+    [
+      "temperature per day"
+    ],
+    [
+      "degrees per hour"
+    ],
+    [
+      "individuals per m2"
+    ],
+    [
+      "harvest rate"
+    ],
+    [
+      "exploitation rate per year"
+    ],
+    [
+      "catch per unit effort"
+    ],
+    [
+      "fish per net per day"
+    ],
+    [
+      "m²"
+    ],
+    [
+      "m³"
+    ],
+    [
+      "km² per year"
+    ]
+  ],
+  "method_evidence": [
+    "Catch count does not identify a measurement procedure.",
+    "A technician measured fork length in the field with a measuring board from the snout tip to the caudal-fin fork.",
+    "fork_length was measured in the field using a measuring board.",
+    "Catch enumeration procedure. A method slot generated for this column. Catch count; no procedure supplied.",
+    "Fish were counted by a trained observer.",
+    "Abundance was estimated by a mark-recapture model.",
+    "Length was measured with a calliper.",
+    "Length was measured with a caliper.",
+    "Lengths were measured with callipers.",
+    "No protocol was recorded for this column.",
+    "Not measured using a board.",
+    "Estimated from the survey method described above.",
+    "Weighed with a spring scale",
+    "",
+    "   ",
+    "The sonar counted 500 fish",
+    "Counted by hand, then estimated by an algorithm.",
+    "Derived by the estimator",
+    "Unknown gear",
+    "Field method: snorkel survey",
+    "Surveyed via helicopter",
+    "Enumerated by the technician on the bank",
+    "Enumerated by the bank technician sixty characters later than the verb, which is more than the forty allowed: technician",
+    "Modelled using a Bayesian state-space model",
+    "The estimation method is unspecified",
+    "Weighed by a scale",
+    "counted by an observer",
+    "was not sampled with a net",
+    "GEAR: beach seine",
+    "Instrument\ncalibrated daily",
+    "measured\nwith a board",
+    "Catch (fish) counted, by the gear, in the field",
+    "assay-based estimate",
+    "operational procedure OP-12"
+  ],
+  "constraint_evidence": [
+    "CATCH_COUNT records the number of fish retained in each trawl catch.",
+    "The field explicitly denotes the salmon ocean life-cycle phase.",
+    "Natural-origin spawner abundance estimate",
+    "No life stage recorded.",
+    "Hatchery",
+    "run timing",
+    "Age-2 smolts",
+    "Species group: sockeye",
+    "benchmark exceeded",
+    "unknown stock",
+    "",
+    "Fish counted in a trawl",
+    "lifecycle phase",
+    "life-stage at capture",
+    "Freshwater residence",
+    "wild fish only",
+    "reporting unit: CU",
+    "Population estimate",
+    "terminal fishery",
+    "sexed by external examination",
+    "Ageing structures",
+    "The season is not recorded but the origin is",
+    "without maturity data; run size only",
+    "STOCK",
+    "hatchery-origin"
+  ],
+  "modifier_evidence": [
+    "Mean water temperature by site",
+    "mean_weight of sampled fish",
+    "Water temperature in degrees C",
+    "Total fish observed in a trawl catch.",
+    "peak.count",
+    "summary",
+    "average",
+    "",
+    "MAXIMUM depth",
+    "min",
+    "cumulative catch to date",
+    "aggregate",
+    "the median",
+    "meaningful",
+    "sum_of_counts",
+    "peak-count"
+  ],
+  "role_hints": [
+    "constraint|statistical_modifier",
+    " a | b ",
+    "a,b;c",
+    null,
+    "",
+    "|",
+    "property||entity",
+    " Variable |property",
+    "unit",
+    "  ",
+    "a|",
+    "|b|",
+    "entity ; property",
+    "method|method"
+  ],
+  "role_type": [
+    {
+      "name": "hinted_property_for_variable",
+      "role": "variable",
+      "candidate": {
+        "iri": "https://example.org/count",
+        "role_hints": "property",
+        "term_type": "skos_concept"
+      }
+    },
+    {
+      "name": "qudt_unit_for_property",
+      "role": "property",
+      "candidate": {
+        "iri": "https://qudt.org/vocab/unit/KiloGM",
+        "role_hints": null,
+        "term_type": "qudt unit"
+      }
+    },
+    {
+      "name": "unknown_type_is_allowed",
+      "role": "variable",
+      "candidate": {
+        "iri": "https://example.org/native-concept",
+        "role_hints": null,
+        "term_type": "owl_class"
+      }
+    },
+    {
+      "name": "object_property_predicate",
+      "role": "method",
+      "candidate": {
+        "iri": "https://w3id.org/smn/usesObservationProcedure",
+        "role_hints": "method",
+        "resource_kind": "ObjectProperty",
+        "type_iris": "http://www.w3.org/2002/07/owl#ObjectProperty"
+      }
+    },
+    {
+      "name": "smn_modifier_with_two_hints",
+      "role": "statistical_modifier",
+      "candidate": {
+        "iri": "https://w3id.org/smn/MeanStatisticalModifier",
+        "label": "Mean",
+        "role_hints": "constraint|statistical_modifier"
+      }
+    },
+    {
+      "name": "hints_keep_their_order",
+      "role": "variable",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "role_hints": "property|entity|constraint"
+      }
+    },
+    {
+      "name": "comma_is_part_of_a_hint",
+      "role": "statistical_modifier",
+      "candidate": {
+        "iri": "https://w3id.org/smn/MeanStatisticalModifier",
+        "role_hints": "constraint,statistical_modifier"
+      }
+    },
+    {
+      "name": "hint_case_is_kept",
+      "role": "variable",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "role_hints": "Variable"
+      }
+    },
+    {
+      "name": "quantitykind_for_unit",
+      "role": "unit",
+      "candidate": {
+        "iri": "http://qudt.org/vocab/quantitykind/Count",
+        "resource_kind": "QuantityKind"
+      }
+    },
+    {
+      "name": "procedure_type_for_variable",
+      "role": "variable",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "term_type": "sosa procedure"
+      }
+    },
+    {
+      "name": "constraint_type_for_entity",
+      "role": "entity",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "term_type": "constraint concept"
+      }
+    },
+    {
+      "name": "unit_of_measure_type_for_unit",
+      "role": "unit",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "native_type": "unit of measure"
+      }
+    },
+    {
+      "name": "lone_pipe_is_no_hint",
+      "role": "variable",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "role_hints": "|"
+      }
+    },
+    {
+      "name": "spaced_datatype_property",
+      "role": "property",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "type_iris": "Datatype Property"
+      }
+    },
+    {
+      "name": "rdf_property_in_native_type",
+      "role": "entity",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "native_type": "rdf property"
+      }
+    },
+    {
+      "name": "unit_word_in_iri_only",
+      "role": "property",
+      "candidate": {
+        "iri": "https://example.org/unit/metre"
+      }
+    },
+    {
+      "name": "hint_beats_type",
+      "role": "unit",
+      "candidate": {
+        "iri": "http://qudt.org/vocab/quantitykind/Count",
+        "role_hints": "property"
+      }
+    },
+    {
+      "name": "whitespace_hints",
+      "role": "variable",
+      "candidate": {
+        "iri": "https://example.org/x",
+        "role_hints": "  variable  "
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "name": "unrelated_fields_are_excluded",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "CATCH_COUNT is the number of fish retained in a trawl catch.",
+        "FORK_LENGTH_MM was measured in the field with a measuring board following the fork-length protocol.",
+        "SPAWNER_CATCH_COUNT was enumerated using a visual survey protocol."
+      ]
+    },
+    {
+      "name": "local_phrase_anchor",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "Catch count was enumerated using a visual survey protocol."
+      ]
+    },
+    {
+      "name": "weak_singleton_anchors_nothing",
+      "target": {
+        "column_name": "count",
+        "column_label": "Count",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "count",
+        "column_label": "Count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "Spawner count was enumerated using a visual survey protocol."
+      ]
+    },
+    {
+      "name": "suffixed_identifier_is_not_the_field",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "CATCH_COUNT_ESTIMATE was enumerated using a sonar survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_*_suffix",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "* CATCH_COUNT_ESTIMATE was enumerated using a sonar survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_+_suffix",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "+ CATCH_COUNT_ESTIMATE was enumerated using a sonar survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_|_suffix",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "| CATCH_COUNT_ESTIMATE was enumerated using a sonar survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_-_suffix",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "- CATCH_COUNT_ESTIMATE was enumerated using a sonar survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_1._suffix",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "1. CATCH_COUNT_ESTIMATE was enumerated using a sonar survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_###_suffix",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "### CATCH_COUNT_ESTIMATE was enumerated using a sonar survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_>_suffix",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "> CATCH_COUNT_ESTIMATE was enumerated using a sonar survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_*_local",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "* Catch count was enumerated using a visual survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_+_local",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "+ Catch count was enumerated using a visual survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_|_local",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "| Catch count was enumerated using a visual survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_-_local",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "- Catch count was enumerated using a visual survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_1._local",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "1. Catch count was enumerated using a visual survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_###_local",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "### Catch count was enumerated using a visual survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "markup_>_local",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "> Catch count was enumerated using a visual survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "labels_stand_in_without_a_column_name",
+      "target": {
+        "column_label": "Fork length",
+        "column_description": "Length to the fork."
+      },
+      "dict_row": {
+        "column_label": "Fork length"
+      },
+      "chunks": [
+        "Fork length was measured with a board.",
+        "fork_length measured with a board",
+        "Fork-length protocol: board."
+      ]
+    },
+    {
+      "name": "multiline_chunk_phrase_anchor_quirk",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "Catch count was enumerated using a visual survey protocol.\nSecond line mentions fork_length."
+      ]
+    },
+    {
+      "name": "multiline_chunk_identifier_anchor",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "CATCH_COUNT was enumerated using a visual survey protocol.\nSecond line."
+      ]
+    },
+    {
+      "name": "nbsp_leading_chunk",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        " Catch count was enumerated using a visual survey protocol."
+      ]
+    },
+    {
+      "name": "missing_fields_leave_no_double_space",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": null,
+        "target_query_context": "  "
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": null,
+        "unit_label": "count"
+      },
+      "chunks": []
+    },
+    {
+      "name": "untrimmed_values_are_kept_as_they_are",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "  Catch count  ",
+        "column_description": "Fish\tcounted"
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "unit_label": " count "
+      },
+      "chunks": [
+        "  CATCH_COUNT enumerated  "
+      ]
+    },
+    {
+      "name": "identifier_with_digits",
+      "target": {
+        "column_name": "fl_mm_2",
+        "column_label": "Fork length"
+      },
+      "dict_row": {
+        "column_name": "fl_mm_2",
+        "column_label": "Fork length"
+      },
+      "chunks": [
+        "fl_mm_2 was measured with a board.",
+        "Fork length was measured with a board."
+      ]
+    },
+    {
+      "name": "long_single_word_anchors",
+      "target": {
+        "column_name": "escapement",
+        "column_label": "Escapement"
+      },
+      "dict_row": {
+        "column_name": "escapement"
+      },
+      "chunks": [
+        "Escapement was estimated by a mark-recapture model.",
+        "The escapement estimate",
+        "escapement_total counted"
+      ]
+    },
+    {
+      "name": "accented_chunk_boundary",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "café CATCH_COUNT enumerated",
+        "CATCH_COUNTé enumerated"
+      ]
+    },
+    {
+      "name": "tab_and_digit_markup",
+      "target": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "target_label": "Catch count method",
+        "search_query": "catch count procedure",
+        "target_query_context": "Catch count; no procedure supplied.",
+        "column_description": "Number of fish in the catch."
+      },
+      "dict_row": {
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch."
+      },
+      "chunks": [
+        "\t12) Catch count was enumerated using a visual survey protocol.",
+        "2024-06-01 Catch count was enumerated using a visual survey protocol."
+      ]
+    }
+  ],
+  "bundles": [
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Total fish observed in a trawl catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": "count",
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "variable",
+          "target_sdp_field": "term_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        },
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        },
+        {
+          "dictionary_role": "entity",
+          "target_sdp_field": "entity_iri",
+          "search_query": "population",
+          "target_label": "population",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        },
+        {
+          "dictionary_role": "unit",
+          "target_sdp_field": "unit_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        },
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        },
+        {
+          "dictionary_role": "statistical_modifier",
+          "target_sdp_field": "statistical_modifier_iri",
+          "search_query": "total",
+          "target_label": "total",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        }
+      ],
+      "candidates": {
+        "variable": [
+          {
+            "label": "Catch abundance",
+            "iri": "https://example.org/variable",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A variable candidate",
+            "score": 0.9,
+            "role_hints": "variable"
+          }
+        ],
+        "property": [
+          {
+            "label": "Count",
+            "iri": "https://example.org/property",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A property candidate",
+            "score": 0.9,
+            "role_hints": "property"
+          }
+        ],
+        "entity": [
+          {
+            "label": "Fish",
+            "iri": "https://example.org/entity",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A entity candidate",
+            "score": 0.9,
+            "role_hints": "entity"
+          }
+        ],
+        "unit": [
+          {
+            "label": "Count",
+            "iri": "https://example.org/unit",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A unit candidate",
+            "score": 0.9,
+            "role_hints": "unit"
+          }
+        ],
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://example.org/constraint",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A constraint candidate",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ],
+        "statistical_modifier": [
+          {
+            "label": "Total value",
+            "iri": "https://example.org/statistical_modifier",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A statistical_modifier candidate",
+            "score": 0.9,
+            "role_hints": "statistical_modifier"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/variable",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/property",
+          "llm_selected_label": "Count",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "entity",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/entity",
+          "llm_selected_label": "Fish",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "unit",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/unit",
+          "llm_selected_label": "Count",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/constraint",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "statistical_modifier",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/statistical_modifier",
+          "llm_selected_label": "Total value",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "constraint_without_evidence_is_the_only_downgrade"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "variable",
+          "target_sdp_field": "term_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        },
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        },
+        {
+          "dictionary_role": "entity",
+          "target_sdp_field": "entity_iri",
+          "search_query": "population",
+          "target_label": "population",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        },
+        {
+          "dictionary_role": "unit",
+          "target_sdp_field": "unit_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        },
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "variable": [
+          {
+            "label": "Catch abundance",
+            "iri": "https://example.org/variable",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A variable candidate",
+            "score": 0.9,
+            "role_hints": "variable"
+          }
+        ],
+        "property": [
+          {
+            "label": "Count",
+            "iri": "http://qudt.org/vocab/quantitykind/Count",
+            "source": "qudt",
+            "ontology": "QUDT",
+            "definition": "The number of items.",
+            "score": 0.9,
+            "role_hints": "property",
+            "resource_kind": "QuantityKind"
+          }
+        ],
+        "entity": [
+          {
+            "label": "Fish",
+            "iri": "https://example.org/entity",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A entity candidate",
+            "score": 0.9,
+            "role_hints": "entity"
+          }
+        ],
+        "unit": [
+          {
+            "label": "Kilogram",
+            "iri": "http://qudt.org/vocab/unit/KiloGM",
+            "source": "qudt",
+            "ontology": "QUDT",
+            "definition": "A unit of mass.",
+            "score": 0.9,
+            "role_hints": "unit",
+            "resource_kind": "Unit"
+          }
+        ],
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://example.org/constraint",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A constraint candidate",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Fixture decision.",
+          "llm_confidence": 0.5
+        },
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "http://qudt.org/vocab/quantitykind/Count",
+          "llm_selected_label": "Count",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "entity",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Fixture decision.",
+          "llm_confidence": 0.5
+        },
+        {
+          "dictionary_role": "unit",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "http://qudt.org/vocab/unit/KiloGM",
+          "llm_selected_label": "Kilogram",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Fixture decision.",
+          "llm_confidence": 0.5
+        }
+      ],
+      "chunks": [],
+      "name": "incompatible_property_unit_pair"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": "count",
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "property": [
+          {
+            "label": "Fish weight",
+            "iri": "https://w3id.org/smn/FishWeight",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Mass of a fish",
+            "score": 0.9,
+            "role_hints": "property"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/FishWeight",
+          "llm_selected_label": "Fish weight",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "candidate_dimension_against_dictionary_unit"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": "square metres",
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "property": [
+          {
+            "label": "Wetted area",
+            "iri": "https://example.org/WettedArea",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The area of the wetted channel.",
+            "score": 0.9,
+            "role_hints": "property"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/WettedArea",
+          "llm_selected_label": "Wetted area",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "area_property_matches_area_unit"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": "hectare",
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "property": [
+          {
+            "label": "Water volume",
+            "iri": "https://example.org/WaterVolume",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Volume of water in the pool.",
+            "score": 0.9,
+            "role_hints": "property"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/WaterVolume",
+          "llm_selected_label": "Water volume",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "volume_property_against_area_unit"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": "m3/s",
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "property": [
+          {
+            "label": "Stream discharge",
+            "iri": "https://example.org/StreamDischarge",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Volumetric flow through a channel.",
+            "score": 0.9,
+            "role_hints": "property"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/StreamDischarge",
+          "llm_selected_label": "Stream discharge",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "flow_property_matches_compound_flow_unit"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": "km/h",
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "property": [
+          {
+            "label": "Stream discharge",
+            "iri": "https://example.org/StreamDischarge",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Volumetric flow through a channel.",
+            "score": 0.9,
+            "role_hints": "property"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/StreamDischarge",
+          "llm_selected_label": "Stream discharge",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "flow_property_against_speed_unit"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Catch count in a trawl catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": "https://w3id.org/smn/CatchAbundance",
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Catch count in a trawl catch."
+        }
+      ],
+      "candidates": {
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://w3id.org/smn/CatchContext",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The context of a catch.",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchContext",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "catch_context_pairs_with_the_dictionary_variable"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Catch count in a trawl catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "variable",
+          "target_sdp_field": "term_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Catch count in a trawl catch."
+        },
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Catch count in a trawl catch."
+        }
+      ],
+      "candidates": {
+        "variable": [
+          {
+            "label": "Catch abundance",
+            "iri": "https://w3id.org/smn/CatchAbundance",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Abundance observed in a catch.",
+            "score": 0.9,
+            "role_hints": "variable"
+          }
+        ],
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://w3id.org/smn/CatchContext",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The context of a catch.",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchAbundance",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchContext",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "catch_context_pairs_with_the_accepted_variable"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Catch count in a trawl catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": "REVIEW: https://w3id.org/smn/CatchAbundance",
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Catch count in a trawl catch."
+        }
+      ],
+      "candidates": {
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://w3id.org/smn/CatchContext",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The context of a catch.",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchContext",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "review_marked_variable_does_not_pair"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Catch abundance for the ocean life-cycle phase.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": "https://w3id.org/smn/CatchAbundance",
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Catch abundance for the ocean life-cycle phase."
+        }
+      ],
+      "candidates": {
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://w3id.org/smn/CatchContext",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The context of a catch.",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchContext",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "catch_context_with_lifecycle_evidence_stands"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "variable",
+          "target_sdp_field": "term_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "variable": [
+          {
+            "label": "Catch abundance",
+            "iri": "https://example.org/variable",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A variable candidate",
+            "score": 0.9,
+            "role_hints": "property|entity"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/variable",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "role_hints_keep_their_order_in_the_message"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Mean water temperature",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "statistical_modifier",
+          "target_sdp_field": "statistical_modifier_iri",
+          "search_query": "total",
+          "target_label": "total",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Mean water temperature"
+        }
+      ],
+      "candidates": {
+        "statistical_modifier": [
+          {
+            "label": "Mean",
+            "iri": "https://w3id.org/smn/MeanStatisticalModifier",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The arithmetic mean.",
+            "score": 0.9,
+            "role_hints": "constraint,statistical_modifier"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "statistical_modifier",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/MeanStatisticalModifier",
+          "llm_selected_label": "Mean",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "comma_joined_hints_are_one_hint"
+    },
+    {
+      "name": "method_evidence_by_observer_alternative",
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Fish were counted by a trained observer.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "method",
+          "target_sdp_field": "term_iri",
+          "search_query": "catch count procedure",
+          "target_label": "catch count procedure",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Catch count",
+          "column_description": "Fish were counted by a trained observer."
+        }
+      ],
+      "candidates": {
+        "method": [
+          {
+            "label": "Visual count procedure",
+            "iri": "https://w3id.org/smn/VisualCountProcedure",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Counting fish by eye.",
+            "score": 0.9,
+            "role_hints": "method"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/VisualCountProcedure",
+          "llm_selected_label": "Visual count procedure",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": []
+    },
+    {
+      "name": "method_without_evidence",
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "method",
+          "target_sdp_field": "term_iri",
+          "search_query": "catch count procedure",
+          "target_label": "catch count procedure",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the catch."
+        }
+      ],
+      "candidates": {
+        "method": [
+          {
+            "label": "Visual count procedure",
+            "iri": "https://w3id.org/smn/VisualCountProcedure",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Counting fish by eye.",
+            "score": 0.9,
+            "role_hints": "method"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/VisualCountProcedure",
+          "llm_selected_label": "Visual count procedure",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": []
+    },
+    {
+      "name": "anchored_context_supplies_method_and_constraint_evidence",
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "method",
+          "target_sdp_field": "term_iri",
+          "search_query": "catch count procedure",
+          "target_label": "catch count procedure",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the catch."
+        },
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "catch count",
+          "target_label": "catch count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the catch."
+        }
+      ],
+      "candidates": {
+        "method": [
+          {
+            "label": "Visual count procedure",
+            "iri": "https://w3id.org/smn/VisualCountProcedure",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Counting fish by eye.",
+            "score": 0.9,
+            "role_hints": "method"
+          }
+        ],
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://w3id.org/smn/CatchContext",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The context of a catch.",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/VisualCountProcedure",
+          "llm_selected_label": "Visual count procedure",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchContext",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [
+        "CATCH_COUNT was enumerated using a visual survey protocol during the ocean phase.",
+        "FORK_LENGTH_MM was measured in the field with a measuring board."
+      ]
+    },
+    {
+      "name": "unanchored_context_is_not_evidence",
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "method",
+          "target_sdp_field": "term_iri",
+          "search_query": "catch count procedure",
+          "target_label": "catch count procedure",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the catch."
+        },
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "catch count",
+          "target_label": "catch count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the catch."
+        }
+      ],
+      "candidates": {
+        "method": [
+          {
+            "label": "Visual count procedure",
+            "iri": "https://w3id.org/smn/VisualCountProcedure",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Counting fish by eye.",
+            "score": 0.9,
+            "role_hints": "method"
+          }
+        ],
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://w3id.org/smn/CatchContext",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The context of a catch.",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/VisualCountProcedure",
+          "llm_selected_label": "Visual count procedure",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/CatchContext",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [
+        "FORK_LENGTH_MM was measured in the field with a measuring board following the fork-length protocol.",
+        "SPAWNER_CATCH_COUNT was enumerated using a visual survey protocol during the ocean phase."
+      ]
+    },
+    {
+      "name": "weak_column_name_anchors_nothing",
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "count",
+        "column_label": "Count",
+        "column_description": "Number of fish in the catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "method",
+          "target_sdp_field": "term_iri",
+          "search_query": "count procedure",
+          "target_label": "count procedure",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Count",
+          "column_description": "Number of fish in the catch."
+        }
+      ],
+      "candidates": {
+        "method": [
+          {
+            "label": "Visual count procedure",
+            "iri": "https://w3id.org/smn/VisualCountProcedure",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Counting fish by eye.",
+            "score": 0.9,
+            "role_hints": "method"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/VisualCountProcedure",
+          "llm_selected_label": "Visual count procedure",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [
+        "Spawner count was enumerated using a visual survey protocol."
+      ]
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "water_temp",
+        "column_label": "Water temperature",
+        "column_description": "Water temperature in degrees C",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "statistical_modifier",
+          "target_sdp_field": "statistical_modifier_iri",
+          "search_query": "statistical modifier",
+          "target_label": "statistical modifier",
+          "target_description": null,
+          "target_query_context": "Water temperature in degrees C",
+          "column_label": "Water temperature",
+          "column_description": "Water temperature in degrees C"
+        }
+      ],
+      "candidates": {
+        "statistical_modifier": [
+          {
+            "label": "Mean",
+            "iri": "https://w3id.org/smn/MeanStatisticalModifier",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "The arithmetic mean of the observed values.",
+            "score": 0.9,
+            "role_hints": "constraint|statistical_modifier"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "statistical_modifier",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/MeanStatisticalModifier",
+          "llm_selected_label": "Mean",
+          "llm_rationale": "Accepted.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "modifier_without_aggregation_evidence"
+    },
+    {
+      "name": "predicate_candidate_cannot_fill_a_slot",
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "CATCH_COUNT",
+        "column_label": "Catch count",
+        "column_description": "Fish were counted by a trained observer.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "method",
+          "target_sdp_field": "term_iri",
+          "search_query": "catch count procedure",
+          "target_label": "catch count procedure",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Catch count",
+          "column_description": "Fish were counted by a trained observer."
+        }
+      ],
+      "candidates": {
+        "method": [
+          {
+            "label": "uses observation procedure",
+            "iri": "https://w3id.org/smn/usesObservationProcedure",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Links an observation to its procedure.",
+            "score": 0.9,
+            "role_hints": "method",
+            "resource_kind": "ObjectProperty",
+            "type_iris": "http://www.w3.org/2002/07/owl#ObjectProperty"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "method",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/usesObservationProcedure",
+          "llm_selected_label": "uses observation procedure",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": []
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "variable",
+          "target_sdp_field": "term_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "variable": [
+          {
+            "label": "Catch abundance",
+            "iri": "https://example.org/variable",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A variable candidate",
+            "score": 0.9,
+            "role_hints": "variable"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 5,
+          "llm_selected_iri": "https://example.org/variable",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "out_of_range_index_is_skipped"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Total fish observed in a trawl catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        }
+      ],
+      "candidates": {
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://example.org/constraint",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A constraint candidate",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "review",
+          "llm_selected_candidate_index": null,
+          "llm_selected_iri": null,
+          "llm_selected_label": null,
+          "llm_rationale": "Fixture decision.",
+          "llm_confidence": 0.5
+        }
+      ],
+      "chunks": [],
+      "name": "non_accept_rows_are_skipped"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Total fish observed in a trawl catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        }
+      ],
+      "candidates": {
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://example.org/constraint",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A constraint candidate",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/constraint",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": null,
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "notes_stand_alone_without_a_rationale"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Total fish observed in a trawl catch.",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Total fish observed in a trawl catch."
+        }
+      ],
+      "candidates": {
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://example.org/constraint",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A constraint candidate",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/constraint",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "  Padded rationale.  ",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "rationale_is_trimmed_before_the_notes"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": "kg",
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "unit",
+          "target_sdp_field": "unit_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "unit": [
+          {
+            "label": "Number",
+            "iri": "http://qudt.org/vocab/unit/NUM",
+            "source": "qudt",
+            "ontology": "QUDT",
+            "definition": "A count of items.",
+            "score": 0.9,
+            "role_hints": "unit",
+            "resource_kind": "Unit"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "unit",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "http://qudt.org/vocab/unit/NUM",
+          "llm_selected_label": "Number",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "unit_candidate_dimension_against_dictionary_unit"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": "kg",
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        },
+        {
+          "dictionary_role": "unit",
+          "target_sdp_field": "unit_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "property": [
+          {
+            "label": "Count",
+            "iri": "http://qudt.org/vocab/quantitykind/Count",
+            "source": "qudt",
+            "ontology": "QUDT",
+            "definition": "The number of items.",
+            "score": 0.9,
+            "role_hints": "property",
+            "resource_kind": "QuantityKind"
+          }
+        ],
+        "unit": [
+          {
+            "label": "Kilogram",
+            "iri": "http://qudt.org/vocab/unit/KiloGM",
+            "source": "qudt",
+            "ontology": "QUDT",
+            "definition": "A unit of mass.",
+            "score": 0.9,
+            "role_hints": "unit",
+            "resource_kind": "Unit"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "http://qudt.org/vocab/quantitykind/Count",
+          "llm_selected_label": "Count",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "unit",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "http://qudt.org/vocab/unit/KiloGM",
+          "llm_selected_label": "Kilogram",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "dimension_and_pair_findings_in_r_order"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "variable",
+          "target_sdp_field": "term_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        },
+        {
+          "dictionary_role": "property",
+          "target_sdp_field": "property_iri",
+          "search_query": "count",
+          "target_label": "count",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "variable": [
+          {
+            "label": "Catch abundance",
+            "iri": "https://example.org/variable",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A variable candidate",
+            "score": 0.9,
+            "role_hints": "variable"
+          }
+        ],
+        "property": [
+          {
+            "label": "Count",
+            "iri": "http://qudt.org/vocab/quantitykind/Count",
+            "source": "qudt",
+            "ontology": "QUDT",
+            "definition": "The number of items.",
+            "score": 0.9,
+            "role_hints": "property",
+            "resource_kind": "QuantityKind"
+          },
+          {
+            "label": "Abundance",
+            "iri": "https://w3id.org/smn/Abundance",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "Number of organisms.",
+            "score": 0.9,
+            "role_hints": "property"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "variable",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/variable",
+          "llm_selected_label": "Catch abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        },
+        {
+          "dictionary_role": "property",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 2,
+          "llm_selected_iri": "https://w3id.org/smn/Abundance",
+          "llm_selected_label": "Abundance",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "second_candidate_is_the_selected_one"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": null,
+        "column_description": null,
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": null,
+          "column_description": null
+        }
+      ],
+      "candidates": {
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://example.org/constraint",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A constraint candidate",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/constraint",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [
+        "Natural-origin spawner abundance estimate"
+      ],
+      "name": "no_labels_at_all_finds_no_evidence"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Estimate for wild fish",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "constraint",
+          "target_sdp_field": "constraint_iri",
+          "search_query": "spawner abundance",
+          "target_label": "spawner abundance",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "constraint": [
+          {
+            "label": "Catch context",
+            "iri": "https://example.org/constraint",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A constraint candidate",
+            "score": 0.9,
+            "role_hints": "constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "constraint",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://example.org/constraint",
+          "llm_selected_label": "Catch context",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "constraint_with_evidence_stands"
+    },
+    {
+      "dict_row": {
+        "dataset_id": "d1",
+        "table_id": "t1",
+        "column_name": "spawner_count",
+        "column_label": "Spawner count",
+        "column_description": "Natural-origin spawner abundance estimate",
+        "column_role": "measurement",
+        "value_type": "integer",
+        "unit_label": null,
+        "unit_iri": null,
+        "term_iri": null,
+        "property_iri": null,
+        "entity_iri": null,
+        "constraint_iri": null,
+        "statistical_modifier_iri": null,
+        "term_type": null
+      },
+      "targets": [
+        {
+          "dictionary_role": "entity",
+          "target_sdp_field": "entity_iri",
+          "search_query": "population",
+          "target_label": "population",
+          "target_description": null,
+          "target_query_context": null,
+          "column_label": "Spawner count",
+          "column_description": "Natural-origin spawner abundance estimate"
+        }
+      ],
+      "candidates": {
+        "entity": [
+          {
+            "label": "Population",
+            "iri": "https://w3id.org/smn/Population",
+            "source": "smn",
+            "ontology": "demo",
+            "definition": "A group of fish.",
+            "score": 0.9,
+            "role_hints": "entity|constraint"
+          }
+        ]
+      },
+      "assessments": [
+        {
+          "dictionary_role": "entity",
+          "llm_decision": "accept",
+          "llm_selected_candidate_index": 1,
+          "llm_selected_iri": "https://w3id.org/smn/Population",
+          "llm_selected_label": "Population",
+          "llm_rationale": "The candidate fits.",
+          "llm_confidence": 0.94
+        }
+      ],
+      "chunks": [],
+      "name": "entity_with_a_second_hint_stands"
+    }
+  ]
+}

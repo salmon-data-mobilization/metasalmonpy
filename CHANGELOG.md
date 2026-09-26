@@ -18,6 +18,50 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **The bundle validators give metasalmon's verdicts on the same input.** Hub
+  queue item **B-360**, ruled 2026-09-25 when Brett took every recommendation
+  in section 10 of the S16 execplan (decision 9): the two packages converge on
+  R's validators, this package moving, because they are the richer and more
+  recently hardened set and the shared review-packet fixtures (B-326 / B-327)
+  fail until the two sides agree. `llm_review.py`'s validator block now mirrors
+  `R/semantic-bundle-validators.R` function for function. What moved: the
+  **dimension classifier** gains area, volume, flow and speed with R's rules —
+  a value that is a whole compound unit (`m3/s`, `km/h`) decides on its own, a
+  time denominator counted twice or raised to a power means a derived quantity
+  the classifier does not name, one denominator adds `rate`, and a strong
+  physical dimension wins only alone and only without a rate (this package had
+  five classes, treated any denominator as rate-or-nothing, and matched the
+  compound units as substrings); the **field anchors** are R's — the column
+  names are the candidates and the labels stand in only when there is no
+  column name, a candidate needs two tokens of three or more characters, or six
+  characters that are not a weak singleton, and a chunk meets a phrase anchor
+  only when it starts with the phrase after leading markup and its leading
+  token carries no `_` or `-` (this package anchored on names and labels
+  together and counted every whitespace-separated token); the
+  **method-evidence** predicate gains R's two `by … <observer|technician|…>`
+  and `by … <model|algorithm|estimator|…>` alternatives and spells `caliper` as
+  R does; **role hints split on `|` only**, keep their order and case, and a
+  comma-joined hint is one hint (this package split on `|`, `,` and `;`,
+  lowercased and sorted); the **paired-redundancy rule** reads the slot IRIs
+  the dictionary already holds, so a `CatchAbundance` the dictionary carries
+  pairs with a newly accepted `CatchContext` (this package read only the
+  accepted candidates); evidence text drops missing values instead of
+  rendering them as empty pieces; findings come in R's order (method,
+  constraint, modifier, role type, dimension, pair, redundancy); and every
+  regex R runs with `perl = TRUE` runs ASCII-only here too, as PCRE does in R.
+
+  Pinned by `tests/test_validator_parity.py` on
+  `tests/data/validator_parity/cases.json`: 118 dimension inputs, 75 evidence
+  strings, 14 hint strings, 18 role-type candidates, 28 field-anchored evidence
+  cases and 30 whole bundles through the driver, all scored by metasalmon's own
+  functions (`expected-from-r.R` beside them, run against metasalmon `main` at
+  `98cb9e6`) and identical here; the `parity` job re-runs the R script.
+  Measured before the change on the same cases: **74 disagreed with R** — 51
+  of the 118 dimension inputs, 7 of the 34 method-evidence strings, 5 of the 14
+  hint strings, 3 of the 18 role-type candidates and 8 of the 30 bundles.
+  After it, none. This is convergence, not a `PARITY.md` row: the difference
+  was never registered, and after this there is none.
+
 * **`datapackage.json` and `metadata/dataset.csv` spell a typed instant the
   same way, in the form Brett ruled.** A `datetime`/`Timestamp` in
   `temporal_start` or `temporal_end` reached both files through two different
