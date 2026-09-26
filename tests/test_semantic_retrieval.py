@@ -519,8 +519,8 @@ def test_r_fixture_provenance_is_recorded():
 # ``r-retrieve-candidates.json`` holds what R gives at each pass for the inputs
 # in ``retrieve-candidates-cases.json``, from ``r-retrieve-candidates.R`` run on
 # metasalmon ``main`` @ ``33e65e4`` (R 4.5.2): R's two passes give the same
-# rows, the pass number aside, and pass 2 is byte-identical to the fixture
-# B-363 took at ``98cb9e6``.
+# rows, the pass number aside, and pass 2 gives exactly the rows and search
+# calls of the fixture B-363 took at ``98cb9e6``.
 
 R_RETRIEVE_PATH = DATA / "r-retrieve-candidates.json"
 R_RETRIEVE = _load(R_RETRIEVE_PATH, {"cases": [], "provenance": {}})

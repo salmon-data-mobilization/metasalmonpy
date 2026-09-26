@@ -999,7 +999,8 @@ and moving it is a separate outward act.
   is 0. Pinned both ways. `tests/data/semantics/r-retrieve-candidates.R` now
   drives metasalmon's retriever at both passes, and this package matches what
   it gives at both (run on metasalmon `main` @ `33e65e4` under R 4.5.2; pass 2
-  came out byte-identical to the fixture B-363 took at `98cb9e6`).
+  gives exactly the rows and search calls of the fixture B-363 took at
+  `98cb9e6`).
   `suggest_semantics()`'s pinned output was re-captured with two
   configurations the existing three never exercised, `rule-shapes-top3` and
   `rule-shapes-top0`, and both fail on `main` before the change. The existing
