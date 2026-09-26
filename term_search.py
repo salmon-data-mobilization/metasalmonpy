@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -116,13 +117,42 @@ def _empty_terms(role=None) -> pd.DataFrame:
     )
 
 
+class _PerThreadSinks(threading.local):
+    """A stack of failure sinks that each thread sees its own copy of.
+
+    An R handler is installed around one call stack and hears only the
+    failures inside it. One stack shared by the process broke that once two
+    calls ran on two threads: one call's ``pop()`` could remove the other's
+    sink, and a failure landed in whichever sink was installed last, anywhere
+    in the process, so a failed ICES request could lose its warning and a
+    ``find_terms()`` source could read as answered (hub item B-378). Each
+    caller pushes and pops on the thread it runs on, so this thread's stack is
+    its call stack's.
+    """
+
+    def __init__(self) -> None:
+        self._sinks: List[List[str]] = []
+
+    def append(self, sink: List[str]) -> None:
+        self._sinks.append(sink)
+
+    def pop(self) -> List[str]:
+        return self._sinks.pop()
+
+    def __getitem__(self, index: int) -> List[str]:
+        return self._sinks[index]
+
+    def __len__(self) -> int:
+        return len(self._sinks)
+
+
 # Per-call sinks, so a failed vocabulary lookup can be *recorded* without
 # discarding the rows that did resolve. find_terms() installs one around each
 # source function, and ices_vocab one around each request it makes. Mirrors
 # metasalmon's `.ms_signal_search_failure()` + withCallingHandlers pair: R
 # signals a classed condition that is silent when nobody handles it, so where
 # no sink is installed a failure stays quiet here too.
-_search_failure_sinks: List[List[str]] = []
+_search_failure_sinks = _PerThreadSinks()
 
 # How every recorded failure begins. What follows it is the detail, which R's
 # condition carries on its own as `detail`, and which ices_vocab names.

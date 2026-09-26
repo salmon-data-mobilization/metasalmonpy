@@ -39,12 +39,7 @@ def _ices_request(url: str):
         data = _safe_json(url, headers={"Accept": "application/json"})
     finally:
         _term_search._search_failure_sinks.pop()
-    # _safe_json() answers None whenever it records a failure. The sinks are
-    # one stack for the process, so a failure from a call on another thread can
-    # land in this call's sink, and it must never replace an answer this call
-    # received. Retires when the sinks are per thread, so that a failure can
-    # only reach the sink of the call that made it.
-    if data is not None or not failures:
+    if not failures:
         return data
     # Redacted where the text is captured. _safe_json() has redacted the
     # failure already, and redacting again can only hide more, so this does
