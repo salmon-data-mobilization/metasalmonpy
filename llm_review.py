@@ -204,14 +204,106 @@ class _TextExtractor(HTMLParser):
             self.parts.append(text)
 
 
-def _decode_text(path: Path) -> str:
-    raw = path.read_bytes()
-    for encoding in ("utf-8", "utf-8-sig", "cp1252", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("utf-8", errors="replace")
+# --- Context documents -------------------------------------------------------
+#
+# Everything from here to `_relevant_context()` mirrors metasalmon's
+# `R/llm-semantic-helpers.R` step for step (hub queue B-364, ruled 2026-09-25
+# with the S16 execplan, decision 4 and section 2.7): the same extension list,
+# the same text extraction for text formats, the same 2200/200 chunking, the
+# same source labels and chunk ids, the same token-overlap scoring and the same
+# tie order. The two packages are about to share one review-packet file
+# (B-326 / B-327), so a context document has to become the same excerpts on
+# both sides. What is deliberately NOT shared is the library-specific
+# extraction for PDF, DOCX, spreadsheets and HTML: PARITY.md row 62.
+#
+# R facts this code leans on, each measured on 2026-09-25 under R 4.5.2:
+#   * `readLines()` accepts LF, CRLF and a bare CR as a line end, discards a
+#     UTF-8 byte-order mark in a UTF-8 locale, and reports no trailing empty
+#     line for a final newline.
+#   * `trimws()` strips only space, tab, CR and LF -- never NBSP, form feed or
+#     vertical tab -- so `str.strip()` is the wrong tool here.
+#   * `iconv(..., sub = "")` drops the five bytes Windows-1252 leaves
+#     undefined (0x81, 0x8D, 0x8F, 0x90, 0x9D) instead of failing, so the
+#     latin-1 step is reached only when nothing survived cp1252.
+#   * `[^a-z0-9]` in R's default regex engine is a code-point range, so every
+#     non-ASCII character is a token separator, and `tolower()` applies the
+#     simple case mapping.
+
+# `.ms_supported_context_extensions()`, in its order.
+SUPPORTED_CONTEXT_EXTENSIONS = (
+    "md", "txt", "csv", "tsv", "json", "yaml", "yml", "rst", "r", "rmd", "qmd",
+    "pdf", "htm", "html", "docx", "xls", "xlsx", "xlsm",
+)
+# `.ms_chunk_context_text()` defaults and `.ms_llm_context_chunk_limit()`'s
+# ordinary limit.
+CONTEXT_CHUNK_CHARS = 2200
+CONTEXT_OVERLAP_CHARS = 200
+CONTEXT_EXCERPT_LIMIT = 4
+# R's `trimws()` default: `[ \t\r\n]`.
+_R_WHITESPACE = " \t\r\n"
+
+
+def _r_trimws(value) -> str:
+    """R's ``trimws()``: strip space, tab, CR and LF only, never other whitespace."""
+    return str(value).strip(_R_WHITESPACE)
+
+
+def _r_file_ext(name: str) -> str:
+    """``tools::file_ext()``: the alphanumeric run after the last dot, else ``""``."""
+    match = re.search(r"\.([^\W_]+)$", name)
+    return match.group(1) if match else ""
+
+
+def _decode_context_bytes(raw: bytes) -> str:
+    """``.ms_read_text_utf8()``'s decoding: UTF-8, then Windows-1252, then latin-1.
+
+    A leading byte-order mark goes first, as ``readLines()`` discards it. The
+    cp1252 step drops the five undefined bytes the way ``iconv(sub = "")``
+    does, so latin-1 is reached only when cp1252 produced nothing at all.
+    """
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    converted = raw.decode("cp1252", errors="ignore")
+    if not converted:
+        converted = raw.decode("latin-1")
+    return converted
+
+
+def _r_read_lines(path: Path) -> list[str]:
+    """``readLines(path, warn = FALSE, encoding = "UTF-8")`` with R's fallback decoding."""
+    text = _decode_context_bytes(path.read_bytes())
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
+def _read_text_file(path: Path) -> str:
+    """``.ms_read_text_utf8()``: the file's lines joined with LF, nothing collapsed."""
+    return "\n".join(_r_read_lines(path))
+
+
+def _read_rmarkdown(path: Path) -> str:
+    """``.ms_context_text_from_rmarkdown()``: drop leading YAML front matter and
+    every fence line. The fenced content itself stays."""
+    lines = _r_read_lines(path)
+    if not lines:
+        return ""
+    if _r_trimws(lines[0]) == "---":
+        closing = [
+            index
+            for index, line in enumerate(lines[1:], start=1)
+            if _r_trimws(line) == "---"
+        ]
+        if closing:
+            lines = lines[closing[0] + 1 :]
+    return "\n".join(
+        line for line in lines if not _r_trimws(line).startswith("```")
+    )
 
 
 def _read_docx(path: Path) -> str:
@@ -223,37 +315,51 @@ def _read_docx(path: Path) -> str:
     )
 
 
-def _read_context_file(path: Path) -> str:
-    suffix = path.suffix.lower()
-    if suffix in {".html", ".htm"}:
-        parser = _TextExtractor()
-        parser.feed(_decode_text(path))
-        return "\n".join(parser.parts)
-    if suffix == ".docx":
-        return _read_docx(path)
-    if suffix in {".xls", ".xlsx", ".xlsm"}:
+def _read_context_file(path: Path) -> Optional[str]:
+    """``.ms_context_text_from_file()``: the document's text, or ``None`` when it is skipped.
+
+    Text formats go through R's own extraction above. PDF, DOCX, spreadsheet
+    and HTML text is library-specific on each side (PARITY.md row 62) and only
+    the shared steps -- the extension gate, the trim and the empty-file skip --
+    are mirrored for them.
+    """
+    extension = _r_file_ext(path.name).lower()
+    if extension not in SUPPORTED_CONTEXT_EXTENSIONS:
+        warnings.warn(
+            f"Skipping unsupported context file {path}. Supported extensions: "
+            + ", ".join(SUPPORTED_CONTEXT_EXTENSIONS),
+            stacklevel=2,
+        )
+        return None
+    if extension in {"xls", "xlsx", "xlsm"}:
         workbook = pd.read_excel(path, sheet_name=None)
-        return "\n\n".join(
+        text = "\n\n".join(
             f"Sheet: {name}\n{frame.to_csv(index=False)}"
             for name, frame in workbook.items()
         )
-    if suffix == ".ipynb":
-        notebook = json.loads(_decode_text(path))
-        cells = notebook.get("cells", [])
-        return "\n\n".join(
-            "".join(cell.get("source", []))
-            for cell in cells
-            if cell.get("cell_type") in {"markdown", "code"}
-        )
-    if suffix == ".pdf":
+    elif extension == "pdf":
         try:
             from pypdf import PdfReader
         except ImportError as exc:
             raise ImportError(
                 "PDF context requires the optional pypdf dependency."
             ) from exc
-        return "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
-    return _decode_text(path)
+        text = "\n".join(page.extract_text() or "" for page in PdfReader(path).pages)
+    elif extension in {"htm", "html"}:
+        parser = _TextExtractor()
+        parser.feed(_decode_context_bytes(path.read_bytes()))
+        text = "\n".join(parser.parts)
+    elif extension in {"rmd", "qmd"}:
+        text = _read_rmarkdown(path)
+    elif extension == "docx":
+        text = _read_docx(path)
+    else:
+        text = _read_text_file(path)
+    text = _r_trimws(text)
+    if not text:
+        warnings.warn(f"Skipping empty context file {path}.", stacklevel=2)
+        return None
+    return text
 
 
 def _normalize_context_files(context_files) -> list[Path]:
@@ -288,77 +394,259 @@ def validate_context_files(context_files) -> list[Path]:
     return _normalize_context_files(context_files)
 
 
+def _make_unique(names: list[str], sep: str) -> list[str]:
+    """``base::make.unique(names, sep)``: a repeated name gets ``sep`` and the
+    smallest count that is not already a name, counting on per name."""
+    taken = set(names)
+    seen: set[str] = set()
+    counters: dict[str, int] = {}
+    out = []
+    for name in names:
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+            continue
+        count = counters.get(name, 0)
+        while True:
+            count += 1
+            candidate = f"{name}{sep}{count}"
+            if candidate not in taken:
+                break
+        counters[name] = count
+        taken.add(candidate)
+        out.append(candidate)
+    return out
+
+
+def _unique_context_sources(documents: list[dict]) -> list[dict]:
+    """``.ms_unique_context_sources()``: keep a unique basename as it is; give a
+    colliding one its parent directory, then a ``" #n"`` suffix as the last
+    resort, so two ``README.md`` files never share a chunk id."""
+    if len(documents) < 2:
+        return documents
+    sources = [document["source"] for document in documents]
+    duplicated = {source for source in sources if sources.count(source) > 1}
+    if not duplicated:
+        return documents
+    for document in documents:
+        if document["source"] not in duplicated:
+            continue
+        parent = os.path.basename(os.path.dirname(document["path"]))
+        if parent and parent not in {".", "/"}:
+            document["source"] = f"{parent}/{document['source']}"
+    final = [document["source"] for document in documents]
+    if len(set(final)) != len(final):
+        for document, label in zip(documents, _make_unique(final, sep=" #")):
+            document["source"] = label
+    return documents
+
+
+def _chunk_context_text(
+    text,
+    source: str,
+    chunk_chars: int = CONTEXT_CHUNK_CHARS,
+    overlap_chars: int = CONTEXT_OVERLAP_CHARS,
+) -> list[dict]:
+    """``.ms_chunk_context_text()``: fixed-width character windows with overlap.
+
+    Windows start every ``chunk_chars - overlap_chars`` characters for as long
+    as a start lies inside the text, so a document of exactly 2200 characters
+    yields two chunks, the second being its last 200 characters. Each window
+    is trimmed; an all-whitespace window is dropped but keeps its number, so
+    the ids of the survivors are what R numbers them.
+    """
+    text = "" if text is None else str(text)
+    if not _r_trimws(text):
+        return []
+    chunk_chars = max(400, int(chunk_chars))
+    overlap_chars = max(0, min(int(overlap_chars), chunk_chars // 2))
+    step = max(1, chunk_chars - overlap_chars)
+    chunks = []
+    for index, start in enumerate(range(0, len(text), step), start=1):
+        chunk_text = _r_trimws(text[start : start + chunk_chars])
+        if chunk_text:
+            chunks.append(
+                {
+                    "source": source,
+                    "chunk_id": f"{source}#{index}",
+                    "text": chunk_text,
+                }
+            )
+    return chunks
+
+
+def _flatten_text(values) -> list[str]:
+    """The pieces ``paste(unlist(list(...)))`` would join. A missing value is
+    skipped: R renders it as ``NA``, which never survives the token filter."""
+    flat = []
+    for value in values:
+        if isinstance(value, str):
+            flat.append(value)
+        elif isinstance(value, (list, tuple, pd.Series, pd.Index)):
+            flat.extend(_flatten_text(value))
+        elif not _missing(value):
+            flat.append(str(value))
+    return flat
+
+
+def _context_tokens(*values) -> list[str]:
+    """``.ms_context_tokens()``: lowercase ASCII runs of three or more characters.
+
+    R lowercases before its camelCase split, so that split never fires and is
+    not reproduced. ``tolower()`` applies the simple case mapping where
+    ``str.lower()`` applies the full one; the only unconditional difference is
+    U+0130, which ``str.lower()`` turns into ``i`` plus a combining dot -- a
+    non-ASCII separator that would cut the token R keeps whole.
+    """
+    text = " ".join(_flatten_text(values))
+    text = text.replace("İ", "i").lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return [token for token in text.split(" ") if len(token) >= 3]
+
+
+def _context_chunk_limit(config: dict) -> int:
+    """``.ms_llm_context_chunk_limit()``: two excerpts on OpenRouter's free
+    tier, four otherwise."""
+    if _uses_openrouter_free(config.get("provider"), config.get("model")):
+        return 2
+    return CONTEXT_EXCERPT_LIMIT
+
+
+def _score_context_chunks(
+    chunks: pd.DataFrame,
+    target,
+    candidates: Optional[pd.DataFrame] = None,
+    max_chunks: int = CONTEXT_EXCERPT_LIMIT,
+) -> pd.DataFrame:
+    """``.ms_score_context_chunks()``: the pool ranked for one target.
+
+    The score is how many distinct query tokens -- from the target's search
+    query, labels and descriptions and the candidates' labels and definitions
+    -- occur in the chunk. Ties break on the shorter chunk, then the source
+    label in C collation (the order metasalmon's scorer takes under hub item
+    B-326), then pool order. A scored result carries ``context_score``; with
+    nothing to score by, R returns the head of the pool unscored, and so does
+    this.
+    """
+    if chunks is None or chunks.empty:
+        return chunks
+    labels = definitions = []
+    if candidates is not None and len(candidates) > 0:
+        if "label" in candidates:
+            labels = candidates["label"].tolist()
+        if "definition" in candidates:
+            definitions = candidates["definition"].tolist()
+    query_tokens = list(
+        dict.fromkeys(
+            _context_tokens(
+                target.get("search_query"),
+                target.get("target_label"),
+                target.get("target_description"),
+                target.get("column_label"),
+                target.get("column_description"),
+                labels,
+                definitions,
+            )
+        )
+    )
+    if not query_tokens:
+        return chunks.head(max_chunks).reset_index(drop=True)
+    query_set = set(query_tokens)
+    texts = [str(text) for text in chunks["text"]]
+    sources = [str(source) for source in chunks["source"]]
+    scores = [len(query_set.intersection(_context_tokens(text))) for text in texts]
+    order = sorted(
+        range(len(texts)),
+        key=lambda index: (-scores[index], len(texts[index]), sources[index]),
+    )
+    ranked = chunks.iloc[order].copy()
+    ranked["context_score"] = [scores[index] for index in order]
+    return ranked.head(max(1, int(max_chunks))).reset_index(drop=True)
+
+
 def load_context_chunks(
     context_files=None,
     context_text=None,
-    chunk_size: int = 1400,
+    chunk_size: int = CONTEXT_CHUNK_CHARS,
+    overlap: int = CONTEXT_OVERLAP_CHARS,
 ) -> pd.DataFrame:
+    """``.ms_collect_context_chunks()``: every context document and inline
+    snippet as a pool of chunks, one row each, with metasalmon's source labels
+    and chunk ids (``<source>#<n>`` for a file, ``inline_context[<i>]#<n>``
+    for the i-th non-empty snippet)."""
     paths = _normalize_context_files(context_files)
-    records = []
-    labels = {}
+    documents = []
     for path in paths:
-        base = path.name
-        labels[base] = labels.get(base, 0) + 1
-        source = base if labels[base] == 1 else f"{base} [{labels[base]}]"
-        records.append((source, _read_context_file(path)))
+        text = _read_context_file(path)
+        if text is None:
+            continue
+        resolved = path.resolve()
+        documents.append(
+            {"path": str(resolved), "source": resolved.name, "text": text}
+        )
+    inline = []
     if context_text is not None:
         values = (
             [context_text]
             if isinstance(context_text, str)
             else list(context_text)
         )
-        for index, value in enumerate(values, start=1):
+        for value in values:
             if not isinstance(value, str):
                 raise TypeError("llm_context_text must contain only strings.")
-            records.append((f"inline-context-{index}", value))
+            value = _r_trimws(value)
+            if value:
+                inline.append(value)
+    if not documents and not inline:
+        return pd.DataFrame(columns=["source", "chunk_id", "text"])
 
     chunks = []
-    for source, value in records:
-        text = re.sub(r"\s+", " ", value).strip()
-        if not text:
-            continue
-        for index, start in enumerate(range(0, len(text), chunk_size), start=1):
-            chunks.append(
-                {
-                    "source": source,
-                    "chunk_id": f"{source}#{index}",
-                    "text": text[start : start + chunk_size],
-                }
+    for document in _unique_context_sources(documents):
+        chunks.extend(
+            _chunk_context_text(
+                document["text"], document["source"], chunk_size, overlap
             )
+        )
+    for index, value in enumerate(inline, start=1):
+        snippet_chunks = _chunk_context_text(
+            value, "inline_context", chunk_size, overlap
+        )
+        for position, chunk in enumerate(snippet_chunks, start=1):
+            chunk["chunk_id"] = f"inline_context[{index}]#{position}"
+        chunks.extend(snippet_chunks)
     return pd.DataFrame(chunks, columns=["source", "chunk_id", "text"])
 
 
-def _relevant_context(chunks: pd.DataFrame, targets: pd.DataFrame) -> pd.DataFrame:
+def _relevant_context(
+    chunks: pd.DataFrame,
+    targets: pd.DataFrame,
+    suggestions: Optional[pd.DataFrame] = None,
+    max_chunks: int = CONTEXT_EXCERPT_LIMIT,
+) -> pd.DataFrame:
+    """The excerpts one review unit sees, at most ``max_chunks`` of them.
+
+    Each target is scored on its own with its own candidates
+    (``.ms_prepare_context_chunks()``); a bundle's per-role picks are then
+    joined in role order, deduplicated on source and chunk id, and cut to the
+    limit (``.ms_semantic_bundle_context_chunks()``). A single target is the
+    one-row case of the same rule.
+    """
     if chunks.empty:
         return chunks
-    target_text = " ".join(
-        str(value)
-        for column in (
-            "target_label",
-            "target_description",
-            "search_query",
-            "target_query_context",
+    picks = []
+    for _, target in targets.iterrows():
+        candidates = (
+            _candidates_for_target(suggestions, target)
+            if suggestions is not None
+            else None
         )
-        if column in targets
-        for value in targets[column].dropna()
-    ).lower()
-    tokens = {
-        token
-        for token in re.findall(r"[a-z0-9]+", target_text)
-        if len(token) > 2
-    }
-    ranked = chunks.copy()
-    ranked["_score"] = ranked["text"].str.lower().map(
-        lambda value: sum(token in value for token in tokens)
-    )
-    return (
-        ranked.sort_values(
-            ["_score", "source", "chunk_id"],
-            ascending=[False, True, True],
-        )
-        .head(8)
-        .drop(columns="_score")
-        .reset_index(drop=True)
+        picks.append(_score_context_chunks(chunks, target, candidates, max_chunks))
+    if not picks:
+        return chunks.head(0).reset_index(drop=True)
+    ranked = pd.concat(picks, ignore_index=True)
+    ranked = ranked.drop_duplicates(subset=["source", "chunk_id"], keep="first")
+    return ranked.head(max_chunks)[["source", "chunk_id", "text"]].reset_index(
+        drop=True
     )
 
 
@@ -1587,68 +1875,171 @@ def _dictionary_row(target, dictionary) -> dict:
     return matches.iloc[0].to_dict() if not matches.empty else {}
 
 
-def _field_anchors(target, dictionary_row: dict) -> tuple[list[str], list[str]]:
-    weak = {
-        "age",
-        "code",
-        "count",
-        "length",
-        "method",
-        "number",
-        "phase",
-        "rate",
-        "sex",
-        "total",
-        "unit",
-        "value",
-        "weight",
+# --- The bundle validators ---------------------------------------------------
+#
+# Everything from here to `_apply_validators()` gives the verdicts metasalmon's
+# `R/semantic-bundle-validators.R` gives on the same input (hub queue B-360,
+# ruled 2026-09-25 with the S16 execplan, decision 9: converge on R's
+# validators, this package moving). The validators are surface 5 of the role
+# contract, and the shared review-packet fixtures (B-326 / B-327) fail until the
+# two sides agree, so this is convergence rather than a PARITY.md row.
+# tests/test_validator_parity.py holds the block to cases metasalmon itself
+# scored.
+#
+# Regex flags, because they decide word boundaries. R's `perl = TRUE` patterns
+# run PCRE without Unicode properties -- measured 2026-09-25 on R 4.5.2: `\b`,
+# `\s`, `\w` and `[[:punct:]]` are ASCII-only -- so their mirrors here carry
+# re.ASCII. R's default engine, which `_role_type_message()`'s explicit
+# native-type tests use, has a locale-aware `\b`; Python's default Unicode `\b`
+# is the closest match for that.
+
+_VALIDATOR_WEAK_SINGLETONS = frozenset(
+    {
+        "age", "code", "count", "length", "method", "number", "phase", "rate",
+        "sex", "total", "unit", "value", "weight",
     }
-    identifiers = []
-    phrases = []
-    column_name = _text(
-        dictionary_row.get("column_name"),
-        _text(target.get("column_name")),
-    )
-    if column_name:
-        normalized_identifier = column_name.strip().lower()
-        if re.fullmatch(r"[a-z0-9_]+", normalized_identifier):
-            identifiers.append(normalized_identifier)
-    for value in (
-        dictionary_row.get("column_label"),
-        target.get("column_label"),
-        column_name,
+)
+
+
+def _validator_trim(value) -> str:
+    """R's ``trimws()`` default: space, tab, CR and LF only. Hub B-364 adds a
+    general ``_r_trimws()`` to the context block; fold this into it once both
+    have merged."""
+    return str(value).strip(" \t\r\n")
+
+
+def _validator_scalar(value, default=None):
+    """``.ms_semantic_trim_string()``: the value trimmed as R trims it, else the default."""
+    if _missing(value):
+        return default
+    text = _validator_trim(value)
+    return text if text else default
+
+
+def _validator_values(values) -> list[str]:
+    """The pieces ``unlist(list(...))`` would yield, as text; missing ones dropped."""
+    flat = []
+    for value in values:
+        if isinstance(value, str):
+            flat.append(value)
+        elif isinstance(value, (list, tuple, pd.Series, pd.Index)):
+            flat.extend(_validator_values(value))
+        elif not _missing(value):
+            flat.append(str(value))
+    return flat
+
+
+def _validator_text(*values) -> str:
+    """``.ms_semantic_validator_text()``: the non-blank values, untrimmed, joined
+    by one space and lowercased. A missing or blank value is dropped, not
+    rendered, so no double space stands where one was."""
+    kept = [value for value in _validator_values(values) if _validator_trim(value)]
+    return " ".join(kept).lower()
+
+
+def _validator_tokens(text: str) -> list[str]:
+    """``.ms_context_tokens()`` as the anchor builder uses it: lowercase ASCII
+    runs of three or more characters. B-364 adds the general
+    ``_context_tokens()``; fold this into it once both have merged."""
+    text = re.sub(r"[^a-z0-9]+", " ", str(text).lower())
+    return [token for token in text.split(" ") if len(token) >= 3]
+
+
+def _field_anchors(target, dictionary_row: dict) -> list[str]:
+    """``.ms_semantic_validator_field_anchors()``: what a context chunk must
+    carry to count as evidence for this column.
+
+    The column names (the dictionary's, then the target's) are the candidates;
+    only when there is no column name at all do the column labels stand in. A
+    candidate makes an ``identifier:`` anchor when it is a plain identifier and
+    a ``phrase_start:`` anchor always -- unless it is one weak or short word,
+    which anchors nothing.
+    """
+    field_names = [
+        str(name)
+        for name in (dictionary_row.get("column_name"), target.get("column_name"))
+        if not _missing(name) and _validator_trim(name)
+    ]
+    labels = [dictionary_row.get("column_label"), target.get("column_label")]
+    candidates = field_names if field_names else labels
+    anchors = []
+    for candidate in dict.fromkeys(
+        str(candidate) for candidate in candidates if not _missing(candidate)
     ):
-        phrase = re.sub(r"[^a-z0-9]+", " ", _text(value, "").lower()).strip()
-        tokens = phrase.split()
-        if phrase and not (len(tokens) < 2 and (len(phrase) < 6 or phrase in weak)):
-            phrases.append(phrase)
-    return list(dict.fromkeys(identifiers)), list(dict.fromkeys(phrases))
+        identifier = _validator_trim(candidate).lower()
+        phrase = _validator_trim(re.sub(r"[^a-z0-9]+", " ", identifier))
+        tokens = _validator_tokens(phrase)
+        if not phrase or (
+            len(tokens) < 2
+            and (len(phrase) < 6 or phrase in _VALIDATOR_WEAK_SINGLETONS)
+        ):
+            continue
+        if field_names and re.fullmatch(r"[a-z0-9_]+", identifier):
+            anchors.append(f"identifier:{identifier}")
+        anchors.append(f"phrase_start:{phrase}")
+    return list(dict.fromkeys(anchors))
+
+
+def _chunk_has_anchor(text, anchor: str) -> bool:
+    """``.ms_semantic_validator_chunk_has_anchor()``.
+
+    An identifier anchor must be a whole ``[a-z0-9_]`` token of the chunk. A
+    phrase anchor must start the chunk once leading markup (ASCII punctuation
+    and digits) is stripped, and the chunk's leading token may not carry ``_``
+    or ``-``, so ``CATCH_COUNT_ESTIMATE ...`` does not vouch for
+    ``catch_count``. Both regexes are R's, quirks included: the leading-token
+    pattern spans to the end of the string, so on a multi-line chunk it does
+    not match, the whole chunk stands in as the leading token, and any ``_`` or
+    ``-`` in it fails the phrase anchor.
+    """
+    raw_text = "" if _missing(text) else str(text)
+    lowered = raw_text.lower()
+    anchor = _validator_trim(anchor).lower()
+    if not lowered or not anchor:
+        return False
+    if anchor.startswith("identifier:"):
+        identifier = anchor[len("identifier:"):]
+        return identifier in re.split(r"[^a-z0-9_]+", lowered)
+    phrase = re.sub(r"^phrase_start:", "", anchor)
+    unmarked = re.sub(
+        r"^\s*(?:[!-/:-@\[-`{-~0-9]+\s*)+", "", raw_text, flags=re.ASCII
+    )
+    leading_token = re.sub(
+        r"^\s*([a-zA-Z0-9][a-zA-Z0-9_-]*).*$", r"\1", unmarked, flags=re.ASCII
+    )
+    if re.search(r"[_-]", leading_token):
+        return False
+    normalized = _validator_trim(re.sub(r"[^a-z0-9]+", " ", unmarked.lower()))
+    return normalized == phrase or normalized.startswith(f"{phrase} ")
 
 
 def _anchored_context_text(target, dictionary_row: dict, context) -> list[str]:
+    """The context chunks that carry one of the column's anchors, in pool order."""
     if context is None or context.empty or "text" not in context:
         return []
-    identifiers, phrases = _field_anchors(target, dictionary_row)
+    anchors = _field_anchors(target, dictionary_row)
     selected = []
-    for value in context["text"].dropna().astype(str):
-        lowered = value.lower()
-        normalized = re.sub(r"[^a-z0-9]+", " ", lowered).strip()
-        identifier_match = any(
-            re.search(rf"(?<![a-z0-9_]){re.escape(anchor)}(?![a-z0-9_])", lowered)
-            for anchor in identifiers
-        )
-        phrase_match = any(
-            normalized == anchor or normalized.startswith(f"{anchor} ")
-            for anchor in phrases
-        )
-        if identifier_match or phrase_match:
-            selected.append(value)
+    for text in context["text"]:
+        if _missing(text):
+            continue
+        if any(_chunk_has_anchor(text, anchor) for anchor in anchors):
+            selected.append(str(text))
     return selected
 
 
 def _evidence_text(target, dictionary, context=None) -> str:
-    dictionary_row = _dictionary_row(target, dictionary)
-    values = [
+    """The bundle validator evidence for a target whose dictionary row is
+    looked up in ``dictionary``."""
+    return _bundle_validator_evidence(
+        target, _dictionary_row(target, dictionary), context
+    )
+
+
+def _bundle_validator_evidence(target, dictionary_row: dict, context=None) -> str:
+    """``.ms_semantic_bundle_validator_evidence()``: the target's query context
+    and labels, the dictionary row's name, labels and unit, and the anchored
+    context chunks, as one lowercase string."""
+    return _validator_text(
         target.get("target_query_context"),
         target.get("column_label"),
         target.get("column_description"),
@@ -1656,113 +2047,155 @@ def _evidence_text(target, dictionary, context=None) -> str:
         dictionary_row.get("column_label"),
         dictionary_row.get("column_description"),
         dictionary_row.get("unit_label"),
-        *_anchored_context_text(target, dictionary_row, context),
-    ]
-    return " ".join(_text(value, "") for value in values).lower()
+        _anchored_context_text(target, dictionary_row, context),
+    )
+
+
+_VALIDATOR_NEGATION = (
+    r"no|not|without|unknown|unspecified|missing|does not|did not|is not|was not"
+)
+_METHOD_TERMS = (
+    r"protocol|gear|instrument|assay|technique|field method|lab method|"
+    r"laboratory method|survey method|measurement method|estimation method|"
+    r"field procedure|lab procedure|laboratory procedure|"
+    r"measurement procedure|operational procedure"
+)
+_CONSTRAINT_TERMS = (
+    r"origin|life[ -]?cycle|life[ -]?stage|stage|run|season|age|sex|"
+    r"maturity|phase|terminal|ocean|freshwater|wild|hatchery|population|"
+    r"stock|species group|reporting unit|benchmark"
+)
 
 
 def _strip_negated_evidence(text: str, evidence_pattern: str) -> str:
-    negation = (
-        r"no|not|without|unknown|unspecified|missing|does not|did not|"
-        r"is not|was not"
-    )
+    """``.ms_semantic_validator_strip_negated_evidence()``: blank every
+    evidence term that a negation reaches within sixty characters."""
     return re.sub(
-        rf"\b(?:{negation})\b.{{0,60}}\b(?:{evidence_pattern})\b",
+        rf"\b({_VALIDATOR_NEGATION})\b.{{0,60}}\b({evidence_pattern})\b",
         " ",
         text,
+        flags=re.ASCII,
     )
 
 
-def _has_method_evidence(text: str) -> bool:
-    terms = (
-        r"protocol|gear|instrument|assay|technique|field method|lab method|"
-        r"laboratory method|survey method|measurement method|estimation method|"
-        r"field procedure|lab procedure|laboratory procedure|"
-        r"measurement procedure|operational procedure"
-    )
-    positive = _strip_negated_evidence(text, terms)
+def _has_method_evidence(text) -> bool:
+    """``.ms_semantic_validator_has_method_evidence()``: six alternatives -- a
+    method term, a measurement verb followed by ``using``/``with``/``via`` or
+    by ``by ... <method|protocol|procedure|observer|technician|instrument|gear>``,
+    ``using``/``with`` followed by an instrument, and an estimation verb
+    followed by ``using``/``with``/``from`` or by ``by ... <model|algorithm|
+    estimator|method|procedure>``."""
+    text = _validator_text(text)
+    if not text:
+        return False
+    positive = _strip_negated_evidence(text, _METHOD_TERMS)
     return bool(
         re.search(
-            rf"\b(?:{terms})\b|"
-            r"\b(?:measured|sampled|surveyed|enumerated|counted|weighed)\b"
-            r".{0,80}\b(?:using|with|via)\b|"
-            r"\b(?:using|with)\b.{0,80}\b(?:board|scale|net|sonar|weir|"
-            r"camera|call?iper|ruler|sensor|model)\b|"
-            r"\b(?:estimated|calculated|derived|modelled|modeled)\s+"
-            r"(?:using|with|from)\b",
+            rf"\b({_METHOD_TERMS})\b"
+            r"|\b(measured|sampled|surveyed|enumerated|counted|weighed)\b"
+            r".{0,80}\b(using|with|via)\b"
+            r"|\b(measured|sampled|surveyed|enumerated|counted|weighed)\b"
+            r".{0,80}\bby\b.{0,40}"
+            r"\b(method|protocol|procedure|observer|technician|instrument|gear)\b"
+            r"|\b(using|with)\b.{0,80}"
+            r"\b(board|scale|net|sonar|weir|camera|caliper|ruler|sensor|model)\b"
+            r"|\b(estimated|calculated|derived|modelled|modeled)\s+(using|with|from)\b"
+            r"|\b(estimated|calculated|derived|modelled|modeled)\b.{0,80}\bby\b"
+            r".{0,40}\b(model|algorithm|estimator|method|procedure)\b",
             positive,
+            flags=re.ASCII,
         )
     )
 
 
-def _has_modifier_evidence(text: str) -> bool:
-    # Underscores are not word boundaries, so `mean_weight` needs splitting;
-    # lowercased here because R's helper folds case itself
-    # (mirrors .ms_semantic_validator_has_modifier_evidence).
+def _has_modifier_evidence(text) -> bool:
+    """``.ms_semantic_validator_has_modifier_evidence()``. Underscores and dots
+    are not word boundaries, so ``mean_weight`` is split first."""
+    text = _validator_text(text)
+    if not text:
+        return False
     return bool(
         re.search(
-            r"\b(?:mean|average|median|max|maximum|min|minimum|total|"
+            r"\b(mean|average|median|max|maximum|min|minimum|total|"
             r"cumulative|sum|peak|aggregate|aggregated)\b",
-            re.sub(r"[_.]", " ", text.lower()),
+            re.sub(r"[_.]", " ", text),
+            flags=re.ASCII,
         )
     )
 
 
-def _has_constraint_evidence(text: str) -> bool:
-    terms = (
-        r"origin|life[ -]?cycle|life[ -]?stage|stage|run|season|age|sex|"
-        r"maturity|phase|terminal|ocean|freshwater|wild|hatchery|population|"
-        r"stock|species group|reporting unit|benchmark"
+def _has_constraint_evidence(text) -> bool:
+    """``.ms_semantic_validator_has_constraint_evidence()``."""
+    text = _validator_text(text)
+    if not text:
+        return False
+    return bool(
+        re.search(
+            rf"\b({_CONSTRAINT_TERMS})\b",
+            _strip_negated_evidence(text, _CONSTRAINT_TERMS),
+            flags=re.ASCII,
+        )
     )
-    return bool(re.search(rf"\b(?:{terms})\b", _strip_negated_evidence(text, terms)))
 
 
 def _candidate_type(candidate: dict) -> str:
-    return " ".join(
-        _text(candidate.get(field), "")
-        for field in ("term_type", "native_type", "resource_kind", "type_iris")
-    ).lower()
+    """``.ms_semantic_validator_candidate_type()``: the candidate's type fields
+    present, in this order, as validator text."""
+    return _validator_text(
+        *(
+            candidate.get(field)
+            for field in ("term_type", "native_type", "resource_kind", "type_iris")
+        )
+    )
 
 
-def _split_role_hints(value) -> set[str]:
+def _split_role_hints(value) -> list[str]:
+    """``.ms_semantic_split_role_hints()``: split on ``|`` only, each hint
+    trimmed, empties dropped, order and case kept. A comma or semicolon is
+    part of a hint, not a separator."""
     if _missing(value):
-        return set()
-    return {
-        hint.strip().lower()
-        for hint in re.split(r"[|,;]", str(value))
-        if hint.strip()
-    }
+        return []
+    return [
+        hint
+        for hint in (_validator_trim(part) for part in str(value).split("|"))
+        if hint
+    ]
 
 
 def _role_type_message(role: str, candidate: dict) -> Optional[str]:
+    """``.ms_validate_semantic_role_type()``'s message, or ``None`` when the
+    candidate may fill the role."""
     hints = _split_role_hints(candidate.get("role_hints"))
     if hints and role not in hints:
         return (
             f"Candidate role hints are incompatible with the {role} slot: "
-            f"{', '.join(sorted(hints))}."
+            f"{', '.join(hints)}."
         )
-    iri = _text(candidate.get("iri"), "").lower()
+    iri = _validator_scalar(candidate.get("iri"), "").lower()
     native_type = _candidate_type(candidate)
     if re.search(
         r"object\s*property|datatype\s*property|annotation\s*property|"
-        r"rdf\s*property|owl#(?:object|datatype|annotation)property",
+        r"rdf\s*property|owl#objectproperty|owl#datatypeproperty|"
+        r"owl#annotationproperty",
         native_type,
+        flags=re.ASCII,
     ):
         return (
             "Candidate is an ontology relation predicate, not a value that "
             f"can populate the {role} semantic slot."
         )
+    # R runs these four in its default engine, not PCRE: locale-aware \b.
     combined = f"{iri} {native_type}"
     explicit_role = None
-    if re.search(r"/vocab/unit/|\b(?:unit|unit of measure)\b", combined):
+    if re.search(r"/vocab/unit/|\b(unit|unit of measure)\b", combined):
         explicit_role = "unit"
-    elif re.search(r"/vocab/quantitykind/|\b(?:quantity kind|quantitykind)\b", combined):
+    elif re.search(r"/vocab/quantitykind/|\b(quantity kind|quantitykind)\b", combined):
         explicit_role = "property"
-    elif re.search(r"\b(?:method|procedure)\b", native_type):
+    elif re.search(r"\b(method|procedure)\b", native_type):
         explicit_role = "method"
     elif re.search(r"\bconstraint\b", native_type):
         explicit_role = "constraint"
-    if explicit_role and explicit_role != role:
+    if explicit_role is not None and explicit_role != role:
         return (
             f"Candidate native type is explicitly {explicit_role}-like and "
             f"is incompatible with the {role} slot."
@@ -1770,49 +2203,124 @@ def _role_type_message(role: str, candidate: dict) -> Optional[str]:
     return None
 
 
+_TIME_UNIT = r"(s|sec|second|min|minute|h|hr|hour|d|day|wk|week|mo|month|yr|year|season)"
+_DENOMINATOR_PATTERN = (
+    rf"(\bper\s+{_TIME_UNIT}\b"
+    rf"|/\s*{_TIME_UNIT}\b"
+    rf"|[-_]per[-_]{_TIME_UNIT}\b"
+    rf"|\b{_TIME_UNIT}\s*\^?\s*-\s*1\b)"
+)
+_POWERED_DENOMINATOR_PATTERN = (
+    rf"((\bper\s+|/\s*|[-_]per[-_]){_TIME_UNIT}\s*(\^?\s*[2-9]|squared|cubed)\b"
+    rf"|\b{_TIME_UNIT}\s*\^?\s*-\s*[2-9]\b)"
+)
+# A value that IS a compound unit, whole, names its dimension outright.
+_COMPOUND_DIMENSION_RULES = (
+    ("flow", r"^(cubic met(er|re)s? per second|m3/s|cumecs?|cms)$"),
+    ("speed", r"^(kilomet(er|re)s? per hour|met(er|re)s? per second|km/h|m/s|kph)$"),
+)
+_DIMENSION_RULES = (
+    ("flow", r"\b(flow|discharge)\b"),
+    ("speed", r"\b(speed|velocity)\b"),
+    ("temperature", r"\b(temperature|celsius|fahrenheit|kelvin|deg c)\b"),
+    ("area", r"\b(area|square[ -](milli|centi|kilo)?met(er|re)s?|m2|hectare)\b"),
+    (
+        "volume",
+        r"\b(volume|lit(er|re)s?|cubic[ -](milli|centi|kilo)?met(er|re)s?|m3)\b",
+    ),
+    (
+        "mass",
+        r"\b(mass|weight|kilograms?|grams?|tonnes?|pounds?|lbs?|kg|kilogm|gm)\b",
+    ),
+    (
+        "length",
+        r"\b(length|width|depth|height|fork length|millimet(er|re)s?|"
+        r"centimet(er|re)s?|met(er|re)s?|mm|cm|millim|centim)\b",
+    ),
+    ("count", r"\b(count|abundance|number|numerosity|individuals?|num)\b"),
+    (
+        "dimensionless",
+        r"\b(dimensionless|unitless|percentage|percent|proportion|ratio|"
+        r"fraction|decimal|dimensionlessratio)\b"
+        r"|\b(survival|exploitation|harvest|mortality) rate\b"
+        r"|/vocab/unit/(percent|one)\b",
+    ),
+    (
+        "rate",
+        r"\b(frequency|occurrences? per|individuals? per|fish per|"
+        r"events? per|per capita per)\b",
+    ),
+)
+_STRONG_PHYSICAL_DIMENSIONS = (
+    "flow", "speed", "temperature", "area", "volume", "mass", "length",
+)
+
+
 def _dimension(*values) -> Optional[str]:
-    text = " ".join(_text(value, "") for value in values).lower()
-    text = (
-        text.replace("\u2212", "-")
-        .replace("\u207b", "-")
-        .replace("\u00b2", "2")
-        .replace("\u00b3", "3")
-        .replace("\u00b7", " ")
-    )
-    text = re.sub(r"\s+", " ", text).strip()
-    if not text:
+    """``.ms_semantic_validator_dimension()``: the one dimension the values
+    name, or ``None`` when they name none or more than one.
+
+    Each value is lowercased, trimmed, its Unicode minus, superscripts and
+    middle dot normalised, and its whitespace collapsed. A value that is a
+    whole compound unit (``m3/s``, ``km/h``) decides on its own. A time
+    denominator (``per year``, ``/s``, ``yr^-1``) counted more than once, or
+    raised to a power, means a derived quantity this classifier does not name.
+    One time denominator adds ``rate``. Then: exactly one strong physical
+    dimension wins unless a rate is also present; more than one is ambiguous;
+    ``rate`` beats the weak classes; and a weak class stands only alone.
+    """
+    normalized = []
+    for value in _validator_values(values):
+        if not _validator_trim(value):
+            continue
+        value = _validator_trim(value).lower()
+        value = re.sub(r"\u2212|\u207b", "-", value)
+        value = (
+            value.replace("\u00b9", "1")
+            .replace("\u00b2", "2")
+            .replace("\u00b3", "3")
+            .replace("\u00b7", " ")
+        )
+        normalized.append(re.sub(r"\s+", " ", value, flags=re.ASCII))
+    if not normalized:
         return None
-    if re.fullmatch(r".*(?:cubic metres? per second|m3/s|cumecs?|cms).*", text):
-        return "flow"
-    if re.fullmatch(r".*(?:kilometres? per hour|metres? per second|km/h|m/s|kph).*", text):
-        return "speed"
-    denominator = re.search(
-        r"(?:\bper\s+|/\s*|[-_]per[-_])"
-        r"(?:s|sec|second|min|minute|h|hr|hour|d|day|week|month|yr|year|season)\b"
-        r"|(?:s|sec|second|min|minute|h|hr|hour|d|day|week|month|yr|year)"
-        r"\s*\^?\s*-\s*1\b",
-        text,
-    )
-    if denominator:
-        if re.search(
-            r"\b(?:frequency|occurrences?|individuals?|fish|events?)\s+per\b|"
-            r"\b(?:survival|exploitation|harvest|mortality) rate\b",
-            text,
-        ):
-            return "rate"
-        return None
-    rules = [
-        ("temperature", r"\b(?:temperature|celsius|fahrenheit|kelvin|deg c)\b"),
-        ("mass", r"\b(?:mass|weight|kilograms?|grams?|tonnes?|pounds?|lbs?|kg|kilogm)\b"),
-        ("length", r"\b(?:length|width|depth|height|fork length|millimetres?|centimetres?|metres?|mm|cm)\b"),
-        ("count", r"\b(?:count|abundance|number|numerosity|individuals?|num)\b"),
-        (
-            "dimensionless",
-            r"\b(?:dimensionless|unitless|percentage|percent|proportion|ratio|"
-            r"fraction|decimal)\b|/vocab/unit/(?:percent|one)\b",
-        ),
+    text = " ".join(normalized)
+
+    compound = [
+        name
+        for name, pattern in _COMPOUND_DIMENSION_RULES
+        if any(re.search(pattern, value, flags=re.ASCII) for value in normalized)
     ]
-    matched = [name for name, pattern in rules if re.search(pattern, text)]
+    if len(compound) == 1:
+        return compound[0]
+    if len(compound) > 1:
+        return None
+
+    denominator_count = max(
+        len(re.findall(_DENOMINATOR_PATTERN, value, flags=re.ASCII))
+        for value in normalized
+    )
+    powered_denominator = any(
+        re.search(_POWERED_DENOMINATOR_PATTERN, value, flags=re.ASCII)
+        for value in normalized
+    )
+    if denominator_count > 1 or powered_denominator:
+        return None
+
+    matched = [
+        name
+        for name, pattern in _DIMENSION_RULES
+        if re.search(pattern, text, flags=re.ASCII)
+    ]
+    if denominator_count == 1 and "rate" not in matched:
+        matched.append("rate")
+    strong_physical = [name for name in matched if name in _STRONG_PHYSICAL_DIMENSIONS]
+    if len(strong_physical) == 1:
+        return None if "rate" in matched else strong_physical[0]
+    if len(strong_physical) > 1:
+        return None
+    if "rate" in matched:
+        return "rate"
     return matched[0] if len(matched) == 1 else None
 
 
@@ -1844,16 +2352,45 @@ def _finding(row, code: str, message: str) -> dict:
     }
 
 
+def _candidate_dimension(candidate: dict) -> Optional[str]:
+    """``.ms_semantic_validator_candidate_dimension()``."""
+    return _dimension(
+        candidate.get("label"),
+        candidate.get("definition"),
+        candidate.get("iri"),
+    )
+
+
+def _current_selected_iris(rows, dictionary_row: dict) -> dict:
+    """``.ms_semantic_bundle_current_selected_iris()``: the IRI each slot holds
+    once the accepts are applied -- the dictionary's own filled slots (a
+    ``REVIEW:``-marked value does not count) overridden by every accepted
+    row's selected IRI. The paired-redundancy rule reads this, so a variable
+    the dictionary already carries pairs with a newly accepted constraint."""
+    selected = {role: None for role in BUNDLE_SLOT_FIELDS}
+    for role, field in BUNDLE_SLOT_FIELDS.items():
+        value = _validator_scalar(dictionary_row.get(field), "")
+        if value and not re.match(r"REVIEW:", value, flags=re.IGNORECASE):
+            selected[role] = value
+    for row in rows:
+        iri = _validator_scalar(row.get("llm_selected_iri"), "")
+        if _validator_scalar(row.get("llm_decision"), "") == "accept" and iri:
+            selected[str(row.get("dictionary_role"))] = iri
+    return selected
+
+
 def _downgrade(row, findings: list[dict]) -> None:
+    """Turn the accept into a review, clear the selection, keep the confidence
+    and append ``[CODE] message`` for each finding to the rationale."""
     row["llm_decision"] = "review"
     row["llm_selected_candidate_index"] = pd.NA
     row["llm_selected_iri"] = pd.NA
     row["llm_selected_label"] = pd.NA
-    rationale = _text(row.get("llm_rationale"), "")
     notes = " ".join(
         f"[{finding['code']}] {finding['message']}" for finding in findings
     )
-    row["llm_rationale"] = f"{rationale} {notes}".strip()
+    rationale = _validator_scalar(row.get("llm_rationale"), None)
+    row["llm_rationale"] = notes if rationale is None else f"{rationale} {notes}"
 
 
 def _apply_validators(
@@ -1863,31 +2400,49 @@ def _apply_validators(
     suggestions,
     context,
 ) -> tuple[list[dict], list[dict]]:
-    by_role = {str(row["dictionary_role"]): row for row in rows}
+    """``.ms_semantic_apply_bundle_validators()``: run the seven deterministic
+    validators over every accepted row of one bundle, in R's order, and
+    downgrade the rows that fail.
+
+    The selected candidates and the current slot IRIs are read once, before
+    any row is downgraded, so a pair or a redundancy is judged on what the
+    model accepted rather than on what an earlier validator left standing.
+    """
     target_by_role = {
         str(target["dictionary_role"]): target
         for _, target in targets.iterrows()
     }
-    selected = {
-        role: _selected_candidate(row, target_by_role[role], suggestions)
-        for role, row in by_role.items()
-        if _text(row.get("llm_decision")) == "accept"
-    }
-    selected_iris = {
-        role: _text(candidate.get("iri"))
-        for role, candidate in selected.items()
-        if candidate is not None
-    }
-    all_findings = []
-    for role, row in by_role.items():
-        if _text(row.get("llm_decision")) != "accept":
+    bundle_dictionary_row = (
+        _dictionary_row(targets.iloc[0], dictionary) if len(targets) else {}
+    )
+    selected = {}
+    for row in rows:
+        role = str(row.get("dictionary_role"))
+        if (
+            _validator_scalar(row.get("llm_decision"), "") != "accept"
+            or role not in target_by_role
+        ):
             continue
-        target = target_by_role[role]
-        candidate = selected.get(role)
+        candidate = _selected_candidate(row, target_by_role[role], suggestions)
+        if candidate is not None:
+            selected[role] = candidate
+    selected_iris = _current_selected_iris(rows, bundle_dictionary_row)
+
+    all_findings = []
+    for row in rows:
+        if _validator_scalar(row.get("llm_decision"), "") != "accept":
+            continue
+        role = str(row.get("dictionary_role"))
+        target = target_by_role.get(role)
+        if target is None:
+            continue
+        candidate = _selected_candidate(row, target, suggestions)
         if candidate is None:
             continue
-        evidence = _evidence_text(target, dictionary, context)
+        dictionary_row = _dictionary_row(target, dictionary)
+        evidence = _bundle_validator_evidence(target, dictionary_row, context)
         row_findings = []
+
         if role == "method" and not _has_method_evidence(evidence):
             row_findings.append(
                 _finding(
@@ -1895,6 +2450,16 @@ def _apply_validators(
                     "SEM_METHOD_EVIDENCE_REQUIRED",
                     "The accepted method candidate lacks explicit field, "
                     "protocol, gear, instrument, or estimation-procedure evidence.",
+                )
+            )
+        if role == "constraint" and not _has_constraint_evidence(evidence):
+            row_findings.append(
+                _finding(
+                    row,
+                    "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
+                    "The accepted constraint candidate lacks an explicit "
+                    "qualifier such as origin, life stage, phase, season, age, "
+                    "sex, stock, or reporting unit.",
                 )
             )
         if role == "statistical_modifier" and not _has_modifier_evidence(
@@ -1916,16 +2481,6 @@ def _apply_validators(
                     "minimum, total, or peak).",
                 )
             )
-        if role == "constraint" and not _has_constraint_evidence(evidence):
-            row_findings.append(
-                _finding(
-                    row,
-                    "SEM_CONSTRAINT_EVIDENCE_REQUIRED",
-                    "The accepted constraint candidate lacks an explicit "
-                    "qualifier such as origin, life stage, phase, season, age, "
-                    "sex, stock, or reporting unit.",
-                )
-            )
         role_message = _role_type_message(role, candidate)
         if role_message:
             row_findings.append(
@@ -1933,16 +2488,11 @@ def _apply_validators(
             )
 
         if role in {"property", "unit"}:
-            dictionary_row = _dictionary_row(target, dictionary)
             expected = _dimension(
                 dictionary_row.get("unit_label"),
                 dictionary_row.get("unit_iri"),
             )
-            actual = _dimension(
-                candidate.get("label"),
-                candidate.get("definition"),
-                candidate.get("iri"),
-            )
+            actual = _candidate_dimension(candidate) if expected else None
             if expected and actual and expected != actual:
                 row_findings.append(
                     _finding(
@@ -1955,17 +2505,13 @@ def _apply_validators(
 
         property_candidate = selected.get("property")
         unit_candidate = selected.get("unit")
-        if role in {"property", "unit"} and property_candidate and unit_candidate:
-            property_dimension = _dimension(
-                property_candidate.get("label"),
-                property_candidate.get("definition"),
-                property_candidate.get("iri"),
-            )
-            unit_dimension = _dimension(
-                unit_candidate.get("label"),
-                unit_candidate.get("definition"),
-                unit_candidate.get("iri"),
-            )
+        if (
+            role in {"property", "unit"}
+            and property_candidate is not None
+            and unit_candidate is not None
+        ):
+            property_dimension = _candidate_dimension(property_candidate)
+            unit_dimension = _candidate_dimension(unit_candidate)
             if (
                 property_dimension
                 and unit_dimension
@@ -1984,9 +2530,9 @@ def _apply_validators(
 
         if (
             role == "constraint"
-            and _text(candidate.get("iri"))
+            and _validator_scalar(candidate.get("iri"), "")
             == "https://w3id.org/smn/CatchContext"
-            and selected_iris.get("variable")
+            and _validator_scalar(selected_iris.get("variable"), "")
             == "https://w3id.org/smn/CatchAbundance"
             and not _has_constraint_evidence(evidence)
         ):
@@ -2078,6 +2624,7 @@ def assess_semantic_suggestions(
         request_fn,
     )
     chunks = load_context_chunks(context_files, context_text)
+    excerpt_limit = _context_chunk_limit(config)
     rows = []
     handled = set()
     validator_findings = []
@@ -2098,7 +2645,7 @@ def assess_semantic_suggestions(
         dictionary_row = _dictionary_row(group.iloc[0], dictionary)
         if _text(dictionary_row.get("column_role"), "").lower() != "measurement":
             continue
-        context = _relevant_context(chunks, group)
+        context = _relevant_context(chunks, group, suggestions, excerpt_limit)
         bundle_rows = _assess_bundle(
             group,
             suggestions,
@@ -2133,7 +2680,9 @@ def assess_semantic_suggestions(
         if _target_key(target) in handled:
             continue
         candidates = _candidates_for_target(suggestions, target)
-        context = _relevant_context(chunks, pd.DataFrame([target]))
+        context = _relevant_context(
+            chunks, pd.DataFrame([target]), suggestions, excerpt_limit
+        )
         row = _assess_generic(target, candidates, context, config)
         initial_row = row.copy()
         suggestions, row = _apply_generic_retry(

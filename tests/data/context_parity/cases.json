@@ -1,0 +1,138 @@
+{
+  "files": [
+    "documents/notes.md",
+    "documents/protocol.qmd",
+    "documents/log.txt",
+    "documents/a/dictionary.csv",
+    "documents/b/dictionary.csv",
+    "documents/p/q/field-guide.md",
+    "documents/r/q/field-guide.md",
+    "documents/Zeta.txt",
+    "documents/alpha.txt",
+    "documents/sites.tsv",
+    "documents/config.yaml",
+    "documents/meta.json",
+    "documents/analysis.R",
+    "documents/readme.rst",
+    "documents/ignored.ipynb",
+    "documents/empty.txt",
+    "documents/blank.md"
+  ],
+  "inline_text": [
+    "  Spawner abundance was estimated using a mark-recapture protocol at the weir.  ",
+    "   ",
+    "Water temperature logged hourly at the weir.",
+    "Water temperature logged hourly at the weir.",
+    "Paragraph 1: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 2: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 3: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 4: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 5: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 6: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 7: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 8: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 9: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 10: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 11: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 12: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 13: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 14: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 15: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 16: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 17: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 18: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 19: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 20: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 21: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 22: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 23: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency. Paragraph 24: juvenile abundance and smolt counts were recorded at the rotary screw trap and expanded by trap efficiency."
+  ],
+  "targets": [
+    {
+      "name": "spawner",
+      "max_chunks": 4,
+      "target": {
+        "search_query": "spawner abundance",
+        "target_label": "Spawner count",
+        "target_description": "Natural-origin spawner abundance estimate",
+        "column_label": "Spawner count",
+        "column_description": "Count of spawners by mark-recapture"
+      },
+      "candidates": [
+        {
+          "label": "Spawner abundance",
+          "definition": "The number of spawning adults."
+        },
+        {
+          "label": "Escapement",
+          "definition": "Adults escaping fisheries to spawn."
+        }
+      ]
+    },
+    {
+      "name": "temperature",
+      "max_chunks": 4,
+      "target": {
+        "search_query": "water temperature",
+        "target_label": "Water temperature",
+        "target_description": "Water temperature measurement",
+        "column_label": "Water temperature",
+        "column_description": "Hourly water temperature in degrees Celsius"
+      },
+      "candidates": [
+        {
+          "label": "Water temperature",
+          "definition": "Temperature of the water column measured in degrees Celsius."
+        }
+      ]
+    },
+    {
+      "name": "no_tokens",
+      "max_chunks": 4,
+      "target": {
+        "search_query": "",
+        "target_label": "",
+        "target_description": null,
+        "column_label": "",
+        "column_description": null
+      },
+      "candidates": [
+        {
+          "label": null,
+          "definition": null
+        }
+      ]
+    },
+    {
+      "name": "tie",
+      "max_chunks": 4,
+      "target": {
+        "search_query": "mark-recapture protocol",
+        "target_label": "",
+        "target_description": "",
+        "column_label": "",
+        "column_description": ""
+      },
+      "candidates": []
+    },
+    {
+      "name": "limit_two",
+      "max_chunks": 2,
+      "target": {
+        "search_query": "spawner abundance",
+        "target_label": "Spawner count",
+        "target_description": "Natural-origin spawner abundance estimate",
+        "column_label": "Spawner count",
+        "column_description": "Count of spawners by mark-recapture"
+      },
+      "candidates": [
+        {
+          "label": "Spawner abundance",
+          "definition": "The number of spawning adults."
+        }
+      ]
+    },
+    {
+      "name": "accented",
+      "max_chunks": 4,
+      "target": {
+        "search_query": "Río café",
+        "target_label": "Café",
+        "target_description": "",
+        "column_label": "",
+        "column_description": ""
+      },
+      "candidates": []
+    },
+    {
+      "name": "camel_case",
+      "max_chunks": 4,
+      "target": {
+        "search_query": "SpawnerCount",
+        "target_label": "",
+        "target_description": "",
+        "column_label": "",
+        "column_description": ""
+      },
+      "candidates": []
+    }
+  ]
+}

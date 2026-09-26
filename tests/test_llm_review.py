@@ -872,9 +872,12 @@ def test_context_decodes_cp1252_and_disambiguates_duplicate_basenames(tmp_path):
 
     assert "caf\u00e9" in " ".join(chunks["text"])
     assert chunks["source"].nunique() == 2
+    # metasalmon's labels: a colliding basename gains its parent directory
+    # (.ms_unique_context_sources), so the two stay distinct in
+    # llm_context_sources without a counter (B-364).
     assert set(chunks["source"]) == {
-        "dictionary.csv",
-        "dictionary.csv [2]",
+        "first/dictionary.csv",
+        "second/dictionary.csv",
     }
 
 

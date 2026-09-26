@@ -74,6 +74,50 @@ and moving it is a separate outward act.
      opening one, and the one deliberate departure from *current* R is the
      ruled convergence point R itself is moving to.
 
+* **The bundle validators give metasalmon's verdicts on the same input.** Hub
+  queue item **B-360**, ruled 2026-09-25 when Brett took every recommendation
+  in section 10 of the S16 execplan (decision 9): the two packages converge on
+  R's validators, this package moving, because they are the richer and more
+  recently hardened set and the shared review-packet fixtures (B-326 / B-327)
+  fail until the two sides agree. `llm_review.py`'s validator block now mirrors
+  `R/semantic-bundle-validators.R` function for function. What moved: the
+  **dimension classifier** gains area, volume, flow and speed with R's rules —
+  a value that is a whole compound unit (`m3/s`, `km/h`) decides on its own, a
+  time denominator counted twice or raised to a power means a derived quantity
+  the classifier does not name, one denominator adds `rate`, and a strong
+  physical dimension wins only alone and only without a rate (this package had
+  five classes, treated any denominator as rate-or-nothing, and matched the
+  compound units as substrings); the **field anchors** are R's — the column
+  names are the candidates and the labels stand in only when there is no
+  column name, a candidate needs two tokens of three or more characters, or six
+  characters that are not a weak singleton, and a chunk meets a phrase anchor
+  only when it starts with the phrase after leading markup and its leading
+  token carries no `_` or `-` (this package anchored on names and labels
+  together and counted every whitespace-separated token); the
+  **method-evidence** predicate gains R's two `by … <observer|technician|…>`
+  and `by … <model|algorithm|estimator|…>` alternatives and spells `caliper` as
+  R does; **role hints split on `|` only**, keep their order and case, and a
+  comma-joined hint is one hint (this package split on `|`, `,` and `;`,
+  lowercased and sorted); the **paired-redundancy rule** reads the slot IRIs
+  the dictionary already holds, so a `CatchAbundance` the dictionary carries
+  pairs with a newly accepted `CatchContext` (this package read only the
+  accepted candidates); evidence text drops missing values instead of
+  rendering them as empty pieces; findings come in R's order (method,
+  constraint, modifier, role type, dimension, pair, redundancy); and every
+  regex R runs with `perl = TRUE` runs ASCII-only here too, as PCRE does in R.
+
+  Pinned by `tests/test_validator_parity.py` on
+  `tests/data/validator_parity/cases.json`: 118 dimension inputs, 75 evidence
+  strings, 14 hint strings, 18 role-type candidates, 28 field-anchored evidence
+  cases and 30 whole bundles through the driver, all scored by metasalmon's own
+  functions (`expected-from-r.R` beside them, run against metasalmon `main` at
+  `98cb9e6`) and identical here; the `parity` job re-runs the R script.
+  Measured before the change on the same cases: **74 disagreed with R** — 51
+  of the 118 dimension inputs, 7 of the 34 method-evidence strings, 5 of the 14
+  hint strings, 3 of the 18 role-type candidates and 8 of the 30 bundles.
+  After it, none. This is convergence, not a `PARITY.md` row: the difference
+  was never registered, and after this there is none.
+
 * **`datapackage.json` and `metadata/dataset.csv` spell a typed instant the
   same way, in the form Brett ruled.** A `datetime`/`Timestamp` in
   `temporal_start` or `temporal_end` reached both files through two different
@@ -663,7 +707,311 @@ and moving it is a separate outward act.
   suite jobs check out one commit and skip them, and the new workflow runs
   them strictly.
 
+* **`review_metadata()`'s console counts an IRI field reported as a
+  placeholder as an IRI, so it points at `review_semantics()` whenever an IRI
+  field is a gap.** Hub queue item **B-244**, the port of the footer half of
+  metasalmon's **B-211** (metasalmon pull request #170). The scan keeps one
+  row per field (hub item **B-212**, above), so a placeholder in an IRI field
+  keeps its `placeholder` row and gets no `iri` row. The footer counted IRI
+  gaps by the reason a row kept, so that field fell out of the count, and when
+  every IRI gap was a placeholder the footer dropped its line pointing at
+  `review_semantics()`. Measured on `66ad1a3`, on a package whose only gaps
+  were `MISSING METADATA:` in `tables.csv`'s `observation_unit_iri` and
+  `REVIEW REQUIRED:` in a measurement column's `unit_iri`: both rows came back
+  as `placeholder`, and the footer read *2 fields still block strict
+  validation.* with no IRI line. It now counts the rows whose field ends in
+  `_iri`, as metasalmon's footer does, and adds *2 of them are IRIs --
+  review_semantics() shows candidates for any that have them.* Every row the
+  old count found has such a field, so the count only gains IRI fields
+  reported under another reason: a placeholder, or `required` under a selected
+  schema that calls an IRI field required. The rows `review_metadata()`
+  returns and the calls it prints do not change.
+  `tests/test_sdp_field_setters.py` twins metasalmon's test, with every IRI
+  gap a placeholder, and it failed on the footer as it stood. metasalmon fixed
+  the footer first, so this closes R-shipped-first lag and is not a deliberate
+  difference; it opens no `PARITY.md` row.
+
+* **`create_sdp()` with its defaults no longer raises once two targets get
+  search candidates.** Hub queue item **B-370**. Every `find_terms()` answer
+  carries its per-source diagnostics in `attrs["diagnostics"]`, a DataFrame.
+  The retrieval loop in `suggest_semantics()` copied each answer with its
+  `attrs`, and `pd.concat()` compares its inputs' `attrs` whenever every input
+  has some. A DataFrame there has no single truth value, so the call raised
+  `ValueError` as soon as two targets got candidates. `create_sdp()` and
+  `infer_dictionary(seed_semantics=True)` seed through that loop with
+  `find_terms()` as the search, so both raised on any table a search could
+  answer for two targets, and so did `suggest_semantics()` with its default
+  search or with a `search_fn` whose answers carry a DataFrame in `attrs`.
+  Measured on `main` `380a7a4`, with every search source patched and the
+  network refused, each of those raised under pandas 3.0.6 in both dependency
+  legs, and under 2.2.3 and 1.5.3 with core dependencies, and each now
+  completes.
+
+  The loop's own copy of each answer now drops the answer's `attrs`, so the
+  candidate frames reach `pd.concat()` without them. The answer itself is not
+  touched, and what a caller reads from `find_terms()`'s `attrs` is
+  unchanged. One consequence is observable: when exactly one target got
+  candidates, the `semantic_suggestions` frame inherited that one search's
+  diagnostics in its own `attrs`, and it now carries none, as it already did
+  whenever the answers carried no `attrs`. With `llm_assess=True`, the
+  review's retry merge raised the same way on `main` when the first pass left
+  one candidate frame. It completes now, because the frame it merges into no
+  longer carries `attrs`.
+
+  `tests/test_search_answer_attrs.py` pins `suggest_semantics()` and
+  `create_sdp()` with its defaults, and failed on `380a7a4`. The lasting
+  outage in `tests/test_semantic_retrieval_dedup.py` now answers with one
+  candidate per target, as metasalmon's twin does, which the crash had
+  prevented. There is no metasalmon half, because R has no counterpart of
+  pandas' `attrs` comparison.
+
+* **`apply_salmon_dictionary()` gives a coded column the labels in
+  `codes.csv`'s `code_label`.** Hub queue item **B-274**. metasalmon applies a
+  code list with `factor(x, levels = code_value, labels = code_label)`, so a
+  coded column's levels are its labels. Here no coded column ever carried one.
+  The relabel called `rename_categories` on the Series rather than on its
+  `.cat` accessor, and the `AttributeError` fell into an `except` marked
+  defensive, which turned the column into text holding the code values. Under
+  the `categorical` role the block after it then rebuilt the categories from
+  the code values, which would have blanked every label had one been applied.
+  Measured on `main` `e089b86` under pandas 3.0.6, 2.2.3 and 1.5.3, codes `N`
+  and `W` labelled `Net` and `Weir` came back as `N` and `W`, and a Categorical
+  of integers `[1, 2, 3]` against integer code values `[1, 2]` came back
+  `[nan, nan, nan]` under the `categorical` role, the listed values blanked with
+  the unlisted one.
+
+  A coded column is now a Categorical whose categories are its labels, in
+  code-list order, under either role, and the `categorical` role keeps them.
+  Where pandas and R part, it follows R's `factor()`, measured on metasalmon
+  `11c770c`: two codes sharing a label share one category, a repeated code
+  value takes its first row's label, and an ordered Categorical stays ordered.
+  A code whose label is missing or blank gets a missing level in R, which
+  prints and writes as `NA`; pandas has no missing category, so its values
+  become missing, unreported, as in R. A value missing from the code list still
+  becomes missing, and B-241's warning still names it. Without a `code_label`
+  column the code values serve as labels.
+
+  A failure that is left is reported. The one found is a data frame that
+  repeats the column's name, whose values in both columns were all blanked;
+  they are now kept, as text, with a `RuntimeWarning` naming the column. R
+  refuses such a data frame, and what this package should do with one is hub
+  item **B-397**'s.
+
+  `ApplyDictionaryCodeLabelTests` in `tests/test_dictionary.py` pins each of
+  these and failed on `e089b86`, and `test_apply_salmon_dictionary_with_codes`,
+  which asserted that the categories were the code values, now asserts the
+  labels. There is no metasalmon half and no `PARITY.md` row, because metasalmon
+  already applies the labels.
+
+* **The semantic review no longer records, by any route, an accept whose IRI is
+  empty or still a `REVIEW:` marker.** Hub queue item **B-247**, the mirror half
+  of metasalmon's **B-246** (metasalmon pull request #199). **B-220** closed one
+  route, `accept_suggestion(iri=...)`. Three more stayed open, and one message
+  misdirected. Each was measured on `main` `c7be120`:
+
+  - `review_semantics()` queued a shortlisted candidate whose `iri` was only the
+    marker, because it tested only that the text of `iri` was not empty, and
+    `accept_suggestion(rank=1)` then recorded `decision_iri` `''` for
+    `"REVIEW:"`, `"REVIEW: "` and `"review:"`. Such a candidate is no longer
+    queued. In a slot that held one, the candidates after it now rank one place
+    higher, as they already did after a candidate with an empty `iri`. A review
+    saved by an earlier version, or edited by hand, can still hold one, so
+    `rank=` now refuses a candidate whose IRI names no term.
+  - A recorded `accepted` row whose `iri` was only the marker came back in the
+    next review as an accept with `decision_iri` `''`, and its slot left the
+    default queue as decided. This had been read and not run; that is its first
+    measurement here. It is no longer replayed, so the slot is asked again. A
+    recorded reject is still replayed from such a row, and now from one whose
+    `iri` is empty too, because rejecting a slot names no candidate: a slot whose
+    only candidate had an empty `iri` used to lose its rejection and reason from
+    `include_filled=True`. The console prints no accept call for such a
+    candidate, since the call would be refused.
+  - The strip removes one marker, so `accept_suggestion(iri="REVIEW:REVIEW:")`
+    recorded the IRI `REVIEW:`, and so did `rank=1` on a candidate carrying it,
+    although the docstring of `_strip_review_iri()` says the marker never
+    survives a decision. An `iri` that is still a marker once one is removed is
+    now refused, with its own message, a shortlisted candidate carrying one is
+    not queued, and `rank=` refuses one that a review still holds.
+  - `review_semantics()` listed a suggestion row with no IRI under *"Some
+    suggestions target fields this review cannot decide"*, naming a field the
+    review does decide, and said to edit it in the metadata CSVs directly. A
+    package where an accept before B-220 recorded an empty IRI printed that on
+    every review. A row with no IRI offers nothing to accept, and it is now
+    dropped without a message. Fields the review cannot decide are still listed.
+
+  Which spellings count as the marker is unchanged: these checks use the same
+  `_strip_review_iri()` and `_is_review_iri()` as before, so the two packages
+  still refuse different spellings where their strips differ. Which spellings
+  both should recognise is hub question **Q-63**'s, and this change implements
+  none of its ruling. The tests are the twins of B-246's in
+  `tests/testthat/test-review-console.R`, each asserting its spelling premise
+  against this package's own strip and detector. This closes R-shipped-first
+  lag and is not a deliberate difference, so it opens no `PARITY.md` row.
+
+* **A declared `datetime` value that its offset carries before year 1 or after
+  year 9999 is read, where reading or validating its package raised.** Hub
+  queue item **B-388**. `parse_datetime_token()` builds the wall clock a token
+  spells and then applies the token's UTC offset, and a `datetime` holds years
+  1 to 9999. So `0001-01-01T00:00:00+01`, an hour before year 1, and
+  `9999-12-31T23:00:00-02`, an hour after year 9999, raised
+  `OverflowError: date value out of range`. `convert_declared_tokens()` raised
+  with it, and so did `read_salmon_datapackage()` and
+  `validate_salmon_datapackage()` on a package whose declared `datetime`
+  column held one, with a message that named neither the column nor the value.
+  Measured on `main` `c7be120` under pandas 3.0.6, 2.2.3 and 1.5.3.
+
+  readr reads these tokens. Under R 4.3.3 and readr 2.2.0,
+  `readr::parse_datetime()` and `readr::read_csv()` with a `col_datetime()`
+  column agree, with no parse problem: `0001-01-01T00:00:00+01` is the POSIXct
+  R prints as `"0-12-31 23:00:00 UTC"`, `0001-01-01T00:30:00+01` is
+  `"0-12-31 23:30:00 UTC"`, and `9999-12-31T23:00:00-02` is
+  `"10000-01-01 01:00:00 UTC"`. metasalmon, on its `main` at `9aeb0ec`, reads
+  and validates a package holding each.
+
+  Such a token now parses to that instant, as a `numpy.datetime64` at
+  microsecond resolution. No `datetime` holds it, and pandas 1.5 cannot hold it
+  in a `Timestamp`. What a read returns depends on pandas. pandas 3 reads the
+  column as `datetime64[us]`, where the value prints as
+  `Timestamp('0-12-31 23:00:00')`. Older pandas keep the object column the
+  reader already used for an instant outside their nanosecond range, with the
+  `numpy.datetime64` in it. A token whose instant a `datetime` holds reads as
+  it did.
+
+  A coded `datetime` column is compared with its codes by metasalmon's key for
+  these instants, `0000-12-31T23:00:00.000000Z` and
+  `10000-01-01T01:00:00.000000Z`, and the validator names that key when a code
+  is missing, as metasalmon's does. `format_datetime_token()` now reads the
+  calendar fields of every instant after moving it into the 400-year Gregorian
+  cycle that starts at the epoch, which leaves the key of every instant a
+  `datetime` holds unchanged.
+
+  `tests/test_instant_beyond_datetime_range.py` pins each of these, and 18 of
+  its 21 tests failed on `c7be120`. Two paths do not yet handle such a value:
+  writing it back out, and validating an observation structure that binds its
+  column. Both go through `iso_instant_text()`, and neither is part of this
+  fix. There is no metasalmon half and no `PARITY.md` row, because readr
+  already reads these tokens.
+
+* **The ICES helpers warn when the request fails, so an empty result no longer
+  hides an outage.** Hub queue item **B-378**, the mirror half of metasalmon's
+  **B-377**. `ices_code_types()`, `ices_codes()`, `ices_find_code_types()` and
+  `ices_find_codes()` returned the same empty DataFrame for a request that
+  failed as for an answer with no rows, and nothing warned, so during an outage
+  a caller asking for a code list was told there was none. `_safe_json()` did
+  record the failure, but only in a sink a caller installs, and these helpers
+  installed none. Measured on `main` `c7be120` with the request mocked, all
+  four gave an empty DataFrame and no warning for a refused connection and for
+  an HTTP 503 alike.
+
+  A refused connection, an HTTP error status, a timeout, or an answer that is
+  not JSON now gives a `RuntimeWarning` that names the request, with any secret
+  in it redacted, and says what failed. It names them in metasalmon's order:
+  that the request failed, the request, the failure, and that the empty result
+  says nothing about what ICES holds. The result is still the empty DataFrame,
+  and an answer of `[]` still gives it with no warning. A timeout also keeps
+  the warning it already had. It is a warning and not an error because the
+  return value does not change, which is the choice metasalmon made.
+
+  An answer with an empty body is a failed request too, including where curl
+  is on `PATH`. `_safe_json()` asks again through curl when urlopen's answer
+  cannot be parsed, and it read curl's empty output as no answer rather than
+  as a failure, so the helpers gave no warning and `find_terms()` read the
+  source as answered. It now records the failure, as its urlopen path and
+  metasalmon already did.
+
+  **The sinks `_safe_json()` records a failure into are now per thread.** They
+  were one stack for the process, so on two threads one call could remove the
+  other's sink, and a failure reached whichever sink had been installed last.
+  A failed request could then lose its warning, and, by reading, a concurrent
+  `find_terms()` call could record a source that failed as answered. A failure
+  now reaches only a sink installed on the thread that signalled it, which is
+  the scope an R handler has.
+
+  `IcesFailedRequestTests` in `tests/test_ices_vocab.py` mocks `urlopen` and the
+  curl fallback before any helper runs, and records every URL asked for. For
+  each of the four helpers it pins a refused connection, with curl on `PATH`
+  and without it, an HTTP 503, and an answer of `[]`. For `ices_codes()` it
+  pins the whole message, and that a secret in the request or in the failure
+  does not reach it. It also holds two requests on two threads in an
+  interleaving that lost the warning, and pins that the one that failed warns
+  and the other keeps its rows, and that an empty body read through curl
+  warns. `tests/test_term_search_diagnostics.py` pins that a failure signalled
+  on another thread never reaches this thread's sink, and that the curl
+  fallback records an empty body as a failure.
+  Each of these failed on `c7be120`, apart from the answer of `[]`, which was
+  already silent. The timeout and the answer that is not JSON were measured
+  rather than pinned. It is the port metasalmon's B-377 owed here, and it opens
+  no `PARITY.md` row.
+
+* **A `codes.csv` row with no code value gets no semantic suggestions, and the
+  review no longer queues a slot it could not address.** Hub queue item
+  **B-277**, the mirror half of metasalmon's **B-276**, ruled by Brett
+  2026-09-25. The codes schema lets a row leave `code_value` empty when it
+  supplies `vocabulary_iri`, and defines `term_iri` as the term that
+  `code_value` represents, so such a row has no code value for a term to
+  represent. Target discovery still gave it a code-level target, keyed
+  `…/nan` (or `…/` for empty text) where metasalmon keyed it `…/NA`, so
+  `suggest_semantics()` and `create_sdp()` wrote suggestions for it and
+  `review_semantics()` queued a slot whose printed calls refused as ambiguous
+  wherever the column had its own slot of the same role.
+
+  - Discovery now forms no target for such a row, in any role, so no key is
+    formed for it either. A row of the same column that has a code value keeps
+    its targets. Empty means a missing value (`NaN`, `pd.NA`, `None`) or text
+    that is blank once trimmed of what R's `trimws()` trims; the texts `NA`
+    and `nan`, and U+00A0, are code values.
+  - `review_semantics()` leaves such a row out of the queue when a
+    `semantic_suggestions.csv` written before this change still carries its
+    candidates, whichever key spelled its empty value, with
+    `include_filled=True` too, and replays no decision recorded on it. The rows
+    stay in the file.
+  - Every call the review prints for such a column now runs. Where the row was
+    the column's only code, the call for the column's own slot no longer needs
+    `code_value`. Paste calls from a fresh `review_semantics()`.
+
+  This closes R-shipped-first lag and opens no `PARITY.md` row.
+
 ### Changed
+
+* **Context documents become the excerpts metasalmon builds.** Hub queue item
+  **B-364**, ruled 2026-09-25 when Brett took every recommendation in section
+  10 of the S16 execplan (decision 4, section 2.7): the two packages are about
+  to share one review-packet file, so a context document has to become the
+  same excerpts on both sides. `llm_review.py` now mirrors
+  `R/llm-semantic-helpers.R` step for step — metasalmon's extension list
+  (`.ipynb` is no longer read; an unsupported or empty file is skipped with a
+  warning, as R skips it); R's text extraction for text formats (UTF-8, then
+  Windows-1252 with its five undefined bytes dropped, then latin-1; a
+  byte-order mark discarded; CRLF and a bare CR to LF; front matter and fence
+  lines dropped for `.rmd` and `.qmd` only; no whitespace collapsing, where
+  this package used to fold every run into one space); 2200-character chunks
+  with 200 of overlap in place of 1400 with none; R's source labels (a
+  colliding basename gains its parent directory, then base R's
+  `make.unique(sep = " #")`, in place of a ` [2]` counter) and chunk ids
+  (`<source>#<n>`, `inline_context[<i>]#<n>`); token-overlap scoring over
+  lowercase ASCII tokens of three or more characters — the count of distinct
+  query tokens present in the chunk, drawn from the target's search query,
+  labels and descriptions **and the candidates' labels and definitions**, where
+  this package scored substring hits over the target text alone; ties broken
+  on the shorter chunk, then the source label in C collation, the radix order
+  metasalmon's scorer takes under hub item B-326; and four excerpts per
+  target, two on OpenRouter's free tier, in place of eight. A bundle's excerpts
+  are the union of its roles' picks in role order, deduplicated and cut to the
+  limit, as `.ms_semantic_bundle_context_chunks()` builds them.
+
+  Pinned by `tests/test_context_parity.py` on text-only fixtures under
+  `tests/data/context_parity/`: `expected.json` is what metasalmon's own
+  `.ms_collect_context_chunks()` and `.ms_score_context_chunks()` produced for
+  them (`expected-from-r.R` beside it, run against metasalmon `main` at
+  `98cb9e6`), the offline tests hold this package to it, and the `parity` job
+  re-runs the R script so a change on either side turns CI red. Measured
+  before the change on the same fixtures: 23 chunks of at most 1400 collapsed
+  characters against R's 21 of at most 2200; after it, the pool and every
+  scored ranking are identical. Library-specific extraction for PDF, DOCX,
+  spreadsheets and HTML is deliberately outside the pin and is **`PARITY.md`
+  row 62**, twinned in the hub's `knowledge/parity-deviations.md`.
+  `load_context_chunks()` keeps its signature; its `chunk_size` default moves
+  to 2200 and it gains `overlap=200`.
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
   Hub queue item **B-166**, the twin of the copy metasalmon made in its pull
@@ -736,6 +1084,76 @@ and moving it is a separate outward act.
   This is R-shipped-first lag being closed, not a deliberate difference, so it
   opens no `PARITY.md` row. Row **53** is amended in place, because it described
   the defect as present on both sides.
+
+* **`create_sdp()` no longer seeds a code list for a date column.** Hub queue
+  item **B-188**. `pandas.read_csv` reads a column of ISO dates as text, and the
+  code-row seeder, `metadata.code_list_values()`, accepted any `object` or
+  string column. So on the bundled 30-row sample `START_DTT` and `END_DTT` each
+  carried fourteen `codes.csv` rows while the dictionary typed them `temporal`,
+  and the specification's validator (`scripts/validate_package.py` in
+  smn-data-pkg) reports every such row as targeting "a non-categorical or
+  unknown column". metasalmon cannot write those rows: `readr::read_csv()` reads
+  the same column as a `Date`, and its seeder selects only character and factor
+  columns.
+
+  The seeder now applies R's guard the way `apply_salmon_dictionary()` does
+  (hub B-241): a Categorical, a string column, or an `object` column of text. An
+  `object` column that mixes text with other values still seeds, as before,
+  because R holds any vector with text in it as character. An
+  `object` column of `datetime.date`, `datetime`, number or logical values
+  seeds nothing, as a `Date`, `POSIXct`, numeric or logical column seeds
+  nothing in R. Text that readr would read as a date or a date-time seeds
+  nothing either. That means every present value has the date shape readr
+  guesses (`2001-11-06`, `2001/11/06`), or every present value is a date-time
+  that `readr::parse_datetime()` accepts. The boundary was measured against
+  readr 2.2.0 and is pinned token by token in
+  `tests/test_codes_target_categorical.py`. A Categorical still seeds whatever
+  its values are, as a factor does in R. Text that readr reads as a time of day
+  still seeds a code list. One case now differs from R. metasalmon's seeder,
+  handed the same dates as a character vector rather than through readr, still
+  lists them, because its guard reads the class alone. This package cannot tell
+  that case apart, since `pandas.read_csv` gives it text either way.
+
+  The role heuristic reads the same predicate (hub B-125). So a column of date
+  text whose name has no time word is now typed `attribute`, where it was typed
+  `categorical` and given a code list. On the bundled sample `create_sdp()` now
+  seeds the same 129 rows over the same twelve columns as metasalmon, and
+  `tests/test_codes_target_categorical.py` asserts R's plain condition, that no
+  `codes.csv` row targets a non-categorical column, on every bundled example.
+  The test that pinned the two date columns as a known residual is deleted.
+  Apart from the one case above, this ports R's behaviour. That case is
+  `PARITY.md` row **64**, and Brett ruled on 2026-09-25 that R moves to match
+  (hub B-310).
+
+### Parity evidence
+
+* **Two tests pin that the EML `calendarDate` carries the spelling
+  `metadata/dataset.csv` holds.** Hub queue item **B-245**, the mirror half of
+  the hub's **B-162**: these are the twins of the two tests B-162 added to
+  metasalmon's `tests/testthat/test-canonical-date-render.R`. No behaviour
+  changed. `eml._add_coverage()` writes `temporal_start` and `temporal_end`
+  through `_as_character()`, which reads like a third renderer beside the two
+  writers. B-162 answered for R that it is not one, and the same construction
+  holds here: `write_eml_from_sdp()` reads the package back from disk, where
+  `read_sdp_csv()` reads every column as `str`, so the EML copies the one
+  rendering a writer made. Nothing pinned that.
+
+  The first test writes `datetime.date(999, 1, 1)` and
+  `datetime.date(2024, 12, 31)` through `write_salmon_datapackage()` and
+  exports the package through `write_eml_from_sdp()`, schema check included.
+  Both `calendarDate` values must equal the `dataset.csv` cells and
+  `datapackage.json`'s `temporal`, and read `0999-01-01` and `2024-12-31`. The
+  second writes the text `999-06-05`. That is not an `xs:date`, so the exported
+  call refuses it, and the test builds the coverage from the frame
+  `validate_salmon_datapackage()` returns as `package`, which is the frame the
+  builder receives. Its `calendarDate` must equal the `dataset.csv` cell. Both
+  pass on the code as it stands, and each fails under a mutation that
+  re-renders the value at the two `calendarDate` lines.
+
+  They live in `tests/test_platform_determinism_guard.py`, after the twins of
+  B-115's writer tests, as they do in metasalmon. The first needs the `[eml]`
+  extra and skips without it; the second runs in both dependency legs. The EML
+  behaves here as it does in metasalmon, so this opens no `PARITY.md` row.
 
 ## 0.5.0
 
