@@ -768,10 +768,12 @@ and moving it is a separate outward act.
   the warning it already had. It is a warning and not an error because the
   return value does not change, which is the choice metasalmon made.
 
-  One answer still gives no warning: a response with an empty body, on a
-  machine where curl is on `PATH`. `_safe_json()` then asks again through curl
-  and reads curl's empty output as no answer rather than as a failure, where
-  metasalmon warns. That fallback is not changed here.
+  An answer with an empty body is a failed request too, including where curl
+  is on `PATH`. `_safe_json()` asks again through curl when urlopen's answer
+  cannot be parsed, and it read curl's empty output as no answer rather than
+  as a failure, so the helpers gave no warning and `find_terms()` read the
+  source as answered. It now records the failure, as its urlopen path and
+  metasalmon already did.
 
   **The sinks `_safe_json()` records a failure into are now per thread.** They
   were one stack for the process, so on two threads one call could remove the
@@ -788,8 +790,10 @@ and moving it is a separate outward act.
   pins the whole message, and that a secret in the request or in the failure
   does not reach it. It also holds two requests on two threads in an
   interleaving that lost the warning, and pins that the one that failed warns
-  and the other keeps its rows. `tests/test_term_search_diagnostics.py` pins
-  that a failure signalled on another thread never reaches this thread's sink.
+  and the other keeps its rows, and that an empty body read through curl
+  warns. `tests/test_term_search_diagnostics.py` pins that a failure signalled
+  on another thread never reaches this thread's sink, and that the curl
+  fallback records an empty body as a failure.
   Each of these failed on `c7be120`, apart from the answer of `[]`, which was
   already silent. The timeout and the answer that is not JSON were measured
   rather than pinned. It is the port metasalmon's B-377 owed here, and it opens
