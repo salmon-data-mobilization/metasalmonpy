@@ -748,6 +748,34 @@ and moving it is a separate outward act.
   against this package's own strip and detector. This closes R-shipped-first
   lag and is not a deliberate difference, so it opens no `PARITY.md` row.
 
+* **A `codes.csv` row with no code value gets no semantic suggestions, and the
+  review no longer queues a slot it could not address.** Hub queue item
+  **B-277**, the mirror half of metasalmon's **B-276**, ruled by Brett
+  2026-09-25. The codes schema lets a row leave `code_value` empty when it
+  supplies `vocabulary_iri`, and defines `term_iri` as the term that
+  `code_value` represents, so such a row has no code value for a term to
+  represent. Target discovery still gave it a code-level target, keyed
+  `…/nan` (or `…/` for empty text) where metasalmon keyed it `…/NA`, so
+  `suggest_semantics()` and `create_sdp()` wrote suggestions for it and
+  `review_semantics()` queued a slot whose printed calls refused as ambiguous
+  wherever the column had its own slot of the same role.
+
+  - Discovery now forms no target for such a row, in any role, so no key is
+    formed for it either. A row of the same column that has a code value keeps
+    its targets. Empty means a missing value (`NaN`, `pd.NA`, `None`) or text
+    that is blank once trimmed of what R's `trimws()` trims; the texts `NA`
+    and `nan`, and U+00A0, are code values.
+  - `review_semantics()` leaves such a row out of the queue when a
+    `semantic_suggestions.csv` written before this change still carries its
+    candidates, whichever key spelled its empty value, with
+    `include_filled=True` too, and replays no decision recorded on it. The rows
+    stay in the file.
+  - Every call the review prints for such a column now runs. Where the row was
+    the column's only code, the call for the column's own slot no longer needs
+    `code_value`. Paste calls from a fresh `review_semantics()`.
+
+  This closes R-shipped-first lag and opens no `PARITY.md` row.
+
 ### Changed
 
 * **Context documents become the excerpts metasalmon builds.** Hub queue item
