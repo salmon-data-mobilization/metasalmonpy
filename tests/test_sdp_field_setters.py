@@ -1433,3 +1433,180 @@ def test_a_setter_patch_produces_the_descriptor_a_rebuild_would(
     assert json.loads((patched / "datapackage.json").read_text()) == json.loads(
         (rebuilt_path / "datapackage.json").read_text()
     )
+
+
+# ---------------------------------------------------------------------------
+# The licence is recommended, not required
+# ---------------------------------------------------------------------------
+#
+# The twins of metasalmon's tests of the same names, in
+# tests/testthat/test-sdp-field-setters.R. The SDP specification makes
+# ``license`` recommended rather than required (smn-data-pkg pull request 12;
+# Brett, 2026-09-26: most datasets assign none), so a blank licence states that
+# none was granted. This package reads the requirement from its SDP schema
+# bundle, and the bundle it ships still requires the licence, because the
+# bundle and the pin move only together and only from a release tag (hub items
+# B-198 and B-199). So the tests that need the licence to be optional serve a
+# bundle whose licence field reads the way that pull request writes it.
+#
+# *Retires when:* B-199 re-vendors a bundle in which the licence is optional.
+# The tests can then read the shipped bundle instead of serving one.
+
+
+def _licence_optional_bundle() -> dict:
+    """The bundled schema with ``license`` recommended rather than required.
+
+    No ``constraints.required``, and ``sdp:requirement`` "recommended". It is
+    passed back through the validator, so the new field shape is parsed rather
+    than assumed.
+    """
+    bundled = sdp_schema._load_vendored_sdp_schema()
+    schemas = copy.deepcopy(bundled["metadata_schemas"])
+    for field in schemas["dataset"]["fields"]:
+        if field["name"] == "license":
+            field.pop("constraints", None)
+            field["sdp:requirement"] = "recommended"
+    return sdp_schema._validate_sdp_schema(
+        {
+            "metadata_schemas": schemas,
+            "profile": bundled["profile"],
+            "rules": bundled["rules"],
+        }
+    )
+
+
+def _serve_licence_optional_bundle(monkeypatch) -> None:
+    """Every schema reader in the calling test gets that bundle.
+
+    A non-default source sends them all through the loader, whose remote fetch
+    is served the bundle with the network blocked, as in the selected-schema
+    tests above.
+    """
+    sdp_schema.set_sdp_schema_source("remote")
+    _count_schema_fetches(monkeypatch, _licence_optional_bundle())
+
+
+def _setter_namespace(package: Path) -> dict:
+    return {
+        "pkg": str(package),
+        "set_sdp_dataset": functools.partial(set_sdp_dataset, quiet=True),
+        "set_sdp_table": functools.partial(set_sdp_table, quiet=True),
+        "set_sdp_column": functools.partial(set_sdp_column, quiet=True),
+        "set_sdp_code": functools.partial(set_sdp_code, quiet=True),
+    }
+
+
+def _dataset_licence(package: Path) -> str:
+    frame = pd.read_csv(
+        package / "metadata" / "dataset.csv", dtype=str, keep_default_na=False
+    )
+    return frame["license"].iloc[0]
+
+
+def _descriptor_of(package: Path) -> dict:
+    return json.loads((package / "datapackage.json").read_text(encoding="utf-8"))
+
+
+def test_the_dataset_placeholder_fill_leaves_a_blank_licence_blank():
+    from metasalmonpy.metadata import (
+        fill_review_placeholders_dataset_meta,
+        normalize_dataset_meta,
+    )
+
+    filled = fill_review_placeholders_dataset_meta(
+        normalize_dataset_meta(
+            pd.DataFrame(
+                {"dataset_id": ["demo-1", "demo-2"], "license": [pd.NA, "CC-BY-4.0"]}
+            )
+        )
+    )
+    assert pd.isna(filled["license"].iloc[0])
+    assert filled["license"].iloc[1] == "CC-BY-4.0"
+    # The prompts for the fields the schema requires are unchanged.
+    assert filled["creator"].str.startswith("MISSING METADATA:").all()
+    assert filled["contact_email"].str.startswith("MISSING METADATA:").all()
+
+
+def test_a_package_that_states_no_licence_passes_strict_validation_under_a_bundle_that_makes_it_optional(
+    raw_package, monkeypatch
+):
+    shipped_required = sdp_schema_required_field_names("dataset")
+    _serve_licence_optional_bundle(monkeypatch)
+    # The served bundle differs from the shipped one in the licence and nothing
+    # else. Written so that it still holds once the shipped bundle makes the
+    # licence optional too.
+    assert sdp_schema_required_field_names("dataset") == [
+        name for name in shipped_required if name != "license"
+    ]
+
+    # Nothing asks for a licence, as a placeholder or as a blank required field.
+    assert "license" not in set(review_metadata(str(raw_package)).rows["field"])
+
+    namespace = _setter_namespace(raw_package)
+    for _ in range(6):
+        if _run_printed_calls(raw_package, namespace) == 0:
+            break
+    assert review_metadata(str(raw_package)).empty
+    validate_salmon_datapackage(str(raw_package), require_iris=True)
+
+    assert _dataset_licence(raw_package) == ""
+    assert "licenses" not in _descriptor_of(raw_package)
+
+
+def test_a_licence_placeholder_from_an_earlier_package_clears_to_no_licence(
+    raw_package, monkeypatch
+):
+    # Packages written before this change carry the placeholder. It stays
+    # refused under a bundle that makes the licence optional, because it is
+    # still a placeholder, and ``license=pandas.NA`` is the call that states no
+    # licence instead.
+    _serve_licence_optional_bundle(monkeypatch)
+    dataset_csv = raw_package / "metadata" / "dataset.csv"
+    frame = pd.read_csv(dataset_csv, dtype=str, keep_default_na=False)
+    frame.loc[0, "license"] = (
+        "MISSING METADATA: add dataset license (for example, CC-BY-4.0)."
+    )
+    frame.to_csv(dataset_csv, index=False)
+    rows = review_metadata(str(raw_package)).rows
+    assert list(rows.loc[rows["field"] == "license", "reason"]) == ["placeholder"]
+
+    set_sdp_dataset(str(raw_package), license=pd.NA, quiet=True)
+    assert _dataset_licence(raw_package) == ""
+    assert "license" not in set(review_metadata(str(raw_package)).rows["field"])
+    assert "licenses" not in _descriptor_of(raw_package)
+
+
+def test_a_licence_placeholder_never_becomes_a_licenses_entry():
+    from metasalmonpy.metadata import normalize_dataset_meta
+    from metasalmonpy.package_io import _descriptor_apply_dataset_meta
+
+    def written_licenses(license_value):
+        # Refused or left out, never written: the descriptor either omits
+        # ``licenses`` or the write stops. Which of the two a marker gets is
+        # not the property.
+        meta = normalize_dataset_meta(
+            pd.DataFrame(
+                {
+                    "dataset_id": ["demo-1"],
+                    "title": ["Demo"],
+                    "description": ["Demo."],
+                    "license": [license_value],
+                }
+            )
+        )
+        try:
+            return _descriptor_apply_dataset_meta({}, meta.iloc[0]).get("licenses")
+        except ValueError:
+            return None
+
+    for placeholder in (
+        "MISSING METADATA: add dataset license (for example, CC-BY-4.0).",
+        "MISSING DESCRIPTION: describe the licence.",
+        "REVIEW REQUIRED: confirm the licence.",
+        "REVIEW:CC-BY-4.0",
+        pd.NA,
+    ):
+        assert written_licenses(placeholder) is None, placeholder
+    # The control: a stated licence is written, so the Nones above are the
+    # writer's answer and not a probe that can only return None.
+    assert written_licenses("CC-BY-4.0")[0]["name"] == "CC-BY-4.0"
