@@ -112,6 +112,27 @@ class SafeJsonFailureSignallingTests(unittest.TestCase):
         self.assertFalse(any("SECRETVALUE" in message for message in messages))
         self.assertTrue(any("apikey=[REDACTED]" in message for message in messages))
 
+    def test_an_empty_body_from_the_curl_fallback_is_signalled(self):
+        # An empty body is no answer. urlopen's JSON parse fails on it, and the
+        # curl fallback read its own empty output as no answer rather than as
+        # a failure, so a source that answered nothing read as answered.
+        # metasalmon's .safe_json() fails to parse it (hub item B-378).
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = b""
+        with mock.patch.object(
+            ts.urllib.request, "urlopen", return_value=response
+        ), mock.patch.object(ts.shutil, "which", return_value="/usr/bin/curl"), mock.patch.object(
+            ts.subprocess, "check_output", return_value=b""
+        ) as curl:
+            result, failures = self._collect(
+                lambda: ts._safe_json("https://example.org/search")
+            )
+        self.assertEqual(curl.call_count, 1)
+        self.assertIsNone(result)
+        self.assertEqual(len(failures), 1)
+
     def test_a_failure_on_another_thread_never_reaches_this_threads_sink(self):
         # The sinks are per thread, as R's handlers are per call stack: a
         # failure signalled on another thread, whether it installed a sink of

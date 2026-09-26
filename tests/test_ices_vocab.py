@@ -119,13 +119,14 @@ _HELPERS = {
 }
 
 
-def _run(helper, respond, curl_on_path=True):
+def _run(helper, respond, curl_on_path=True, curl_answer=None):
     """Run one helper with ``respond`` standing in for the request.
 
     Returns what it returned, the warnings it gave, and the URLs it asked for,
     urlopen's and curl's alike. ``curl_on_path`` decides whether _safe_json()
-    finds curl for its fallback. The fallback is mocked either way, and the
-    mock fails to connect, as curl does against a host that refuses.
+    finds curl for its fallback. The fallback is mocked either way. It prints
+    ``curl_answer`` when one is given, and otherwise fails to connect, as curl
+    does against a host that refuses.
     """
     requested = []
 
@@ -135,6 +136,8 @@ def _run(helper, respond, curl_on_path=True):
 
     def check_output(cmd, timeout=None):
         requested.append(next(arg for arg in cmd if arg.startswith(("http://", "https://"))))
+        if curl_answer is not None:
+            return curl_answer.encode("utf-8")
         # curl's exit status 7: it failed to connect to the host.
         raise subprocess.CalledProcessError(7, cmd)
 
@@ -190,6 +193,17 @@ class IcesFailedRequestTests(unittest.TestCase):
                 self.assertEqual(requested, [request])
                 message = self.assert_one_failure_warning(caught, request)
                 self.assertIn("HTTP 503", message)
+                self.assert_empty_frame(result)
+
+    def test_an_answer_with_an_empty_body_warns_when_curl_reads_it_empty_too(self):
+        # An empty body is no answer, and metasalmon fails to parse it and
+        # warns. urlopen's JSON parse fails on it, so _safe_json() asks again
+        # through curl, whose output is empty too.
+        for name, (helper, request) in _HELPERS.items():
+            with self.subTest(helper=name):
+                result, caught, requested = _run(helper, _answer(200, ""), curl_answer="")
+                self.assertEqual(requested, [request, request])
+                self.assert_one_failure_warning(caught, request)
                 self.assert_empty_frame(result)
 
     def test_an_answer_of_no_rows_gives_the_empty_result_with_no_warning(self):
