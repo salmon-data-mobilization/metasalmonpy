@@ -1,5 +1,7 @@
 import io
+import json
 import subprocess
+import threading
 import unittest
 import urllib.error
 import warnings
@@ -198,23 +200,55 @@ class IcesFailedRequestTests(unittest.TestCase):
                 self.assertEqual([str(w.message) for w in caught], [])
                 self.assert_empty_frame(result)
 
-    def test_a_failure_recorded_for_another_call_never_replaces_an_answer(self):
-        # The failure sinks are one stack for the process, so a call on another
-        # thread can record its failure in this call's sink. Simulated here by
-        # recording one while this call's own request answers with rows.
-        rows = [{"key": "BMT", "description": "Beam trawl"}]
+    def test_a_failed_request_keeps_its_warning_while_another_thread_requests(self):
+        # A failure is heard only by a sink installed around the call that
+        # failed, as an R handler is only around its own call stack. When the
+        # sinks were one stack for the process, this interleaving lost A's
+        # warning: A fails while B's sink is installed and B is mid-request,
+        # and B finishes after A.
+        rows = [{"key": "Gear", "description": "Gear Type Codes"}]
+        a_inside, b_inside, a_finished = (threading.Event() for _ in range(3))
+        timeouts, results = [], {}
 
-        def answered_while_another_call_failed(url, headers=None, timeout=30):
-            ts._signal_search_failure("https://example.org/another-call", "HTTP 503")
-            return rows
+        def urlopen(request, timeout=None):
+            if request.full_url.endswith("/Code/Gear"):  # A
+                a_inside.set()
+                if not b_inside.wait(10):
+                    timeouts.append("A waiting for B")
+                raise urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))
+            b_inside.set()  # B
+            if not a_finished.wait(10):
+                timeouts.append("B waiting for A")
+            return _Response(200, json.dumps(rows))
 
-        with mock.patch.object(
-            iv, "_safe_json", answered_while_another_call_failed
+        def run_a():
+            try:
+                results["A"] = iv.ices_codes("Gear")
+            finally:
+                a_finished.set()
+
+        def run_b():
+            results["B"] = iv.ices_code_types()
+
+        with mock.patch.object(ts.urllib.request, "urlopen", urlopen), mock.patch.object(
+            ts.shutil, "which", return_value=None
         ), warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            result = iv.ices_codes("Gear")
-        self.assertEqual([str(w.message) for w in caught], [])
-        self.assertEqual(list(result["key"]), ["BMT"])
+            thread_a = threading.Thread(target=run_a)
+            thread_a.start()
+            self.assertTrue(a_inside.wait(10))
+            thread_b = threading.Thread(target=run_b)
+            thread_b.start()
+            thread_a.join(10)
+            thread_b.join(10)
+        self.assertEqual(timeouts, [])
+        self.assertFalse(thread_a.is_alive() or thread_b.is_alive())
+        message = self.assert_one_failure_warning(
+            caught, "https://vocab.ices.dk/services/api/Code/Gear"
+        )
+        self.assertIn("Connection refused", message)
+        self.assert_empty_frame(results["A"])
+        self.assertEqual(list(results["B"]["key"]), ["Gear"])
 
     def test_the_warning_names_what_metasalmon_names_in_its_order(self):
         # metasalmon's cli warning, measured on its main at 14f6d4f, is a
