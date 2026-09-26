@@ -256,7 +256,10 @@ def _safe_json(url: str, headers: Optional[Dict[str, str]] = None, timeout: int 
             body = subprocess.check_output(cmd, timeout=timeout).decode("utf-8")
             if _debug:
                 print(f"[_safe_json] curl success: {len(body)} bytes", file=sys.stderr)
-            return json.loads(body) if body else None
+            # An empty body is no answer. json.loads() refuses it, so it is
+            # recorded below as the failure it is on the urlopen path above,
+            # and as metasalmon's .safe_json() records it (hub item B-378).
+            return json.loads(body)
         except Exception as _curl_err:
             if _debug:
                 print(f"[_safe_json] curl failed: {type(_curl_err).__name__}: {_curl_err}", file=sys.stderr)
