@@ -276,10 +276,18 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1586
-passed / 2 skipped with the extras installed, 1444 / 144 with core dependencies
-only (2026-09-25, measured locally for hub B-360 on `c01b527`, its merge of
-`main` `2d2ab2c`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1678
+passed / 2 skipped with the extras installed, 1536 / 144 with core dependencies
+only (2026-09-26, measured locally for hub B-362 on `27868bd`, its merge of
+`main` `7715e43`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
+in isolated environments built from `.[test]` and `.[test,eml,context]`;
+1214 / 2 and 1073 / 143 for B-362 on `27fc7e2`, its merge of `main` `380a7a4`,
+1180 / 1 and 1039 / 142 on `99de1c3`, its merge of `main` `0235487`, and
+1158 / 1 and 1017 / 142 on `7f9f79c`, branched from `main` `ba1b54a`, each under
+Python 3.13.11, pytest 9.1.1 and pandas 3.0.5 in a full clone with every tag,
+the same under `python -m pytest -q` and bare `pytest -q`; 1586 / 2 and
+1444 / 144 for hub B-360 on `c01b527`, its merge of `main` `2d2ab2c`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
 worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
 in isolated environments built from `.[test]` and `.[test,eml,context]`; the
 jump over `main` is `tests/test_validator_parity.py`'s 285 parametrised cases;
