@@ -1,8 +1,11 @@
 #!/usr/bin/env Rscript
-# Drive metasalmon's shortlist retriever at retrieval pass 2 over
+# Drive metasalmon's shortlist retriever at retrieval passes 1 and 2 over
 # retrieve-candidates-cases.json and write what R gives to
 # r-retrieve-candidates.json, the fixture tests/test_semantic_retrieval.py
-# pins this package's second pass against.
+# pins both of this package's passes against (pass 2 since hub B-363, pass 1
+# since B-382). R's retriever has one rule for both passes; the pass is
+# recorded on every row and changes nothing else, which the fixture shows
+# rather than assumes.
 #
 # The function driven is internal: .ms_retrieve_semantic_target_candidates()
 # (R/semantics-helpers.R), with a search function that returns the case's
@@ -11,11 +14,13 @@
 # null, an explicit allowlist otherwise. Run it against the metasalmon tree
 # the fixture should describe -- never a primary checkout being edited:
 #
-#   METASALMON_SRC=/path/to/metasalmon-export Rscript r-retrieve-candidates.R
+#   METASALMON_SRC=/path/to/metasalmon-export METASALMON_COMMIT=<sha> \
+#     Rscript r-retrieve-candidates.R
 #
-# With METASALMON_SRC unset it uses the installed metasalmon. Then record the
-# commit and R version in the fixture's "provenance" member and in the test
-# module's docstring. Regenerate whenever metasalmon changes the retriever.
+# With METASALMON_SRC unset it uses the installed metasalmon. The commit and R
+# version land in the fixture's "provenance" member; record them in the test
+# module's provenance test too. Regenerate whenever metasalmon changes the
+# retriever.
 suppressPackageStartupMessages(library(jsonlite))
 src <- Sys.getenv("METASALMON_SRC", unset = NA_character_)
 if (!is.na(src) && nzchar(src)) {
@@ -74,14 +79,24 @@ cases <- lapply(inputs$cases, function(case) {
   } else {
     source_policy(unlist(case$sources), omitted = FALSE)
   }
-  retrieved <- retrieve(
-    target = target,
-    sources = policy,
-    max_per_role = case$max_per_role,
-    search_fn = search_fn,
-    query = case$query,
-    retrieval_pass = 2L
-  )
+  # One entry per pass, each with the calls that pass made, so a difference
+  # between the passes would show in the fixture instead of being assumed away.
+  passes <- lapply(c(1L, 2L), function(pass) {
+    calls <<- list()
+    retrieved <- retrieve(
+      target = target,
+      sources = policy,
+      max_per_role = case$max_per_role,
+      search_fn = search_fn,
+      query = case$query,
+      retrieval_pass = pass
+    )
+    list(
+      retrieval_pass = pass,
+      search_calls = lapply(calls, function(call) list(query = call$query, role = call$role)),
+      retrieved = records_of(retrieved)
+    )
+  })
   list(
     id = case$id,
     exercises = case$exercises,
@@ -91,8 +106,7 @@ cases <- lapply(inputs$cases, function(case) {
     target = case$target,
     result_columns = names(results),
     results = case$results,
-    search_calls = lapply(calls, function(call) list(query = call$query, role = call$role)),
-    retrieved = records_of(retrieved)
+    passes = passes
   )
 })
 
