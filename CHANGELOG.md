@@ -16,6 +16,47 @@ keeps the same shape with its *(development version)* heading, which is what
 this heading mirrors. **The number does not move here**: it is a parity claim,
 and moving it is a separate outward act.
 
+### Breaking changes
+
+* **A package's ownership sentinel is now `.sdp-package`, holding the line
+  `sdp-owned`, and `.metasalmonpy-package` is no longer written or
+  recognised** (hub queue item **B-127**, the mirror half of metasalmon's
+  B-113; ruled by Brett 2026-08-24, hub Q14). `write_salmon_datapackage()`,
+  and `create_sdp()` through it, now mark a package directory with one
+  sentinel shared with metasalmon rather than a file named after this
+  implementation, because what owns the directory is the SDP tooling and not
+  one language's copy of it. metasalmon chose the name and content line and
+  made the same change in its pull request #197, and both are recorded in
+  `PARITY.md` row 51. For a directory you already have:
+
+  - **A package that still has its SDP metadata needs nothing.** The
+    `overwrite=True` check recognises it by its metadata CSVs, as it always
+    has, and the next write adds `.sdp-package`.
+  - **A directory whose only sign of being a package is
+    `.metasalmonpy-package` is no longer replaced.** `overwrite=True` now
+    raises *"Refusing to overwrite non-metasalmonpy directory"*. If it is a
+    package you mean to rewrite, rename that file to `.sdp-package`;
+    otherwise write to a new directory.
+  - **An existing `.metasalmonpy-package` is left where it is.** A rewrite no
+    longer manages it, so it survives unless `prune=True` empties the
+    directory. Nothing reads it any more, and you can delete it. The same
+    goes for a `.metasalmon-package` that metasalmon 0.5.0 or earlier wrote.
+  - **`metasalmonpy.package_io.PACKAGE_SENTINEL` is now `".sdp-package"`.**
+    Code that imports the constant to find, create or skip the sentinel
+    follows the new name without a change. Code that spells
+    `".metasalmonpy-package"` itself no longer finds the file this package
+    writes: import the constant instead, or use `".sdp-package"`.
+
+  With metasalmon's development version, a package written by one
+  implementation and rewritten by the other carries one sentinel,
+  `.sdp-package`, where it used to collect one from each (measured in both
+  directions against metasalmon `main` at `94b449b`).
+  `tests/test_package_ownership_sentinel.py` pins the name and the bytes, that
+  a directory carrying only `.sdp-package` is recognised, that one carrying
+  only a per-language sentinel is not, and that a rewrite leaves a
+  per-language sentinel where it was; they are the twins of metasalmon's
+  `tests/testthat/test-package-ownership-sentinel.R`.
+
 ### Fixed
 
 * **`datapackage.json` and `metadata/dataset.csv` spell a typed instant the

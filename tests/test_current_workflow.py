@@ -10,7 +10,12 @@ from metasalmonpy import (
     write_edh_xml_from_sdp,
     write_salmon_datapackage,
 )
-from metasalmonpy.package_io import _has_value, _is_semantic_code_candidate
+from metasalmonpy.package_io import (
+    PACKAGE_SENTINEL,
+    _has_value,
+    _is_semantic_code_candidate,
+    _package_ownership_bytes,
+)
 
 
 def _reviewed_artifacts():
@@ -94,7 +99,7 @@ def test_writer_uses_current_sdp_layout_and_reader_round_trips(tmp_path):
     assert (package_path / "metadata" / "column_dictionary.csv").exists()
     assert (package_path / "data" / "observations.csv").exists()
     assert (package_path / "datapackage.json").exists()
-    assert (package_path / ".metasalmonpy-package").exists()
+    assert (package_path / ".sdp-package").exists()
 
     package = read_salmon_datapackage(package_path)
     assert package["dataset"]["dataset_id"].iloc[0] == "demo"
@@ -334,9 +339,7 @@ def test_writer_writes_into_an_existing_empty_directory_without_overwrite(tmp_pa
         # A stale ownership sentinel from an earlier write.
         (
             "stale-sentinel",
-            lambda p: (p / ".metasalmonpy-package").write_text(
-                "metasalmonpy-owned\n", encoding="utf-8"
-            ),
+            lambda p: (p / PACKAGE_SENTINEL).write_bytes(_package_ownership_bytes()),
         ),
         # An empty `data/` subdirectory: the SUBDIRECTORY is empty, the target
         # is not. Emptiness is never recursive.
