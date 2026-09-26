@@ -792,6 +792,57 @@ and moving it is a separate outward act.
   fix. There is no metasalmon half and no `PARITY.md` row, because readr
   already reads these tokens.
 
+* **The ICES helpers warn when the request fails, so an empty result no longer
+  hides an outage.** Hub queue item **B-378**, the mirror half of metasalmon's
+  **B-377**. `ices_code_types()`, `ices_codes()`, `ices_find_code_types()` and
+  `ices_find_codes()` returned the same empty DataFrame for a request that
+  failed as for an answer with no rows, and nothing warned, so during an outage
+  a caller asking for a code list was told there was none. `_safe_json()` did
+  record the failure, but only in a sink a caller installs, and these helpers
+  installed none. Measured on `main` `c7be120` with the request mocked, all
+  four gave an empty DataFrame and no warning for a refused connection and for
+  an HTTP 503 alike.
+
+  A refused connection, an HTTP error status, a timeout, or an answer that is
+  not JSON now gives a `RuntimeWarning` that names the request, with any secret
+  in it redacted, and says what failed. It names them in metasalmon's order:
+  that the request failed, the request, the failure, and that the empty result
+  says nothing about what ICES holds. The result is still the empty DataFrame,
+  and an answer of `[]` still gives it with no warning. A timeout also keeps
+  the warning it already had. It is a warning and not an error because the
+  return value does not change, which is the choice metasalmon made.
+
+  An answer with an empty body is a failed request too, including where curl
+  is on `PATH`. `_safe_json()` asks again through curl when urlopen's answer
+  cannot be parsed, and it read curl's empty output as no answer rather than
+  as a failure, so the helpers gave no warning and `find_terms()` read the
+  source as answered. It now records the failure, as its urlopen path and
+  metasalmon already did.
+
+  **The sinks `_safe_json()` records a failure into are now per thread.** They
+  were one stack for the process, so on two threads one call could remove the
+  other's sink, and a failure reached whichever sink had been installed last.
+  A failed request could then lose its warning, and, by reading, a concurrent
+  `find_terms()` call could record a source that failed as answered. A failure
+  now reaches only a sink installed on the thread that signalled it, which is
+  the scope an R handler has.
+
+  `IcesFailedRequestTests` in `tests/test_ices_vocab.py` mocks `urlopen` and the
+  curl fallback before any helper runs, and records every URL asked for. For
+  each of the four helpers it pins a refused connection, with curl on `PATH`
+  and without it, an HTTP 503, and an answer of `[]`. For `ices_codes()` it
+  pins the whole message, and that a secret in the request or in the failure
+  does not reach it. It also holds two requests on two threads in an
+  interleaving that lost the warning, and pins that the one that failed warns
+  and the other keeps its rows, and that an empty body read through curl
+  warns. `tests/test_term_search_diagnostics.py` pins that a failure signalled
+  on another thread never reaches this thread's sink, and that the curl
+  fallback records an empty body as a failure.
+  Each of these failed on `c7be120`, apart from the answer of `[]`, which was
+  already silent. The timeout and the answer that is not JSON were measured
+  rather than pinned. It is the port metasalmon's B-377 owed here, and it opens
+  no `PARITY.md` row.
+
 ### Changed
 
 * **Context documents become the excerpts metasalmon builds.** Hub queue item
