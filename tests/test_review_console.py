@@ -30,6 +30,7 @@ from metasalmonpy.metadata import read_sdp_csv
 from metasalmonpy.review_console import (
     SemanticReview,
     _accept_call,
+    _is_review_iri,
     _reject_call,
     _strip_review_iri,
 )
@@ -876,6 +877,271 @@ def test_accept_takes_a_marked_iri_and_records_it_without_the_marker():
     assert review["decision_iri"].dropna().tolist() == [
         "https://w3id.org/smn/WaterTemperature"
     ]
+
+
+# The routes B-220 left open to a decision that names no term (hub item B-247,
+# the mirror of metasalmon's B-246). A shortlisted candidate whose ``iri`` is
+# only the marker was queued, because the queue tested only that the text of
+# ``iri`` was not empty, so ``rank=`` accepted it with an empty
+# ``decision_iri``, and a recorded accept of one replayed the same way. The
+# strip removes one marker, so a doubled one left a marker in the decision on
+# either route. No producer writes such a candidate; a hand-edited or external
+# suggestions table does. The spellings are ``MARKER_ONLY_IRIS`` above, which
+# follows the strip, and each test asserts its premise first for the same
+# reason those tests do.
+
+
+def _decided_iris(review: SemanticReview) -> list:
+    rows = review.rows
+    return rows.loc[rows["decision"].notna(), "decision_iri"].tolist()
+
+
+@pytest.mark.parametrize(
+    "marker", list(MARKER_ONLY_IRIS.values()), ids=list(MARKER_ONLY_IRIS)
+)
+def test_a_candidate_that_is_only_the_marker_is_not_queued_so_rank_cannot_accept_it(
+    marker, capsys
+):
+    assert _strip_review_iri(marker) == ""
+
+    alone = review_semantics(_dictionary_with([_suggestion_row(iri=marker)]))
+    assert len(alone) == 0
+    with pytest.raises(ValueError, match="No review slot matches"):
+        accept_suggestion(alone, "spawner_count", "variable", rank=1)
+    capsys.readouterr()
+
+    # Ahead of a real candidate it does not take rank 1 from it, and dropping it
+    # is not reported as a field the review cannot decide.
+    review = review_semantics(
+        _dictionary_with(
+            [_suggestion_row(label="Marker only", iri=marker), _suggestion_row()]
+        )
+    )
+    assert "cannot decide" not in capsys.readouterr().out
+    review = accept_suggestion(review, "spawner_count", "variable", rank=1)
+    assert _decided_iris(review) == [SPAWNER_IRI]
+
+
+@pytest.mark.parametrize(
+    "marker", list(MARKER_ONLY_IRIS.values()), ids=list(MARKER_ONLY_IRIS)
+)
+def test_a_recorded_accept_of_a_candidate_that_is_only_the_marker_replays_no_empty_iri(
+    marker,
+):
+    assert _strip_review_iri(marker) == ""
+
+    dictionary = _dictionary_with(
+        [
+            _suggestion_row(label="Marker only", iri=marker, decision="accepted"),
+            _suggestion_row(decision="not_selected"),
+        ]
+    )
+    rebuilt = review_semantics(dictionary, include_filled=True)
+    assert not (
+        (rebuilt.rows["decision"] == "accept") & (rebuilt.rows["decision_iri"] == "")
+    ).any()
+    # That accept named no term, so it decided nothing: the slot is asked again.
+    queued = review_semantics(dictionary)
+    assert queued["iri"].tolist() == [SPAWNER_IRI]
+    assert queued["decision"].isna().all()
+
+
+# What each of these leaves once ``_strip_review_iri()`` has run is still read
+# as a marker by ``_is_review_iri()``. The spellings are this package's own:
+# metasalmon's twin of "in two cases" puts a space before each colon, which
+# ``_strip_review_iri()`` does not read as the marker today. Which spellings
+# count is Q-63's.
+DOUBLED_MARKER_IRIS = {
+    "twice, with nothing after": "REVIEW: REVIEW:",
+    "twice, with no space between": "REVIEW:REVIEW:",
+    "twice, in two cases": "review: Review:",
+    "twice, before a term": "REVIEW: REVIEW: https://w3id.org/smn/WaterTemperature",
+}
+
+
+@pytest.mark.parametrize(
+    "doubled", list(DOUBLED_MARKER_IRIS.values()), ids=list(DOUBLED_MARKER_IRIS)
+)
+def test_no_accept_records_an_iri_that_is_still_a_marker_once_one_is_stripped(
+    doubled,
+):
+    assert _is_review_iri(_strip_review_iri(doubled))
+
+    review = review_semantics(_dictionary_with([_suggestion_row()]))
+    with pytest.raises(ValueError, match="not a REVIEW: marker"):
+        accept_suggestion(review, "spawner_count", "variable", iri=doubled)
+
+    # On a shortlisted candidate it is not queued, so neither ``rank=`` nor a
+    # recorded accept of it can put it in a decision.
+    suggestions = [
+        _suggestion_row(label="Doubled marker", iri=doubled),
+        _suggestion_row(),
+    ]
+    review = accept_suggestion(
+        review_semantics(_dictionary_with(suggestions)),
+        "spawner_count",
+        "variable",
+        rank=1,
+    )
+    decided = _decided_iris(review)
+    assert not any(_is_review_iri(value) for value in decided)
+    assert decided == [SPAWNER_IRI]
+
+    suggestions[0]["decision"] = "accepted"
+    suggestions[1]["decision"] = "not_selected"
+    rebuilt = review_semantics(_dictionary_with(suggestions), include_filled=True)
+    replayed = rebuilt.rows.loc[rebuilt.rows["decision"] == "accept", "decision_iri"]
+    assert not any(_is_review_iri(value) for value in replayed)
+
+
+# A review the current ``review_semantics()`` did not build can still hold such
+# a candidate: one saved by an earlier version, or edited by hand. ``rank=``
+# refuses it there too, rather than trusting the queue to have left it out.
+NAMES_NO_TERM_IRIS = {**MARKER_ONLY_IRIS, **DOUBLED_MARKER_IRIS}
+
+
+@pytest.mark.parametrize(
+    "value", list(NAMES_NO_TERM_IRIS.values()), ids=list(NAMES_NO_TERM_IRIS)
+)
+def test_rank_refuses_a_candidate_in_the_review_whose_iri_names_no_term(value):
+    stripped = _strip_review_iri(value)
+    assert not stripped or _is_review_iri(stripped)
+
+    review = review_semantics(_dictionary_with([_suggestion_row()]))
+    rows = review.rows
+    rows.at[rows.index[0], "iri"] = value
+    edited = SemanticReview(rows, review.path)
+    with pytest.raises(ValueError, match="names no term"):
+        accept_suggestion(edited, "spawner_count", "variable", rank=1)
+
+
+# Rejecting a slot does not depend on any candidate's IRI, so a recorded reject
+# is replayed from a row whose IRI names no term, which the queue otherwise
+# leaves out. Without that, a slot whose only candidate is such a row lost its
+# rejection, and the reason, from ``include_filled=True``.
+EMPTY_IRIS = {"an empty string": "", "a missing value": pd.NA}
+NO_TERM_OR_EMPTY_IRIS = {**NAMES_NO_TERM_IRIS, **EMPTY_IRIS}
+
+
+@pytest.mark.parametrize(
+    "value", list(NO_TERM_OR_EMPTY_IRIS.values()), ids=list(NO_TERM_OR_EMPTY_IRIS)
+)
+def test_a_recorded_reject_is_replayed_from_a_candidate_whose_iri_names_no_term(
+    value,
+):
+    dictionary = _dictionary_with(
+        [
+            _suggestion_row(
+                iri=value,
+                decision="rejected",
+                decision_reason="no candidate describes a wild-origin count",
+            )
+        ]
+    )
+    revisited = review_semantics(dictionary, include_filled=True)
+    assert revisited["decision"].tolist() == ["reject"]
+    assert revisited["decision_reason"].tolist() == [
+        "no candidate describes a wild-origin count"
+    ]
+    assert len(review_semantics(dictionary)) == 0
+    with pytest.raises(ValueError, match="names no term"):
+        accept_suggestion(revisited, "spawner_count", "variable", rank=1)
+
+
+# The console prints a call only where the call runs. A candidate whose IRI
+# names no term is refused by ``accept_suggestion()``, so it gets no accept
+# call, while its slot keeps its reject call and every other candidate keeps
+# its own.
+CONSOLE_NO_TERM_IRIS = {
+    "the bare marker": "REVIEW:",
+    "a doubled marker": "REVIEW: REVIEW:",
+    **EMPTY_IRIS,
+}
+
+
+@pytest.mark.parametrize(
+    "value", list(CONSOLE_NO_TERM_IRIS.values()), ids=list(CONSOLE_NO_TERM_IRIS)
+)
+def test_the_console_prints_no_accept_call_for_a_candidate_whose_iri_names_no_term(
+    value,
+):
+    abundance = "https://w3id.org/smn/Abundance"
+    dictionary = _dictionary_with(
+        [
+            _suggestion_row(
+                iri=value,
+                decision="rejected",
+                decision_reason="no candidate describes a wild-origin count",
+            ),
+            _suggestion_row(
+                dictionary_role="property",
+                target_sdp_field="property_iri",
+                label="Abundance",
+                iri=abundance,
+            ),
+        ]
+    )
+    review = review_semantics(dictionary, include_filled=True)
+    lines = review.render_lines(object_name="review")
+    assert any("DECIDED: reject" in line for line in lines)
+    assert any("names no term" in line for line in lines)
+
+    namespace = {
+        "accept_suggestion": accept_suggestion,
+        "reject_suggestion": reject_suggestion,
+        "review": review,
+    }
+    accepts = [
+        line.strip()[len("review = "):]
+        for line in lines
+        if line.strip().startswith("review = accept_suggestion(")
+    ]
+    assert len(accepts) == 1
+    for call in accepts:
+        decided = eval(call, namespace).rows  # noqa: S307 - the call is the contract
+        accepted = decided.loc[decided["decision"] == "accept", "decision_iri"]
+        assert accepted.tolist() == [abundance]
+    rejects = [
+        line.strip().split("# ")[0].strip()[len("review = "):]
+        for line in lines
+        if line.strip().startswith("review = reject_suggestion(")
+    ]
+    assert len(rejects) == 2
+    for call in rejects:
+        assert isinstance(eval(call, namespace), SemanticReview)  # noqa: S307
+
+
+# A row with no IRI targets a field the review does decide, so it is not one of
+# the fields "this review cannot decide", and editing the metadata CSV by hand
+# is not what it needs. The shape B-220 left in a package: a hand-picked
+# ``accepted`` row with an empty ``iri`` at the head of its slot.
+@pytest.mark.parametrize("empty", list(EMPTY_IRIS.values()), ids=list(EMPTY_IRIS))
+def test_review_semantics_does_not_report_a_row_with_no_iri_as_a_field_it_cannot_decide(
+    empty, capsys
+):
+    suggestions = [
+        _suggestion_row(iri=empty, source="user", decision="accepted"),
+        _suggestion_row(decision="not_selected"),
+    ]
+    review = review_semantics(_dictionary_with(suggestions))
+    assert "cannot decide" not in capsys.readouterr().out
+    assert review["iri"].tolist() == [SPAWNER_IRI]
+    assert review["decision"].isna().all()
+
+    # A field the review cannot decide is still reported, and alone.
+    suggestions.append(
+        _suggestion_row(
+            target_scope="dataset",
+            target_sdp_file="dataset.csv",
+            target_sdp_field="keywords",
+            target_row_key="demo-1",
+        )
+    )
+    review_semantics(_dictionary_with(suggestions))
+    reported = capsys.readouterr().out
+    assert "cannot decide" in reported
+    assert "dataset.csv" in reported
+    assert "column_dictionary.csv" not in reported
 
 
 def test_accept_refuses_a_rank_that_is_not_there():

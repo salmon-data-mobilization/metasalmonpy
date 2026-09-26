@@ -166,6 +166,23 @@ def _is_review_iri(value) -> bool:
     return _text(value).upper().startswith("REVIEW:")
 
 
+def _review_names_term(recorded) -> bool:
+    """Whether an IRI as a decision records it names a term.
+
+    ``recorded`` is what :func:`_strip_review_iri` returns. It names a term when
+    something is left once the ``REVIEW:`` marker is stripped, and what is left
+    is not still read as a marker by :func:`_is_review_iri`. The strip removes
+    one marker, so a doubled ``REVIEW: REVIEW:`` leaves one.
+    :func:`review_semantics` asks this of every candidate and
+    :func:`accept_suggestion` of the IRI it would record, so neither records a
+    decision that names no term (hub item B-247, the mirror of metasalmon's
+    B-246, whose ``.ms_review_names_term()`` this is). Which spellings count as
+    the marker is the strip's and the detector's, and this decides none.
+    """
+    text = _text(recorded)
+    return bool(text) and not _is_review_iri(text)
+
+
 def _review_slot_id(frame: pd.DataFrame) -> "pd.Series":
     """One (target file, target row, target field) triple per row.
 
@@ -452,6 +469,16 @@ def _review_source_frames(x) -> dict:
     return {}
 
 
+def _recorded_decision(value) -> Optional[str]:
+    """The review decision a ``decision`` cell records, or ``None``.
+
+    The one reading of that cell, so the replay below and the queue filter in
+    :func:`review_semantics`, which keeps a recorded reject, cannot disagree
+    about which rows carry one.
+    """
+    return RECORDED_DECISIONS.get(_text(value).lower())
+
+
 def _review_seed_recorded_decisions(
     rows: pd.DataFrame, suggestions: pd.DataFrame
 ) -> pd.DataFrame:
@@ -477,7 +504,7 @@ def _review_seed_recorded_decisions(
     # ``rows`` is built from ``suggestions`` row for row and this runs before
     # any subsetting, so the positions still line up here.
     for position in range(len(rows)):
-        recorded = RECORDED_DECISIONS.get(decisions[position].lower())
+        recorded = _recorded_decision(decisions[position])
         if recorded is None:
             continue
         index = rows.index[position]
@@ -574,16 +601,37 @@ def review_semantics(
     # would show a row that cannot be decided.
     target_files = suggestions["target_sdp_file"].map(_text)
     target_fields = suggestions["target_sdp_field"].map(_text)
-    keep = (
-        target_files.isin(WRITABLE_FILES)
-        & target_fields.str.endswith("_iri")
-        & (suggestions["iri"].map(_text) != "")
+    decidable = target_files.isin(WRITABLE_FILES) & target_fields.str.endswith(
+        "_iri"
     )
+    # A candidate is queued only when the IRI a decision would record names a
+    # term. Tested only for being empty, a candidate whose ``iri`` was only the
+    # marker was queued, ``rank=`` accepted it with an empty ``decision_iri``,
+    # and a recorded accept of one replayed the same way (hub item B-247, the
+    # mirror of metasalmon's B-246).
+    has_iri = suggestions["iri"].map(
+        lambda value: _review_names_term(_strip_review_iri(value))
+    )
+    # A recorded reject is kept whatever its IRI, because rejecting a slot
+    # names no candidate: dropped, a slot whose only candidate named no term
+    # lost its rejection and reason on replay. ``accept_suggestion(rank=)``
+    # refuses such a row, so keeping it lets nothing record an accept.
+    if "decision" in suggestions.columns:
+        rejected = suggestions["decision"].map(
+            lambda value: _recorded_decision(value) == "reject"
+        )
+    else:
+        rejected = pd.Series(False, index=suggestions.index)
+    keep = decidable & (has_iri | rejected)
+    # Only a field the review cannot decide is reported as one. A row dropped
+    # for naming no term targets a field the review does decide, and listing it
+    # here told the user to edit that field by hand (hub item B-247); it offers
+    # nothing to accept, so it is dropped without a word.
     dropped = sorted(
         {
             f"{file_name} · {field}"
             for file_name, field in zip(
-                target_files[~keep], target_fields[~keep]
+                target_files[~decidable], target_fields[~decidable]
             )
         }
     )
@@ -1024,12 +1072,21 @@ def _render_review_lines(review: SemanticReview, object_name: str) -> list:
                         candidate["llm_rationale"], indent="            "
                     )
                 )
-            lines.append(
-                "       "
-                + object_name
-                + " = "
-                + _accept_call(rows, slot, candidate["rank"], object_name)
-            )
+            # A call is printed only where it runs. A candidate whose IRI names
+            # no term is here only to carry a recorded reject, or because the
+            # review was not built by :func:`review_semantics`, and
+            # :func:`accept_suggestion` refuses it.
+            if _review_names_term(_strip_review_iri(candidate["iri"])):
+                lines.append(
+                    "       "
+                    + object_name
+                    + " = "
+                    + _accept_call(rows, slot, candidate["rank"], object_name)
+                )
+            else:
+                lines.append(
+                    "       (its IRI names no term, so it cannot be accepted)"
+                )
             lines.append("")
 
         lines.append(
@@ -1241,10 +1298,28 @@ def accept_suggestion(
     # The non-empty check reads the stripped value, because that is the value
     # the decision records. Run before the strip, it let ``iri="REVIEW:"``, and
     # every other spelling the strip removes, record an accept that named no
-    # term (hub item B-220, the mirror of metasalmon's B-219).
-    if iri is not None and not accepted_iri:
+    # term (hub item B-220, the mirror of metasalmon's B-219). The strip removes
+    # one marker, so a value that is still a marker after it is refused too
+    # (hub item B-247, the mirror of metasalmon's B-246). ``rank=`` is checked
+    # as well: :func:`review_semantics` queues no such candidate, but a review
+    # it did not build as it is now -- one saved by an earlier version, or
+    # edited by hand -- can still hold one.
+    if not _review_names_term(accepted_iri):
+        if iri is None:
+            raise ValueError(
+                "The candidate at that rank names no term. Its IRI is empty, "
+                "or still a REVIEW: marker once one is removed. Rebuild the "
+                "review with review_semantics(), which does not queue such a "
+                "candidate."
+            )
         message = "iri must be a non-empty IRI."
-        if _text(iri):
+        if accepted_iri:
+            message = (
+                "iri must be an IRI, not a REVIEW: marker. An accepted IRI is "
+                "recorded without one REVIEW: marker, and what is left here is "
+                "still a marker."
+            )
+        elif _text(iri):
             message += (
                 " An accepted IRI is recorded without its REVIEW: marker, and "
                 "nothing follows the marker here."
