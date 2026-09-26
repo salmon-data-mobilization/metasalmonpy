@@ -276,10 +276,18 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1678
-passed / 2 skipped with the extras installed, 1536 / 144 with core dependencies
-only (2026-09-26, measured locally for hub B-362 on `27868bd`, its merge of
-`main` `7715e43`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1713
+passed / 2 skipped with the extras installed, 1571 / 144 with core dependencies
+only (2026-09-26, measured locally for hub B-363 on `ca664f6`, its merge of
+`main` `416668e`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
+in isolated environments built from `.[test]` and `.[test,eml,context]`;
+1175 / 2 and 1034 / 143 for B-363 on `8444d3a`, its merge of `main` `380a7a4`,
+1141 / 1 and 1000 / 142 on `c8317c1`, its merge of `main` `0235487`, and
+1119 / 1 and 978 / 142 on `c5d7c88`, branched from `main` `ba1b54a`, each under
+Python 3.13.11, pytest 9.1.1 and pandas 3.0.5 in a full clone with every tag,
+the same under `python -m pytest -q` and bare `pytest -q`; 1678 / 2 and
+1536 / 144 for hub B-362 on `27868bd`, its merge of `main` `7715e43`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
 worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
 in isolated environments built from `.[test]` and `.[test,eml,context]`;
 1214 / 2 and 1073 / 143 for B-362 on `27fc7e2`, its merge of `main` `380a7a4`,
