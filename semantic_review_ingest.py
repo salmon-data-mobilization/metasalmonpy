@@ -36,6 +36,7 @@ from typing import Callable, Optional, Union
 import pandas as pd
 
 from .metadata import R_SPACE_CLASS
+from .term_search import find_terms
 from .semantic_review_json import (
     read_semantic_review_json,
     semantic_review_canonical_bytes,
@@ -1228,7 +1229,7 @@ def ingest_semantic_assessments(
     packet_id: Optional[str] = None,
     provider: Optional[str] = None,
     model: Optional[str] = None,
-    search_fn: Optional[Callable] = None,
+    search_fn: Callable = find_terms,
     review_dir: Optional[Union[str, os.PathLike]] = None,
     quiet: bool = False,
 ) -> dict:
@@ -1314,10 +1315,7 @@ def ingest_semantic_assessments(
     from .llm_review import LLM_ASSESSMENT_COLUMNS
     from .review_console import _review_source_frames
     from .semantics import _search_once_per_call
-    from .term_search import find_terms
 
-    if search_fn is None:
-        search_fn = find_terms
     review_input = _review_input(x, review_dir)
     review_dir = review_input["review_dir"]
     provider_override = {"given": provider is not None, "value": None if provider is None else _non_empty_string(provider)}

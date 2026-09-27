@@ -1033,6 +1033,14 @@ def test_no_provider_symbol_is_reachable_from_the_two_exported_functions():
     assert ("semantic_review_ingest", "_validate_row") in reachable
     assert ("llm_review", "_apply_validators") in reachable
     assert not (reachable & provider), sorted(reachable & provider)
+    # Retrieval is reached only through the search_fn argument, whose default
+    # is find_terms().
+    import inspect
+
+    from metasalmonpy import find_terms
+
+    for function in (write_semantic_review_packet, ingest_semantic_assessments):
+        assert inspect.signature(function).parameters["search_fn"].default is find_terms
 
 
 # -----------------------------------------------------------------------------

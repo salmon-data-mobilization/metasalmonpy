@@ -46,6 +46,7 @@ from .semantic_review_json import (
     semantic_review_packet_id,
 )
 from .semantics import _SEMANTIC_TARGET_COLUMNS
+from .term_search import find_terms
 
 __all__ = ["write_semantic_review_packet"]
 
@@ -1191,7 +1192,7 @@ def write_semantic_review_packet(
     context_text=None,
     top_n: int = 5,
     sources: Optional[Sequence[str]] = None,
-    search_fn: Optional[Callable] = None,
+    search_fn: Callable = find_terms,
     code_scope: str = "factor",
     review_dir: Optional[Union[str, os.PathLike]] = None,
     overwrite: bool = False,
@@ -1278,10 +1279,7 @@ def write_semantic_review_packet(
     """
     from .llm_review import collect_context
     from .review_console import _review_source_frames
-    from .term_search import find_terms
 
-    if search_fn is None:
-        search_fn = find_terms
     review_input = _review_input(x, review_dir)
     if code_scope not in _CODE_SCOPES:
         raise ValueError(f"code_scope must be one of {', '.join(_CODE_SCOPES)}; got {code_scope!r}.")
