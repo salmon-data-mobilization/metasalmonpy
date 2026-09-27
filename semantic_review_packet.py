@@ -1136,7 +1136,13 @@ def _package_targets(path: Path, frames: Mapping, top_n: int, source_policy: dic
             if slot_id in seen:
                 continue
             seen.add(slot_id)
-            target = {column: record.get(column) for column in SEMANTIC_TARGET_COLUMNS}
+            # The CSV reader keeps an empty field as "", where metasalmon's
+            # reads it as NA (PARITY.md row 21); a target is built from the
+            # suggestion row as R builds it, an empty field missing.
+            target = {
+                column: (None if isinstance(record.get(column), str) and record.get(column) == "" else record.get(column))
+                for column in SEMANTIC_TARGET_COLUMNS
+            }
             targets.append(target)
             target["slot_id"] = _slot_id(target)
             target["current_value"] = None if _is_missing(current) else current

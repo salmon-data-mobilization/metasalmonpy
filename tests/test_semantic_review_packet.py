@@ -1678,3 +1678,27 @@ def test_the_retriever_trims_the_query_and_skips_a_role_with_no_sources():
     calls.clear()
     assert _retrieve_semantic_target_candidates(target, make_source_policy([]), 5, search).empty
     assert calls == []
+
+
+def test_a_package_path_reads_an_empty_suggestion_field_as_missing(tmp_path, monkeypatch):
+    # metasalmon reads the empty field as NA; this package's CSV reader keeps it
+    # as "" (PARITY.md row 21). A target rebuilt from semantic_suggestions.csv
+    # is built as R builds it: with its search_role column blanked, every
+    # target searches, and is recorded, under its dictionary role.
+    path = _spawners_package(tmp_path, monkeypatch, "blank-search-role")
+    suggestions_path = path / "semantic_suggestions.csv"
+    suggestions = pd.read_csv(suggestions_path, dtype=str, keep_default_na=False)
+    suggestions["search_role"] = ""
+    suggestions.to_csv(suggestions_path, index=False)
+    roles = []
+
+    def recording(query, role=None, sources=None):
+        roles.append(role)
+        return _hits(query, role, sources)
+
+    built = write_semantic_review_packet(str(path), search_fn=recording, quiet=True)
+    slots = _read_json(built["path"])["units"]
+    targets = [slot["target"] for unit in slots for slot in unit["slots"]]
+    assert targets and all(target["search_role"] == target["dictionary_role"] for target in targets)
+    assert all(target["code_value"] is None for target in targets)
+    assert None not in roles
