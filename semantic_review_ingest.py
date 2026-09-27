@@ -52,7 +52,6 @@ from .semantic_review_packet import (
     PACKAGE_OWNED_COLUMNS,
     PACKET_VERSION,
     SEMANTIC_TARGET_COLUMNS,
-    TARGET_GROUP_COLUMNS,
     _assert_readable,
     _group_key,
     _is_missing,
@@ -66,7 +65,6 @@ from .semantic_review_packet import (
     _trim_string,
     assemble_packet,
     candidate_object,
-    write_files,
 )
 
 __all__ = ["SemanticReviewError", "ingest_semantic_assessments"]
@@ -1312,7 +1310,6 @@ def ingest_semantic_assessments(
         unchanged) and ``summary`` (counts of decisions, errors, downgrades,
         escalations and retries).
     """
-    from .llm_review import LLM_ASSESSMENT_COLUMNS
     from .review_console import _review_source_frames
     from .semantics import _search_once_per_call
 

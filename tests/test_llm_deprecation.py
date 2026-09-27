@@ -22,7 +22,6 @@ import warnings
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 import metasalmonpy
 from metasalmonpy import (
