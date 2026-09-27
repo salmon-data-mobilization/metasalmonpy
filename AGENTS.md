@@ -329,14 +329,22 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1720
-passed / 2 skipped with the extras installed, 1578 / 144 with core dependencies
-only (2026-09-26, measured locally for hub B-382 on `c4aa61a`, branched from
-`main` `82f1fb7`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1833
+passed / 5 skipped with the extras installed, 1691 / 147 with core dependencies
+only (2026-09-26, measured locally for hub B-327 on `a2f0fa4`, stacked on
+B-382's `abd4218`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
 worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
 in isolated environments built from `.[test]` and `.[test,eml,context]`; the
-seven over `main` are the four pass-1 R retrieval cases, the two pinned
-configurations B-382 added and the test of what they cover; 1713 / 2 and
+113 over B-382 are `tests/test_semantic_review_packet.py`'s 104 and
+`tests/test_llm_deprecation.py`'s 9, and the three new skips are
+`tests/test_semantic_review_parity.py`'s, which need a metasalmon checkout and
+a metasalmon that has the review-packet contract; 1720 / 2 and 1578 / 144 for
+hub B-382 on `c4aa61a`, branched from `main` `82f1fb7`, under Python 3.13.11,
+pytest 9.1.1 and pandas 3.0.5, in a worktree of a full clone with
+`METASALMON_PATH` unset, by `python -m pytest -q` in isolated environments
+built from `.[test]` and `.[test,eml,context]`; the seven over `main` are the
+four pass-1 R retrieval cases, the two pinned configurations B-382 added and
+the test of what they cover; 1713 / 2 and
 1571 / 144 for hub B-363 on `ca664f6`, its merge of `main` `416668e`, whose
 tests `main` `82f1fb7` merged unchanged, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
 worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
@@ -429,10 +437,17 @@ instead. The other three are `tests/test_check_changelog_window.py`'s replays of
 repository's history, which need a full clone with the tags. CI's suite jobs
 check out one commit, so they skip there and run in the `changelog-window`
 workflow instead. The gap between the legs is the extras-gated EML, KNB and
-context-reader tests. Two tests skip in both legs, locally and on CI: the
+context-reader tests. Five tests skip in both legs, locally and on CI: the
 Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1` is
-set, and the comparison of `scripts/check-changelog-window.py` with the hub's
-copy, which runs only when `METASALMON_PATH` names a metasalmon checkout. These
+set; the comparison of `scripts/check-changelog-window.py` with the hub's
+copy, which runs only when `METASALMON_PATH` names a metasalmon checkout; and
+`tests/test_semantic_review_parity.py`'s three (hub B-327), whose comparison of
+the vendored review-packet contract with metasalmon's runs where a metasalmon
+checkout is present (`METASALMON_PATH`, or the `parity` job's clone in
+`/tmp/metasalmon`) and whose two cross-language sessions run where a metasalmon
+with the contract can be run (`METASALMON_SRC`, or an installed metasalmon from
+`5c99487` on, as the `parity` job installs; the `/tmp/metasalmon-lib` on the
+machine that measured the counts above holds an older one). These
 counts are a dated measurement, not a target — update them when you add tests
 rather than treating a mismatch as a failure.
 
