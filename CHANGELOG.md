@@ -986,7 +986,9 @@ and moving it is a separate outward act.
   its `spec/licence-optional` branch, so this mirrors it and opens no
   `PARITY.md` row.
 
-  **Strict validation still requires a licence for now.** metasalmonpy reads
+  **Strict validation still requires a licence for now.** [corrected
+  2026-09-27: no longer, since hub item B-199 re-vendored the bundle from
+  `sdp-0.3.2`; see its entry below.] metasalmonpy reads
   the requirement from its bundled SDP schema, which moves only with
   `SDP_SPEC_TAG`, from a specification release (hub item B-199). Until that
   release arrives here, `validate_salmon_datapackage(require_iris=True)` reports
@@ -1000,6 +1002,92 @@ and moving it is a separate outward act.
   which passes once the licence is optional. Neither a placeholder nor a
   `REVIEW:` marker ever becomes a `datapackage.json` `licenses` entry: the
   placeholder is left out, and the writer refuses the marker.
+
+* **The SDP schema pin and the vendored bundle move to the `sdp-0.3.2`
+  release, together and byte for byte.** Hub queue item **B-199**, the
+  metasalmonpy half of metasalmon's B-198 (metasalmon pull request #148).
+  `sdp-0.3.2` is the first smn-data-pkg release carrying Brett's Q-51 ruling
+  of 2026-09-16, and on 2026-09-23 he ruled that the pin names a release tag
+  for it rather than a commit. `SDP_SPEC_TAG`, and with it
+  `DEFAULT_SDP_SCHEMA_BASE_URL`, now names the `sdp-0.3.2` tag in place of
+  `sdp-0.3.0`, the tag metasalmon pins. Every file the remote loader fetches
+  -- the six metadata schemas, the v0.3 profile and `sdp.rules.yaml` -- is
+  re-vendored from that tag with `git cat-file blob`, never edited by hand.
+  Three of the eight change: `dataset.schema.json`, the profile and the rules.
+  `sdp-0.3.2` is a patch release, so the profile keeps its `v0.3` path, and
+  the profile, rules and schema URIs a written `datapackage.json` carries do
+  not change. `METASALMONPY_SDP_SCHEMA_BASE_URL` and
+  `set_sdp_schema_base_url()` still override the pin.
+
+  What a user can observe:
+
+  - **metasalmonpy writes `sdp-0.3.2`.** A package written with a blank
+    `spec_version` declares `sdp-0.3.2` in `metadata/dataset.csv` and in
+    `datapackage.json`'s `sdp.specVersion`, because both are read from the
+    bundle's rules `version`. `SDP_PROFILE_VERSION` reads it, and
+    `migrate_sdp_methods()` stamps it too.
+  - **Re-writing a package stamped `sdp-0.3.0` prints a note, not a
+    warning.** Every package metasalmonpy 0.5.0 wrote says `sdp-0.3.0` in
+    `dataset.csv`, and `write_salmon_datapackage()` warned whenever that
+    value differed from the loaded schema's. A difference in the patch number
+    alone now prints a note to standard output instead, because a patch
+    release keeps the profile (Brett, 2026-09-27; metasalmon makes the same
+    change with `cli::cli_inform()`). A declared version whose major or minor
+    number differs, or that is not an `sdp-<major>.<minor>.<patch>` label,
+    still raises the `UserWarning`. Either way the package carries both
+    values; clear `spec_version` to adopt the loaded version.
+  - **A licence is recommended, not required.** The bundled
+    `dataset.schema.json` drops `constraints.required` from `license` and
+    marks it `sdp:requirement: recommended` (smn-data-pkg pull request 12).
+    Under the default options `validate_salmon_datapackage(require_iris=True)`
+    accepts a blank licence, a `require_iris=False` run no longer warns that
+    it is blank, and `review_metadata()` no longer lists it. This is the
+    release the licence entry above was waiting for. A placeholder in the
+    field is still refused, as in every field.
+  - **The schema in use admits the ISO instant.** `temporal_start` and
+    `temporal_end` carry
+    `^(\d{4}|\d{4}-\d{2}-\d{2}|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)$` in
+    both the pinned and the vendored bundle. That is the spelling this package
+    has written for a typed instant since B-145, so for a four-digit year the
+    package and the profile no longer disagree. No validation outcome changes
+    from the pattern alone, because nothing here reads `constraints.pattern`
+    yet (hub item B-205).
+  - **The hints for three fields change.** When a placeholder carries no
+    instruction of its own, such as a bare `MISSING METADATA:`,
+    `review_metadata()` takes its hint from the schema's field description.
+    `temporal_start` now reads "Start of the period covered by the dataset: a
+    year, a date, or an ISO 8601 instant in UTC.", `temporal_end` reads the
+    same with "End", and `license` reads "Reuse license: an SPDX-style
+    identifier, a license name, or a URL. Leave blank when none has been
+    granted."
+
+  **Online and offline sessions now load the same bytes.** Under the default
+  `"auto"` source the loader reads the pinned tag and falls back to the
+  vendored bundle, and under the default settings `review_metadata()` and the
+  `set_sdp_*()` setters read the vendored bundle in the tag's place (hub item
+  B-215). Until now the two differed in `sdp.rules.yaml`, which B-166
+  re-vendored from a later commit than the pin; `sdp-0.3.2` carries those
+  rules, so that exception retires. A new manifest,
+  `data/sdp-bundle-manifest.json`, shipped in the wheel, names the tag, its
+  commit and the SHA-256 of each vendored file, the same hashes metasalmon's
+  `inst/extdata/sdp-bundle-manifest.json` names. A new offline test fails
+  when a vendored file, the manifest's file list or the pin disagrees with it,
+  so a partial re-vendor or a hand edit fails without a network, and a second
+  test shows that check failing on each of those. A network test, opt-in as
+  this suite's other one is (`METASALMONPY_RUN_SDP_PIN_TEST=1`), checks that
+  the pinned tag serves every file byte for byte.
+
+  A further new test, `tests/test_temporal_profile_pattern.py`, checks the
+  instant a written package carries against the pattern **read from the
+  vendored bundle**, in both `datapackage.json` and `metadata/dataset.csv`.
+  Every earlier check compared those two files with each other, which is how
+  a typed instant went unseen while both broke the profile. The fixture uses
+  four-digit years, because the pre-1000 spelling is hub item B-161's
+  question. The package R wrote under `tests/data/resource_types/r-package/`
+  moves by one line, `datapackage.json`'s `specVersion`, re-canonicalized by
+  R's own round trip at metasalmon main `0495318`. This is a port of B-198 and
+  opens no `PARITY.md` row: row 38 is amended in place to record that the two
+  pins agree again.
 
 * **The first retrieval pass gives the shortlist metasalmon gives.** Hub queue
   item **B-382**, the last of the S16 convergence items that precede the

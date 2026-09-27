@@ -246,7 +246,7 @@ def test_an_agreeing_legacy_package_migrates_end_to_end(tmp_path):
 
     # dataset.csv advances the spec pin.
     dataset = _read_character_csv(root / "metadata" / "dataset.csv")
-    assert dataset["spec_version"].tolist() == ["sdp-0.3.0"]
+    assert dataset["spec_version"].tolist() == ["sdp-0.3.2"]
 
     # The descriptor loses the registry resource and pointer and carries the
     # v0.3 identity.
@@ -257,7 +257,7 @@ def test_an_agreeing_legacy_package_migrates_end_to_end(tmp_path):
     assert "metadata/methods.csv" not in resource_paths
     assert "methods" not in (descriptor.get("sdp", {}).get("metadata") or {})
     assert descriptor["profile"] == V03_PROFILE
-    assert descriptor["sdp"]["specVersion"] == "sdp-0.3.0"
+    assert descriptor["sdp"]["specVersion"] == "sdp-0.3.2"
     assert descriptor["sdp"]["rules"] == RULES_URL
 
     # The registry file itself is gone, and the migrated package validates.
@@ -697,7 +697,7 @@ def test_migration_rewrites_the_nested_descriptor_profile_too(tmp_path):
     migrated = json.loads(descriptor_path.read_text(encoding="utf-8"))
     assert "v0.3" in migrated["profile"]
     assert "v0.3" in migrated["sdp"]["profile"]
-    assert migrated["sdp"]["specVersion"] == "sdp-0.3.0"
+    assert migrated["sdp"]["specVersion"] == "sdp-0.3.2"
 
 
 def test_the_placement_report_is_in_canonical_order_regardless_of_input_order(

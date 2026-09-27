@@ -55,6 +55,7 @@ from .sdp_methods import _atomic_write_set
 from .sdp_schema import (
     SDP_PROFILE_URL as _SDP_PROFILE_URL,
     SDP_RULES_URL as _SDP_RULES_URL,
+    _sdp_same_minor_version,
     load_sdp_schema,
     sdp_metadata_resource_entries,
 )
@@ -1230,13 +1231,26 @@ def write_salmon_datapackage(
         else ""
     )
     if declared_spec_version and declared_spec_version != sdp_bundle["version"]:
-        warnings.warn(
-            f"metadata/dataset.csv declares {declared_spec_version!r} but the loaded "
-            f"SDP schema is {sdp_bundle['version']!r}. The package will carry both "
-            "values; clear spec_version to adopt the loaded schema version.",
-            UserWarning,
-            stacklevel=2,
-        )
+        if _sdp_same_minor_version(declared_spec_version, sdp_bundle["version"]):
+            # A patch release keeps the profile, so this is a note, not a
+            # problem: every package written before a patch re-vendor would
+            # otherwise warn (Brett, 2026-09-27). metasalmon informs with
+            # ``cli::cli_inform()`` here; this package prints its informational
+            # messages, so the note is seen by default and is not a warning.
+            print(
+                f"metadata/dataset.csv declares {declared_spec_version!r}; the "
+                f"loaded SDP schema is {sdp_bundle['version']!r}, a patch release "
+                "of the same profile. The package will carry both values; clear "
+                "spec_version to adopt the loaded schema version."
+            )
+        else:
+            warnings.warn(
+                f"metadata/dataset.csv declares {declared_spec_version!r} but the loaded "
+                f"SDP schema is {sdp_bundle['version']!r}. The package will carry both "
+                "values; clear spec_version to adopt the loaded schema version.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     datapackage = {
         "profile": sdp_bundle["profile_uri"],

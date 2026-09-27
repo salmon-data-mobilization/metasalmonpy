@@ -1,0 +1,16 @@
+{
+  "note": "The vendored SDP schema bundle: every file sdp_schema._fetch_remote_sdp_schema() fetches, each a byte-for-byte copy of `git cat-file blob <tag>:<path>` in the source repository, stored at data/<path>. Each value is the SHA-256 of those bytes. Re-vendor every file from one tag, and move this manifest and SDP_SPEC_TAG in sdp_schema.py to that tag in the same change. tests/test_sdp_schema.py checks the three against each other.",
+  "source": "https://github.com/salmon-data-mobilization/smn-data-pkg",
+  "tag": "sdp-0.3.2",
+  "commit": "6806319c6e88d14064688be7f981e8735269c558",
+  "files": {
+    "schema/frictionless/metadata/dataset.schema.json": "ec76dc82f886b5ffeab3aab201a214496d25fb9dd2a43d531ba55c5f8736fc2a",
+    "schema/frictionless/metadata/tables.schema.json": "c3c6b1707e257085057e5c5ec3ea34665476d9174d1a805e8e5ce4001e31f8e7",
+    "schema/frictionless/metadata/column_dictionary.schema.json": "4d56c7743ef37e3e4eaf33bf09c4a009edc9e10d2b36f7d9993fcce12f7ab5a5",
+    "schema/frictionless/metadata/codes.schema.json": "c39ccc013ef0176302536050a07869750187a1d149a0a57484b563f21097894a",
+    "schema/frictionless/metadata/observation_structures.schema.json": "9693157b41526303471ea39aeec10a43f1a26e65ef24a448149d81064c30f2ed",
+    "schema/frictionless/metadata/observation_components.schema.json": "0f6073807291210929dc6e10e41d7d0d0a61413fffbf8c254d94092456e63110",
+    "profiles/salmon-data-package/v0.3/profile.json": "138df40f8528eab380fc2a3f8031bbb0d34716c35ceff29db7c3591a1bdadb99",
+    "schema/sdp.rules.yaml": "beed44f974f5647d6626a067a5b3c2ff17e10870203de1bb490552defd341c9e"
+  }
+}

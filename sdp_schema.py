@@ -16,34 +16,38 @@ the mechanics:
   different sources, so one package could carry two disagreeing versions. The
   loader caches per process and both now resolve identically.
 
-**The remote base URL is pinned to the ``sdp-0.3.0`` tag, not to ``main``.**
-metasalmon's default is pinned to the same tag (``R/schema-helpers.R``,
-``.ms_default_sdp_schema_base_url()``): tracking ``main`` meant every upstream
+**The remote base URL is pinned to the ``sdp-0.3.2`` tag, never to ``main``.**
+metasalmon's default names the same tag (``R/schema-helpers.R``,
+``.ms_sdp_schema_pinned_base_url()``): tracking ``main`` meant every upstream
 spec release broke networked schema loads — ``sdp-0.3.0`` deleted
-``methods.schema.json`` and the remote fetch 404ed. Advancing the pin is part
-of implementing a new spec version, and it moves **together with the vendored
-bundle, never separately** (PARITY.md rows 27 and 38 record why: the two must
-never name different spec eras). It is overridable, so nothing is locked away:
+``methods.schema.json`` and the remote fetch 404ed. ``sdp-0.3.2`` is the first
+release carrying Brett's Q-51 ruling, which admits an ISO 8601 instant in
+``temporal_start`` and ``temporal_end``, and he ruled on 2026-09-23 that the
+pin names a release tag rather than a commit (hub items B-198 and B-199).
+Advancing the pin is part of implementing a new spec version, and it moves
+**together with the vendored bundle and its manifest, never separately**
+(PARITY.md rows 27 and 38 record why): under the default ``"auto"`` source an
+online session loads the pinned tag and an offline one the vendored copy, so
+the two must hold the same bytes. The pin is not a workaround, so it has no
+retirement condition. It is overridable, so nothing is locked away:
 ``METASALMONPY_SDP_SCHEMA_BASE_URL`` (or :func:`set_sdp_schema_base_url`)
 names any ref or host.
 
 The vendored bundle under ``data/schema`` and ``data/profiles``, meaning the
 files ``SDP_METADATA_SCHEMA_PATHS``, ``SDP_PROFILE_PATH`` and
-``SDP_RULES_PATH`` name, is a verbatim copy of the upstream ``sdp-0.3.0`` git
-tag, with one exception. That tag has no ``methods.schema.json``: sdp-0.3.0
-removed the ``metadata/methods.csv`` registry from the specification, so the
-legacy registry *reader* in ``sdp_methods`` carries its own frozen column
-contract instead of reading one from this bundle.
-
-**The exception is ``data/schema/sdp.rules.yaml``** (hub B-166). It is a
-verbatim copy of ``smn-data-pkg`` ``main``'s, carrying the SOSA Procedure rules
-reworded after the tag (its pull request 8). When it was copied, metasalmon
-vendored the same git blob and no tag carried those rules. Its ``version:`` and
-``profile:`` scalars, the only two fields this module reads, are the tag's, so
-the pinned remote bundle and the vendored one still agree on everything this
-package reads, and differ only in rule text nothing here parses. *Retires
-when:* the whole bundle is re-vendored from one tag that carries those rules
-(hub B-199).
+``SDP_RULES_PATH`` name, is a byte-for-byte copy of those paths at the upstream
+``sdp-0.3.2`` tag, taken with ``git cat-file blob`` and never edited by hand.
+``data/sdp-bundle-manifest.json`` names the tag, its commit and each file's
+SHA-256, and ``tests/test_sdp_schema.py`` fails, with no network, when a
+vendored file, the loader's path list or ``SDP_SPEC_TAG`` disagrees with it.
+``sdp-0.3.2`` is a patch release, so the profile keeps its ``v0.3`` path. The
+tag has no ``methods.schema.json``: sdp-0.3.0 removed the
+``metadata/methods.csv`` registry from the specification, so the legacy
+registry *reader* in ``sdp_methods`` carries its own frozen column contract
+instead of reading one from this bundle. (Until B-199, ``sdp.rules.yaml`` was
+the one exception to the tag copy, taken from a later commit of ``main`` for
+its reworded SOSA Procedure rules by hub B-166. ``sdp-0.3.2`` carries those
+rules, so the exception retired with that re-vendor.)
 """
 
 from __future__ import annotations
@@ -59,9 +63,9 @@ from typing import Any, Callable, Dict, List, Optional
 _DATA_DIR = Path(__file__).resolve().parent / "data"
 
 # The upstream ref this package's parity claim is measured against. Moves
-# only together with the vendored bundle under ``data/`` (PARITY.md rows 27
-# and 38).
-SDP_SPEC_TAG = "sdp-0.3.0"
+# only together with the vendored bundle under ``data/`` and the ``tag`` in
+# ``data/sdp-bundle-manifest.json`` (PARITY.md rows 27 and 38).
+SDP_SPEC_TAG = "sdp-0.3.2"
 DEFAULT_SDP_SCHEMA_BASE_URL = (
     "https://raw.githubusercontent.com/salmon-data-mobilization/smn-data-pkg/"
     + SDP_SPEC_TAG
@@ -393,7 +397,7 @@ def _sdp_schema_options_are_default() -> bool:
 
 
 def vendored_path(relative: str) -> Path:
-    """Absolute path to one file of the vendored ``sdp-0.3.0`` bundle."""
+    """Absolute path to one file of the vendored SDP bundle, under ``data/``."""
     return _DATA_DIR / relative
 
 
@@ -525,6 +529,32 @@ def sdp_profile_version() -> str:
     versions.
     """
     return load_sdp_schema(quiet=True)["version"]
+
+
+_SDP_VERSION_LABEL_RE = re.compile(r"sdp-([0-9]+)\.([0-9]+)\.([0-9]+)")
+
+
+def _sdp_same_minor_version(a: Any, b: Any) -> bool:
+    """Whether two SDP version labels differ at most in the patch number.
+
+    Mirrors ``.ms_sdp_same_minor_version()`` (metasalmon, 2026-09-27). For
+    example ``sdp-0.3.0`` and ``sdp-0.3.2``: a patch release keeps the profile
+    path, so both name the same profile. Anything that is not
+    ``sdp-<major>.<minor>.<patch>`` is ``False``, so an unrecognised label is
+    treated as a real difference. The numbers compare as integers, so minor 30
+    is not minor 3, and the pattern says ``[0-9]`` rather than ``\\d`` because
+    in Python ``\\d`` also matches digits outside ASCII.
+    """
+    if not isinstance(a, str) or not isinstance(b, str):
+        return False
+    first = _SDP_VERSION_LABEL_RE.fullmatch(a)
+    second = _SDP_VERSION_LABEL_RE.fullmatch(b)
+    if first is None or second is None:
+        return False
+    return (int(first.group(1)), int(first.group(2))) == (
+        int(second.group(1)),
+        int(second.group(2)),
+    )
 
 
 def sdp_profile_uri() -> str:

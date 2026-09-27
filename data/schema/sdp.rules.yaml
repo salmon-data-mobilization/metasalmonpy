@@ -1,4 +1,4 @@
-version: sdp-0.3.0
+version: sdp-0.3.2
 profile: https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json
 rules:
 - id: codes_required_for_categorical_columns

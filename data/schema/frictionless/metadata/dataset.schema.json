@@ -54,10 +54,8 @@
     {
       "name": "license",
       "type": "string",
-      "description": "License name or URL.",
-      "constraints": {
-        "required": true
-      },
+      "description": "Reuse license: an SPDX-style identifier, a license name, or a URL. Leave blank when none has been granted.",
+      "sdp:requirement": "recommended",
       "example": "CC-BY-4.0",
       "sdp:examples": [
         "CC-BY-4.0",
@@ -77,25 +75,27 @@
     {
       "name": "temporal_start",
       "type": "string",
-      "description": "Start date or year covered by the dataset.",
+      "description": "Start of the period covered by the dataset: a year, a date, or an ISO 8601 instant in UTC.",
       "constraints": {
-        "pattern": "^(\\d{4}|\\d{4}-\\d{2}-\\d{2})$"
+        "pattern": "^(\\d{4}|\\d{4}-\\d{2}-\\d{2}|\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z)$"
       },
       "sdp:examples": [
         "1996",
-        "1996-01-01"
+        "1996-01-01",
+        "1996-01-01T00:00:00Z"
       ]
     },
     {
       "name": "temporal_end",
       "type": "string",
-      "description": "End date or year covered by the dataset.",
+      "description": "End of the period covered by the dataset: a year, a date, or an ISO 8601 instant in UTC.",
       "constraints": {
-        "pattern": "^(\\d{4}|\\d{4}-\\d{2}-\\d{2})$"
+        "pattern": "^(\\d{4}|\\d{4}-\\d{2}-\\d{2}|\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z)$"
       },
       "sdp:examples": [
         "2024",
-        "2024-12-31"
+        "2024-12-31",
+        "2024-12-31T23:59:59Z"
       ]
     },
     {
@@ -165,7 +165,7 @@
       "name": "spec_version",
       "type": "string",
       "description": "SDP specification version.",
-      "example": "sdp-0.2.0"
+      "example": "sdp-0.3.2"
     },
     {
       "name": "protocol_iri",
