@@ -387,6 +387,8 @@ def test_the_vendored_contract_is_the_hub_copy_byte_for_byte():
     assert ours == sorted(str(p.relative_to(theirs)) for p in theirs.rglob("*") if p.is_file())
     for name in ours:
         assert (FIXTURES / name).read_bytes() == (theirs / name).read_bytes(), name
+    theme_a = hub / "tests" / "testthat" / "fixtures" / "theme-a" / "cases-v1.json"
+    assert THEME_A_CASES.read_bytes() == theme_a.read_bytes()
 
 
 def _schema_errors(instance, schema, root, path="$") -> list:
@@ -1035,6 +1037,211 @@ def test_no_provider_symbol_is_reachable_from_the_two_exported_functions():
     assert ("semantic_review_ingest", "_validate_row") in reachable
     assert ("llm_review", "_apply_validators") in reachable
     assert not (reachable & provider), sorted(reachable & provider)
+
+
+# -----------------------------------------------------------------------------
+# The Theme A oracles, replayed through the ingester
+# -----------------------------------------------------------------------------
+#
+# The six Theme A cases and three adversarial variants are conformance cases
+# like any other (above); these tests add the oracle *events* after the
+# downstream prefill step, which is how the Theme A oracles reach this package
+# (PARITY.md row 45). ``tests/data/semantic_review/theme-a/cases-v1.json`` is
+# metasalmon's ``tests/testthat/fixtures/theme-a/cases-v1.json``, vendored
+# byte for byte; the event builder and the oracle evaluator below are ports of
+# ``events_from_package_outputs()`` and ``evaluate_oracles()`` from metasalmon's
+# ``scripts/theme-a-benchmark.R``, kept to what the tests read.
+
+THEME_A_CASES = Path(__file__).resolve().parent / "data" / "semantic_review" / "theme-a" / "cases-v1.json"
+THEME_A_CASE_IDS = {
+    "catch_count": "ta_catch_count",
+    "catch_weight_advisory": "ta_catch_weight",
+    "fork_length_explicit_procedure": "ta_fork_length",
+    "ocean_phase_explicit_lifecycle": "ta_ocean_phase",
+    "synthetic_structured_gap": "ta_gap",
+    "handcrafted_gcdfo_routing": "ta_gcdfo_routing",
+}
+
+
+def _present(value) -> bool:
+    if value is None or value is pd.NA:
+        return False
+    if isinstance(value, float) and math.isnan(value):
+        return False
+    return bool(str(value).strip())
+
+
+def _scope_from_namespace(namespace) -> str:
+    if not _present(namespace):
+        return "uncertain"
+    value = str(namespace).strip().lower()
+    return value if value in ("smn", "gcdfo", "profile") else "uncertain"
+
+
+def _events_from_package_outputs(assessments, final_dictionary, gaps, requests) -> list:
+    """``events_from_package_outputs()``: assessment, selection, prefill, gap and routing events."""
+    events = []
+    for _, row in assessments.iterrows():
+        decision = str(row["llm_decision"]) if _present(row["llm_decision"]) else None
+        events.append({"type": "assessment", "role": row["dictionary_role"], "decision": decision})
+        if _present(row["llm_selected_iri"]):
+            events.append({"type": "selection", "role": row["dictionary_role"], "iri": str(row["llm_selected_iri"]), "decision": decision})
+    fields = {"variable": "term_iri", "property": "property_iri", "entity": "entity_iri", "unit": "unit_iri"}
+    for _, row in final_dictionary.iterrows():
+        for role, field in fields.items():
+            if field not in final_dictionary.columns or not _present(row[field]):
+                continue
+            value = str(row[field])
+            if re.match(r"^\s*REVIEW\s*:", value, re.IGNORECASE):
+                iri = re.sub(r"^\s*REVIEW\s*:\s*", "", value, flags=re.IGNORECASE)
+                events.append({"type": "prefill", "role": role, "iri": iri, "decision": "accept"})
+    for _, gap in gaps.iterrows():
+        if "llm_decision" in gaps.columns and _present(gap["llm_decision"]):
+            decision = str(gap["llm_decision"])
+        elif "detection" in gaps.columns and _present(gap["detection"]):
+            decision = str(gap["detection"])
+        else:
+            decision = "candidate_gap"
+        scope = _scope_from_namespace(gap["llm_new_term_namespace"]) if "llm_new_term_namespace" in gaps.columns else "uncertain"
+        if scope == "uncertain":
+            placement = str(gap["placement_recommendation"]).strip().lower() if (
+                "placement_recommendation" in gaps.columns and _present(gap["placement_recommendation"])
+            ) else ""
+            scope = placement if placement in ("smn", "gcdfo", "profile") else "uncertain"
+        events.append({"type": "gap", "role": str(gap["dictionary_role"]), "scope": scope, "decision": decision})
+    if len(requests):
+        for _, request in requests[requests["request_scope"].isin(["smn", "gcdfo", "profile"])].iterrows():
+            events.append({"type": "routing", "scope": str(request["request_scope"]), "repository": str(request["ontology_repo"])})
+    return events
+
+
+def _scalar_key(value) -> str:
+    if value is None:
+        return "<NA>"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
+def _event_matches_rule(event: dict, rule: dict) -> bool:
+    fields = [field for field in rule if field not in ("rule_id", "note", "advisory")]
+    return all(field in event and _scalar_key(event[field]) == _scalar_key(rule[field]) for field in fields)
+
+
+def _evaluate_oracles(cases: dict, observed: dict) -> dict:
+    """``evaluate_oracles()``, kept to its verdict: every non-advisory required
+    rule matched by an event, no forbidden rule matched, per blocking case."""
+    failures = []
+    for case in cases["cases"]:
+        events = observed[case["case_id"]]
+        for rule in case["oracle"].get("required", []):
+            if not rule.get("advisory") and not any(_event_matches_rule(event, rule) for event in events):
+                failures.append((case["case_id"], rule["rule_id"], "required event not observed", case.get("blocking")))
+        for rule in case["oracle"].get("forbidden", []):
+            if any(_event_matches_rule(event, rule) for event in events):
+                failures.append((case["case_id"], rule["rule_id"], "forbidden event observed", case.get("blocking")))
+    blocking = [failure for failure in failures if failure[3]]
+    return {"status": "pass" if not blocking else "fail", "failures": failures}
+
+
+def _theme_a_run(case_id: str, tmp_path: Path) -> dict:
+    """Build and ingest a Theme A case, then run this package's own prefill
+    step, gap detection and term-request renderer over the result."""
+    from metasalmonpy import render_ontology_term_request
+    from metasalmonpy.package_io import _auto_apply_package_suggestions
+
+    case = _build_case(case_id, tmp_path)
+    result = ingest_semantic_assessments(
+        case["dict"], assessments=str(case["case_dir"] / "harness-1.csv"), review_dir=case["review_dir"],
+        search_fn=_no_search, quiet=True,
+    )
+    original = case["dict"].copy()
+    original.attrs = {}
+    artifacts = {"dict": original.copy(), "semantic_suggestions": result["suggestions"], "table_meta": pd.DataFrame()}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        _auto_apply_package_suggestions(artifacts, llm_assess=True)
+        final = artifacts["dict"]
+        gap_input = final.copy()
+        gap_input.attrs = {
+            "semantic_suggestions": result["suggestions"],
+            "semantic_llm_assessments": result["assessments"],
+            "semantic_targets": result["targets"],
+        }
+        gaps = detect_semantic_term_gaps(gap_input)
+        requests = (
+            render_ontology_term_request(gaps, scope="auto", ask=False, profile_name="theme-a-benchmark")
+            if len(gaps)
+            else pd.DataFrame()
+        )
+    return {
+        "result": result,
+        "events": _events_from_package_outputs(result["assessments"], final, gaps, requests),
+        "gap_count": len(gaps),
+        "term_request_count": len(requests),
+        "expected": _read_json(case["case_dir"] / "expected" / "events.json"),
+    }
+
+
+def test_the_theme_a_cases_pass_their_recorded_oracles():
+    cases = _read_json(THEME_A_CASES)
+    assert sorted(case["case_id"] for case in cases["cases"]) == sorted(THEME_A_CASE_IDS)
+    observed = {
+        case_id: _read_json(FIXTURES / fixture_id / "expected" / "events.json")["events"]
+        for case_id, fixture_id in THEME_A_CASE_IDS.items()
+    }
+    evaluation = _evaluate_oracles(cases, observed)
+    assert evaluation["status"] == "pass", evaluation["failures"]
+
+
+@pytest.mark.parametrize(
+    "case_id",
+    sorted(THEME_A_CASE_IDS.values()) + ["ta_ctx_accept", "ta_gap_reject", "ta_method_accept"],
+)
+def test_the_recorded_events_are_what_this_package_produces(case_id, tmp_path):
+    """The ingester's result through this package's own prefill step, gap
+    detection and term-request renderer gives the events metasalmon recorded,
+    event for event -- every Theme A case, where metasalmon's own test
+    rebuilds three."""
+    run = _theme_a_run(case_id, tmp_path)
+    assert run["events"] == run["expected"]["events"]
+    assert run["gap_count"] == run["expected"]["gap_count"]
+    assert run["term_request_count"] == run["expected"]["term_request_count"]
+
+
+def test_three_adversarial_harness_answers_are_caught_by_the_deterministic_layer(tmp_path):
+    cases = _read_json(THEME_A_CASES)
+    by_id = {case["case_id"]: case for case in cases["cases"]}
+
+    def passes(case_id, events):
+        return _evaluate_oracles({"cases": [by_id[case_id]]}, {case_id: events})["status"] == "pass"
+
+    # Accepting the fork-length method for catch_count fails the forbidden rule
+    # through SEM_METHOD_EVIDENCE_REQUIRED: the accept becomes review.
+    method = _theme_a_run("ta_method_accept", tmp_path / "method")
+    assert "SEM_METHOD_EVIDENCE_REQUIRED" in set(method["result"]["findings"]["code"])
+    record = method["result"]["assessments"]
+    assert list(record.loc[record["dictionary_role"] == "method", "llm_decision"]) == ["review"]
+    assert passes("catch_count", method["events"])
+    # The evaluator bites: the accept the validators refused would have failed.
+    refused = {"type": "selection", "role": "method", "iri": "https://w3id.org/smn/ForkLengthMeasurementFieldMethod", "decision": "accept"}
+    assert not passes("catch_count", method["events"] + [refused])
+
+    # Accepting CatchContext beside CatchAbundance raises SEM_REDUNDANT_CATCH_CONTEXT.
+    context = _theme_a_run("ta_ctx_accept", tmp_path / "context")
+    assert "SEM_REDUNDANT_CATCH_CONTEXT" in set(context["result"]["findings"]["code"])
+    record = context["result"]["assessments"]
+    assert list(record.loc[record["dictionary_role"] == "constraint", "llm_decision"]) == ["review"]
+    assert passes("catch_count", context["events"])
+
+    # A reject_shortlist on synthetic_structured_gap still surfaces the gap
+    # through escalation.
+    gap = _theme_a_run("ta_gap_reject", tmp_path / "gap")
+    row = gap["result"]["assessments"].iloc[0]
+    assert row["llm_decision"] == "request_new_term"
+    assert row["llm_escalated_from"] == "reject_shortlist"
+    assert any(event["type"] == "gap" and event["scope"] == "uncertain" for event in gap["events"])
+    assert passes("synthetic_structured_gap", gap["events"])
 
 
 # -----------------------------------------------------------------------------
