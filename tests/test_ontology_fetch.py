@@ -436,13 +436,16 @@ def test_the_default_cache_is_a_persistent_per_user_cache(monkeypatch, tmp_path)
     assert default(platform="linux", environ={}, home=home) == os.path.join(home, ".cache", tail)
     assert default(platform="freebsd14", environ={}, home=home) == os.path.join(home, ".cache", tail)
     assert default(platform="darwin", environ={}, home=home) == os.path.join(home, "Library", "Caches", tail)
-    assert default(platform="win32", environ={"LOCALAPPDATA": "C:/Users/me/AppData/Local"}, home=home) == os.path.join(
-        "C:/Users/me/AppData/Local", tail
+    # Stand-in directory names: the function joins whatever it is given.
+    local_app_data = str(tmp_path / "local-app-data")
+    xdg_cache = str(tmp_path / "xdg-cache")
+    assert default(platform="win32", environ={"LOCALAPPDATA": local_app_data}, home=home) == os.path.join(
+        local_app_data, tail
     )
     assert default(platform="win32", environ={}, home=home) == os.path.join(home, "AppData", "Local", tail)
     for platform in ("linux", "darwin", "win32"):
-        assert default(platform=platform, environ={"XDG_CACHE_HOME": "/x/cache", "LOCALAPPDATA": "C:/L"}, home=home) == (
-            os.path.join("/x/cache", tail)
+        assert default(platform=platform, environ={"XDG_CACHE_HOME": xdg_cache, "LOCALAPPDATA": local_app_data}, home=home) == (
+            os.path.join(xdg_cache, tail)
         )
     # An empty XDG_CACHE_HOME counts as unset, as R's nzchar() test has it.
     assert default(platform="linux", environ={"XDG_CACHE_HOME": ""}, home=home) == os.path.join(home, ".cache", tail)
