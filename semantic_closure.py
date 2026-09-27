@@ -85,7 +85,7 @@ from .sdp_methods import (
     _extension_root,
 )
 from .term_requests import GAP_COLUMNS, _namespace_scope
-from .term_search import _search_failed_sources, find_terms
+from .term_search import _normalize_explicit_sources, _search_failed_sources, find_terms
 from .text_safety import redact_secrets
 
 # The vocabulary evidence fields, in the order the digest hashes them. The order
@@ -1070,7 +1070,10 @@ def write_sdp_semantic_closure(
         hook; the signature is ``fn(query, role=..., sources=...)``.
     sources:
         Vocabulary sources to search. Defaults to ``("smn", "gcdfo")``, the two
-        this package resolves deterministically.
+        this package resolves deterministically. Names are read as
+        :func:`find_terms` reads them: each trimmed and lower-cased, with
+        missing, empty and repeated names dropped. A list with no name left is
+        an error.
     quiet:
         Suppress the progress and summary messages. Warnings about gaps and
         placeholder rationales are not suppressed.
@@ -1124,11 +1127,12 @@ def write_sdp_semantic_closure(
         raise ValueError(f"Directory {path} does not exist.")
     if not callable(search_fn):
         raise ValueError("search_fn must be a function.")
-    source_list: List[str] = []
-    for source in (sources,) if isinstance(sources, str) else sources:
-        text = _as_character(source).strip()
-        if text and text not in source_list:
-            source_list.append(text)
+    # One reading of a source list for the whole package: the rule find_terms()
+    # and make_source_policy() apply (hub B-421), and the one metasalmon's
+    # closure takes from `.ms_normalize_explicit_sources()`. This used to be
+    # strip() and first-wins de-duplication with no lower-casing, so " SMN" and
+    # "smn" were two sources here.
+    source_list: List[str] = list(_normalize_explicit_sources(sources))
     if not source_list:
         raise ValueError("sources must name at least one vocabulary source.")
     evidence = _normalize_evidence(evidence)
