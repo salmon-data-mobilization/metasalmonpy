@@ -561,6 +561,23 @@ def _error_row(target: Mapping, config: Mapping, error: str) -> dict:
     return _empty_assessment(target, config, error=redact_secrets(text))
 
 
+def _read_decision(value) -> Optional[str]:
+    """``.ms_semantic_review_read_decision()``: a harness's decision as the validator reads it.
+
+    Trimmed, lowercased and with the alias resolved, so ``propose_new_term`` is
+    the ``request_new_term`` it names. Row validation and the downgrade count
+    both read the decision through this, so the two cannot disagree about what
+    the harness wrote (hub item B-425, the mirror of metasalmon's B-424: the
+    count there exempted the alias with a named subset that never compared
+    equal, and this package reproduced that until both were fixed).
+    """
+    decision = _non_empty_string(value)
+    decision = decision.lower() if decision is not None else None
+    if decision is not None:
+        decision = DECISION_ALIASES.get(decision, decision)
+    return decision
+
+
 def _note(row: dict, note: str) -> dict:
     """``.ms_semantic_review_note()``: append a package note to the rationale."""
     row = dict(row)
@@ -669,10 +686,7 @@ def _validate_row(row: Mapping, slot: Mapping, config: Mapping, context: pd.Data
         return _error_row(target, config, declared)
 
     # 2. The decision, lowercased and trimmed, with the alias read.
-    decision = text("llm_decision")
-    decision = decision.lower() if decision is not None else None
-    if decision is not None:
-        decision = DECISION_ALIASES.get(decision, decision)
+    decision = _read_decision(row.get("llm_decision"))
     echo = text("llm_selected_iri")
     candidate_iris = [
         ("" if iri is None else iri.strip(_R_TRIM))
@@ -1442,15 +1456,10 @@ def ingest_semantic_assessments(
                 kept_pass_1 += 1
         else:
             # A downgrade is a recorded decision other than the one the harness
-            # wrote. metasalmon exempts the alias with
-            # `identical(aliases[harness_decision] %||% NA, decision)`, which
-            # never holds because the subset keeps its name, so an alias read
-            # as request_new_term counts as a downgrade there. The shared
-            # fixtures record that count (row_errors: five), so it is counted
-            # the same way here; see the B-327 report.
-            harness_decision = _non_empty_string(row.get("llm_decision"))
-            harness_decision = harness_decision.lower() if harness_decision is not None else None
-            if validated["llm_decision"] != harness_decision:
+            # wrote, read with the alias resolved: ``propose_new_term``
+            # recorded as ``request_new_term`` is the harness's own decision,
+            # not a downgrade (hub B-425, the mirror of B-424).
+            if validated["llm_decision"] != _read_decision(row.get("llm_decision")):
                 downgrades += 1
             if pass_number == 2:
                 previous = slot["previous_assessment"] or {}

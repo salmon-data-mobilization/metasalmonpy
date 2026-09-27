@@ -135,6 +135,26 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Defects in the review-packet contract are fixed before it ships.** Hub
+  queue item **B-425**, the metasalmonpy half of **B-424**. B-327 found each
+  while porting the contract and reproduced metasalmon's behaviour on purpose,
+  so that the shared conformance fixtures would agree; Brett ruled on
+  2026-09-26 that they be fixed now, in both packages. The vendored fixtures
+  under `tests/data/semantic_review/v1/` are metasalmon's regenerated copies,
+  byte for byte, and each fix is pinned by a test in
+  `tests/test_semantic_review_packet.py` that failed before it.
+
+  1. **The `propose_new_term` alias no longer counts as a downgrade.** The
+     ingest summary counts a downgrade when the recorded decision differs from
+     the one the harness wrote, and it compared the recorded decision with the
+     harness's text lowercased but with the alias unread, so a harness that
+     wrote `propose_new_term` was recorded as `request_new_term`, correctly,
+     and counted as downgraded. That was metasalmon's count, mirrored: R
+     exempted the alias with a named subset that never compared equal. Row
+     validation and the count now read the decision through one helper
+     (`semantic_review_ingest._read_decision()`), and the `row_errors` case
+     records four downgrades where it recorded five.
+
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
   half of the S16 convergence that precedes the shared review-packet contract

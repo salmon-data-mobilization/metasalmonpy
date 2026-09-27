@@ -67,7 +67,7 @@
     "retry_gain/packet-2.json": "110e60c22e82bf50e4f552f9d7c75609b3009976cf79f6c18bc43ec01284c4b0",
     "row_errors/expected/findings-1.csv": "c61b756ef3c7f9232c196ea99dd1b2fed132d0be9abd426df41eafea95365a8a",
     "row_errors/expected/record-1.csv": "54182e890131109f2051082c2cf52567375f7a2c72c84f54be04d270dedfb783",
-    "row_errors/expected/status-1.json": "5601d7d3e7aeb4707afb0bc6123291eec4d7f5b2b0e02d5b82a1b6b3310d8c79",
+    "row_errors/expected/status-1.json": "e3452ec3fe8992167a1d96fa839925d43e119951421101089cb252d8a2f01740",
     "row_errors/expected/suggestions-1.csv": "a7dd64a570a1f6eb4187caf2a9cd5934d19fc6e946b2a2134c6f7707c51820d4",
     "row_errors/harness-1.csv": "9fa2338b4e8774c418c3d82a69a37a2638ccbb83850322cd63c4111b58069276",
     "row_errors/harness-1.csv.packet-id": "8cbd5be8181abffff3d5c82d9891e2f197aa2fff395607350ca8533d99d46626",

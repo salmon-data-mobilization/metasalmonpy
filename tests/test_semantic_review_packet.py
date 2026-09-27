@@ -1702,3 +1702,35 @@ def test_a_package_path_reads_an_empty_suggestion_field_as_missing(tmp_path, mon
     assert targets and all(target["search_role"] == target["dictionary_role"] for target in targets)
     assert all(target["code_value"] is None for target in targets)
     assert None not in roles
+
+
+# -----------------------------------------------------------------------------
+# Follow-ups found while porting the contract (hub item B-425 here, B-424 in
+# metasalmon, B-381 / B-380 for the retry-query classifier). Each test failed
+# before the change it pins.
+# -----------------------------------------------------------------------------
+
+
+def test_the_propose_new_term_alias_is_the_decision_it_names_not_a_downgrade(tmp_path):
+    case = _build_case("target_units", tmp_path)
+    slots = _slots(_read_json(case["built"]["path"]))
+    rows = []
+    for position, slot in enumerate(slots):
+        if position == 0:
+            # The alias in mixed case: read as request_new_term, the harness's own decision.
+            rows.append(
+                _harness_row(slot["target"], llm_decision="Propose_New_Term", llm_confidence=0.6,
+                             llm_rationale="The ontology lacks it.", llm_new_term_label="A new term")
+            )
+        elif position == 1:
+            # A real downgrade, still counted: an accept that selects nothing becomes review.
+            rows.append(_harness_row(slot["target"], llm_decision="accept", llm_confidence=0.8, llm_rationale="No index."))
+        else:
+            rows.append(_harness_row(slot["target"], llm_decision="review", llm_confidence=0.4, llm_rationale="Later."))
+    result = ingest_semantic_assessments(
+        case["dict"], assessments=_harness_frame(rows), packet_id=case["built"]["packet_id"],
+        review_dir=case["review_dir"], search_fn=_no_search, quiet=True,
+    )
+    assert result["summary"]["decisions"]["request_new_term"] == 1
+    assert result["summary"]["errors"] == 0
+    assert result["summary"]["downgrades"] == 1
