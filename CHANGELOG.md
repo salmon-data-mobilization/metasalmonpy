@@ -18,6 +18,21 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **A missing entry in a source list names no source.** Hub queue item
+  **B-421**, which converges metasalmon on this package's reading of a source
+  list: each name trimmed with `str.strip()` and lower-cased, an empty name
+  dropped and a repeat dropped after its first appearance, in the caller's
+  order. One case had no R counterpart to converge on: `None`, NaN and `pd.NA`
+  went through `str()` and became the names `"none"`, `"nan"` and `"<na>"`,
+  searched as nothing and reported in `find_terms()`'s diagnostics as searches
+  that found nothing. metasalmon drops its `NA`, so `find_terms()` and
+  `make_source_policy()` now drop a missing entry too, and the two packages read
+  a source list identically. `find_terms()`'s docstring now states the whole
+  rule, and that `sources=None` searches `sources_for_role(role)`, which it
+  always did and metasalmon now does as well (hub B-420, Q70).
+  `tests/test_find_terms_sources.py`, the twin of metasalmon's
+  `tests/testthat/test-find-terms-sources.R`, failed before the change.
+
 * **`fetch_salmon_ontology()` no longer answers a request for one ontology with
   another's body, or one representation's request with another's.** Hub queue
   items **B-334** and **B-336**, the halves of metasalmon's **B-333** and
