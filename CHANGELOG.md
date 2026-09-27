@@ -177,6 +177,16 @@ and moving it is a separate outward act.
      awaiting its second pass or was accepted a pass earlier. The vendored
      schema's `unit_key` description says what a target key holds, and the new
      shared case `code_roles` pins the in-memory build.
+  3. **`prune=True` warns before it deletes a review record in a package with
+     no shortlist file.** `package_io._warn_pruning_recorded_decisions()`
+     returned early when there was no `semantic_suggestions.csv`, before it
+     asked whether `review/` held an ingested record, as metasalmon's did. A
+     packet that holds only blank slots with no candidates leaves exactly that
+     package: ingesting `review` or `request_new_term` answers for it writes
+     `review/semantic-llm-assessments.csv` and no shortlist file, so a later
+     rewrite with `prune=True` deleted the whole record without a word (raised
+     in the Codex review of pull request #72). The record is now looked for
+     first, whatever the shortlist file's state.
 
 * **A retry query written as a CURIE is recognised as an identifier whatever
   letters it holds.** Hub queue item **B-381**, the mirror of metasalmon's

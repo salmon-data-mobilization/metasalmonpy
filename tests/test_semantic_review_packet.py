@@ -1902,3 +1902,33 @@ def test_finalizing_one_role_of_a_shared_slot_keeps_the_other_roles_rows(tmp_pat
         warnings.simplefilter("ignore")
         review = review_semantics(str(path)).rows
     assert set(review.loc[review["target_file"] == "codes.csv", "role"]) == {"constraint", "entity"}
+
+
+def test_prune_warns_about_a_review_record_even_when_the_package_has_no_shortlist_file(tmp_path, monkeypatch):
+    # A packet holding only blank slots with no candidates: ingesting review and
+    # request_new_term answers writes the record and no semantic_suggestions.csv,
+    # and the prune warning used to return early for a missing shortlist file
+    # before it asked about review/, so the rewrite deleted the record silently.
+    frames = {"catch": pd.DataFrame({"catch_weight": [12.5, 8.1, 20.4]})}
+    path = _package(tmp_path / "prune-no-shortlist", frames, _nothing, monkeypatch, "catch")
+    built = write_semantic_review_packet(str(path), search_fn=_nothing, quiet=True)
+    rows = []
+    for position, slot in enumerate(_slots(_read_json(built["path"]))):
+        if position == 0:
+            rows.append(_harness_row(slot["target"], llm_decision="request_new_term", llm_confidence=0.6,
+                                     llm_rationale="Nothing was offered.", llm_new_term_label="Catch weight"))
+        else:
+            rows.append(_harness_row(slot["target"], llm_decision="review", llm_confidence=0.3, llm_rationale="Later."))
+    ingest_semantic_assessments(
+        str(path), assessments=_harness_frame(rows), packet_id=built["packet_id"], search_fn=_no_search, quiet=True
+    )
+    assert (path / "review" / "semantic-llm-assessments.csv").is_file()
+    assert not (path / "semantic_suggestions.csv").exists()
+    package = read_salmon_datapackage(str(path))
+    with pytest.warns(UserWarning, match="review/, which holds an ingested semantic review record"):
+        write_salmon_datapackage(
+            resources=package["resources"], dataset_meta=package["dataset"], table_meta=package["tables"],
+            dict_df=package["dictionary"], codes=package["codes"], path=path, overwrite=True, prune=True,
+        )
+    # The warning does not stop the prune.
+    assert not (path / "review").exists()
