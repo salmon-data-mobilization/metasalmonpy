@@ -604,7 +604,9 @@ def test_the_pinned_tag_serves_the_vendored_bundle_byte_for_byte():
 
     *Retires when:* the loader stops fetching a remote bundle, or stops falling
     back to the vendored one. Either way there is no longer a second copy for
-    the first to disagree with.
+    the first to disagree with. The opt-in gate retires sooner, when a CI job
+    with network access sets the variable, so the check runs on every pull
+    request rather than on request.
     """
     if not os.getenv("METASALMONPY_RUN_SDP_PIN_TEST", ""):
         pytest.skip(
