@@ -65,6 +65,28 @@ and moving it is a separate outward act.
      earlier versions under the old three names are no longer read.
   3. **A 304 with no cached copy is that url's failure**, and the next url is
      tried. It used to write the 304's empty body as the copy and return it.
+  4. **A copy holds exactly the bytes the server sent, and is written
+     atomically.** It used to be `response.text` written as UTF-8 by opening
+     the copy for writing, so a text type sent with no charset was decoded as
+     ISO-8859-1 and re-encoded (a UTF-8 e-acute became the four bytes of its
+     misreading), and a write that failed part-way left the copy empty. The
+     copy is now `response.content`, written through `atomic_io.atomic_write()`
+     -- a same-directory temporary and a rename -- as metasalmon writes it with
+     `writeBin()` and `file.rename()`, and metasalmon has stopped adding the
+     final newline it used to, so both packages store the same bytes. A
+     validator file is the header's bytes and a newline, written in binary, as
+     metasalmon writes it, where it used to have no newline.
+
+* **`write_sdp_semantic_closure()` reads its `sources` the way `find_terms()`
+  does.** Hub queue item **B-421**, extended to the closure writer in both
+  packages. It had its own rule, `strip()` and first-wins de-duplication with
+  no lower-casing, so `" SMN"` and `"smn"` were two sources here, and
+  metasalmon's closure had a different rule again. It now reads the list with
+  `_normalize_explicit_sources()`, the rule `find_terms()` and
+  `make_source_policy()` apply, and metasalmon's closure uses its twin, so the
+  three readers in each package, and the two packages, read a list one way. A
+  list with no name left is still refused. `tests/test_semantic_closure.py`
+  failed before the change.
 
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
@@ -1020,6 +1042,30 @@ and moving it is a separate outward act.
   This closes R-shipped-first lag and opens no `PARITY.md` row.
 
 ### Changed
+
+* **`fetch_salmon_ontology()` takes `timeout_seconds`, 30 by default, and caches
+  in a persistent per-user directory, as metasalmon does.** The follow-ups that
+  converged the two fetchers' remaining differences on 2026-09-26; each was
+  shown failing before the change in `tests/test_ontology_fetch.py`.
+
+  1. **`timeout_seconds`** (default 30, metasalmon's default) bounds both the
+     connection and the read, where every request had a fixed 15 s. It is the
+     last parameter, so a call that passes `fallback_urls` by position still
+     works. One difference is left in the libraries rather than the packages:
+     curl, under metasalmon, bounds the whole transfer, while requests bounds
+     each wait for the server's bytes, so a server that keeps sending slowly is
+     cut off there and not here.
+  2. **The default `cache_dir` is a persistent per-user cache** in the
+     locations R's `tools::R_user_dir()` uses for metasalmon's:
+     `$XDG_CACHE_HOME/metasalmonpy/ontology` when `XDG_CACHE_HOME` is set, on
+     every platform as in R, and otherwise
+     `~/Library/Caches/metasalmonpy/ontology` on macOS,
+     `%LOCALAPPDATA%\metasalmonpy\ontology` on Windows and
+     `~/.cache/metasalmonpy/ontology` elsewhere, found with the standard library
+     alone. It was `metasalmonpy-ontology-cache` under the system temporary
+     directory, where a copy an ETag could have let a later session reuse did
+     not survive a reboot. Copies there are no longer read, and you can delete
+     the directory.
 
 * **The repository no longer declares a `data/ontology` checkout that no clone
   can produce.** Hub queue item **B-337**. `.gitmodules` declared one
