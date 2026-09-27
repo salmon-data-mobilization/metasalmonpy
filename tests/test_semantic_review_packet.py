@@ -673,6 +673,31 @@ def test_an_iri_the_packet_did_not_offer_is_never_applied(tmp_path):
     assert not any(str(text).startswith("NA ") for text in record["llm_rationale"].dropna())
 
 
+def test_an_identifier_like_retry_query_is_not_issued_and_says_why(tmp_path):
+    # retry_dead_ends' README row promises an identifier-like query, but its
+    # "smn:MeshSize" is not one to R: TRE reads `[^\s]` as "neither a backslash
+    # nor s", and "MeshSize" has an s, so the fixture retries it as a lexical
+    # query and records no reason (as this package does, llm_review.py's
+    # _IDENTIFIER_CURIE). This pins decision 12 with a query both read as an
+    # identifier.
+    case = _build_case("retry_dead_ends", tmp_path)
+    harness = pd.read_csv(case["case_dir"] / "harness-1.csv", dtype=str, keep_default_na=False)
+    harness = harness.replace("", None)
+    harness.loc[harness["column_name"] == "MESH_SIZE", "llm_retry_query"] = "https://w3id.org/smn/MeshSize"
+    calls: list = []
+    result = ingest_semantic_assessments(
+        case["dict"], assessments=harness, packet_id=case["built"]["packet_id"], review_dir=case["review_dir"],
+        search_fn=_fake_search(_search_responses(), calls), quiet=True,
+    )
+    row = result["assessments"][result["assessments"]["column_name"] == "MESH_SIZE"].iloc[0]
+    assert row["llm_decision"] == "retry_search"
+    assert row["llm_retry_query_rejection_reason"] == "identifier_like_query"
+    assert row["llm_rationale"].endswith("Retry query looks like an identifier rather than a lexical query; the retry was not issued.")
+    assert not bool(row["llm_exploration_used"])
+    assert [call["query"] for call in calls] == ["fishing vessel"]
+    assert result["summary"]["retries"] == 1
+
+
 def test_error_downgraded_escalated_and_success_rows_carry_identical_names_and_types(tmp_path):
     case = _build_case("row_errors", tmp_path)
     result = _ingest_quietly(

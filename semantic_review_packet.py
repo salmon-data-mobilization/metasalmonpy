@@ -862,9 +862,11 @@ def _source_policy(sources) -> dict:
     """The source policy, keeping the caller's list as given for the packet."""
     from .llm_review import make_source_policy
 
-    policy = make_source_policy(None if sources is None else list(sources))
-    if sources is not None:
-        policy["given"] = [str(source) for source in ([sources] if isinstance(sources, str) else list(sources))]
+    if sources is None:
+        return make_source_policy(None)
+    given = [sources] if isinstance(sources, str) else list(sources)
+    policy = make_source_policy(given)
+    policy["given"] = [str(source) for source in given]
     return policy
 
 
@@ -1287,7 +1289,7 @@ def write_semantic_review_packet(
         top_n_value = int(top_n[0] if isinstance(top_n, (list, tuple)) else top_n)
     except (TypeError, ValueError):
         top_n_value = 0
-    if isinstance(top_n, bool) or top_n_value < 1:
+    if top_n_value < 1:
         raise ValueError("top_n must be a positive whole number.")
     source_policy = _source_policy(sources)
     review_dir = review_input["review_dir"]
