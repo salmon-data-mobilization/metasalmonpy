@@ -1,7 +1,7 @@
 {
   "provenance": {
-    "captured_from": "metasalmonpy at ccc3363, whose retriever puts pass 1 on metasalmon's rule (hub B-382)",
-    "how": "tests/test_semantic_retrieval.py::run_pinned_cases() as the commit adding this capture defines it, through the conftest binding: five configurations, of which rule-shapes-top3 and rule-shapes-top0 were added under B-382. The first three are byte-identical to the capture taken on main @ ba1b54a, before the retrieval loop was extracted (hub B-363)."
+    "captured_from": "metasalmonpy on the B-327 branch, whose retriever stamps only the 19 target columns onto a candidate row (hub B-327), on top of pass 1 on metasalmon's rule (hub B-382, ccc3363)",
+    "how": "tests/test_semantic_retrieval.py::run_pinned_cases() as the commit adding this capture defines it, through the conftest binding: five configurations, of which rule-shapes-top3 and rule-shapes-top0 were added under B-382. The first three are byte-identical to the capture taken on main @ ba1b54a, before the retrieval loop was extracted (hub B-363). Re-captured under B-327: the one change from the B-382 capture is that the suggestions no longer carry a unit_label column, which the retriever used to copy from the target; the search calls, the targets and every other suggestion column and value are unchanged."
   },
   "cases": {
     "role-defaults-top3": {
@@ -921,7 +921,6 @@
           "search_role",
           "target_query_basis",
           "target_query_context",
-          "unit_label",
           "collision_roles",
           "role_collision",
           "role_collision_note"
@@ -961,7 +960,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -1000,7 +998,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -1039,7 +1036,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -1078,7 +1074,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -1117,7 +1112,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -1156,7 +1150,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -1195,7 +1188,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -1234,7 +1226,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -1273,7 +1264,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -1312,7 +1302,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -1351,7 +1340,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -1390,7 +1378,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -1429,7 +1416,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -1468,7 +1454,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -1507,7 +1492,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -1546,7 +1530,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -1585,7 +1568,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -1624,7 +1606,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -1663,7 +1644,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -1702,7 +1682,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -1741,7 +1720,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -1780,7 +1758,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -1819,7 +1796,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -1858,7 +1834,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -1897,7 +1872,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -1936,7 +1910,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -1975,7 +1948,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -2014,7 +1986,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -2053,7 +2024,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -2092,7 +2062,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -2131,7 +2100,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -2170,7 +2138,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -2209,7 +2176,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -2248,7 +2214,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -2287,7 +2252,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -2326,7 +2290,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -2365,7 +2328,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -2404,7 +2366,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -2443,7 +2404,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -2482,7 +2442,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -2521,7 +2480,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -2560,7 +2518,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -2599,7 +2556,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -2638,7 +2594,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -2677,7 +2632,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -2716,7 +2670,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -2755,7 +2708,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -2794,7 +2746,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -2833,7 +2784,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -2872,7 +2822,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -2911,7 +2860,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -2950,7 +2898,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -2989,7 +2936,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -3028,7 +2974,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -3067,7 +3012,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3106,7 +3050,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3145,7 +3088,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3184,7 +3126,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3223,7 +3164,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3262,7 +3202,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3301,7 +3240,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -3340,7 +3278,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -3379,7 +3316,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -3418,7 +3354,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3457,7 +3392,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3496,7 +3430,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3535,7 +3468,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -3574,7 +3506,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -3613,7 +3544,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -3652,7 +3582,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3691,7 +3620,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3730,7 +3658,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3769,7 +3696,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3808,7 +3734,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3847,7 +3772,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3886,7 +3810,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3925,7 +3848,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -3964,7 +3886,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -4816,7 +4737,6 @@
           "search_role",
           "target_query_basis",
           "target_query_context",
-          "unit_label",
           "collision_roles",
           "role_collision",
           "role_collision_note"
@@ -4856,7 +4776,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -4895,7 +4814,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -4934,7 +4852,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -4973,7 +4890,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -5012,7 +4928,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -5051,7 +4966,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -5090,7 +5004,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -5129,7 +5042,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -5168,7 +5080,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -5207,7 +5118,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -5246,7 +5156,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -5285,7 +5194,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -5324,7 +5232,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -5363,7 +5270,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -5402,7 +5308,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -5441,7 +5346,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -5480,7 +5384,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -5519,7 +5422,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -5558,7 +5460,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -5597,7 +5498,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -5636,7 +5536,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -5675,7 +5574,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -5714,7 +5612,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -5753,7 +5650,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -5792,7 +5688,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -5831,7 +5726,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -5870,7 +5764,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -5909,7 +5802,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -5948,7 +5840,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -5987,7 +5878,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -6026,7 +5916,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -6065,7 +5954,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -6104,7 +5992,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -6143,7 +6030,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -6182,7 +6068,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -6221,7 +6106,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -6260,7 +6144,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6299,7 +6182,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6338,7 +6220,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6377,7 +6258,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6416,7 +6296,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -6455,7 +6334,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -6494,7 +6372,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6533,7 +6410,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6572,7 +6448,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -6611,7 +6486,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -6650,7 +6524,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6689,7 +6562,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6728,7 +6600,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6767,7 +6638,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6806,7 +6676,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -6845,7 +6714,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -7769,7 +7637,6 @@
           "search_role",
           "target_query_basis",
           "target_query_context",
-          "unit_label",
           "collision_roles",
           "role_collision",
           "role_collision_note"
@@ -7808,7 +7675,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -7846,7 +7712,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -7884,7 +7749,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -7922,7 +7786,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -7960,7 +7823,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -7998,7 +7860,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -8036,7 +7897,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -8074,7 +7934,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -8112,7 +7971,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -8150,7 +8008,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -8188,7 +8045,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -8226,7 +8082,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -8264,7 +8119,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -8302,7 +8156,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -8340,7 +8193,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -8378,7 +8230,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -8416,7 +8267,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -8454,7 +8304,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -8492,7 +8341,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -8530,7 +8378,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -8568,7 +8415,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -8606,7 +8452,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -8644,7 +8489,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -8682,7 +8526,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -8720,7 +8563,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -8758,7 +8600,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -8796,7 +8637,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -8834,7 +8674,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -8872,7 +8711,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -8910,7 +8748,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -8948,7 +8785,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -8986,7 +8822,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -9024,7 +8859,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -9062,7 +8896,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -9100,7 +8933,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets variable semantics for term_iri."
@@ -9138,7 +8970,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -9176,7 +9007,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -9214,7 +9044,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property|variable",
             "role_collision": true,
             "role_collision_note": "Label appears for variable and property candidates; this row targets property semantics for property_iri."
@@ -9252,7 +9081,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -9290,7 +9118,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -9328,7 +9155,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -9366,7 +9192,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -9404,7 +9229,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -9442,7 +9266,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -9480,7 +9303,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -9518,7 +9340,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -9556,7 +9377,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -9594,7 +9414,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -9632,7 +9451,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -9670,7 +9488,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -9708,7 +9525,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -9746,7 +9562,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -9784,7 +9599,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -9822,7 +9636,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -9860,7 +9673,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -9898,7 +9710,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -9936,7 +9747,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -9974,7 +9784,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10012,7 +9821,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10050,7 +9858,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10088,7 +9895,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -10126,7 +9932,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -10164,7 +9969,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -10202,7 +10006,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10240,7 +10043,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10278,7 +10080,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10316,7 +10117,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -10354,7 +10154,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -10392,7 +10191,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -10430,7 +10228,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10468,7 +10265,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10506,7 +10302,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10544,7 +10339,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10582,7 +10376,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10620,7 +10413,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10658,7 +10450,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10696,7 +10487,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -10734,7 +10524,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -11659,7 +11448,6 @@
           "search_role",
           "target_query_basis",
           "target_query_context",
-          "unit_label",
           "collision_roles",
           "role_collision",
           "role_collision_note"
@@ -11699,7 +11487,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -11738,7 +11525,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -11777,7 +11563,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -11816,7 +11601,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -11855,7 +11639,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -11894,7 +11677,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -11933,7 +11715,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -11972,7 +11753,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -12011,7 +11791,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -12050,7 +11829,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -12089,7 +11867,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -12128,7 +11905,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -12167,7 +11943,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -12206,7 +11981,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -12245,7 +12019,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -12284,7 +12057,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -12323,7 +12095,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -12362,7 +12133,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -12401,7 +12171,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -12440,7 +12209,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -12479,7 +12247,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -12518,7 +12285,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -12557,7 +12323,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -12596,7 +12361,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -12635,7 +12399,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -12674,7 +12437,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -12713,7 +12475,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -12752,7 +12513,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -12791,7 +12551,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -12830,7 +12589,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -12869,7 +12627,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -12908,7 +12665,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -12947,7 +12703,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -12986,7 +12741,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13025,7 +12779,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13064,7 +12817,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13103,7 +12855,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -13142,7 +12893,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -13181,7 +12931,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -13220,7 +12969,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -13259,7 +13007,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -13298,7 +13045,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -13337,7 +13083,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -13376,7 +13121,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -13415,7 +13159,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -13454,7 +13197,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -13493,7 +13235,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -13532,7 +13273,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -13571,7 +13311,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13610,7 +13349,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13649,7 +13387,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13688,7 +13425,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13727,7 +13463,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13766,7 +13501,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -13805,7 +13539,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -13844,7 +13577,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -13883,7 +13615,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -13922,7 +13653,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -13961,7 +13691,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14000,7 +13729,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14039,7 +13767,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -14078,7 +13805,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -14117,7 +13843,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -14156,7 +13881,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14195,7 +13919,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14234,7 +13957,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14273,7 +13995,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -14312,7 +14033,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -14351,7 +14071,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -14390,7 +14109,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14429,7 +14147,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14468,7 +14185,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14507,7 +14223,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14546,7 +14261,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14585,7 +14299,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14624,7 +14337,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14663,7 +14375,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -14702,7 +14413,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -15627,7 +15337,6 @@
           "search_role",
           "target_query_basis",
           "target_query_context",
-          "unit_label",
           "collision_roles",
           "role_collision",
           "role_collision_note"
@@ -15667,7 +15376,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -15706,7 +15414,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -15745,7 +15452,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -15784,7 +15490,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -15823,7 +15528,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Fork length in millimetres measured using callipers",
-            "unit_label": "millimetre",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -15862,7 +15566,6 @@
             "search_role": "variable",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -15901,7 +15604,6 @@
             "search_role": "property",
             "target_query_basis": "role_shaping",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -15940,7 +15642,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -15979,7 +15680,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -16018,7 +15718,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -16057,7 +15756,6 @@
             "search_role": "statistical_modifier",
             "target_query_basis": "aggregation_evidence",
             "target_query_context": "Mean weight of sampled fish in grams",
-            "unit_label": "gram",
             "collision_roles": "statistical_modifier",
             "role_collision": false,
             "role_collision_note": null
@@ -16096,7 +15794,6 @@
             "search_role": "variable",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -16135,7 +15832,6 @@
             "search_role": "property",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "property",
             "role_collision": false,
             "role_collision_note": null
@@ -16174,7 +15870,6 @@
             "search_role": "entity",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -16213,7 +15908,6 @@
             "search_role": "unit",
             "target_query_basis": "unit_label",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "unit",
             "role_collision": false,
             "role_collision_note": null
@@ -16252,7 +15946,6 @@
             "search_role": "constraint",
             "target_query_basis": "column_context",
             "target_query_context": "Water temperature at the site",
-            "unit_label": "degree Celsius",
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -16291,7 +15984,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Salmon life stage",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -16330,7 +16022,6 @@
             "search_role": "variable",
             "target_query_basis": "controlled_non_measurement",
             "target_query_context": "Species code",
-            "unit_label": null,
             "collision_roles": "variable",
             "role_collision": false,
             "role_collision_note": null
@@ -16369,7 +16060,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -16408,7 +16098,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -16447,7 +16136,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "constraint",
             "role_collision": false,
             "role_collision_note": null
@@ -16486,7 +16174,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -16525,7 +16212,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "method",
             "role_collision": false,
             "role_collision_note": null
@@ -16564,7 +16250,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "salmon population Fish observations Fish fish",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -16603,7 +16288,6 @@
             "search_role": null,
             "target_query_basis": "observation_unit",
             "target_query_context": "stream reach Sampling sites Sites sites",
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null
@@ -16642,7 +16326,6 @@
             "search_role": null,
             "target_query_basis": null,
             "target_query_context": null,
-            "unit_label": null,
             "collision_roles": "entity",
             "role_collision": false,
             "role_collision_note": null

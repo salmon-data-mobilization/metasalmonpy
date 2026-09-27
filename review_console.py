@@ -301,18 +301,35 @@ def semantic_suggestions(x) -> Optional[pd.DataFrame]:
 
 
 def semantic_llm_assessments(x) -> Optional[pd.DataFrame]:
-    """Target-level LLM assessments attached to a dictionary.
+    """Target-level semantic assessments attached to a dictionary or a package.
 
     The companion accessor to :func:`semantic_suggestions`, for the
     ``semantic_llm_assessments`` attribute that
-    ``suggest_semantics(llm_assess=True)`` attaches. Reading LLM review is
-    never itself an LLM call: this only reports assessments that already exist.
+    :func:`~metasalmonpy.ingest_semantic_assessments` (and the deprecated
+    ``suggest_semantics(llm_assess=True)``) attaches. Reading assessments is
+    never itself a model call: this only reports assessments that already
+    exist.
 
-    A package path always returns ``None`` -- assessments are not written into
-    the package, so a package on disk cannot carry them.
+    For a package path, the record
+    :func:`~metasalmonpy.ingest_semantic_assessments` persisted in
+    ``review/semantic-llm-assessments.csv``, typed as the 30-column assessment
+    row and carrying the validator findings in
+    ``attrs["semantic_validator_findings"]``, or ``None`` when no record has
+    been ingested. The in-package model call never writes one. A ``review/``
+    directory or record that is a symbolic link is refused rather than
+    followed.
     """
     found = _semantic_attribute_from(x, "semantic_llm_assessments")
-    if found["kind"] == "path" or found["value"] is None:
+    if found["kind"] == "path":
+        from .semantic_review_ingest import read_findings, read_record
+
+        review_dir = found["path"] / "review"
+        record = read_record(review_dir)
+        if record is None:
+            return None
+        record.attrs["semantic_validator_findings"] = read_findings(review_dir)
+        return record
+    if found["value"] is None:
         return None
     return pd.DataFrame(found["value"])
 

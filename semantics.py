@@ -20,6 +20,7 @@ from .metadata import (
 )
 from .term_search import _search_failed_sources, find_terms
 from .dwc_dp import suggest_dwc_mappings
+from .semantic_review_deprecation import deprecated_llm_entry_point
 
 ROLE_MAP = {
     "term_iri": "variable",
@@ -336,6 +337,32 @@ def _semantic_text_hash(parts) -> str:
     return rolling(131, 216613626, 2147483629) + rolling(137, 16777619, 2147483587)
 
 
+#: ``.ms_semantic_target_cols()``: the frozen 19-column semantic target row, in
+#: order (``AGENTS.md``'s frozen column contracts). The one copy: the review
+#: packet (:mod:`.semantic_review_packet`) reads it from here.
+_SEMANTIC_TARGET_COLUMNS = (
+    "dataset_id",
+    "table_id",
+    "column_name",
+    "code_value",
+    "dictionary_role",
+    "search_role",
+    "target_scope",
+    "target_sdp_file",
+    "target_sdp_field",
+    "target_row_key",
+    "target_label",
+    "target_description",
+    "search_query",
+    "target_query_basis",
+    "target_query_context",
+    "column_label",
+    "column_description",
+    "code_label",
+    "code_description",
+)
+
+
 _FINGERPRINT_COLUMNS = (
     "ontology",
     "label",
@@ -431,7 +458,10 @@ def _retrieve_semantic_target_candidates(
     bonus, so an unscored hinted candidate could outrank a scored one, and
     capped at ``max_per_role`` as given, so a depth of 0 kept nothing. The
     packet exporter re-retrieves each pass-1 target through this function
-    (B-327), so a pass-1 shortlist has to be the one metasalmon builds.
+    (B-327), so a pass-1 shortlist has to be the one metasalmon builds, and
+    B-327 took the last three points of R's rule: the query is trimmed as
+    ``trimws()`` trims it, a role with no sources to search is not searched,
+    and only the 19 target columns are stamped onto a candidate row.
     ``tests/test_semantic_retrieval.py`` pins both passes against what R gives
     on shared inputs.
     """
@@ -444,9 +474,17 @@ def _retrieve_semantic_target_candidates(
     if not search_role:
         return pd.DataFrame()
     query_text = target.get("search_query") if query is None else query
-    if _is_missing(query_text) or not str(query_text).strip():
+    # R trims the query with ``trimws()`` -- space, tab, CR and LF, nothing
+    # else -- and searches with, and records, the trimmed text (hub B-327).
+    query_text = "" if _is_missing(query_text) else str(query_text).strip(" \t\r\n")
+    if not query_text:
         return pd.DataFrame()
     target_sources = policy_sources(source_policy, search_role)
+    if not target_sources:
+        # A role with no sources to search -- an explicit, empty allowlist --
+        # is not searched at all, as in R (hub B-327): the answer would be
+        # filtered to nothing anyway, and a search_fn that must not run, ran.
+        return pd.DataFrame()
     res = search_fn(query_text, role=search_role, sources=target_sources)
     if res is None or res.empty:
         return pd.DataFrame()
@@ -492,8 +530,16 @@ def _retrieve_semantic_target_candidates(
     res = res.head(max(1, int(max_per_role))).copy()
     res["retrieval_query"] = query_text
     res["retrieval_pass"] = retrieval_pass
-    for key, value in target.items():
-        res[key] = value
+    # Only the frozen 19 target columns are stamped onto a candidate row, as R
+    # stamps ``intersect(.ms_semantic_target_cols(), names(target))`` (hub
+    # B-327). A discovered target also carries ``unit_label``, the column's
+    # unit, which is not candidate evidence: stamped here it became a 20th
+    # target column on every measurement candidate, and so an ``extra``
+    # member of the review packet's candidate record that metasalmon's never
+    # carries. Nothing read it from a candidate row.
+    for key in _SEMANTIC_TARGET_COLUMNS:
+        if key in target:
+            res[key] = target[key]
     return res
 
 
@@ -1013,6 +1059,7 @@ def _semantic_flag_role_collisions(suggestions_df: pd.DataFrame) -> pd.DataFrame
     return suggestions_df.drop(columns=["_candidate_label_norm", "_collision_key"])
 
 
+@deprecated_llm_entry_point("suggest_semantics")
 def suggest_semantics(
     df,
     dict_df: pd.DataFrame,

@@ -252,8 +252,12 @@ REDACTED_COLUMNS = (
 )
 
 
-def _redact(rows: list) -> list:
-    """``.ms_semantic_review_redact()``: redact every harness free-text cell in place.
+def _scrub_harness_text(rows: list) -> list:
+    """``.ms_semantic_review_redact()``: every harness free-text cell through
+    :func:`~metasalmonpy.text_safety.redact_secrets`, in place.
+
+    Named without "redact" because it is not a redactor: the package has one,
+    and ``tests/test_text_safety.py`` holds it to one.
 
     Returns the names of the columns in which anything changed.
     """
@@ -1331,7 +1335,7 @@ def ingest_semantic_assessments(
     _check_header(read["columns"])
     # Redacted at capture: nothing below sees the unredacted text.
     harness = [dict(row) for row in read["rows"]]
-    redacted_columns = _redact(harness)
+    redacted_columns = _scrub_harness_text(harness)
 
     slots = _slots(packet)
     slot_keys = [slot["key"] for slot in slots]

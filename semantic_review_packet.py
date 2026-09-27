@@ -45,6 +45,7 @@ from .semantic_review_json import (
     semantic_review_canonical_bytes,
     semantic_review_packet_id,
 )
+from .semantics import _SEMANTIC_TARGET_COLUMNS
 
 __all__ = ["write_semantic_review_packet"]
 
@@ -58,27 +59,7 @@ DECISION_VOCABULARY = ("accept", "review", "retry_search", "request_new_term", "
 DECISION_ALIASES = {"propose_new_term": "request_new_term"}
 
 #: ``.ms_semantic_target_cols()``: the frozen 19-column target row, in order.
-SEMANTIC_TARGET_COLUMNS = (
-    "dataset_id",
-    "table_id",
-    "column_name",
-    "code_value",
-    "dictionary_role",
-    "search_role",
-    "target_scope",
-    "target_sdp_file",
-    "target_sdp_field",
-    "target_row_key",
-    "target_label",
-    "target_description",
-    "search_query",
-    "target_query_basis",
-    "target_query_context",
-    "column_label",
-    "column_description",
-    "code_label",
-    "code_description",
-)
+SEMANTIC_TARGET_COLUMNS = _SEMANTIC_TARGET_COLUMNS
 
 #: ``.ms_semantic_target_group_cols()``: what groups a target's candidates.
 TARGET_GROUP_COLUMNS = (

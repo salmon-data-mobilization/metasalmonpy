@@ -94,11 +94,16 @@ from .nuseds import (
 from .term_requests import detect_semantic_term_gaps, render_ontology_term_request, submit_term_request_issues
 from .version_check import check_for_updates
 from .chat_decomposition import chat_decomposition
+from .semantic_review_deprecation import LLMDeprecationWarning
+from .semantic_review_ingest import SemanticReviewError, ingest_semantic_assessments
+from .semantic_review_packet import write_semantic_review_packet
 
 __all__ = [
     "__version__",
+    "LLMDeprecationWarning",
     "MetadataReview",
     "SemanticReview",
+    "SemanticReviewError",
     "SssomMappingSet",
     "accept_suggestion",
     "apply_salmon_dictionary",
@@ -127,6 +132,7 @@ __all__ = [
     "infer_dictionary",
     "infer_salmon_datapackage_artifacts",
     "infer_value_type",
+    "ingest_semantic_assessments",
     "migrate_sdp_methods",
     "ms_setup_github",
     "nuseds_enumeration_method_crosswalk",
@@ -173,4 +179,5 @@ __all__ = [
     "write_sdp_reproducibility_manifest",
     "write_sdp_semantic_closure",
     "write_sdp_sssom",
+    "write_semantic_review_packet",
 ]

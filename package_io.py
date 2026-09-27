@@ -52,6 +52,7 @@ from .resource_types import (
     value_type_mismatch_record,
 )
 from .sdp_methods import _atomic_write_set
+from .semantic_review_deprecation import deprecated_llm_entry_point
 from .sdp_schema import (
     SDP_PROFILE_URL as _SDP_PROFILE_URL,
     SDP_RULES_URL as _SDP_RULES_URL,
@@ -539,26 +540,40 @@ def _warn_pruning_recorded_decisions(target: Path, writes) -> None:
     try:
         rows = read_sdp_csv(suggestions_path)
     except Exception:
+        rows = pd.DataFrame()
+    decisions = []
+    if "decision" in rows.columns:
+        decisions = [
+            value
+            for value in rows["decision"].map(
+                lambda entry: "" if pd.isna(entry) else str(entry).strip()
+            )
+            if value and value != "not_selected"
+        ]
+    # A semantic review session under ``review/`` is a record too (hub item
+    # B-327, mirroring metasalmon's B-326): the packet, the harness's answers
+    # and the ingested assessments. ``prune=True`` would delete it just as
+    # silently.
+    review_record = target / "review" / "semantic-llm-assessments.csv"
+    has_review_record = review_record.is_file()
+    if not decisions and not has_review_record:
         return
-    if "decision" not in rows.columns:
-        return
-    decisions = [
-        value
-        for value in rows["decision"].map(
-            lambda entry: "" if pd.isna(entry) else str(entry).strip()
+    parts = []
+    if decisions:
+        plural = "" if len(decisions) == 1 else "s"
+        parts.append(
+            "prune=True is about to delete semantic_suggestions.csv, which records "
+            f"{len(decisions)} review decision{plural}."
         )
-        if value and value != "not_selected"
-    ]
-    if not decisions:
-        return
-    plural = "" if len(decisions) == 1 else "s"
-    warnings.warn(
-        "prune=True is about to delete semantic_suggestions.csv, which records "
-        f"{len(decisions)} review decision{plural}. Copy it first if you want "
-        "to keep the record of what was accepted and why.",
-        UserWarning,
-        stacklevel=2,
+    if has_review_record:
+        parts.append(
+            "prune=True is about to delete review/, which holds an ingested "
+            "semantic review record."
+        )
+    parts.append(
+        "Copy it first if you want to keep the record of what was accepted and why."
     )
+    warnings.warn(" ".join(parts), UserWarning, stacklevel=2)
 
 
 def _commit_package_write(
@@ -1713,6 +1728,7 @@ def _select_semantic_seed_codes(
     return codes.iloc[0:0].copy()
 
 
+@deprecated_llm_entry_point("infer_salmon_datapackage_artifacts")
 def infer_salmon_datapackage_artifacts(
     resources,
     dataset_id: str = "dataset-1",
@@ -2083,6 +2099,7 @@ def _auto_apply_package_suggestions(artifacts: dict, llm_assess: bool) -> None:
                 ] = suggestion["label"]
 
 
+@deprecated_llm_entry_point("create_sdp")
 def create_sdp(
     resources,
     path: Optional[str] = None,
