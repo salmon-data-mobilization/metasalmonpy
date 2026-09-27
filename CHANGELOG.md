@@ -1021,6 +1021,24 @@ and moving it is a separate outward act.
 
 ### Changed
 
+* **The repository no longer declares a `data/ontology` checkout that no clone
+  can produce.** Hub queue item **B-337**. `.gitmodules` declared one
+  submodule, `data/ontology`, whose url `../dfo-salmon-ontology` resolves
+  against this repository's remote to
+  `salmon-data-mobilization/dfo-salmon-ontology`, which does not exist; there
+  was never a gitlink, so git never read it. Three more tracked files assumed
+  the checkout, and all four came over from a website project in the initial
+  commit. Removed: `.gitmodules`; `.pre-commit-config.yaml`, whose only hook ran
+  `scripts/validate-term-tables.R` for files under
+  `data/ontology/release/artifacts/term-tables/` and so could never run; that
+  script; and the two `.quartoignore` lines for the path. Removing the hook
+  removes a check, although not one that ever ran. `devenv.nix` also stops
+  installing pre-commit and telling you to run `pre-commit install`, because
+  with no configuration file pre-commit refuses every commit. Nothing in the
+  package reads the path. `tests/test_repository_config.py` failed before the
+  change: every submodule `.gitmodules` declares must have a gitlink, and no
+  tracked configuration or code may name the path.
+
 * **`fetch_salmon_ontology()` fetches the Salmon Domain Ontology (smn) by
   default, as metasalmon does.** Hub queue item **B-423**; Q71 clause 1, ruled
   by Brett on 2026-09-26: smn should be the default starting point, so this
