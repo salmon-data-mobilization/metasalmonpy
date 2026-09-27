@@ -118,6 +118,59 @@ violation like a failing test.
 4. New metasalmon work started after 2026-08-13 must land its Python mirror
    as part of the same stream, so the gap never widens again.
 
+## LLM review is strictly opt-in, and the model call is leaving
+
+**LLM review is strictly opt-in.** Supplying `llm_context_files` /
+`llm_context_text` must never trigger a network or model call. LLM review runs
+only when `llm_assess=True` (and, for `infer_dictionary()`,
+`seed_semantics=True`); supplying options that will be ignored warns rather than
+silently doing nothing. metasalmon's `AGENTS.md` states the same contract.
+**Ruled 2026-09-25 (Brett, hub Q67): the model call leaves both packages.** This
+contract governs every release that still carries the in-package call. The
+additive release deprecates that call (hub B-326 in metasalmon, B-327 here) and
+the removal release (B-329 / B-330) deletes it, at which point this becomes the
+stronger contract that the packages make no model call at all. Until then, work
+that only improves the provider path has at most the releases before the
+removal to matter in; the order, and what stays, is the hub's S16 card.
+
+**The in-package model call is deprecated (2026-09-25, hub Q67, stream S16;
+landed here 2026-09-26 by B-327):** `llm_assess=True`, the eleven `llm_*`
+arguments and `chat_decomposition()` raise one `LLMDeprecationWarning` (a
+`FutureWarning` subclass) per top-level call, and are removed in 0.7.0. The
+suite silences it with one warnings filter in `tests/conftest.py`;
+`tests/test_llm_deprecation.py` switches it back on to assert it. Judgement now
+runs in the user's harness against a file: `write_semantic_review_packet()`
+writes `review/semantic-review-packet.json` and `ingest_semantic_assessments()`
+reads `review/semantic-assessments-pass-<n>.csv` back. **The file contract:**
+the packet's `packet_id` is the SHA-256 of its canonical bytes minus
+`packet_id` and `producer`; the harness names the packet it judged in a
+one-line sidecar `<csv>.packet-id` (or the caller passes `packet_id`); an IRI
+the packet did not offer is never applied; a retry is a second harness pass (a
+continuation packet; nothing from that target merges until it is answered); a
+rejected shortlist earns no second pass; and every harness free-text value is
+redacted at capture. The 30-column row's per-column ownership (`harness`,
+`package`, `harness_or_package`) and requiredness live in
+`semantic_review_packet.output_columns()` and are written into every packet.
+Neither function may reach a model provider; the network is reached only
+through `search_fn`, and `tests/test_semantic_review_packet.py` blocks the
+provider entry points and the socket API and walks the static call graph to
+prove it.
+
+**The contract is shared, byte for byte, and metasalmon holds the canonical
+copy.** The schema and the instructions (`data/semantic-review/`) and the
+conformance fixtures (`tests/data/semantic_review/v1/`, with the Theme A oracle
+file beside it in `theme-a/`) are metasalmon's `inst/extdata/semantic-review/`,
+`tests/testthat/fixtures/semantic-review/v1/` and
+`tests/testthat/fixtures/theme-a/cases-v1.json`, vendored unchanged. **Never edit
+a vendored copy to make a test pass**: a case that cannot be matched is a
+difference between the two packages, found and named. A change to any of them
+is a change to the contract and lands in metasalmon first, then here verbatim;
+`tests/test_semantic_review_parity.py` compares the two trees wherever a
+metasalmon checkout is present (the `parity` job's clone, or `METASALMON_PATH`)
+and hands every case across the language boundary both ways wherever a
+metasalmon with the contract is (`METASALMON_SRC`, or the `parity` job's
+install).
+
 ## Coordination hub
 
 The metasalmon repo is the coordinating hub for this family of repos
