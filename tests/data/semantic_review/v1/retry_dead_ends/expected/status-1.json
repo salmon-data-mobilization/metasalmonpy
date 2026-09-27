@@ -14,9 +14,9 @@
     "errors": 0,
     "downgrades": 0,
     "escalations": 0,
-    "retries": 2,
+    "retries": 1,
     "awaiting_pass_2": 0,
     "kept_pass_1": 0
   },
-  "search_calls": 2
+  "search_calls": 1
 }

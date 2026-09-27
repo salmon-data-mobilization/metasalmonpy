@@ -673,17 +673,18 @@ def test_an_iri_the_packet_did_not_offer_is_never_applied(tmp_path):
     assert not any(str(text).startswith("NA ") for text in record["llm_rationale"].dropna())
 
 
-def test_an_identifier_like_retry_query_is_not_issued_and_says_why(tmp_path):
-    # retry_dead_ends' README row promises an identifier-like query, but its
-    # "smn:MeshSize" is not one to R: TRE reads `[^\s]` as "neither a backslash
-    # nor s", and "MeshSize" has an s, so the fixture retries it as a lexical
-    # query and records no reason (as this package does, llm_review.py's
-    # _IDENTIFIER_CURIE). This pins decision 12 with a query both read as an
-    # identifier.
+@pytest.mark.parametrize("query", ["smn:MeshSize", "https://w3id.org/smn/MeshSize"])
+def test_an_identifier_like_retry_query_is_not_issued_and_says_why(query, tmp_path):
+    # Decision 12 of the S16 execplan. retry_dead_ends' own query is the CURIE
+    # smn:MeshSize, which its README calls identifier-like; until hub items
+    # B-380 and B-381 it was not one to either package, because R's class
+    # [^\s] excluded the letter s and this package reproduced that. A URL is
+    # identifier-like before and after.
     case = _build_case("retry_dead_ends", tmp_path)
     harness = pd.read_csv(case["case_dir"] / "harness-1.csv", dtype=str, keep_default_na=False)
     harness = harness.replace("", None)
-    harness.loc[harness["column_name"] == "MESH_SIZE", "llm_retry_query"] = "https://w3id.org/smn/MeshSize"
+    assert harness.loc[harness["column_name"] == "MESH_SIZE", "llm_retry_query"].tolist() == ["smn:MeshSize"]
+    harness.loc[harness["column_name"] == "MESH_SIZE", "llm_retry_query"] = query
     calls: list = []
     result = ingest_semantic_assessments(
         case["dict"], assessments=harness, packet_id=case["built"]["packet_id"], review_dir=case["review_dir"],
