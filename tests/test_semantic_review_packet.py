@@ -1735,3 +1735,170 @@ def test_the_propose_new_term_alias_is_the_decision_it_names_not_a_downgrade(tmp
     assert result["summary"]["decisions"]["request_new_term"] == 1
     assert result["summary"]["errors"] == 0
     assert result["summary"]["downgrades"] == 1
+
+
+def test_a_code_value_of_a_measurement_column_gets_one_target_unit_per_role_in_memory(tmp_path):
+    # The code_roles case: constraint, entity and method targets that share the
+    # code's one term_iri slot. They used to share one unit key, and the build
+    # raised "units must have unique keys".
+    case = _build_case("code_roles", tmp_path)
+    packet = _read_json(case["built"]["path"])
+    slot_id = "codes.csv|fixture-1/catch/CATCH_COUNT/EST|term_iri"
+    keys = [unit["unit_key"] for unit in packet["units"]]
+    assert keys == [f"target:{slot_id}|{role}" for role in ("constraint", "entity", "method")]
+    slots = _slots(packet)
+    assert [slot["role"] for slot in slots] == ["constraint", "entity", "method"]
+    assert all(slot["target"]["slot_id"] == slot_id for slot in slots)
+    # Each role keeps its own shortlist.
+    iris = [[candidate["iri"] for candidate in slot["candidates"]] for slot in slots]
+    assert iris[2] == [
+        "https://example.org/code-roles/method/visual-estimation",
+        "https://example.org/code-roles/method/expansion",
+    ]
+    assert len({iri for shortlist in iris for iri in shortlist}) == 6
+
+
+def _code_roles_package(path: Path, suggestion_roles=("constraint", "entity"), decision=None) -> Path:
+    """A package whose one column is a coded measurement, as the R twin builds it.
+
+    ``count_flag`` is written as a categorical column, so ``codes.csv`` holds its
+    code ``EST``, and the dictionary is then edited to call the column a
+    measurement, so discovery gives that code a constraint, an entity and a
+    method target in one slot. ``suggestion_roles`` are the roles
+    ``semantic_suggestions.csv`` holds rows for.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        create_sdp(
+            {"catch": pd.DataFrame({"count_flag": pd.Categorical(["EST", "EST", "EST"])})}, path=path,
+            dataset_id="demo-1", table_id="catch", seed_semantics=False, seed_verbose=False,
+            check_updates=False, overwrite=True,
+        )
+    dictionary_path = path / "metadata" / "column_dictionary.csv"
+    dictionary = pd.read_csv(dictionary_path, dtype=str, keep_default_na=False)
+    dictionary.loc[dictionary["column_name"] == "count_flag", "column_role"] = "measurement"
+    dictionary.to_csv(dictionary_path, index=False)
+    rows = []
+    for role in suggestion_roles:
+        for number in (1, 2):
+            rows.append(
+                {
+                    "dataset_id": "demo-1", "table_id": "catch", "column_name": "count_flag", "code_value": "EST",
+                    "dictionary_role": role, "search_role": role, "target_scope": "code",
+                    "target_sdp_file": "codes.csv", "target_sdp_field": "term_iri",
+                    "target_row_key": "demo-1/catch/count_flag/EST", "target_label": "EST",
+                    "search_query": "estimated count", "code_label": "EST",
+                    "label": f"Seeded {role} {number}", "iri": f"https://example.org/seeded/{role}/{number}",
+                    "source": "smn", "ontology": "smn", "role": role, "match_type": "label_exact",
+                    "definition": "A seeded term.", "score": 4.5 if number == 1 else 3.5, "decision": decision,
+                }
+            )
+    pd.DataFrame(rows).to_csv(path / "semantic_suggestions.csv", index=False, na_rep="")
+    return path
+
+
+def _code_role_hits(query, role=None, sources=None, **kwargs):
+    """Answers every retrieval but the method role's, so the code's method target
+    has no candidates and reaches the packet only through recovery."""
+    if role == "method":
+        return pd.DataFrame()
+    if role == "constraint" and query == "estimation flag":
+        return pd.DataFrame(
+            {
+                "label": ["Estimation flag"], "iri": ["https://example.org/code-roles/constraint/flag"],
+                "source": ["smn"], "ontology": ["smn"], "role": [role], "match_type": ["label_exact"],
+                "definition": ["A flag saying a value was estimated."], "score": [4.9],
+            }
+        )
+    return pd.DataFrame(
+        {
+            "label": [f"{role} term {i}" for i in (1, 2)],
+            "iri": [f"https://example.org/code-roles/{role}/{i}" for i in (1, 2)],
+            "source": "smn", "ontology": "smn", "role": role, "match_type": "label_exact",
+            "definition": f"A {role} term.", "score": [4.5, 3.5],
+        }
+    )
+
+
+def _code_slots(packet: dict) -> list:
+    return [slot for slot in _slots(packet) if slot["target"]["target_sdp_file"] == "codes.csv"]
+
+
+def test_a_package_path_gives_every_role_of_a_shared_code_slot_its_own_target(tmp_path):
+    path = _code_roles_package(tmp_path / "code-roles")
+    built = write_semantic_review_packet(str(path), search_fn=_code_role_hits, code_scope="all", quiet=True)
+    slots = _code_slots(_read_json(built["path"]))
+    # The queue shows the constraint and entity rows in one slot; each role is
+    # its own target, re-retrieved with its own shortlist, and the method role,
+    # which has no row, is recovered by discovery. Before: one target, the
+    # first role's.
+    assert sorted(slot["role"] for slot in slots) == ["constraint", "entity", "method"]
+    assert {slot["target"]["slot_id"] for slot in slots} == {"codes.csv|demo-1/catch/count_flag/EST|term_iri"}
+    assert len({slot["unit_key"] for slot in slots}) == 3
+    by_role = {slot["role"]: slot for slot in slots}
+    assert [row["iri"] for row in by_role["constraint"]["candidates"]] == [f"https://example.org/code-roles/constraint/{i}" for i in (1, 2)]
+    assert [row["iri"] for row in by_role["entity"]["candidates"]] == [f"https://example.org/code-roles/entity/{i}" for i in (1, 2)]
+    assert by_role["method"]["candidates"] == []
+
+
+def test_a_slot_with_a_recorded_decision_recovers_no_role(tmp_path):
+    path = _code_roles_package(tmp_path / "code-roles-decided", suggestion_roles=("constraint",), decision="rejected")
+    built = write_semantic_review_packet(str(path), search_fn=_code_role_hits, code_scope="all", quiet=True)
+    assert _code_slots(_read_json(built["path"])) == []
+
+
+def test_finalizing_one_role_of_a_shared_slot_keeps_the_other_roles_rows(tmp_path):
+    path = _code_roles_package(tmp_path / "code-roles-split")
+    built = write_semantic_review_packet(str(path), search_fn=_code_role_hits, code_scope="all", quiet=True)
+    rows = []
+    for slot in _slots(_read_json(built["path"])):
+        target = slot["target"]
+        if target["target_sdp_file"] != "codes.csv":
+            rows.append(_harness_row(target, llm_decision="review", llm_confidence=0.2, llm_rationale="Later."))
+        elif slot["role"] == "constraint":
+            rows.append(_harness_row(target, llm_decision="retry_search", llm_confidence=0.3,
+                                     llm_rationale="Search for the flag.", llm_retry_query="estimation flag"))
+        elif slot["role"] == "entity":
+            rows.append(_harness_row(target, llm_decision="accept", llm_confidence=0.9, llm_selected_candidate_index=1,
+                                     llm_selected_iri=slot["candidates"][0]["iri"], llm_rationale="The first."))
+        else:
+            rows.append(_harness_row(target, llm_decision="request_new_term", llm_confidence=0.6,
+                                     llm_rationale="Nothing was offered.", llm_new_term_label="Estimation method"))
+    first = ingest_semantic_assessments(
+        str(path), assessments=_harness_frame(rows), packet_id=built["packet_id"], search_fn=_code_role_hits, quiet=True
+    )
+    assert first["status"] == "awaiting_pass_2"
+    # At pass 1 the entity's merged rows are written and the constraint's rows,
+    # which await their second pass, are left as they were.
+    after_1 = semantic_suggestions(str(path))
+    after_1 = after_1[after_1["target_sdp_file"] == "codes.csv"]
+    assert set(after_1.loc[after_1["dictionary_role"] == "constraint", "iri"]) == {
+        f"https://example.org/seeded/constraint/{i}" for i in (1, 2)
+    }
+    assert (after_1.loc[after_1["dictionary_role"] == "entity", "llm_selected"].astype(str) == "TRUE").any()
+
+    pass_2 = _read_json(first["next_packet"])
+    constraint = [slot for slot in _slots(pass_2) if slot["reassess"]][0]
+    assert constraint["role"] == "constraint"
+    flag = [row["iri"] for row in constraint["candidates"]].index("https://example.org/code-roles/constraint/flag") + 1
+    second = ingest_semantic_assessments(
+        str(path),
+        assessments=_harness_frame([
+            _harness_row(constraint["target"], llm_decision="accept", llm_confidence=0.9,
+                         llm_selected_candidate_index=flag, llm_selected_iri="https://example.org/code-roles/constraint/flag",
+                         llm_rationale="The flag.")
+        ]),
+        packet_id=pass_2["packet_id"], search_fn=_no_search, quiet=True,
+    )
+    assert second["status"] == "complete"
+    # Both accepted roles' rows survive the pass-2 rewrite; slot by slot, the
+    # constraint's rewrite dropped the entity's accepted rows.
+    after_2 = semantic_suggestions(str(path))
+    after_2 = after_2[after_2["target_sdp_file"] == "codes.csv"]
+    selected = after_2[after_2["llm_selected"].astype(str) == "TRUE"]
+    assert set(selected["dictionary_role"]) == {"constraint", "entity"}
+    assert "https://example.org/code-roles/constraint/flag" in set(selected["iri"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        review = review_semantics(str(path)).rows
+    assert set(review.loc[review["target_file"] == "codes.csv", "role"]) == {"constraint", "entity"}

@@ -61,6 +61,7 @@ from .semantic_review_packet import (
     _review_file,
     _review_input,
     _slot_id,
+    _target_address,
     _text_scalar,
     _trim_string,
     assemble_packet,
@@ -1183,9 +1184,13 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
     For the targets whose slots are still undecided, their rows in
     ``semantic_suggestions.csv`` are replaced by the packet's shortlist carrying
     the merged assessment columns. A slot with a recorded decision keeps its
-    rows, as does a hand-picked row; a slot the packet does not hold is
-    untouched. A package whose every lookup found nothing has no shortlist file,
-    and a retry that gained candidates gives it one.
+    rows, as does a hand-picked row; a target the packet does not hold is
+    untouched. Rows are replaced target by target, never slot by slot: a code
+    value of a measurement column has three targets in one slot, and a pass
+    that finalizes one of them must not drop the rows of another, whether it is
+    still awaiting its second pass or was finalized a pass earlier (hub item
+    B-425, the mirror of B-424). A package whose every lookup found nothing has
+    no shortlist file, and a retry that gained candidates gives it one.
     """
     suggestions_path = path / "semantic_suggestions.csv"
     merged_text = _character_frame(merged) if len(merged) else pd.DataFrame()
@@ -1203,25 +1208,28 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
             existing[column] = None
     existing_records = _records(existing)
     existing_slots = [_slot_id(record) for record in existing_records]
+    existing_targets = [_target_address(record) for record in existing_records]
     decided = {
         slot
         for slot, record in zip(existing_slots, existing_records)
         if record.get("decision") is not None and str(record.get("decision")).strip(_R_TRIM)
     }
     merged_records = _records(merged_text)
-    merged_slots = [_slot_id(record) for record in merged_records]
-    replace = [slot for slot in dict.fromkeys(target.get("slot_id") for target in targets) if slot not in decided]
+    merged_targets = [_target_address(record) for record in merged_records]
+    replace = list(
+        dict.fromkeys(_target_address(target) for target in targets if target.get("slot_id") not in decided)
+    )
     pieces = []
     seen = []
-    for slot in dict.fromkeys(existing_slots):
-        if slot in replace:
-            pieces.extend(record for record, owner in zip(merged_records, merged_slots) if owner == slot)
-            seen.append(slot)
+    for address in dict.fromkeys(existing_targets):
+        if address in replace:
+            pieces.extend(record for record, owner in zip(merged_records, merged_targets) if owner == address)
+            seen.append(address)
         else:
-            pieces.extend(record for record, owner in zip(existing_records, existing_slots) if owner == slot)
-    for slot in replace:
-        if slot not in seen:
-            pieces.extend(record for record, owner in zip(merged_records, merged_slots) if owner == slot)
+            pieces.extend(record for record, owner in zip(existing_records, existing_targets) if owner == address)
+    for address in replace:
+        if address not in seen:
+            pieces.extend(record for record, owner in zip(merged_records, merged_targets) if owner == address)
     columns = list(existing.columns) + [
         column for column in dict.fromkeys(key for record in pieces for key in record) if column not in existing.columns
     ]

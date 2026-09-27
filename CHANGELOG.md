@@ -154,6 +154,29 @@ and moving it is a separate outward act.
      validation and the count now read the decision through one helper
      (`semantic_review_ingest._read_decision()`), and the `row_errors` case
      records four downgrades where it recorded five.
+  2. **Every role of a code value of a measurement column reaches the packet
+     as its own target.** Discovery gives such a code a constraint, an entity
+     and a method target, and all three write into the code's one `codes.csv`
+     `term_iri`, so they share one slot id. A target unit was keyed by its slot
+     alone, so the three collided: an in-memory `write_semantic_review_packet()`
+     raised *"units must have unique keys"*, and a package path kept only the
+     first role's shortlist, because it took one queued target per slot. A
+     target unit's key is now its slot and its role,
+     `target:<slot_id>|<dictionary_role>` (`semantic_review_packet._target_address()`,
+     metasalmon's `.ms_semantic_review_target_address()`), so every packet
+     holding a target unit has new bytes and a new `packet_id`; bundle keys are
+     unchanged, and `packet_version` stays `semantic-review-packet/1.0`
+     because the contract has not been released and nothing reads a target
+     key back. On a package path the queue now gives one target per slot and
+     role, and blank-slot recovery asks whether each target, not each slot, has
+     a suggestion row, so a role that found nothing at creation is recovered
+     even when another role of its slot has rows; a slot with a recorded
+     decision still recovers nothing. The ingester's rewrite of
+     `semantic_suggestions.csv` replaces rows target by target, so finalizing
+     one role no longer drops another role's rows, whether that role is still
+     awaiting its second pass or was accepted a pass earlier. The vendored
+     schema's `unit_key` description says what a target key holds, and the new
+     shared case `code_roles` pins the in-memory build.
 
 * **A retry query written as a CURIE is recognised as an identifier whatever
   letters it holds.** Hub queue item **B-381**, the mirror of metasalmon's
