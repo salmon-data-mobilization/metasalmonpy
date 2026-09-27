@@ -829,9 +829,10 @@ def test_placeholder_fill_matches_r_prose_exactly():
         "MISSING METADATA: add primary contact name or team."
     )
     assert row["contact_email"] == "MISSING METADATA: add primary contact email."
-    assert row["license"] == (
-        "MISSING METADATA: add dataset license (for example, CC-BY-4.0)."
-    )
+    # No licence was supplied, and none is invented: the licence is
+    # recommended rather than required, so it stays blank instead of taking a
+    # prompt, as in metasalmon.
+    assert pd.isna(row["license"])
     assert row["spec_version"] == "sdp-0.3.0"
 
     tables = fill_review_placeholders_table_meta(
@@ -929,9 +930,7 @@ def test_infer_metadata_returns_placeholder_filled_frames():
     assert row["creator"] == (
         "MISSING METADATA: add creator, team, or originating program."
     )
-    assert row["license"] == (
-        "MISSING METADATA: add dataset license (for example, CC-BY-4.0)."
-    )
+    assert pd.isna(row["license"])
     assert row["spec_version"] == "sdp-0.3.0"
 
 
