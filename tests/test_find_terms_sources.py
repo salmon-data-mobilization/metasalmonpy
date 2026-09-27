@@ -74,7 +74,7 @@ def test_named_sources_are_trimmed_lower_cased_and_de_duplicated(searched):
     assert searched(sources=["Qudt"])[0] == ["qudt"]
     assert searched(sources=[" smn "])[0] == ["smn"]
     assert searched(sources=["OLS", "ols", " ols"])[1] == ["ols"]
-    assert searched(sources=[" NVS\t"])[0] == ["nvs"]
+    assert searched(sources=["\u00a0NVS\t"])[0] == ["nvs"]
 
 
 @pytest.mark.parametrize("missing", [None, float("nan"), pd.NA])
@@ -102,7 +102,7 @@ def test_the_normaliser_strips_exactly_what_metasalmon_strips():
     assert [point for point in range(0x110000) if chr(point).isspace()] == python_whitespace
     for point in python_whitespace:
         assert normalise([f"{chr(point)}SMN{chr(point)}"]) == ("smn",), f"U+{point:04X}"
-    assert normalise(["᠎smn"]) == ("᠎smn",)
+    assert normalise(["\u180esmn"]) == ("\u180esmn",)
     assert normalise(["s mn"]) == ("s mn",)
 
 
