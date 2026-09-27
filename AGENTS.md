@@ -276,112 +276,22 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1720
-passed / 2 skipped with the extras installed, 1578 / 144 with core dependencies
-only (2026-09-26, measured locally for hub B-382 on `c4aa61a`, branched from
-`main` `82f1fb7`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
-worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
-in isolated environments built from `.[test]` and `.[test,eml,context]`; the
-seven over `main` are the four pass-1 R retrieval cases, the two pinned
-configurations B-382 added and the test of what they cover; 1713 / 2 and
-1571 / 144 for hub B-363 on `ca664f6`, its merge of `main` `416668e`, whose
-tests `main` `82f1fb7` merged unchanged, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
-worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
-in isolated environments built from `.[test]` and `.[test,eml,context]`;
-1175 / 2 and 1034 / 143 for B-363 on `8444d3a`, its merge of `main` `380a7a4`,
-1141 / 1 and 1000 / 142 on `c8317c1`, its merge of `main` `0235487`, and
-1119 / 1 and 978 / 142 on `c5d7c88`, branched from `main` `ba1b54a`, each under
-Python 3.13.11, pytest 9.1.1 and pandas 3.0.5 in a full clone with every tag,
-the same under `python -m pytest -q` and bare `pytest -q`; 1678 / 2 and
-1536 / 144 for hub B-362 on `27868bd`, its merge of `main` `7715e43`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
-worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
-in isolated environments built from `.[test]` and `.[test,eml,context]`;
-1214 / 2 and 1073 / 143 for B-362 on `27fc7e2`, its merge of `main` `380a7a4`,
-1180 / 1 and 1039 / 142 on `99de1c3`, its merge of `main` `0235487`, and
-1158 / 1 and 1017 / 142 on `7f9f79c`, branched from `main` `ba1b54a`, each under
-Python 3.13.11, pytest 9.1.1 and pandas 3.0.5 in a full clone with every tag,
-the same under `python -m pytest -q` and bare `pytest -q`; 1586 / 2 and
-1444 / 144 for hub B-360 on `c01b527`, its merge of `main` `2d2ab2c`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
-worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
-in isolated environments built from `.[test]` and `.[test,eml,context]`; the
-jump over `main` is `tests/test_validator_parity.py`'s 285 parametrised cases;
-1451 / 2 and 1309 / 144 for B-360 on `848c281`, its merge of `main` `cae3d83`;
-1425 / 2 and 1284 / 143 for B-360 on `ddaae54`, its merge of `main` `380a7a4`;
-1291 / 2 and 1149 / 144 for hub B-388 on `1168574`, its merge of
-`main` `a8e87a9`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
-machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a
-worktree of a full clone with every tag and with `METASALMON_PATH` unset, the
-same under `python -m pytest -q` and bare `pytest -q`; 1270 / 2 and 1128 / 144
-for hub B-247 on `60144a1`, branched from `main` `c7be120`, measured the same
-four ways; 1243 / 2 and 1101 / 144 for B-388 on `c5c58b4` and 1242 / 2 and
-1100 / 144 on `b364d57`, each branched from the same `main` and measured the
-same four ways; 1222 / 2 and 1080 / 144 on `main` `c7be120` before them,
-measured the same four ways on 2026-09-25 and again on 2026-09-26, as for hub
-B-274 on its merge of `main` `6f1a191`, whose tests `main` `c7be120` merged
-unchanged; 1213 / 2 and 1071 / 144 for hub
-B-188 on its merge of `main` `cae3d83`, measured the same four ways; 1175 / 2
-and 1033 / 144 for B-274 on `e671772`, its merge of the same `main`, and
-1166 / 2 and 1024 / 144 on `main` `cae3d83` before them; 1154 / 2 and
-1012 / 144 for B-274 on `188769b`, branched from `main` `e089b86`, and
-1145 / 2 and 1003 / 144 on `main` `e089b86` before it, as for B-370 on
-`6881aa0`, its merge of `main` `6700062`, whose tests `main` `e089b86` merged
-unchanged, each measured the same four ways; 1166 / 2 and 1024 / 144 for hub
-B-364 on `2fbde1e`, its merge of `main` `e089b86`, under Python 3.13.11,
-pytest 9.1.1 and pandas 3.0.5, in a worktree of a full clone with
-`METASALMON_PATH` unset, by `python -m pytest -q` in isolated environments
-built from `.[test]` and `.[test,eml,context]`; 1161 / 2 and 1020 / 143 for
-B-364 on `6c91919`, its merge of `main` `380a7a4`; 1105 / 1 and 964 / 142 for
-B-364 on `ac96fb7`, branched from `main` `ba1b54a`; and, under the conditions
-of the first measurement above, 1143 / 2 and 1002 / 143 for B-370 on
-`dd43cd2`, its merge of `main` `056fccc`,
-and 1143 / 2 and 1001 / 144 for B-245 on `08291c2`, its merge of the same
-`main`, whose tests `main` `6700062` merged
-unchanged; 1141 / 2 and 1000 / 143 on `main` `056fccc` before them, measured the
-same four ways, as for B-244 on `4722f17`, its merge of `main` `380a7a4`, whose
-tests `main` `056fccc` merged unchanged; 1142 / 2 and 1001 / 143 for B-370 on
-`b40ed2a` and 1142 / 2 and 1000 / 144 for B-245 on `5e3c0c1`, each branched from
-`main` `380a7a4`; 1140 / 2 and 999 / 143 on `main` `380a7a4` before them,
-measured the same four ways, as for B-201 with `main` `0235487` merged in;
-1103 / 1 and 962 / 142 for B-244 on `bd57a15`, branched from `main` `66ad1a3`;
-1106 / 1 and 965 / 142 for B-243 on `d53f403`, its merge of `main` `66ad1a3`,
-whose tests `main` `0235487` merged unchanged, and
-1136 / 2 and 995 / 143 for B-201 on `1a2fd73`, its merge of the same `main`;
-1102 / 1 and 961 / 142 for B-234 on `f872f51`, whose tests `main` `66ad1a3`
-merged unchanged, 1088 / 1 and 947 / 142 for B-243 on `c4bdfb9`, and 1118 / 2
-and 977 / 143 for B-201 on `d1182e5`, each branched from `main` `ba1b54a`;
-1084 / 1 and 943 / 142 on `main` `ba1b54a` before them, measured the same four
-ways; 1066 / 1 and 925 / 142 for B-189 on `10750ec`, branched from `main`
-`dcafe28`; 1064 / 1 and 923 / 142 on `main` `dcafe28` before it, as for B-212
-on `351fed6`, branched from `main`
-`70fa8fd`; 1061 / 1
-and 920 / 142 for B-222 on `e3b8330`, branched from `main` `ed5e22e`; 1056 / 1
-and 915 / 142 on `main` `ed5e22e` before it, as for B-215 on `9577f35`, which
-has `main` `2405df2` merged in; 1032 / 1
-and 891 / 142 for B-216 with `main` `fc5d16f` merged in, 1030 / 1 and 889 / 142
-for B-220 on `acf243e` and 1024 / 1 and 883 / 142 for B-216 on `f663c9b`
-earlier that day, 1022 / 1 and 881 / 142 for B-241 on the tree of its head
-`5b83c27` on 2026-09-24, 1012 / 1 and
-871 / 142 for B-242 and 1007 / 1 and 866 / 142 for B-240 earlier that day,
-966 / 1 and 825 / 142 for B-191 on 2026-09-23, 951 / 1 and
-810 / 142 at 0.5.0 on 2026-09-16, 896 / 3 and 783 / 116 at the S5 parity port
-on 2026-09-14, and 803 / 3 and 690 / 116 before that). **CI reads five fewer
-passes in each leg for the same tree**: 1131 / 7 and 990 / 148 on B-201's head
-`1a2fd73`, read from its check logs on 2026-09-25, as its head `098030f`, before
-`main` `66ad1a3` was merged in, read 1113 / 7 and 972 / 148. Before B-201 it
-read two fewer, as B-241's head `5b83c27` read 1020 / 3 and 879 / 144 on
-2026-09-24 and B-242's head `183f887` read 1010 / 3 and 869 / 144. Two of the
-five are `tests/test_roundtrip.py`, which runs only where both of those hold.
-CI's suite jobs have neither, so it skips there and runs in CI's `parity` job
-instead. The other three are `tests/test_check_changelog_window.py`'s replays of this
-repository's history, which need a full clone with the tags. CI's suite jobs
-check out one commit, so they skip there and run in the `changelog-window`
-workflow instead. The gap between the legs is the extras-gated EML, KNB and
-context-reader tests. Two tests skip in both legs, locally and on CI: the
-Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1` is
-set, and the comparison of `scripts/check-changelog-window.py` with the hub's
-copy, which runs only when `METASALMON_PATH` names a metasalmon checkout. These
-counts are a dated measurement, not a target — update them when you add tests
-rather than treating a mismatch as a failure.
+dependency configurations, and CI runs both, plus bare `pytest -q` as documented
+above (see *Dependency boundaries*). **The counts are not recorded here**: CI
+reports them on every run, and each pull request states the counts it measured.
+What the skips mean does not change from one pull request to the next, so that
+is recorded. The gap between the legs is the extras-gated EML, KNB and
+context-reader tests, which the core-only leg skips. Two tests skip in both
+legs, locally and on CI: the Qualark fetch test, which runs only when
+`METASALMONPY_RUN_QUALARK_TEST=1` is set, and the comparison of
+`scripts/check-changelog-window.py` with the hub's copy, which runs only when
+`METASALMON_PATH` names a metasalmon checkout. CI's suite jobs also skip a few
+tests that run elsewhere, so they report a few fewer passes than a local run of
+the same tree: `tests/test_roundtrip.py` needs `Rscript` on `PATH` and an R
+library at `/tmp/metasalmon-lib`, and runs in CI's `parity` job, and the replays
+of this repository's history in `tests/test_check_changelog_window.py` need a
+full clone with its tags, and run in the `changelog-window` workflow. A skip
+count that moves without a pull request saying why is worth a look.
 
 **The suite runs from a checkout at any path.** It did not until 2026-09-23
 (hub **B-191**). The root `__init__.py` and a `tests/__init__.py` made pytest
