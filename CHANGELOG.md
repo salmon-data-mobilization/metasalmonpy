@@ -18,6 +18,39 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **`fetch_salmon_ontology()` no longer answers a request for one ontology with
+  another's body, or one representation's request with another's.** Hub queue
+  items **B-334** and **B-336**, the halves of metasalmon's **B-333** and
+  **B-335**. Both packages carried each defect in the same shape, so these are
+  ports rather than register rows, and the two now apply one rule and one cache
+  layout. Each was demonstrated failing before the change
+  (`tests/test_ontology_fetch.py`, whose twin is metasalmon's
+  `tests/testthat/test-ontology-fetch.R`).
+
+  1. **The default fallback is tried for the default url only.** With
+     `fallback_urls=None` a call now tries `https://w3id.org/smn` when `url` is
+     the default and nothing otherwise. The fallback used to be tried after any
+     url, so a call for smn whose url failed returned gcdfo's body, the old
+     default fallback's, with no warning. A list you pass is tried as before,
+     and `[]` still names none.
+  2. **Each URL and representation has its own cached copy and validators.**
+     Every body used to be written to `dfo-salmon.ttl` in `cache_dir`, beside
+     one `etag.txt` and one `last_modified.txt`, so fetching smn and then gcdfo
+     into one directory left gcdfo at the path the smn call had returned, the
+     gcdfo request carried smn's ETag, a Turtle and an RDF/XML fetch of one url
+     did the same, and a fallback's ETag sent to the url on the next call could
+     bring back the fallback's body as the url's on a 304. A copy is now
+     `<key>.ttl`, where `<key>` is the first 16 hexadecimal digits of the
+     SHA-256 of the url as requested, a newline and `accept`, and its
+     validators are `<key>.etag` and `<key>.last_modified`, which is the layout
+     metasalmon writes. A request carries only the validators of the copy that
+     URL returned under that `accept`, a 304 returns that copy, and a 200
+     replaces the copy's validators rather than keeping any the new answer did
+     not send. **The returned file name changes accordingly**; copies cached by
+     earlier versions under the old three names are no longer read.
+  3. **A 304 with no cached copy is that url's failure**, and the next url is
+     tried. It used to write the 304's empty body as the copy and return it.
+
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
   half of the S16 convergence that precedes the shared review-packet contract
@@ -972,6 +1005,21 @@ and moving it is a separate outward act.
   This closes R-shipped-first lag and opens no `PARITY.md` row.
 
 ### Changed
+
+* **`fetch_salmon_ontology()` fetches the Salmon Domain Ontology (smn) by
+  default, as metasalmon does.** Hub queue item **B-423**; Q71 clause 1, ruled
+  by Brett on 2026-09-26: smn should be the default starting point, so this
+  package moves. The default `url` is now `https://w3id.org/smn/` and its
+  fallback `https://w3id.org/smn`. The old default, a gcdfo Turtle file at
+  `dfo-pacific-science.github.io/dfo-salmon-ontology/ontology/dfo-salmon.ttl`,
+  answered 404 when measured on 2026-09-25 and again on 2026-09-26, so every
+  bare call made one failing request and was answered by its gcdfo fallback. A
+  bare call now returns smn where it returned gcdfo; to fetch gcdfo, name it:
+  `fetch_salmon_ontology(url="https://w3id.org/gcdfo/salmon")`. The module and
+  function docstrings name smn, and no longer give offline work as a purpose of
+  the cache: when every URL fails the call raises even with a copy cached, which
+  it always did and which metasalmon now does too (Q71 clause 2, its B-422).
+  `tests/test_ontology_fetch.py` pins the default and failed before the change.
 
 * **The first retrieval pass gives the shortlist metasalmon gives.** Hub queue
   item **B-382**, the last of the S16 convergence items that precede the
