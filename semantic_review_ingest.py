@@ -1123,6 +1123,28 @@ def read_findings(review_dir: Path) -> pd.DataFrame:
     return found[list(FINDINGS_COLUMNS)].reset_index(drop=True)
 
 
+def findings_attr(findings: pd.DataFrame) -> dict:
+    """The validator findings as a record carries them in ``attrs``: column by column.
+
+    ``attrs["semantic_validator_findings"]`` holds the nine findings columns,
+    in order, each as a list of text or ``None`` -- ``DataFrame.to_dict("list")``
+    of the findings frame -- so ``pd.DataFrame(record.attrs["semantic_validator_findings"])``
+    is that frame, with its columns even when there are no findings. Not the
+    frame itself: ``pd.concat()`` compares its inputs' ``attrs`` whenever every
+    input has some, and a DataFrame there has no truth value, so two records
+    that each carried their findings frame could not be concatenated (hub item
+    B-425; the hazard B-370 removed from the retriever). Lists compare, so two
+    records concatenate, and keep the findings when theirs are equal.
+    metasalmon attaches the findings tibble as the record's attribute, where
+    no comparison happens (PARITY.md row 65, item (f)).
+    """
+    frame = findings if findings is not None and len(findings.columns) else _empty_findings()
+    return {
+        column: [_r_character(value) for value in frame[column].tolist()] if column in frame.columns else [None] * len(frame)
+        for column in FINDINGS_COLUMNS
+    }
+
+
 def _merge_llm_assessments(candidates: list, assessments: pd.DataFrame, top_n: int) -> pd.DataFrame:
     """``.ms_semantic_merge_llm_assessments()``: candidates joined with their target's assessment.
 
@@ -1323,8 +1345,11 @@ def ingest_semantic_assessments(
     dict
         ``status`` (``"complete"`` or ``"awaiting_pass_2"``), ``pass``,
         ``packet_id``, ``next_packet`` (the continuation packet's path, or
-        ``None``), ``assessments`` (the record, with the validator findings in
-        ``attrs["semantic_validator_findings"]``), ``findings``,
+        ``None``), ``assessments`` (the record, carrying the validator findings
+        column by column in ``attrs["semantic_validator_findings"]``, as
+        ``semantic_review_ingest.findings_attr()`` builds them, so that two
+        records concatenate),
+        ``findings`` (the same findings as a frame),
         ``suggestions``, ``targets``, ``dictionary`` (with
         ``semantic_suggestions``, ``semantic_targets`` and
         ``semantic_llm_assessments`` in ``attrs``, so
@@ -1620,7 +1645,7 @@ def ingest_semantic_assessments(
             message += f" The harness file in {review_dir} was replaced with its redacted form."
         warnings.warn(message, UserWarning, stacklevel=2)
 
-    record.attrs["semantic_validator_findings"] = findings
+    record.attrs["semantic_validator_findings"] = findings_attr(findings)
     suggestions = suggestions_out if suggestions_out is not None else session_merged
     if review_input["kind"] == "package":
         dictionary = _review_source_frames(str(review_input["path"])).get("column_dictionary.csv")

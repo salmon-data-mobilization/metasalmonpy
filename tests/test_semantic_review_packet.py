@@ -713,14 +713,9 @@ def test_error_downgraded_escalated_and_success_rows_carry_identical_names_and_t
     for frame in (result["assessments"], second["assessments"]):
         assert list(frame.columns) == list(LLM_ASSESSMENT_COLUMNS)
     assert dict(result["assessments"].dtypes) == dict(second["assessments"].dtypes)
-    # Copies without attrs: each record carries its findings frame there, and
-    # pd.concat() compares its inputs' attrs (hub B-370).
-    frames = []
-    for frame in (result["assessments"], second["assessments"]):
-        frame = frame.copy()
-        frame.attrs = {}
-        frames.append(frame)
-    rows = pd.concat(frames, ignore_index=True)
+    # The two records concatenate as they are: the findings ride on attrs as
+    # lists, which pd.concat() can compare (hub B-425; a frame there raised).
+    rows = pd.concat([result["assessments"], second["assessments"]], ignore_index=True)
     assert rows["llm_error"].notna().any()
     assert ((rows["llm_decision"] == "request_new_term") & rows["llm_escalated_from"].notna()).any()
     assert (rows["llm_decision"] == "accept").any()
@@ -802,7 +797,8 @@ def test_semantic_llm_assessments_path_reads_the_persisted_record_with_its_findi
     result = ingest_semantic_assessments(str(path), assessments=harness, packet_id=built["packet_id"], search_fn=_no_search, quiet=True)
     record = semantic_llm_assessments(str(path))
     assert _frame_text(record) == _frame_text(result["assessments"])
-    assert list(record.attrs["semantic_validator_findings"].columns) == list(FINDINGS_COLUMNS)
+    assert list(record.attrs["semantic_validator_findings"]) == list(FINDINGS_COLUMNS)
+    assert list(pd.DataFrame(record.attrs["semantic_validator_findings"]).columns) == list(FINDINGS_COLUMNS)
     # The suggestions were rewritten with the assessment columns, and the
     # review console reads them.
     assert "llm_decision" in semantic_suggestions(str(path)).columns
@@ -1932,3 +1928,47 @@ def test_prune_warns_about_a_review_record_even_when_the_package_has_no_shortlis
         )
     # The warning does not stop the prune.
     assert not (path / "review").exists()
+
+
+def test_two_records_concatenate_and_keep_their_findings_only_when_they_agree(tmp_path, monkeypatch):
+    # Each record carried its findings DataFrame in attrs, and pd.concat()
+    # compares its inputs' attrs whenever every input has some: a DataFrame has
+    # no truth value (and two of different lengths cannot be compared at all),
+    # so no two records concatenated -- the hazard hub B-370 removed from the
+    # retriever. The findings now ride column by column (B-425).
+    downgraded = [_build_case("bundle_downgrade", tmp_path / name) for name in ("a", "b")]
+    results = [
+        ingest_semantic_assessments(
+            case["dict"], assessments=str(case["case_dir"] / "harness-1.csv"), review_dir=case["review_dir"],
+            search_fn=_no_search, quiet=True,
+        )
+        for case in downgraded
+    ]
+    accepted = _build_case("bundle_accept", tmp_path / "c")
+    clean = ingest_semantic_assessments(
+        accepted["dict"], assessments=str(accepted["case_dir"] / "harness-1.csv"), review_dir=accepted["review_dir"],
+        search_fn=_no_search, quiet=True,
+    )
+    first = results[0]["assessments"]
+    assert len(results[0]["findings"]) > 0 and len(clean["findings"]) == 0
+    # The attribute is the findings frame, column by column.
+    assert _frame_text(pd.DataFrame(first.attrs["semantic_validator_findings"])) == _frame_text(results[0]["findings"])
+    assert list(pd.DataFrame(clean["assessments"].attrs["semantic_validator_findings"]).columns) == list(FINDINGS_COLUMNS)
+    # Equal findings concatenate and are kept; different ones concatenate and
+    # are dropped, as pandas drops any attrs its inputs disagree on.
+    both = pd.concat([first, results[1]["assessments"]], ignore_index=True)
+    assert len(both) == 2 * len(first)
+    assert both.attrs["semantic_validator_findings"] == first.attrs["semantic_validator_findings"]
+    mixed = pd.concat([first, clean["assessments"]], ignore_index=True)
+    assert "semantic_validator_findings" not in mixed.attrs
+    # So do the records two packages hold.
+    records = []
+    for name in ("one", "two"):
+        path = _spawners_package(tmp_path, monkeypatch, name)
+        built = write_semantic_review_packet(str(path), search_fn=_hits, quiet=True)
+        ingest_semantic_assessments(
+            str(path), assessments=_answer_every_slot(built["path"]), packet_id=built["packet_id"],
+            search_fn=_no_search, quiet=True,
+        )
+        records.append(semantic_llm_assessments(str(path)))
+    assert len(pd.concat(records, ignore_index=True)) == sum(len(record) for record in records)

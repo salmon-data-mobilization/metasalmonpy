@@ -187,6 +187,23 @@ and moving it is a separate outward act.
      rewrite with `prune=True` deleted the whole record without a word (raised
      in the Codex review of pull request #72). The record is now looked for
      first, whatever the shortlist file's state.
+  4. **Two assessment records concatenate** (this package only). A record from
+     `ingest_semantic_assessments()` or `semantic_llm_assessments(path)`
+     carried its validator findings as a DataFrame in
+     `attrs["semantic_validator_findings"]`, and `pd.concat()` compares its
+     inputs' `attrs` whenever every input has some: a DataFrame has no truth
+     value, so concatenating two records, from two sessions or two packages,
+     raised `ValueError` -- the hazard B-370 removed from the retriever. The
+     findings now ride there column by column, as
+     `DataFrame.to_dict("list")` renders them
+     (`semantic_review_ingest.findings_attr()`), so records concatenate, and
+     keep the findings when theirs are equal; `pd.DataFrame()` of the attribute
+     is the findings frame, with its nine columns even when there are none, and
+     the ingest result's `findings` member is the frame itself. metasalmon
+     attaches the findings tibble as an attribute, where nothing compares it,
+     and `PARITY.md` row 65 records the difference. The deprecated
+     `suggest_semantics(llm_assess=True)` still attaches a frame, and goes with
+     it in 0.7.0.
 
 * **A retry query written as a CURIE is recognised as an identifier whatever
   letters it holds.** Hub queue item **B-381**, the mirror of metasalmon's

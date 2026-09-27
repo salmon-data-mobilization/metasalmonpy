@@ -313,21 +313,22 @@ def semantic_llm_assessments(x) -> Optional[pd.DataFrame]:
     For a package path, the record
     :func:`~metasalmonpy.ingest_semantic_assessments` persisted in
     ``review/semantic-llm-assessments.csv``, typed as the 30-column assessment
-    row and carrying the validator findings in
-    ``attrs["semantic_validator_findings"]``, or ``None`` when no record has
-    been ingested. The in-package model call never writes one. A ``review/``
-    directory or record that is a symbolic link is refused rather than
-    followed.
+    row and carrying the validator findings column by column in
+    ``attrs["semantic_validator_findings"]`` (``pd.DataFrame()`` of it is the
+    findings frame; it is not the frame itself, so that two records can be
+    concatenated), or ``None`` when no record has been ingested. The
+    in-package model call never writes one. A ``review/`` directory or record
+    that is a symbolic link is refused rather than followed.
     """
     found = _semantic_attribute_from(x, "semantic_llm_assessments")
     if found["kind"] == "path":
-        from .semantic_review_ingest import read_findings, read_record
+        from .semantic_review_ingest import findings_attr, read_findings, read_record
 
         review_dir = found["path"] / "review"
         record = read_record(review_dir)
         if record is None:
             return None
-        record.attrs["semantic_validator_findings"] = read_findings(review_dir)
+        record.attrs["semantic_validator_findings"] = findings_attr(read_findings(review_dir))
         return record
     if found["value"] is None:
         return None
