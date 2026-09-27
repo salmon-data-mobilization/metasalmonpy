@@ -276,9 +276,38 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1291
-passed / 2 skipped with the extras installed, 1149 / 144 with core dependencies
-only (2026-09-26, measured locally for hub B-388 on `1168574`, its merge of
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1720
+passed / 2 skipped with the extras installed, 1578 / 144 with core dependencies
+only (2026-09-26, measured locally for hub B-382 on `c4aa61a`, branched from
+`main` `82f1fb7`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
+in isolated environments built from `.[test]` and `.[test,eml,context]`; the
+seven over `main` are the four pass-1 R retrieval cases, the two pinned
+configurations B-382 added and the test of what they cover; 1713 / 2 and
+1571 / 144 for hub B-363 on `ca664f6`, its merge of `main` `416668e`, whose
+tests `main` `82f1fb7` merged unchanged, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
+in isolated environments built from `.[test]` and `.[test,eml,context]`;
+1175 / 2 and 1034 / 143 for B-363 on `8444d3a`, its merge of `main` `380a7a4`,
+1141 / 1 and 1000 / 142 on `c8317c1`, its merge of `main` `0235487`, and
+1119 / 1 and 978 / 142 on `c5d7c88`, branched from `main` `ba1b54a`, each under
+Python 3.13.11, pytest 9.1.1 and pandas 3.0.5 in a full clone with every tag,
+the same under `python -m pytest -q` and bare `pytest -q`; 1678 / 2 and
+1536 / 144 for hub B-362 on `27868bd`, its merge of `main` `7715e43`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
+in isolated environments built from `.[test]` and `.[test,eml,context]`;
+1214 / 2 and 1073 / 143 for B-362 on `27fc7e2`, its merge of `main` `380a7a4`,
+1180 / 1 and 1039 / 142 on `99de1c3`, its merge of `main` `0235487`, and
+1158 / 1 and 1017 / 142 on `7f9f79c`, branched from `main` `ba1b54a`, each under
+Python 3.13.11, pytest 9.1.1 and pandas 3.0.5 in a full clone with every tag,
+the same under `python -m pytest -q` and bare `pytest -q`; 1586 / 2 and
+1444 / 144 for hub B-360 on `c01b527`, its merge of `main` `2d2ab2c`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
+in isolated environments built from `.[test]` and `.[test,eml,context]`; the
+jump over `main` is `tests/test_validator_parity.py`'s 285 parametrised cases;
+1451 / 2 and 1309 / 144 for B-360 on `848c281`, its merge of `main` `cae3d83`;
+1425 / 2 and 1284 / 143 for B-360 on `ddaae54`, its merge of `main` `380a7a4`;
+1291 / 2 and 1149 / 144 for hub B-388 on `1168574`, its merge of
 `main` `a8e87a9`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
 machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a
 worktree of a full clone with every tag and with `METASALMON_PATH` unset, the
