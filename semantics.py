@@ -296,9 +296,11 @@ def _role_hint_explanation(status: str, role: str):
 # .ms_retrieve_semantic_target_candidates() and
 # .ms_merge_semantic_target_candidates() (R/semantics-helpers.R), for hub item
 # B-363. The retriever is the loop that used to sit inline in
-# suggest_semantics(), moved and not changed: tests/test_semantic_retrieval.py
-# pins its output against a capture taken before the move. The merge and the
-# identity are ports, pinned against what R gives for the same inputs.
+# suggest_semantics(); B-363 moved it unchanged and hub item B-382 gave its
+# first pass R's rule, so both passes now retrieve as R does.
+# tests/test_semantic_retrieval.py pins both passes, the merge and the identity
+# against what R gives for the same inputs, and suggest_semantics()'s output
+# against a capture re-taken under B-382.
 
 
 def _semantic_trim_string(value, default=None):
@@ -415,32 +417,26 @@ def _retrieve_semantic_target_candidates(
     frame, without searching, when there is no role or no query.
 
     The body is the loop ``suggest_semantics()`` ran inline before hub item
-    B-363, kept step for step so pass-1 output is unchanged: the search
-    answer's ``attrs`` dropped from the copy (hub B-370), the explicit
-    allowlist applied on the way out as well as in (metasalmon 0.1.7), one
-    row per ``(source, iri)``, the role-hint status and bonus, the sort on
-    score (or bonus) then source, ontology, label and iri, the cap, and the
-    target's own columns copied onto every row.
+    B-363: the search answer's ``attrs`` dropped from the copy (hub B-370),
+    the explicit allowlist applied on the way out as well as in (metasalmon
+    0.1.7), one row per candidate identity (:func:`_semantic_candidate_identity`,
+    so IRI-less candidates that differ in any fingerprint column all survive),
+    the role-hint status and bonus, the sort on score (or bonus) then source,
+    ontology, label and iri with a missing score left missing so that it sorts
+    last, bonus or not, the cap floored at 1, and the target's own columns
+    copied onto every row.
 
-    **Pass 1 and pass 2 differ on three points, on purpose and for now.**
-    Today's pass 1 keeps one row per ``(source, iri)``, so IRI-less
-    candidates from one source collapse to one; fills a missing score with 0
-    before the role-hint bonus, so an unscored hinted candidate can outrank a
-    scored one; and caps at ``max_per_role`` as given. R deduplicates by
-    candidate identity, leaves a missing score missing (it sorts last, bonus
-    or not) and floors the cap at 1. Pass 1 keeps today's rule because B-363
-    pins ``suggest_semantics()``'s output unchanged; pass 2 takes R's, pinned
-    against R on shared inputs in ``tests/test_semantic_retrieval.py``,
-    because the second pass is what B-363 converges and the retry code this
-    replaced already kept distinct IRI-less rows and missing scores. *Retires
-    when* pass-1 retrieval converges on R -- the packet exporter re-retrieves
-    pass-1 targets through this function, so B-327 needs it -- at which point
-    the ``pass_one`` branches collapse into the R ones and the pass-1 pin is
-    regenerated under that item.
+    **Both passes take R's rule** (hub B-382). Until then pass 1 kept one row
+    per ``(source, iri)``, filled a missing score with 0 before adding the
+    bonus, so an unscored hinted candidate could outrank a scored one, and
+    capped at ``max_per_role`` as given, so a depth of 0 kept nothing. The
+    packet exporter re-retrieves each pass-1 target through this function
+    (B-327), so a pass-1 shortlist has to be the one metasalmon builds.
+    ``tests/test_semantic_retrieval.py`` pins both passes against what R gives
+    on shared inputs.
     """
     from .llm_review import policy_sources
 
-    pass_one = int(retrieval_pass) == 1
     search_role = target.get("search_role")
     if _is_missing(search_role):
         search_role = target.get("dictionary_role")
@@ -480,23 +476,20 @@ def _retrieve_semantic_target_candidates(
             return pd.DataFrame()
     if "role_hints" not in res.columns:
         res["role_hints"] = pd.NA
-    if pass_one:
-        res = res.drop_duplicates(subset=[col for col in ["source", "iri"] if col in res.columns], keep="first")
-    else:
-        identities = pd.Series(
-            _semantic_candidate_identity(res, role=search_role), index=res.index
-        )
-        res = res.loc[~identities.duplicated(keep="first")].copy()
+    identities = pd.Series(
+        _semantic_candidate_identity(res, role=search_role), index=res.index
+    )
+    res = res.loc[~identities.duplicated(keep="first")].copy()
     res["role_hint_status"] = res["role_hints"].apply(lambda value: _role_hint_status(search_role, value))
     res["role_hint_bonus"] = res["role_hint_status"].apply(_role_hint_bonus)
     res["role_hint_explanation"] = res["role_hint_status"].apply(lambda status: _role_hint_explanation(status, search_role))
     if "score" in res.columns:
         score = pd.to_numeric(res["score"], errors="coerce")
-        res["score"] = (score.fillna(0) if pass_one else score) + res["role_hint_bonus"]
+        res["score"] = score + res["role_hint_bonus"]
         res = res.sort_values(["score", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
     else:
         res = res.sort_values(["role_hint_bonus", "source", "ontology", "label", "iri"], ascending=[False, True, True, True, True])
-    res = res.head(max_per_role if pass_one else max(1, int(max_per_role))).copy()
+    res = res.head(max(1, int(max_per_role))).copy()
     res["retrieval_query"] = query_text
     res["retrieval_pass"] = retrieval_pass
     for key, value in target.items():

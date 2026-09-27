@@ -1579,9 +1579,8 @@ def _retry_candidates(
     (``semantics._semantic_candidate_identity()``, so IRI-less candidates
     with different fingerprints all survive), a missing score stays missing
     and sorts last, the depth is floored at 1, and every row carries
-    ``retrieval_pass`` 2 and the query it came from. Pass 1 keeps its own
-    ``(source, iri)`` key for now; the retriever's docstring says why and what
-    retires the split.
+    ``retrieval_pass`` 2 and the query it came from. Pass 1 takes the same
+    rule since hub B-382.
     """
     from .semantics import _retrieve_semantic_target_candidates
 

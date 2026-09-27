@@ -1,20 +1,24 @@
-"""Retrieval through one function, and metasalmon's second-pass merge (hub B-363).
+"""Retrieval through one function (hub B-363), on metasalmon's rule at both passes (B-382).
 
-Two pins, one per half of the item.
-
-**The extraction changes nothing.** ``suggest_semantics()`` used to retrieve
-each target's shortlist in a loop written inline; that loop is now
+**``suggest_semantics()`` gives the pinned output.** It used to retrieve each
+target's shortlist in a loop written inline; that loop is now
 ``semantics._retrieve_semantic_target_candidates()``, the counterpart of
 metasalmon's ``.ms_retrieve_semantic_target_candidates()``.
-``tests/data/semantics/suggest-semantics-pinned.json`` is the output of
-``run_pinned_cases()`` on ``main`` at ``ba1b54a``, **before** the loop moved:
-the suggestions, the discovered targets and every ``search_fn`` call, for three
-retrieval configurations over one multi-table fixture. The pin test replays
-the same cases and requires the same output, row for row and column for
-column. To regenerate it deliberately (a ruled change to pass-1 retrieval, not
-a drift), write ``run_pinned_cases()``'s result to that file through the
-package-binding route ``tests/conftest.py`` documents, and say in the commit
-which behaviour was meant to change.
+``tests/data/semantics/suggest-semantics-pinned.json`` holds the output of
+``run_pinned_cases()``: the suggestions, the discovered targets and every
+``search_fn`` call, for five retrieval configurations over one multi-table
+fixture. The pin test replays them and requires the same output, row for row
+and column for column. Its history is the point of it. The first capture was
+taken on ``main`` at ``ba1b54a``, **before** the loop moved, so that B-363
+could show the move changed nothing. It was re-captured under B-382, when pass
+1 took R's rule: the first three configurations came out byte-identical,
+because none of them holds a shortlist on which the two rules disagree, so two
+were added that do (``rule-shapes-top3`` and ``rule-shapes-top0``, built from
+``_rule_candidates()``), and on ``main`` before B-382 those two fail. To
+regenerate the pin deliberately (a ruled change to retrieval, not a drift),
+write ``run_pinned_cases()``'s result to that file through the package-binding
+route ``tests/conftest.py`` documents, and say in the commit which behaviour
+was meant to change.
 
 **The merge is R's.** ``semantics._merge_semantic_target_candidates()`` is a
 port of ``.ms_merge_semantic_target_candidates()`` (``R/semantics-helpers.R``):
@@ -230,10 +234,43 @@ def _candidates(query, role, with_scores):
     return frame
 
 
-def _search(calls, with_scores=True):
+def _rule_candidates(query, role, with_scores=True):
+    """A shortlist on which pass 1's old rule and metasalmon's disagree (hub B-382).
+
+    Two IRI-less ``zooma`` rows that differ only in ``match_type``: one
+    candidate under the old ``(source, iri)`` key, two under R's candidate
+    identity. An exact repeat of the first, which both rules drop. And a hinted
+    ``gcdfo`` row with no score: the old rule filled the score with 0 before
+    adding the 0.35 match bonus, so it outranked the scored ``smn`` row at
+    0.30; under R's rule a missing score stays missing and sorts last, so at a
+    depth of three it is the row that falls off. At a depth of 0 the old rule
+    kept nothing and R's keeps one row.
+    """
+    slug = "-".join(str(query).lower().split())
+    free_text = {"label": f"{role} free text", "iri": None, "source": "zooma",
+                 "ontology": "zooma", "role": role, "match_type": "label",
+                 "definition": "An IRI-less annotation.", "score": 0.25, "role_hints": role}
+    rows = [
+        {"label": f"{role} scored", "iri": f"https://w3id.org/smn/{role}/{slug}", "source": "smn",
+         "ontology": "smn", "role": role, "match_type": "label",
+         "definition": f"An smn {role}.", "score": 0.30, "role_hints": pd.NA},
+        free_text,
+        {**free_text, "match_type": "synonym", "score": 0.20},
+        dict(free_text),
+        {"label": f"{role} unscored", "iri": f"https://gcdfo.example/{role}/{slug}/unscored",
+         "source": "gcdfo", "ontology": "gcdfo", "role": role, "match_type": "label",
+         "definition": "A hinted gcdfo term with no score.", "score": math.nan, "role_hints": role},
+    ]
+    frame = pd.DataFrame(rows)
+    if not with_scores:
+        frame = frame.drop(columns=["score"])
+    return frame
+
+
+def _search(calls, with_scores=True, shape=_candidates):
     def search(query, role=None, sources=None):
         calls.append([str(query), str(role), list(sources or ())])
-        return _candidates(query, role, with_scores)
+        return shape(query, role, with_scores)
 
     return search
 
@@ -266,11 +303,17 @@ def _records(frame: pd.DataFrame) -> dict:
 
 
 def run_pinned_cases() -> dict:
-    """The three retrieval configurations the pin covers."""
+    """The five retrieval configurations the pin covers.
+
+    The last two exist for hub B-382: they are the ones on which pass 1's old
+    rule and metasalmon's give different shortlists (see ``_rule_candidates()``).
+    """
     cases = {
         "role-defaults-top3": {"sources": None, "max_per_role": 3, "scores": True},
         "explicit-smn-gcdfo-top2": {"sources": ["smn", "gcdfo"], "max_per_role": 2, "scores": True},
         "no-score-column-top3": {"sources": None, "max_per_role": 3, "scores": False},
+        "rule-shapes-top3": {"sources": None, "max_per_role": 3, "scores": True, "shape": _rule_candidates},
+        "rule-shapes-top0": {"sources": None, "max_per_role": 0, "scores": True, "shape": _rule_candidates},
     }
     out = {}
     for name, spec in cases.items():
@@ -281,7 +324,7 @@ def run_pinned_cases() -> dict:
             dictionary,
             sources=spec["sources"],
             max_per_role=spec["max_per_role"],
-            search_fn=_search(calls, spec["scores"]),
+            search_fn=_search(calls, spec["scores"], spec.get("shape", _candidates)),
             codes=codes,
             table_meta=table_meta,
             dataset_meta=dataset_meta,
@@ -294,7 +337,7 @@ def run_pinned_cases() -> dict:
     return out
 
 
-# --- the pin: suggest_semantics() gives the output it gave before ------------
+# --- the pin: suggest_semantics() gives the pinned output --------------------
 
 
 def _load(path: Path, default: dict) -> dict:
@@ -312,7 +355,7 @@ def test_both_fixtures_are_present():
 
 
 @pytest.mark.parametrize("name", sorted(PINNED["cases"]))
-def test_suggest_semantics_output_is_unchanged_by_the_extraction(name):
+def test_suggest_semantics_gives_the_pinned_output(name):
     actual = run_pinned_cases()[name]
     expected = PINNED["cases"][name]
     assert actual["search_calls"] == expected["search_calls"]
@@ -337,6 +380,31 @@ def test_the_pin_covers_every_retrieval_shape():
     assert {row["target_scope"] for row in suggestions} == {"column", "code", "table", "dataset"}
     explicit = PINNED["cases"]["explicit-smn-gcdfo-top2"]["suggestions"]["rows"]
     assert {row["source"] for row in explicit} == {"smn", "gcdfo"}
+
+
+def test_the_pin_covers_the_shapes_the_two_rules_disagree_on():
+    # Hub B-382. Each target's top three under metasalmon's rule: both
+    # IRI-less zooma rows (they differ in match_type), the scored smn row, and
+    # not the unscored gcdfo row, which sorts last and falls off. The old rule
+    # kept one zooma row and ranked the unscored row above the scored one.
+    rows = PINNED["cases"]["rule-shapes-top3"]["suggestions"]["rows"]
+    by_target = {}
+    for row in rows:
+        by_target.setdefault((row["target_row_key"], row["dictionary_role"]), []).append(row)
+    assert by_target
+    for shortlist in by_target.values():
+        assert [(row["source"], row["match_type"]) for row in shortlist] == [
+            ("zooma", "label"),
+            ("zooma", "synonym"),
+            ("smn", "label"),
+        ]
+        assert all(row["iri"] is None for row in shortlist[:2])
+        assert all(row["score"] is not None for row in shortlist)
+    # A depth of 0 keeps one row per target, as R's floor at 1 does.
+    floor = PINNED["cases"]["rule-shapes-top0"]["suggestions"]["rows"]
+    targets = PINNED["cases"]["rule-shapes-top0"]["targets"]["rows"]
+    assert len(floor) == len(targets)
+    assert len({(row["target_row_key"], row["dictionary_role"]) for row in floor}) == len(targets)
 
 
 def test_suggest_semantics_delegates_to_the_retrieval_function(monkeypatch):
@@ -445,20 +513,25 @@ def test_r_fixture_provenance_is_recorded():
     assert provenance["r_version"].startswith("R version 4.5.2")
 
 
-# --- the second pass through the retriever: R's rule, on shared inputs -------
+# --- both passes through the retriever: R's rule, on shared inputs -----------
 #
-# Pass 1 keeps today's rule on three points the item pins (the (source, iri)
-# key, a missing score filled with 0, the cap as given); pass 2 takes R's,
-# because the second pass is what B-363 converges. The retriever's docstring
-# carries the retirement condition. ``r-retrieve-candidates.json`` holds what
-# R gives at pass 2 for the inputs in ``retrieve-candidates-cases.json``.
+# Pass 2 took R's rule under B-363 and pass 1 under B-382.
+# ``r-retrieve-candidates.json`` holds what R gives at each pass for the inputs
+# in ``retrieve-candidates-cases.json``, from ``r-retrieve-candidates.R`` run on
+# metasalmon ``main`` @ ``33e65e4`` (R 4.5.2): R's two passes give the same
+# rows, the pass number aside, and pass 2 gives exactly the rows and search
+# calls of the fixture B-363 took at ``98cb9e6``.
 
 R_RETRIEVE_PATH = DATA / "r-retrieve-candidates.json"
 R_RETRIEVE = _load(R_RETRIEVE_PATH, {"cases": [], "provenance": {}})
 
 
 def _retrieve_cases():
-    return [pytest.param(case, id=case["id"]) for case in R_RETRIEVE["cases"]]
+    return [
+        pytest.param(case, at_pass, id=f"{case['id']}-pass-{at_pass['retrieval_pass']}")
+        for case in R_RETRIEVE["cases"]
+        for at_pass in case["passes"]
+    ]
 
 
 def _same_cell(got, want) -> bool:
@@ -493,52 +566,52 @@ def _retrieve_at(case, retrieval_pass):
     return rows, calls
 
 
-@pytest.mark.parametrize("case", _retrieve_cases())
-def test_second_pass_retrieval_gives_the_rows_r_gives(case):
-    rows, calls = _retrieve_at(case, retrieval_pass=2)
-    assert calls == case["search_calls"]
+@pytest.mark.parametrize("case,at_pass", _retrieve_cases())
+def test_retrieval_gives_the_rows_r_gives(case, at_pass):
+    rows, calls = _retrieve_at(case, retrieval_pass=at_pass["retrieval_pass"])
+    assert calls == at_pass["search_calls"]
     got = _records(rows)
-    assert set(got["columns"]) == set(case["retrieved"]["columns"])
-    assert len(got["rows"]) == len(case["retrieved"]["rows"])
-    for position, (have, want) in enumerate(zip(got["rows"], case["retrieved"]["rows"])):
+    want_rows = at_pass["retrieved"]["rows"]
+    assert set(got["columns"]) == set(at_pass["retrieved"]["columns"])
+    assert len(got["rows"]) == len(want_rows)
+    for position, (have, want) in enumerate(zip(got["rows"], want_rows)):
         assert _same_row(have, want), f"row {position}: {have} != {want}"
 
 
 def test_r_retrieve_fixture_provenance_is_recorded():
     assert R_RETRIEVE_PATH.is_file(), R_RETRIEVE_PATH
     provenance = R_RETRIEVE["provenance"]
-    assert provenance["metasalmon_commit"] == "98cb9e6"
+    assert provenance["metasalmon_commit"] == "33e65e4"
     assert provenance["r_version"].startswith("R version 4.5.2")
+    assert all([at_pass["retrieval_pass"] for at_pass in case["passes"]] == [1, 2] for case in R_RETRIEVE["cases"])
 
 
-def test_pass_one_keeps_todays_rule_where_pass_two_takes_rs():
-    # The same shortlist through both passes. Pass 1 is today's behaviour,
-    # pinned by the item; pass 2 is R's. The branch retires with pass-1
-    # convergence (see the retriever's docstring).
+def test_both_passes_keep_distinct_iri_less_rows_and_sort_a_missing_score_last():
+    # Hub B-382: one rule for both passes, so the same shortlist through each
+    # gives the same rows, the pass number aside.
     case = next(case for case in R_RETRIEVE["cases"] if case["id"] == "iri-less-and-missing-score")
     pass_one, _ = _retrieve_at(case, retrieval_pass=1)
     pass_two, _ = _retrieve_at(case, retrieval_pass=2)
-    # (source, iri) collapses every IRI-less zooma row to one; identity keeps
-    # the two that differ in match_type and drops the exact repeat.
-    assert int(pass_one["iri"].isna().sum()) == 1
-    assert int(pass_two["iri"].isna().sum()) == 2
-    assert list(pass_two.loc[pass_two["iri"].isna(), "match_type"]) == ["label", "synonym"]
-    # A missing score is filled with 0 (then the bonus) on pass 1 and left
-    # missing, sorting last, on pass 2.
-    assert pass_one["score"].notna().all()
-    assert int(pass_two["score"].isna().sum()) == 1
-    assert pd.isna(pass_two["score"].iloc[-1])
-    assert pass_two["label"].iloc[-1] == "marine phase"
+    for rows in (pass_one, pass_two):
+        # Identity keeps the two IRI-less zooma rows that differ in match_type
+        # and drops the exact repeat; (source, iri) used to keep one.
+        assert int(rows["iri"].isna().sum()) == 2
+        assert list(rows.loc[rows["iri"].isna(), "match_type"]) == ["label", "synonym"]
+        # A missing score stays missing and sorts last; it used to be filled
+        # with 0 before the bonus.
+        assert int(rows["score"].isna().sum()) == 1
+        assert pd.isna(rows["score"].iloc[-1])
+        assert rows["label"].iloc[-1] == "marine phase"
+    assert pass_one.drop(columns=["retrieval_pass"]).equals(pass_two.drop(columns=["retrieval_pass"]))
     assert set(pass_one["retrieval_pass"]) == {1}
     assert set(pass_two["retrieval_pass"]) == {2}
 
 
-def test_a_zero_depth_keeps_nothing_on_pass_one_and_one_row_on_pass_two():
+def test_a_zero_depth_keeps_one_row_on_either_pass():
     case = next(case for case in R_RETRIEVE["cases"] if case["id"] == "cap-zero-keeps-one")
-    pass_one, _ = _retrieve_at(case, retrieval_pass=1)
-    pass_two, _ = _retrieve_at(case, retrieval_pass=2)
-    assert len(pass_one) == 0
-    assert len(pass_two) == 1
+    for retrieval_pass in (1, 2):
+        rows, _ = _retrieve_at(case, retrieval_pass=retrieval_pass)
+        assert len(rows) == 1
 
 
 def test_retry_candidates_keep_distinct_iri_less_alternatives():
