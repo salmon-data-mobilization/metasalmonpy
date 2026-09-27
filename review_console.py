@@ -559,6 +559,35 @@ def review_semantics(
     -------
     SemanticReview
     """
+    queue = _review_queue(x, include_filled=include_filled, columns=columns)
+    rows = queue["review"]
+    if max_candidates is not None:
+        rows = rows[rows["rank"] <= int(max_candidates)]
+
+    return SemanticReview(rows.reset_index(drop=True), queue["review_path"])
+
+
+def _review_queue(
+    x,
+    include_filled: bool = False,
+    columns: Optional[Iterable[str]] = None,
+) -> dict:
+    """The review queue: which slots still need a decision, with every
+    candidate row that would be shown for them.
+
+    The one rule both :func:`review_semantics` and
+    :func:`~metasalmonpy.write_semantic_review_packet` apply (hub item B-327,
+    mirroring metasalmon's ``.ms_review_queue()`` from B-326), so the packet a
+    harness judges holds exactly the slots the console would show and never a
+    fresh discovery -- re-running discovery would drop every slot
+    ``create_sdp()`` pre-filled with a ``REVIEW:`` marker, because discovery
+    treats a marked slot as filled.
+
+    Returns a mapping: ``review`` (one row per candidate, before
+    ``max_candidates``), ``suggestions`` (the suggestion rows the review was
+    built from; ``suggestions.iloc[source_row[i]]`` is the row behind
+    ``review.iloc[i]``), ``source_row`` and ``review_path``.
+    """
     suggestions = semantic_suggestions(x)
     if suggestions is None or suggestions.empty:
         raise ValueError(
@@ -764,6 +793,7 @@ def review_semantics(
     rows = rows.astype({"rank": "int64"})
     rows = _review_seed_recorded_decisions(rows, suggestions)
 
+    source_row = list(range(len(rows)))
     if not include_filled:
         # A slot with an unknown current value (no frame to read, or an
         # ambiguous row match) is kept: dropping it would hide work, and the
@@ -774,14 +804,19 @@ def review_semantics(
         # A recorded decision takes a slot out of the queue even though
         # rejecting leaves the field blank -- "blank" and "undecided" are
         # different states, and only ``include_filled=True`` shows the decided
-        # ones again.
+        # ones again. A hand-picked accept (``source = "user"``) is recorded
+        # with a decision, so this is also what drops it.
         decided_slots = set(rows.loc[rows["decision"].notna(), "slot_id"])
-        rows = rows[unfilled & ~rows["slot_id"].isin(decided_slots)]
+        keep = (unfilled & ~rows["slot_id"].isin(decided_slots)).to_numpy(dtype=bool)
+        source_row = [position for position, kept in enumerate(keep) if kept]
+        rows = rows[keep]
 
-    if max_candidates is not None:
-        rows = rows[rows["rank"] <= int(max_candidates)]
-
-    return SemanticReview(rows.reset_index(drop=True), review_path)
+    return {
+        "review": rows,
+        "suggestions": suggestions,
+        "source_row": source_row,
+        "review_path": review_path,
+    }
 
 
 # ---------------------------------------------------------------------------

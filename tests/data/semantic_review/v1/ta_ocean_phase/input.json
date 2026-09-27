@@ -1,0 +1,85 @@
+{
+  "case_id": "ta_ocean_phase",
+  "dictionary": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "trawl",
+      "column_name": "OCEAN_PHASE_CODE",
+      "column_label": "Ocean life-cycle phase",
+      "column_description": "Code identifying the salmon ocean life-cycle or assessment phase represented by the observation.",
+      "column_role": "measurement",
+      "value_type": "number",
+      "unit_label": null,
+      "unit_iri": null,
+      "term_iri": null,
+      "property_iri": null,
+      "entity_iri": null,
+      "constraint_iri": null,
+      "statistical_modifier_iri": null,
+      "method_iri": null,
+      "term_type": null
+    }
+  ],
+  "targets": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "trawl",
+      "column_name": "OCEAN_PHASE_CODE",
+      "code_value": null,
+      "dictionary_role": "constraint",
+      "search_role": "constraint",
+      "target_scope": "column",
+      "target_sdp_file": "column_dictionary.csv",
+      "target_sdp_field": "constraint_iri",
+      "target_row_key": "theme_a/trawl/OCEAN_PHASE_CODE",
+      "target_label": "Ocean phase",
+      "target_description": "Salmon ocean life-cycle or assessment phase.",
+      "search_query": "salmon ocean lifecycle phase",
+      "target_query_basis": "column_description",
+      "target_query_context": "Explicit salmon ocean life-cycle and assessment phase.",
+      "column_label": "Ocean life-cycle phase",
+      "column_description": "Code identifying the salmon ocean life-cycle or assessment phase represented by the observation.",
+      "code_label": null,
+      "code_description": null
+    }
+  ],
+  "candidates": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "trawl",
+      "column_name": "OCEAN_PHASE_CODE",
+      "code_value": null,
+      "dictionary_role": "constraint",
+      "search_role": "constraint",
+      "target_scope": "column",
+      "target_sdp_file": "column_dictionary.csv",
+      "target_sdp_field": "constraint_iri",
+      "target_row_key": "theme_a/trawl/OCEAN_PHASE_CODE",
+      "target_label": "Ocean phase",
+      "target_description": "Salmon ocean life-cycle or assessment phase.",
+      "search_query": "salmon ocean lifecycle phase",
+      "target_query_basis": "column_description",
+      "target_query_context": "Explicit salmon ocean life-cycle and assessment phase.",
+      "column_label": "Ocean life-cycle phase",
+      "column_description": "Code identifying the salmon ocean life-cycle or assessment phase represented by the observation.",
+      "code_label": null,
+      "code_description": null,
+      "label": "Ocean phase",
+      "iri": "https://w3id.org/smn/OceanPhase",
+      "source": "smn",
+      "ontology": "Salmon Ontology",
+      "role": "constraint",
+      "match_type": "label_partial",
+      "definition": "A salmon life-cycle or assessment phase occurring in the ocean.",
+      "score": 0.96,
+      "term_type": "skos_concept",
+      "definition_status": "curated_paraphrase",
+      "retrieval_query": "salmon ocean lifecycle phase",
+      "retrieval_pass": 1
+    }
+  ],
+  "context_text": [
+    "The field explicitly denotes the salmon life-cycle and assessment phase in the ocean, rather than merely stating that sampling occurred at sea."
+  ],
+  "top_n": 5
+}

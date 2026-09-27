@@ -1,0 +1,3 @@
+dataset_id,table_id,column_name,code,severity,role,before_decision,after_decision,message
+theme_a,trawl,CATCH_COUNT,SEM_CONSTRAINT_EVIDENCE_REQUIRED,warning,constraint,accept,review,"The accepted constraint candidate lacks an explicit qualifier such as origin, life stage, phase, season, age, sex, stock, or reporting unit."
+theme_a,trawl,CATCH_COUNT,SEM_REDUNDANT_CATCH_CONTEXT,warning,constraint,accept,review,CatchContext duplicates the accepted CatchAbundance framing when no additional constraint evidence is present.

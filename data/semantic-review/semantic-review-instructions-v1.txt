@@ -1,0 +1,111 @@
+SEMANTIC REVIEW INSTRUCTIONS (semantic-review-packet/1.0)
+
+You are judging ontology candidate matches for a Salmon Data Package. The
+packet you are reading was written by metasalmon or metasalmonpy. It holds
+every target that still needs a decision, each target's ranked shortlist of
+candidates, the dictionary context the package knows, and excerpts from the
+user's own context documents. Your answers go into ONE CSV file, which the
+package reads back, validates, merges and records. Nothing you write reaches
+the package's metadata directly: a person still confirms each accepted term
+in the package's review console before it is applied.
+
+WHAT YOU ARE JUDGING
+
+A target is one semantic slot: one IRI field of one column, code value,
+table or dataset. Each target carries its identity (nine columns you copy
+back exactly), the query the package searched with, and a candidate
+shortlist. Candidates are numbered from 1 in the order the package ranked
+them; you refer to a candidate by that index. A candidate carries its label,
+IRI, source vocabulary, ontology, native ontology type, role hints,
+definition and scores, so you see the same evidence the package's own
+validators read.
+
+A unit groups the targets that must be judged together. A bundle unit is
+one measurement column with a slot for each of its I-ADOPT roles and the
+current value of every slot. A target unit is one slot on its own. A unit
+may carry a target with no candidates; answer it like any other (review,
+retry_search or request_new_term, never accept).
+
+JUDGEMENT POLICY
+
+Judge variable, property, entity, unit, constraint, and statistical_modifier together before finalizing any slot.
+Role-fit beats topical relatedness. A nearby term is wrong when it does not fit the requested slot.
+Preserve each candidate's native ontology type; do not infer that a term is a SKOS concept merely because it targets term_iri.
+A method is never a dictionary slot: procedures are usedProcedure-style context recorded on tables.csv or resolved through codes.csv, so method targets appear only for code values.
+Accept a method only when the code or field explicitly names a method, protocol, gear, procedure, or estimation process.
+statistical_modifier is part of variable identity (I-ADOPT StatisticalModifier); accept one only when the column is an aggregation or summary such as a mean, maximum, total, or peak.
+Accept a constraint only when explicit contextual evidence changes the meaning; generic catch wording alone is insufficient.
+Reason about the whole variable first, then assess the current slot.
+For constraint_iri, choose a candidate only when it adds qualifying context that changes meaning, not when it merely restates obvious field context such as a generic catch framing.
+For statistical_modifier_iri, choose a candidate only when the column is an aggregation or summary (mean, maximum, minimum, total, peak); it is part of variable identity under I-ADOPT.
+For a method target on a code value, choose a candidate only when the code explicitly names a method, protocol, gear, or estimation procedure.
+Choose only from the provided candidates; never invent an IRI.
+If no provided candidate is clearly acceptable, return review and select no candidate.
+If the shortlist family looks wrong, use retry_search and provide a short retry_query.
+If every provided candidate is off-topic or the wrong semantic family, use reject_shortlist and explain why in rationale.
+If the ontology likely lacks the right concept, use request_new_term and provide a suggested label, definition and namespace.
+If no precise existing term appears available, prefer request_new_term over forcing a weak local winner.
+missing_context must be an empty string when nothing material is missing; otherwise return a short plain-language note, not a filename or boolean.
+confidence must be a number between 0 and 1.
+
+THE FIVE DECISIONS
+
+accept            One provided candidate is the right term for this slot.
+                  Give its index and echo its IRI.
+review            No provided candidate is clearly acceptable; a person
+                  should look. Select no candidate.
+retry_search      The shortlist is the wrong family; the package should
+                  search again. Give a short lexical retry query. The
+                  package retrieves it and, when the search finds new
+                  candidates, writes a second packet for you to judge.
+                  There is no third pass.
+reject_shortlist  Every candidate is off-topic or the wrong semantic
+                  family. Select no candidate; say why. A rejection earns
+                  no second pass: the package escalates it at once to
+                  request_new_term so the gap is filed. To have the
+                  package search again instead, use retry_search.
+request_new_term  The ontology likely lacks the concept. Select no
+                  candidate; give a suggested label, definition and
+                  namespace when you can.
+
+propose_new_term is read as request_new_term.
+
+OUTPUT RULES
+
+Write the file named in the packet's output.file member, next to the packet,
+with a CSV library, never by hand: UTF-8, no byte-order mark, one header row
+naming exactly the thirty columns in the packet's output.columns order, and
+one row per target in the packet (a bundle unit is one row per slot). An
+empty field is the only missing value.
+
+Copy the nine identity columns exactly as the packet gives them, empty for
+null. Fill llm_provider and llm_model with the model that judged the row.
+Fill llm_decision and llm_confidence on every row. On accept, fill
+llm_selected_candidate_index with the candidate's index and echo its IRI in
+llm_selected_iri; leave both empty on every other decision. On
+retry_search, fill llm_retry_query. On request_new_term, fill
+llm_new_term_label, llm_new_term_definition and llm_new_term_namespace when
+you can; never fill them on accept. llm_rationale and llm_missing_context
+are yours; llm_bundle_summary is yours on a bundle unit. If you could not
+judge a row, put the reason in llm_error and leave the decision empty.
+
+Leave every package-owned column empty: llm_selected_label,
+llm_context_sources, llm_exploration_used, llm_exploration_queries,
+llm_exploration_candidate_gain, llm_escalated_from and
+llm_retry_query_rejection_reason. The package fills them and overwrites
+anything you write there.
+
+Name the packet you judged. Beside your CSV, write a one-line file with the
+same name plus the suffix .packet-id (for example
+semantic-assessments-pass-1.csv.packet-id) holding the packet's packet_id,
+copied exactly. The package refuses a file that names no packet and a file
+that names a different packet from the one it is ingesting, so a stale
+answer can never be recorded under a newer packet.
+
+Never edit the packet. Its packet_id is a hash of its contents and the
+package refuses a packet that no longer matches it. Do not add columns, do
+not reorder them, and do not add rows for targets the packet does not hold.
+
+Do not put credentials or other secrets in any cell. The package redacts
+what it recognises before anything is recorded, but nothing you write here
+needs a secret.

@@ -1,0 +1,363 @@
+{
+  "packet_version": "semantic-review-packet/1.0",
+  "packet_id": "92efac616038d6e7045bb15eea71feab8470f2ea27a32570c8d356bdb8139c97",
+  "pass": 1,
+  "parent_packet_id": null,
+  "producer": {
+    "implementation": "metasalmon",
+    "version": "0.5.0",
+    "function": "write_semantic_review_packet"
+  },
+  "pins": {
+    "sdp_profile": {
+      "version": "sdp-0.3.0",
+      "source": "vendored"
+    },
+    "ontologies": {
+      "pinned": false,
+      "sources": [
+        "smn"
+      ],
+      "failed_sources": []
+    },
+    "ranking_identity": null,
+    "retrieval": {
+      "top_n": 5,
+      "code_scope": "factor",
+      "source_policy": {
+        "mode": "role_defaults",
+        "explicit_allowlist": [],
+        "effective_sources_by_role": {
+          "variable": [
+            "smn",
+            "gcdfo",
+            "nvs",
+            "ols",
+            "zooma"
+          ],
+          "property": [
+            "smn",
+            "gcdfo",
+            "qudt",
+            "nvs",
+            "ols",
+            "zooma"
+          ],
+          "entity": [
+            "smn",
+            "gcdfo",
+            "gbif",
+            "worms",
+            "bioportal",
+            "ols"
+          ],
+          "unit": [
+            "qudt",
+            "nvs",
+            "ols"
+          ],
+          "constraint": [
+            "smn",
+            "gcdfo",
+            "ols"
+          ],
+          "statistical_modifier": [
+            "smn",
+            "ols"
+          ],
+          "method": [
+            "smn",
+            "gcdfo",
+            "bioportal",
+            "ols",
+            "zooma"
+          ]
+        }
+      }
+    }
+  },
+  "instructions": "SEMANTIC REVIEW INSTRUCTIONS (semantic-review-packet/1.0)\n\nYou are judging ontology candidate matches for a Salmon Data Package. The\npacket you are reading was written by metasalmon or metasalmonpy. It holds\nevery target that still needs a decision, each target's ranked shortlist of\ncandidates, the dictionary context the package knows, and excerpts from the\nuser's own context documents. Your answers go into ONE CSV file, which the\npackage reads back, validates, merges and records. Nothing you write reaches\nthe package's metadata directly: a person still confirms each accepted term\nin the package's review console before it is applied.\n\nWHAT YOU ARE JUDGING\n\nA target is one semantic slot: one IRI field of one column, code value,\ntable or dataset. Each target carries its identity (nine columns you copy\nback exactly), the query the package searched with, and a candidate\nshortlist. Candidates are numbered from 1 in the order the package ranked\nthem; you refer to a candidate by that index. A candidate carries its label,\nIRI, source vocabulary, ontology, native ontology type, role hints,\ndefinition and scores, so you see the same evidence the package's own\nvalidators read.\n\nA unit groups the targets that must be judged together. A bundle unit is\none measurement column with a slot for each of its I-ADOPT roles and the\ncurrent value of every slot. A target unit is one slot on its own. A unit\nmay carry a target with no candidates; answer it like any other (review,\nretry_search or request_new_term, never accept).\n\nJUDGEMENT POLICY\n\nJudge variable, property, entity, unit, constraint, and statistical_modifier together before finalizing any slot.\nRole-fit beats topical relatedness. A nearby term is wrong when it does not fit the requested slot.\nPreserve each candidate's native ontology type; do not infer that a term is a SKOS concept merely because it targets term_iri.\nA method is never a dictionary slot: procedures are usedProcedure-style context recorded on tables.csv or resolved through codes.csv, so method targets appear only for code values.\nAccept a method only when the code or field explicitly names a method, protocol, gear, procedure, or estimation process.\nstatistical_modifier is part of variable identity (I-ADOPT StatisticalModifier); accept one only when the column is an aggregation or summary such as a mean, maximum, total, or peak.\nAccept a constraint only when explicit contextual evidence changes the meaning; generic catch wording alone is insufficient.\nReason about the whole variable first, then assess the current slot.\nFor constraint_iri, choose a candidate only when it adds qualifying context that changes meaning, not when it merely restates obvious field context such as a generic catch framing.\nFor statistical_modifier_iri, choose a candidate only when the column is an aggregation or summary (mean, maximum, minimum, total, peak); it is part of variable identity under I-ADOPT.\nFor a method target on a code value, choose a candidate only when the code explicitly names a method, protocol, gear, or estimation procedure.\nChoose only from the provided candidates; never invent an IRI.\nIf no provided candidate is clearly acceptable, return review and select no candidate.\nIf the shortlist family looks wrong, use retry_search and provide a short retry_query.\nIf every provided candidate is off-topic or the wrong semantic family, use reject_shortlist and explain why in rationale.\nIf the ontology likely lacks the right concept, use request_new_term and provide a suggested label, definition and namespace.\nIf no precise existing term appears available, prefer request_new_term over forcing a weak local winner.\nmissing_context must be an empty string when nothing material is missing; otherwise return a short plain-language note, not a filename or boolean.\nconfidence must be a number between 0 and 1.\n\nTHE FIVE DECISIONS\n\naccept            One provided candidate is the right term for this slot.\n                  Give its index and echo its IRI.\nreview            No provided candidate is clearly acceptable; a person\n                  should look. Select no candidate.\nretry_search      The shortlist is the wrong family; the package should\n                  search again. Give a short lexical retry query. The\n                  package retrieves it and, when the search finds new\n                  candidates, writes a second packet for you to judge.\n                  There is no third pass.\nreject_shortlist  Every candidate is off-topic or the wrong semantic\n                  family. Select no candidate; say why. A rejection earns\n                  no second pass: the package escalates it at once to\n                  request_new_term so the gap is filed. To have the\n                  package search again instead, use retry_search.\nrequest_new_term  The ontology likely lacks the concept. Select no\n                  candidate; give a suggested label, definition and\n                  namespace when you can.\n\npropose_new_term is read as request_new_term.\n\nOUTPUT RULES\n\nWrite the file named in the packet's output.file member, next to the packet,\nwith a CSV library, never by hand: UTF-8, no byte-order mark, one header row\nnaming exactly the thirty columns in the packet's output.columns order, and\none row per target in the packet (a bundle unit is one row per slot). An\nempty field is the only missing value.\n\nCopy the nine identity columns exactly as the packet gives them, empty for\nnull. Fill llm_provider and llm_model with the model that judged the row.\nFill llm_decision and llm_confidence on every row. On accept, fill\nllm_selected_candidate_index with the candidate's index and echo its IRI in\nllm_selected_iri; leave both empty on every other decision. On\nretry_search, fill llm_retry_query. On request_new_term, fill\nllm_new_term_label, llm_new_term_definition and llm_new_term_namespace when\nyou can; never fill them on accept. llm_rationale and llm_missing_context\nare yours; llm_bundle_summary is yours on a bundle unit. If you could not\njudge a row, put the reason in llm_error and leave the decision empty.\n\nLeave every package-owned column empty: llm_selected_label,\nllm_context_sources, llm_exploration_used, llm_exploration_queries,\nllm_exploration_candidate_gain, llm_escalated_from and\nllm_retry_query_rejection_reason. The package fills them and overwrites\nanything you write there.\n\nName the packet you judged. Beside your CSV, write a one-line file with the\nsame name plus the suffix .packet-id (for example\nsemantic-assessments-pass-1.csv.packet-id) holding the packet's packet_id,\ncopied exactly. The package refuses a file that names no packet and a file\nthat names a different packet from the one it is ingesting, so a stale\nanswer can never be recorded under a newer packet.\n\nNever edit the packet. Its packet_id is a hash of its contents and the\npackage refuses a packet that no longer matches it. Do not add columns, do\nnot reorder them, and do not add rows for targets the packet does not hold.\n\nDo not put credentials or other secrets in any cell. The package redacts\nwhat it recognises before anything is recorded, but nothing you write here\nneeds a secret.",
+  "decision_vocabulary": [
+    "accept",
+    "review",
+    "retry_search",
+    "request_new_term",
+    "reject_shortlist"
+  ],
+  "decision_aliases": {
+    "propose_new_term": "request_new_term"
+  },
+  "output": {
+    "file": "review/semantic-assessments-pass-1.csv",
+    "columns": [
+      {
+        "name": "dataset_id",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "table_id",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "column_name",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "code_value",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "dictionary_role",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "target_scope",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "target_sdp_file",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "target_sdp_field",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "search_query",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "llm_provider",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "llm_model",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "llm_decision",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "llm_confidence",
+        "owner": "harness",
+        "required": "always"
+      },
+      {
+        "name": "llm_selected_candidate_index",
+        "owner": "harness",
+        "required": "accept"
+      },
+      {
+        "name": "llm_selected_iri",
+        "owner": "harness",
+        "required": "accept"
+      },
+      {
+        "name": "llm_selected_label",
+        "owner": "package",
+        "required": "never"
+      },
+      {
+        "name": "llm_rationale",
+        "owner": "harness",
+        "required": "never"
+      },
+      {
+        "name": "llm_missing_context",
+        "owner": "harness",
+        "required": "never"
+      },
+      {
+        "name": "llm_bundle_summary",
+        "owner": "harness",
+        "required": "never"
+      },
+      {
+        "name": "llm_retry_query",
+        "owner": "harness",
+        "required": "retry_search"
+      },
+      {
+        "name": "llm_new_term_label",
+        "owner": "harness",
+        "required": "never"
+      },
+      {
+        "name": "llm_new_term_definition",
+        "owner": "harness",
+        "required": "never"
+      },
+      {
+        "name": "llm_new_term_namespace",
+        "owner": "harness",
+        "required": "never"
+      },
+      {
+        "name": "llm_context_sources",
+        "owner": "package",
+        "required": "never"
+      },
+      {
+        "name": "llm_exploration_used",
+        "owner": "package",
+        "required": "never"
+      },
+      {
+        "name": "llm_exploration_queries",
+        "owner": "package",
+        "required": "never"
+      },
+      {
+        "name": "llm_exploration_candidate_gain",
+        "owner": "package",
+        "required": "never"
+      },
+      {
+        "name": "llm_error",
+        "owner": "harness_or_package",
+        "required": "never"
+      },
+      {
+        "name": "llm_escalated_from",
+        "owner": "package",
+        "required": "never"
+      },
+      {
+        "name": "llm_retry_query_rejection_reason",
+        "owner": "package",
+        "required": "never"
+      }
+    ]
+  },
+  "context": {
+    "inputs": [
+      {
+        "source": "inline_context[1]",
+        "kind": "text",
+        "sha256": "fd32a4f9a12243e02de6537d983c9e5f9185ba7472d3aadb211b6fa9af12ddbd"
+      }
+    ],
+    "chunking": {
+      "chunk_chars": 2200,
+      "overlap_chars": 200,
+      "max_excerpts": 4,
+      "token_min_chars": 3
+    }
+  },
+  "units": [
+    {
+      "unit_kind": "bundle",
+      "unit_key": "bundle:theme_a/trawl/STANDARDIZED_CATCH_BIOMASS",
+      "dictionary": {
+        "dataset_id": "theme_a",
+        "table_id": "trawl",
+        "column_name": "STANDARDIZED_CATCH_BIOMASS",
+        "column_label": "Standardized catch biomass",
+        "column_description": "Model-standardized aggregate catch biomass for a trawl event.",
+        "column_role": "measurement",
+        "value_type": "number",
+        "unit_label": "kg",
+        "term_type": null
+      },
+      "current_slots": {
+        "variable": null,
+        "property": null,
+        "entity": null,
+        "unit": null,
+        "constraint": null,
+        "statistical_modifier": null
+      },
+      "slots": [
+        {
+          "dictionary_role": "variable",
+          "target_sdp_field": "term_iri",
+          "status": "review",
+          "current_value": null,
+          "slot_id": "column_dictionary.csv|theme_a/trawl/STANDARDIZED_CATCH_BIOMASS|term_iri",
+          "identity": {
+            "dataset_id": "theme_a",
+            "table_id": "trawl",
+            "column_name": "STANDARDIZED_CATCH_BIOMASS",
+            "code_value": null,
+            "dictionary_role": "variable",
+            "target_scope": "column",
+            "target_sdp_file": "column_dictionary.csv",
+            "target_sdp_field": "term_iri",
+            "search_query": "standardized aggregate catch biomass"
+          },
+          "target": {
+            "dataset_id": "theme_a",
+            "table_id": "trawl",
+            "column_name": "STANDARDIZED_CATCH_BIOMASS",
+            "code_value": null,
+            "dictionary_role": "variable",
+            "search_role": "variable",
+            "target_scope": "column",
+            "target_sdp_file": "column_dictionary.csv",
+            "target_sdp_field": "term_iri",
+            "target_row_key": "theme_a/trawl/STANDARDIZED_CATCH_BIOMASS",
+            "target_label": "Standardized catch biomass",
+            "target_description": "Model-standardized aggregate catch biomass for a trawl event.",
+            "search_query": "standardized aggregate catch biomass",
+            "target_query_basis": "column_description",
+            "target_query_context": "Model-standardized aggregate catch biomass for a trawl event.",
+            "column_label": "Standardized catch biomass",
+            "column_description": "Model-standardized aggregate catch biomass for a trawl event.",
+            "code_label": null,
+            "code_description": null
+          },
+          "candidates": [
+            {
+              "index": 1,
+              "label": "Fish weight",
+              "iri": "https://w3id.org/smn/FishWeight",
+              "source": "smn",
+              "ontology": "Salmon Ontology",
+              "role": "variable",
+              "match_type": "label_partial",
+              "definition": "The body mass of an individual fish.",
+              "term_type": "owl_class",
+              "resource_kind": null,
+              "type_iris": null,
+              "native_type": "owl_class",
+              "role_hints": null,
+              "role_hint_status": null,
+              "role_hint_bonus": null,
+              "lexical_score": 0.48,
+              "alignment_only": null,
+              "agreement_sources": null,
+              "retrieval_query": "standardized aggregate catch biomass",
+              "retrieval_pass": 1,
+              "role_collision": null,
+              "role_collision_note": null,
+              "extra": {
+                "definition_status": "curated_paraphrase"
+              }
+            }
+          ]
+        }
+      ],
+      "context_excerpts": [
+        {
+          "source": "inline_context",
+          "chunk_id": "inline_context[1]#1",
+          "context_score": 9,
+          "excerpt": "This synthetic field denotes model-standardized aggregate catch biomass. The frozen shortlist contains only an individual-fish weight term, so the whole-variable slot must remain an explicit ontology gap."
+        }
+      ]
+    }
+  ]
+}

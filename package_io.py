@@ -1673,6 +1673,46 @@ def _prefill_legacy_enumeration_method_code_terms(codes, dictionary=None):
     )
 
 
+def _select_semantic_seed_codes(
+    codes: Optional[pd.DataFrame],
+    resource_map: Mapping,
+    scope: str,
+    dataset_id,
+) -> Optional[pd.DataFrame]:
+    """The ``codes.csv`` rows whose values get a semantic target under ``scope``.
+
+    ``"none"`` seeds no code; ``"all"`` seeds every code; ``"factor"`` seeds the
+    codes of the columns that look like a code list
+    (:func:`_is_semantic_code_candidate`). The counterpart of metasalmon's
+    ``.ms_select_semantic_seed_codes()``. Moved out of
+    :func:`infer_salmon_datapackage_artifacts` unchanged for hub item B-327,
+    because the review-packet exporter recovers a package's blank slots by
+    running the discovery ``create_sdp()`` ran, under the same scope.
+    """
+    if scope == "none":
+        return None
+    if scope != "factor" or codes is None:
+        return codes
+    categorical_keys = []
+    for resource_name, resource_df in resource_map.items():
+        for column in resource_df.columns:
+            if _is_semantic_code_candidate(
+                str(column),
+                resource_df[column],
+            ):
+                categorical_keys.append((dataset_id, resource_name, column))
+    if categorical_keys:
+        allowed = pd.MultiIndex.from_tuples(
+            categorical_keys,
+            names=["dataset_id", "table_id", "column_name"],
+        )
+        code_keys = pd.MultiIndex.from_frame(
+            codes[["dataset_id", "table_id", "column_name"]]
+        )
+        return codes.loc[code_keys.isin(allowed)].copy()
+    return codes.iloc[0:0].copy()
+
+
 def infer_salmon_datapackage_artifacts(
     resources,
     dataset_id: str = "dataset-1",
@@ -1767,29 +1807,9 @@ def infer_salmon_datapackage_artifacts(
             print("Seeding semantic suggestions during infer_salmon_datapackage_artifacts().")
         from .semantics import suggest_semantics
 
-        semantic_codes = codes
-        if semantic_code_scope == "none":
-            semantic_codes = None
-        elif semantic_code_scope == "factor" and codes is not None:
-            categorical_keys = []
-            for resource_name, resource_df in resource_map.items():
-                for column in resource_df.columns:
-                    if _is_semantic_code_candidate(
-                        str(column),
-                        resource_df[column],
-                    ):
-                        categorical_keys.append((dataset_id, resource_name, column))
-            if categorical_keys:
-                allowed = pd.MultiIndex.from_tuples(
-                    categorical_keys,
-                    names=["dataset_id", "table_id", "column_name"],
-                )
-                code_keys = pd.MultiIndex.from_frame(
-                    codes[["dataset_id", "table_id", "column_name"]]
-                )
-                semantic_codes = codes.loc[code_keys.isin(allowed)].copy()
-            else:
-                semantic_codes = codes.iloc[0:0].copy()
+        semantic_codes = _select_semantic_seed_codes(
+            codes, resource_map, semantic_code_scope, dataset_id
+        )
 
         dict_df = suggest_semantics(
             resource_map,

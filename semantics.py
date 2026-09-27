@@ -950,6 +950,69 @@ def _copy_search_answer(answer):
     return answer.copy() if isinstance(answer, pd.DataFrame) else answer
 
 
+_COLLISION_GROUP_COLUMNS = (
+    "dataset_id",
+    "table_id",
+    "column_name",
+    "code_value",
+    "target_scope",
+    "target_sdp_file",
+)
+
+
+def _semantic_flag_role_collisions(suggestions_df: pd.DataFrame) -> pd.DataFrame:
+    """Flag a label that surfaces as both a variable and a property candidate.
+
+    For the same target column, so a reviewer sees that the row targets one
+    role's semantics: ``collision_roles`` (the roles the label appears for,
+    ``|``-joined in code-point order), ``role_collision`` and
+    ``role_collision_note``. Moved out of :func:`suggest_semantics` unchanged
+    for hub item B-327, as metasalmon moved its copy into
+    ``.ms_semantic_flag_role_collisions()`` for B-326, so the review-packet
+    exporter marks a re-retrieved shortlist the same way. Any earlier flags
+    are recomputed rather than kept.
+    """
+    suggestions_df = suggestions_df.drop(
+        columns=[
+            column
+            for column in ("collision_roles", "role_collision", "role_collision_note")
+            if column in suggestions_df.columns
+        ]
+    ).copy()
+    if suggestions_df.empty:
+        return suggestions_df
+    for column in _COLLISION_GROUP_COLUMNS + ("target_sdp_field", "dictionary_role"):
+        if column not in suggestions_df.columns:
+            suggestions_df[column] = pd.NA
+    suggestions_df["_candidate_label_norm"] = suggestions_df["label"].fillna("").astype(str).str.strip().str.lower()
+    group_cols = [*_COLLISION_GROUP_COLUMNS, "_candidate_label_norm"]
+    suggestions_df["_collision_key"] = suggestions_df[group_cols].apply(
+        lambda row: "\r".join("<NA>" if _is_missing(value) else str(value) for value in row),
+        axis=1,
+    )
+    collision_roles = suggestions_df.groupby("_collision_key")["dictionary_role"].agg(
+        lambda values: "|".join(sorted(set(values.dropna().astype(str))))
+    )
+    suggestions_df["collision_roles"] = suggestions_df["_collision_key"].map(collision_roles)
+    suggestions_df["role_collision"] = suggestions_df["collision_roles"].apply(
+        lambda value: {"variable", "property"}.issubset(set(str(value).split("|")))
+    )
+    suggestions_df["role_collision_note"] = pd.NA
+    variable_collision = suggestions_df["role_collision"] & (suggestions_df["dictionary_role"] == "variable")
+    property_collision = suggestions_df["role_collision"] & (suggestions_df["dictionary_role"] == "property")
+    suggestions_df.loc[variable_collision, "role_collision_note"] = (
+        "Label appears for variable and property candidates; this row targets variable semantics for "
+        + suggestions_df.loc[variable_collision, "target_sdp_field"].astype(str)
+        + "."
+    )
+    suggestions_df.loc[property_collision, "role_collision_note"] = (
+        "Label appears for variable and property candidates; this row targets property semantics for "
+        + suggestions_df.loc[property_collision, "target_sdp_field"].astype(str)
+        + "."
+    )
+    return suggestions_df.drop(columns=["_candidate_label_norm", "_collision_key"])
+
+
 def suggest_semantics(
     df,
     dict_df: pd.DataFrame,
@@ -1360,41 +1423,7 @@ def suggest_semantics(
         )
 
     if not suggestions_df.empty:
-        suggestions_df["_candidate_label_norm"] = suggestions_df["label"].fillna("").astype(str).str.strip().str.lower()
-        group_cols = [
-            "dataset_id",
-            "table_id",
-            "column_name",
-            "code_value",
-            "target_scope",
-            "target_sdp_file",
-            "_candidate_label_norm",
-        ]
-        suggestions_df["_collision_key"] = suggestions_df[group_cols].apply(
-            lambda row: "\r".join("<NA>" if _is_missing(value) else str(value) for value in row),
-            axis=1,
-        )
-        collision_roles = suggestions_df.groupby("_collision_key")["dictionary_role"].agg(
-            lambda values: "|".join(sorted(set(values.dropna().astype(str))))
-        )
-        suggestions_df["collision_roles"] = suggestions_df["_collision_key"].map(collision_roles)
-        suggestions_df["role_collision"] = suggestions_df["collision_roles"].apply(
-            lambda value: {"variable", "property"}.issubset(set(str(value).split("|")))
-        )
-        suggestions_df["role_collision_note"] = pd.NA
-        variable_collision = suggestions_df["role_collision"] & (suggestions_df["dictionary_role"] == "variable")
-        property_collision = suggestions_df["role_collision"] & (suggestions_df["dictionary_role"] == "property")
-        suggestions_df.loc[variable_collision, "role_collision_note"] = (
-            "Label appears for variable and property candidates; this row targets variable semantics for "
-            + suggestions_df.loc[variable_collision, "target_sdp_field"].astype(str)
-            + "."
-        )
-        suggestions_df.loc[property_collision, "role_collision_note"] = (
-            "Label appears for variable and property candidates; this row targets property semantics for "
-            + suggestions_df.loc[property_collision, "target_sdp_field"].astype(str)
-            + "."
-        )
-        suggestions_df = suggestions_df.drop(columns=["_candidate_label_norm", "_collision_key"])
+        suggestions_df = _semantic_flag_role_collisions(suggestions_df)
 
     if llm_assess:
         if targets_df.empty:
