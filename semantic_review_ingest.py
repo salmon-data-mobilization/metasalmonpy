@@ -1012,11 +1012,35 @@ def _union_findings(*frames) -> pd.DataFrame:
 # -----------------------------------------------------------------------------
 
 
+#: The four typed columns of the assessment row; the other 26 are text.
+_TYPED_ASSESSMENT_COLUMNS = frozenset(
+    {"llm_confidence", "llm_selected_candidate_index", "llm_exploration_used", "llm_exploration_candidate_gain"}
+)
+
+
 def _assessment_frame(rows: list) -> pd.DataFrame:
-    """Rows as the stable 30-column record (``.ms_llm_normalize_assessment_rows()``)."""
+    """Rows as the stable 30-column record (``.ms_llm_normalize_assessment_rows()``).
+
+    The four typed columns are typed by
+    :func:`~metasalmonpy.llm_review.normalize_assessment_rows`; the 26 text
+    columns are held as ``object`` with ``None`` for a missing value, whatever
+    the rows hold, so an error row, a downgraded row, an escalated row and a
+    success row carry the same dtypes (pandas would otherwise infer a string
+    dtype for a column that happens to hold only text and ``object`` for one
+    that holds only ``None``).
+    """
     from .llm_review import normalize_assessment_rows
 
-    return normalize_assessment_rows(list(rows))
+    frame = normalize_assessment_rows(list(rows))
+    for column in frame.columns:
+        if column in _TYPED_ASSESSMENT_COLUMNS:
+            continue
+        frame[column] = pd.Series(
+            [None if _is_missing(value) else str(value) for value in frame[column].tolist()],
+            index=frame.index,
+            dtype="object",
+        )
+    return frame
 
 
 def _character_frame(frame: pd.DataFrame) -> pd.DataFrame:

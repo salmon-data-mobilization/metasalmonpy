@@ -1026,8 +1026,9 @@ def _blank_slots(path: Path, frames: Mapping, suggestions: Optional[pd.DataFrame
     not persist its targets, so a slot ``create_sdp()`` left blank because
     retrieval found nothing is invisible to the review queue. A blank slot is
     exactly what discovery sees, so the discovery ``create_sdp()`` ran is run
-    again over the package's own frames -- :func:`suggest_semantics` with a
-    search that answers nothing, which is this package's discovery -- and
+    again over the package's own frames -- ``semantics._semantic_discover_targets()``,
+    the discovery :func:`~metasalmonpy.suggest_semantics` runs, called directly
+    so the in-package model call stays off this function's call graph -- and
     restricted to the writable IRI slots that are blank (not ``REVIEW:``-
     marked), have no suggestion row and no recorded decision. The one thing
     that cannot be recovered is the code scope the caller chose at creation:
@@ -1037,7 +1038,7 @@ def _blank_slots(path: Path, frames: Mapping, suggestions: Optional[pd.DataFrame
     from .metadata import normalize_codes, normalize_dataset_meta, normalize_dictionary, normalize_table_meta, read_sdp_csv
     from .package_io import _select_semantic_seed_codes
     from .review_console import WRITABLE_FILES
-    from .semantics import suggest_semantics
+    from .semantics import _semantic_discover_targets
 
     dictionary = frames.get("column_dictionary.csv")
     empty = {"targets": [], "not_covered": pd.DataFrame()}
@@ -1063,22 +1064,13 @@ def _blank_slots(path: Path, frames: Mapping, suggestions: Optional[pd.DataFrame
     if suggestions is not None and len(suggestions):
         known = {_slot_id(record) for record in _records(suggestions)}
 
-    def nothing(query, role=None, sources=None):
-        return pd.DataFrame()
-
     def discover(scope: str) -> list:
         scoped_codes = None
         if codes is not None and len(codes):
             scoped_codes = _select_semantic_seed_codes(codes, resources, scope, dataset_id)
-        found = suggest_semantics(
-            resources if resources else None,
-            dictionary,
-            search_fn=nothing,
-            codes=scoped_codes,
-            table_meta=table_meta if len(table_meta) else None,
-            dataset_meta=dataset_meta if len(dataset_meta) else None,
+        targets = _target_rows(
+            pd.DataFrame(_semantic_discover_targets(dictionary, scoped_codes, table_meta, dataset_meta))
         )
-        targets = _target_rows(found.attrs.get("semantic_targets"))
         for target in targets:
             target["slot_id"] = _slot_id(target)
         currents = _current_values(targets, frames)

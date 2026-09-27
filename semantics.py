@@ -1059,118 +1059,20 @@ def _semantic_flag_role_collisions(suggestions_df: pd.DataFrame) -> pd.DataFrame
     return suggestions_df.drop(columns=["_candidate_label_norm", "_collision_key"])
 
 
-@deprecated_llm_entry_point("suggest_semantics")
-def suggest_semantics(
-    df,
-    dict_df: pd.DataFrame,
-    sources: Optional[Sequence[str]] = None,
-    include_dwc: bool = False,
-    max_per_role: int = 3,
-    search_fn: Callable = find_terms,
-    codes: Optional[pd.DataFrame] = None,
-    table_meta: Optional[pd.DataFrame] = None,
-    dataset_meta: Optional[pd.DataFrame] = None,
-    llm_assess: bool = False,
-    llm_provider: str = "openai",
-    llm_model: Optional[str] = None,
-    llm_api_key: Optional[str] = None,
-    llm_base_url: Optional[str] = None,
-    llm_reasoning_effort: Optional[str] = None,
-    llm_top_n: int = 5,
-    llm_context_files=None,
-    llm_context_text=None,
-    llm_timeout_seconds: int = 60,
-    llm_request_fn=None,
-) -> pd.DataFrame:
+def _semantic_discover_targets(dictionary, codes_df, table_df, dataset_df) -> list:
+    """The semantic targets of a dictionary and its metadata, one per unfilled slot.
+
+    Measurement columns in every dictionary role, controlled non-measurement
+    columns' ``term_iri``, code values, tables' observation units and datasets'
+    keywords -- each a dict carrying the target columns (and, for a column,
+    its ``unit_label``). The counterpart of metasalmon's
+    ``.ms_semantic_discover_targets()``. Moved out of :func:`suggest_semantics`
+    unchanged for hub item B-327: the review-packet exporter recovers a
+    package's blank slots by running this discovery again, and calling it
+    rather than :func:`suggest_semantics` keeps the in-package model call off
+    the exporter's call graph, which ``tests/test_semantic_review_packet.py``
+    walks. The frames are the ones :func:`suggest_semantics` normalised.
     """
-    Suggest semantic annotations for SDP metadata targets.
-
-    Candidate retrieval covers dictionary columns, controlled codes, table
-    observation units, and dataset keywords. Measurement columns are expanded
-    into variable, property, entity, unit, constraint, and
-    statistical_modifier roles; the code-level method role survives for
-    codes.csv term_iri targets.
-
-    Parameters
-    ----------
-    df
-        A DataFrame, a named mapping of DataFrames, or ``None`` when only
-        supplied metadata targets are being reviewed.
-    dict_df
-        SDP column dictionary.
-    sources
-        Retrieval sources. ``None`` uses role-aware defaults; any explicit
-        value is a strict allowlist for initial and retry retrieval.
-    llm_assess
-        Enable opt-in LLM assessment. Context alone never enables a provider
-        request.
-    llm_context_files
-        Local context file paths. Parsed DataFrames or document objects are
-        rejected.
-
-    Returns
-    -------
-    pandas.DataFrame
-        A normalized dictionary carrying ``semantic_suggestions`` in
-        ``DataFrame.attrs`` and, when requested, the stable 30-column
-        ``semantic_llm_assessments`` table. The dictionary also carries a
-        ``semantic_targets`` attribute with the discovered search targets
-        (one row per unfilled semantic field);
-        :func:`~metasalmonpy.term_requests.detect_semantic_term_gaps` reads it
-        to report targets whose retrieval returned zero candidates, which by
-        construction have no suggestion rows at all.
-    """
-    from .llm_review import (
-        assess_semantic_suggestions,
-        make_source_policy,
-        validate_context_files,
-    )
-
-    if llm_context_files is not None:
-        validate_context_files(llm_context_files)
-    if (llm_context_files is not None or llm_context_text is not None) and not llm_assess:
-        warnings.warn(
-            "LLM context is ignored unless llm_assess=True.",
-            UserWarning,
-            stacklevel=2,
-        )
-    source_policy = make_source_policy(sources)
-    if isinstance(df, Mapping):
-        if not df:
-            raise ValueError("df cannot be an empty resource mapping.")
-        if any(not isinstance(value, pd.DataFrame) for value in df.values()):
-            raise TypeError("All df resources must be pandas DataFrames.")
-        resource_lookup = {str(key): value for key, value in df.items()}
-        default_df = next(iter(resource_lookup.values()))
-    elif isinstance(df, pd.DataFrame):
-        resource_lookup = None
-        default_df = df
-    elif df is None:
-        resource_lookup = None
-        default_df = None
-    else:
-        raise TypeError(
-            "df must be a pandas DataFrame, a named mapping of DataFrames, or None."
-        )
-
-    dictionary = normalize_dictionary(pd.DataFrame(dict_df))
-    codes_df = normalize_codes(codes)
-    table_df = normalize_table_meta(table_meta) if table_meta is not None else pd.DataFrame()
-    dataset_df = normalize_dataset_meta(dataset_meta) if dataset_meta is not None else pd.DataFrame()
-
-    if dictionary.empty and (codes_df is None or codes_df.empty) and table_df.empty and dataset_df.empty:
-        dictionary.attrs["semantic_suggestions"] = pd.DataFrame()
-        dictionary.attrs["semantic_targets"] = pd.DataFrame()
-        if llm_assess:
-            from .llm_review import normalize_assessment_rows
-
-            dictionary.attrs["semantic_llm_assessments"] = (
-                normalize_assessment_rows()
-            )
-        if include_dwc:
-            dictionary.attrs["dwc_mappings"] = pd.DataFrame()
-        return dictionary
-
     targets = []
 
     for _, row in dictionary.iterrows():
@@ -1404,6 +1306,125 @@ def suggest_semantics(
                     "code_description": pd.NA,
                 }
             )
+
+    return targets
+
+
+@deprecated_llm_entry_point("suggest_semantics")
+def suggest_semantics(
+    df,
+    dict_df: pd.DataFrame,
+    sources: Optional[Sequence[str]] = None,
+    include_dwc: bool = False,
+    max_per_role: int = 3,
+    search_fn: Callable = find_terms,
+    codes: Optional[pd.DataFrame] = None,
+    table_meta: Optional[pd.DataFrame] = None,
+    dataset_meta: Optional[pd.DataFrame] = None,
+    llm_assess: bool = False,
+    llm_provider: str = "openai",
+    llm_model: Optional[str] = None,
+    llm_api_key: Optional[str] = None,
+    llm_base_url: Optional[str] = None,
+    llm_reasoning_effort: Optional[str] = None,
+    llm_top_n: int = 5,
+    llm_context_files=None,
+    llm_context_text=None,
+    llm_timeout_seconds: int = 60,
+    llm_request_fn=None,
+) -> pd.DataFrame:
+    """
+    Suggest semantic annotations for SDP metadata targets.
+
+    Candidate retrieval covers dictionary columns, controlled codes, table
+    observation units, and dataset keywords. Measurement columns are expanded
+    into variable, property, entity, unit, constraint, and
+    statistical_modifier roles; the code-level method role survives for
+    codes.csv term_iri targets.
+
+    Parameters
+    ----------
+    df
+        A DataFrame, a named mapping of DataFrames, or ``None`` when only
+        supplied metadata targets are being reviewed.
+    dict_df
+        SDP column dictionary.
+    sources
+        Retrieval sources. ``None`` uses role-aware defaults; any explicit
+        value is a strict allowlist for initial and retry retrieval.
+    llm_assess
+        Enable opt-in LLM assessment. Context alone never enables a provider
+        request.
+    llm_context_files
+        Local context file paths. Parsed DataFrames or document objects are
+        rejected.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A normalized dictionary carrying ``semantic_suggestions`` in
+        ``DataFrame.attrs`` and, when requested, the stable 30-column
+        ``semantic_llm_assessments`` table. The dictionary also carries a
+        ``semantic_targets`` attribute with the discovered search targets
+        (one row per unfilled semantic field);
+        :func:`~metasalmonpy.term_requests.detect_semantic_term_gaps` reads it
+        to report targets whose retrieval returned zero candidates, which by
+        construction have no suggestion rows at all.
+    """
+    from .llm_review import (
+        assess_semantic_suggestions,
+        make_source_policy,
+        validate_context_files,
+    )
+
+    if llm_context_files is not None:
+        validate_context_files(llm_context_files)
+    if (llm_context_files is not None or llm_context_text is not None) and not llm_assess:
+        warnings.warn(
+            "LLM context is ignored unless llm_assess=True.",
+            UserWarning,
+            # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+            # this entry point, so its caller is one frame further out (hub B-327).
+            stacklevel=3,
+        )
+    source_policy = make_source_policy(sources)
+    if isinstance(df, Mapping):
+        if not df:
+            raise ValueError("df cannot be an empty resource mapping.")
+        if any(not isinstance(value, pd.DataFrame) for value in df.values()):
+            raise TypeError("All df resources must be pandas DataFrames.")
+        resource_lookup = {str(key): value for key, value in df.items()}
+        default_df = next(iter(resource_lookup.values()))
+    elif isinstance(df, pd.DataFrame):
+        resource_lookup = None
+        default_df = df
+    elif df is None:
+        resource_lookup = None
+        default_df = None
+    else:
+        raise TypeError(
+            "df must be a pandas DataFrame, a named mapping of DataFrames, or None."
+        )
+
+    dictionary = normalize_dictionary(pd.DataFrame(dict_df))
+    codes_df = normalize_codes(codes)
+    table_df = normalize_table_meta(table_meta) if table_meta is not None else pd.DataFrame()
+    dataset_df = normalize_dataset_meta(dataset_meta) if dataset_meta is not None else pd.DataFrame()
+
+    if dictionary.empty and (codes_df is None or codes_df.empty) and table_df.empty and dataset_df.empty:
+        dictionary.attrs["semantic_suggestions"] = pd.DataFrame()
+        dictionary.attrs["semantic_targets"] = pd.DataFrame()
+        if llm_assess:
+            from .llm_review import normalize_assessment_rows
+
+            dictionary.attrs["semantic_llm_assessments"] = (
+                normalize_assessment_rows()
+            )
+        if include_dwc:
+            dictionary.attrs["dwc_mappings"] = pd.DataFrame()
+        return dictionary
+
+    targets = _semantic_discover_targets(dictionary, codes_df, table_df, dataset_df)
 
     targets_df = pd.DataFrame(targets)
     suggestion_rows = []

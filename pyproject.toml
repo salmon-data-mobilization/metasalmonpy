@@ -42,4 +42,9 @@ package-dir = { "metasalmonpy" = ".", "metasalmonpy.data" = "data", "metasalmonp
     "schema/frictionless/metadata/*.json",
     "profiles/salmon-data-package/v0.3/*.json",
     "xsd/eml-2.2.0/*",
+    # The review-packet contract shared with metasalmon (hub B-327): the packet
+    # schema and the review instructions every packet embeds, byte-identical
+    # with metasalmon's inst/extdata/semantic-review/.
+    "semantic-review/*.json",
+    "semantic-review/*.txt",
 ]

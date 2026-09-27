@@ -1856,7 +1856,9 @@ def infer_salmon_datapackage_artifacts(
         warnings.warn(
             "LLM review options are ignored when seed_semantics=False.",
             UserWarning,
-            stacklevel=2,
+            # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+            # this entry point, so its caller is one frame further out (hub B-327).
+            stacklevel=3,
         )
 
     return {
@@ -2160,7 +2162,9 @@ def create_sdp(
         warnings.warn(
             "LLM context is ignored unless llm_assess=True.",
             UserWarning,
-            stacklevel=2,
+            # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+            # this entry point, so its caller is one frame further out (hub B-327).
+            stacklevel=3,
         )
     if path is None or not str(path).strip():
         safe_id = re.sub(r"[^A-Za-z0-9._-]+", "-", dataset_id).strip("-")
@@ -2282,7 +2286,9 @@ def create_sdp(
                 "contains unresolved review values. Review the package and "
                 "run write_edh_xml_from_sdp() to rebuild it.",
                 UserWarning,
-                stacklevel=2,
+                # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+                # this entry point, so its caller is one frame further out (hub B-327).
+                stacklevel=3,
             )
     return pkg_path
 

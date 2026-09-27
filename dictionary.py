@@ -485,7 +485,9 @@ def infer_dictionary(
         warnings.warn(
             "LLM semantic-review options are ignored when seed_semantics=False.",
             UserWarning,
-            stacklevel=2,
+            # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+            # this entry point, so its caller is one frame further out (hub B-327).
+            stacklevel=3,
         )
 
     llm_options = {
