@@ -61,6 +61,7 @@ from .semantic_review_packet import (
     _review_file,
     _review_input,
     _slot_id,
+    _target_address,
     _text_scalar,
     _trim_string,
     assemble_packet,
@@ -561,6 +562,23 @@ def _error_row(target: Mapping, config: Mapping, error: str) -> dict:
     return _empty_assessment(target, config, error=redact_secrets(text))
 
 
+def _read_decision(value) -> Optional[str]:
+    """``.ms_semantic_review_read_decision()``: a harness's decision as the validator reads it.
+
+    Trimmed, lowercased and with the alias resolved, so ``propose_new_term`` is
+    the ``request_new_term`` it names. Row validation and the downgrade count
+    both read the decision through this, so the two cannot disagree about what
+    the harness wrote (hub item B-425, the mirror of metasalmon's B-424: the
+    count there exempted the alias with a named subset that never compared
+    equal, and this package reproduced that until both were fixed).
+    """
+    decision = _non_empty_string(value)
+    decision = decision.lower() if decision is not None else None
+    if decision is not None:
+        decision = DECISION_ALIASES.get(decision, decision)
+    return decision
+
+
 def _note(row: dict, note: str) -> dict:
     """``.ms_semantic_review_note()``: append a package note to the rationale."""
     row = dict(row)
@@ -669,10 +687,7 @@ def _validate_row(row: Mapping, slot: Mapping, config: Mapping, context: pd.Data
         return _error_row(target, config, declared)
 
     # 2. The decision, lowercased and trimmed, with the alias read.
-    decision = text("llm_decision")
-    decision = decision.lower() if decision is not None else None
-    if decision is not None:
-        decision = DECISION_ALIASES.get(decision, decision)
+    decision = _read_decision(row.get("llm_decision"))
     echo = text("llm_selected_iri")
     candidate_iris = [
         ("" if iri is None else iri.strip(_R_TRIM))
@@ -1108,6 +1123,28 @@ def read_findings(review_dir: Path) -> pd.DataFrame:
     return found[list(FINDINGS_COLUMNS)].reset_index(drop=True)
 
 
+def findings_attr(findings: pd.DataFrame) -> dict:
+    """The validator findings as a record carries them in ``attrs``: column by column.
+
+    ``attrs["semantic_validator_findings"]`` holds the nine findings columns,
+    in order, each as a list of text or ``None`` -- ``DataFrame.to_dict("list")``
+    of the findings frame -- so ``pd.DataFrame(record.attrs["semantic_validator_findings"])``
+    is that frame, with its columns even when there are no findings. Not the
+    frame itself: ``pd.concat()`` compares its inputs' ``attrs`` whenever every
+    input has some, and a DataFrame there has no truth value, so two records
+    that each carried their findings frame could not be concatenated (hub item
+    B-425; the hazard B-370 removed from the retriever). Lists compare, so two
+    records concatenate, and keep the findings when theirs are equal.
+    metasalmon attaches the findings tibble as the record's attribute, where
+    no comparison happens (PARITY.md row 65, item (f)).
+    """
+    frame = findings if findings is not None and len(findings.columns) else _empty_findings()
+    return {
+        column: [_r_character(value) for value in frame[column].tolist()] if column in frame.columns else [None] * len(frame)
+        for column in FINDINGS_COLUMNS
+    }
+
+
 def _merge_llm_assessments(candidates: list, assessments: pd.DataFrame, top_n: int) -> pd.DataFrame:
     """``.ms_semantic_merge_llm_assessments()``: candidates joined with their target's assessment.
 
@@ -1169,9 +1206,13 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
     For the targets whose slots are still undecided, their rows in
     ``semantic_suggestions.csv`` are replaced by the packet's shortlist carrying
     the merged assessment columns. A slot with a recorded decision keeps its
-    rows, as does a hand-picked row; a slot the packet does not hold is
-    untouched. A package whose every lookup found nothing has no shortlist file,
-    and a retry that gained candidates gives it one.
+    rows, as does a hand-picked row; a target the packet does not hold is
+    untouched. Rows are replaced target by target, never slot by slot: a code
+    value of a measurement column has three targets in one slot, and a pass
+    that finalizes one of them must not drop the rows of another, whether it is
+    still awaiting its second pass or was finalized a pass earlier (hub item
+    B-425, the mirror of B-424). A package whose every lookup found nothing has
+    no shortlist file, and a retry that gained candidates gives it one.
     """
     suggestions_path = path / "semantic_suggestions.csv"
     merged_text = _character_frame(merged) if len(merged) else pd.DataFrame()
@@ -1189,25 +1230,28 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
             existing[column] = None
     existing_records = _records(existing)
     existing_slots = [_slot_id(record) for record in existing_records]
+    existing_targets = [_target_address(record) for record in existing_records]
     decided = {
         slot
         for slot, record in zip(existing_slots, existing_records)
         if record.get("decision") is not None and str(record.get("decision")).strip(_R_TRIM)
     }
     merged_records = _records(merged_text)
-    merged_slots = [_slot_id(record) for record in merged_records]
-    replace = [slot for slot in dict.fromkeys(target.get("slot_id") for target in targets) if slot not in decided]
+    merged_targets = [_target_address(record) for record in merged_records]
+    replace = list(
+        dict.fromkeys(_target_address(target) for target in targets if target.get("slot_id") not in decided)
+    )
     pieces = []
     seen = []
-    for slot in dict.fromkeys(existing_slots):
-        if slot in replace:
-            pieces.extend(record for record, owner in zip(merged_records, merged_slots) if owner == slot)
-            seen.append(slot)
+    for address in dict.fromkeys(existing_targets):
+        if address in replace:
+            pieces.extend(record for record, owner in zip(merged_records, merged_targets) if owner == address)
+            seen.append(address)
         else:
-            pieces.extend(record for record, owner in zip(existing_records, existing_slots) if owner == slot)
-    for slot in replace:
-        if slot not in seen:
-            pieces.extend(record for record, owner in zip(merged_records, merged_slots) if owner == slot)
+            pieces.extend(record for record, owner in zip(existing_records, existing_targets) if owner == address)
+    for address in replace:
+        if address not in seen:
+            pieces.extend(record for record, owner in zip(merged_records, merged_targets) if owner == address)
     columns = list(existing.columns) + [
         column for column in dict.fromkeys(key for record in pieces for key in record) if column not in existing.columns
     ]
@@ -1301,8 +1345,11 @@ def ingest_semantic_assessments(
     dict
         ``status`` (``"complete"`` or ``"awaiting_pass_2"``), ``pass``,
         ``packet_id``, ``next_packet`` (the continuation packet's path, or
-        ``None``), ``assessments`` (the record, with the validator findings in
-        ``attrs["semantic_validator_findings"]``), ``findings``,
+        ``None``), ``assessments`` (the record, carrying the validator findings
+        column by column in ``attrs["semantic_validator_findings"]``, as
+        ``semantic_review_ingest.findings_attr()`` builds them, so that two
+        records concatenate),
+        ``findings`` (the same findings as a frame),
         ``suggestions``, ``targets``, ``dictionary`` (with
         ``semantic_suggestions``, ``semantic_targets`` and
         ``semantic_llm_assessments`` in ``attrs``, so
@@ -1442,15 +1489,10 @@ def ingest_semantic_assessments(
                 kept_pass_1 += 1
         else:
             # A downgrade is a recorded decision other than the one the harness
-            # wrote. metasalmon exempts the alias with
-            # `identical(aliases[harness_decision] %||% NA, decision)`, which
-            # never holds because the subset keeps its name, so an alias read
-            # as request_new_term counts as a downgrade there. The shared
-            # fixtures record that count (row_errors: five), so it is counted
-            # the same way here; see the B-327 report.
-            harness_decision = _non_empty_string(row.get("llm_decision"))
-            harness_decision = harness_decision.lower() if harness_decision is not None else None
-            if validated["llm_decision"] != harness_decision:
+            # wrote, read with the alias resolved: ``propose_new_term``
+            # recorded as ``request_new_term`` is the harness's own decision,
+            # not a downgrade (hub B-425, the mirror of B-424).
+            if validated["llm_decision"] != _read_decision(row.get("llm_decision")):
                 downgrades += 1
             if pass_number == 2:
                 previous = slot["previous_assessment"] or {}
@@ -1603,7 +1645,7 @@ def ingest_semantic_assessments(
             message += f" The harness file in {review_dir} was replaced with its redacted form."
         warnings.warn(message, UserWarning, stacklevel=2)
 
-    record.attrs["semantic_validator_findings"] = findings
+    record.attrs["semantic_validator_findings"] = findings_attr(findings)
     suggestions = suggestions_out if suggestions_out is not None else session_merged
     if review_input["kind"] == "package":
         dictionary = _review_source_frames(str(review_input["path"])).get("column_dictionary.csv")

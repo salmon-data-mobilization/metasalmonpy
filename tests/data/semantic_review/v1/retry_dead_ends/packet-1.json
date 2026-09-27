@@ -1,6 +1,6 @@
 {
   "packet_version": "semantic-review-packet/1.0",
-  "packet_id": "2a010eb1499513e51d7ef239ee0680701d813e1c5e9de0dccf7344d65817f0c5",
+  "packet_id": "dba99f985547d6200c75f0eacaea6e8599d807876aee89ae033c80bfbb1ce472",
   "pass": 1,
   "parent_packet_id": null,
   "producer": {
@@ -254,7 +254,7 @@
   "units": [
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/GEAR_TYPE|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/GEAR_TYPE|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -339,7 +339,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/MESH_SIZE|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/MESH_SIZE|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -424,7 +424,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/VESSEL|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/VESSEL|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",

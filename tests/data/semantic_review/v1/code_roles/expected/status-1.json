@@ -1,11 +1,11 @@
 {
   "status": "complete",
   "pass": 1,
-  "packet_id": "cdc4e012a908faab2fd2eead6c9a55c56c29611fcbfcbe3faff119502d31302c",
+  "packet_id": "5a535824ab095bf6e1cf6040af34decad15424cb8f6221ef3f746a1abe3c2404",
   "has_next_packet": false,
   "summary": {
     "decisions": {
-      "accept": 2,
+      "accept": 1,
       "review": 1,
       "retry_search": 0,
       "request_new_term": 1,
@@ -13,7 +13,7 @@
     },
     "errors": 0,
     "downgrades": 0,
-    "escalations": 0,
+    "escalations": 1,
     "retries": 0,
     "awaiting_pass_2": 0,
     "kept_pass_1": 0
