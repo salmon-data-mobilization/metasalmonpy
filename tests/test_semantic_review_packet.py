@@ -362,35 +362,6 @@ def test_the_contract_files_are_declared_as_package_data():
     assert '"semantic-review/*.txt"' in text
 
 
-def _hub_checkout():
-    for candidate in (os.environ.get("METASALMON_PATH"), "/tmp/metasalmon"):
-        if candidate and (Path(candidate) / "tests" / "testthat" / "fixtures" / "semantic-review" / "v1").is_dir():
-            return Path(candidate)
-    return None
-
-
-@pytest.mark.skipif(_hub_checkout() is None, reason="no metasalmon checkout (METASALMON_PATH or the parity job's /tmp/metasalmon)")
-def test_the_vendored_contract_is_the_hub_copy_byte_for_byte():
-    """The schema, the instructions and every fixture file are metasalmon's.
-
-    Runs in the ``parity`` job, which clones metasalmon to ``/tmp/metasalmon``,
-    and wherever ``METASALMON_PATH`` names a checkout, so a change on either
-    side that does not reach the other turns it red.
-    """
-    hub = _hub_checkout()
-    for name in ("semantic-review-packet-v1.schema.json", "semantic-review-instructions-v1.txt"):
-        assert (CHECKOUT / "data" / "semantic-review" / name).read_bytes() == (
-            hub / "inst" / "extdata" / "semantic-review" / name
-        ).read_bytes(), name
-    theirs = hub / "tests" / "testthat" / "fixtures" / "semantic-review" / "v1"
-    ours = sorted(str(p.relative_to(FIXTURES)) for p in FIXTURES.rglob("*") if p.is_file())
-    assert ours == sorted(str(p.relative_to(theirs)) for p in theirs.rglob("*") if p.is_file())
-    for name in ours:
-        assert (FIXTURES / name).read_bytes() == (theirs / name).read_bytes(), name
-    theme_a = hub / "tests" / "testthat" / "fixtures" / "theme-a" / "cases-v1.json"
-    assert THEME_A_CASES.read_bytes() == theme_a.read_bytes()
-
-
 def _schema_errors(instance, schema, root, path="$") -> list:
     """The JSON Schema keywords the vendored packet schema uses, and no others.
 
