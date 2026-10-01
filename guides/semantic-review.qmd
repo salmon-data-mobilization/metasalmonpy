@@ -436,16 +436,20 @@ are yours.
 | `reviewed_semantic_selections.csv` | Exactly one `accepted` row per canonical review target | `write_sdp_semantic_closure()` |
 | `metadata/eml-mapping.yml` | The reviewed EML facts, plus the SHA-256 of each of the two files above | you, except the two SHA-256 values |
 
-**The canonical measurement IRI set** is every non-empty value across
+**The canonical measurement IRI set** is every distinct non-empty IRI across
 `term_iri`, `property_iri`, `entity_iri`, `constraint_iri`,
 `statistical_modifier_iri` and `unit_iri` on your `measurement` dictionary rows,
 plus any `tables.csv` `method_iri` and any procedure IRIs reached through
-`codes.csv` from an observation-structures binding.
+`codes.csv` from an observation-structures binding. A semicolon-separated
+`constraint_iri` contributes each distinct IRI, not one combined string.
 
 **The canonical review target set** is derived independently, and it is *not*
-the measurement set plus anything. It has one target for each filled slot among
-these: the same six semantic fields on your `measurement` dictionary rows,
-plus each table's `observation_unit_iri` **and** its `method_iri`.
+the measurement set plus anything. It has one target for each distinct non-empty
+IRI in each of the same six semantic fields on your `measurement` dictionary
+rows, plus each distinct non-empty IRI in each table's
+`observation_unit_iri` **and** `method_iri`. In
+particular, two different IRIs in one `constraint_iri` cell require two
+accepted ledger rows for that field.
 
 **The two sets differ in both directions**, which is why neither can be reasoned
 from the other:
