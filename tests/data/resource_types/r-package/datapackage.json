@@ -5,7 +5,7 @@
   "title": "Differential",
   "description": "R vs Python",
   "sdp": {
-    "specVersion": "sdp-0.3.0",
+    "specVersion": "sdp-0.3.2",
     "profile": "https://salmon-data-mobilization.github.io/smn-data-pkg/profiles/salmon-data-package/v0.3/profile.json",
     "rules": "https://salmon-data-mobilization.github.io/smn-data-pkg/schema/sdp.rules.yaml",
     "metadata": {

@@ -10,6 +10,17 @@ reproduce every byte, because that is what "the dictionary is the sole type
 authority" buys: a value that survives the read is a value the writer can put
 back.
 
+**One line was re-canonicalized on 2026-09-27, by the same R round trip**
+(hub item B-199). Once the schema pin moved to ``sdp-0.3.2`` in both packages,
+neither round trip reproduced ``datapackage.json`` any more, because each
+writes ``sdp.specVersion`` from the loaded schema. metasalmon main ``0495318``
+(after B-198), run twice over this fixture under the vendored schema, changed
+exactly that line, from ``sdp-0.3.0`` to ``sdp-0.3.2``, and was byte-idempotent
+on the second pass, and this package's round trip then wrote all six files
+byte for byte as R did. ``metadata/dataset.csv`` still declares ``sdp-0.3.0``,
+because both writers keep a declared version: this is a package stamped
+``sdp-0.3.0`` and re-written under ``sdp-0.3.2``, which carries both values.
+
 R adopted C collation at 0.2.0, so these byte claims carry no locale caveat.
 """
 
@@ -149,7 +160,7 @@ def test_the_descriptor_derives_every_uri_from_the_loaded_bundle(tmp_path):
         )
         assert resource["description"]
     assert descriptor["profile"] == descriptor["sdp"]["profile"]
-    assert descriptor["sdp"]["specVersion"] == "sdp-0.3.0"
+    assert descriptor["sdp"]["specVersion"] == "sdp-0.3.2"
 
 
 def test_infer_value_type_no_longer_collapses_midnight_to_a_date():

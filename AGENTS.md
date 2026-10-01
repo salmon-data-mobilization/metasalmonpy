@@ -276,10 +276,17 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1720
-passed / 2 skipped with the extras installed, 1578 / 144 with core dependencies
-only (2026-09-26, measured locally for hub B-382 on `c4aa61a`, branched from
-`main` `82f1fb7`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1733
+passed / 3 skipped with the extras installed, 1591 / 145 with core dependencies
+only (2026-09-27, measured locally for hub B-199 on `e083693`, branched from
+`main` `e81cacd`, under Python 3.11.15, pytest 9.1.1 and pandas 3.0.6, on a
+machine where `Rscript` is on `PATH` and `/tmp/metasalmon-lib` exists, in a
+full clone with every tag and with `METASALMON_PATH` unset, the same under
+`python -m pytest -q` and bare `pytest -q`; the nine over `main` are the tests
+B-199 added, and the third skip in each leg is its opt-in network test;
+1724 / 2 and 1582 / 144 on `main` `e81cacd` before it, measured the same four
+ways; 1720 / 2 and 1578 / 144 for hub B-382 on `c4aa61a` on 2026-09-26,
+branched from `main` `82f1fb7`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
 worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
 in isolated environments built from `.[test]` and `.[test,eml,context]`; the
 seven over `main` are the four pass-1 R retrieval cases, the two pinned
@@ -376,10 +383,12 @@ instead. The other three are `tests/test_check_changelog_window.py`'s replays of
 repository's history, which need a full clone with the tags. CI's suite jobs
 check out one commit, so they skip there and run in the `changelog-window`
 workflow instead. The gap between the legs is the extras-gated EML, KNB and
-context-reader tests. Two tests skip in both legs, locally and on CI: the
+context-reader tests. Three tests skip in both legs, locally and on CI: the
 Qualark fetch test, which runs only when `METASALMONPY_RUN_QUALARK_TEST=1` is
-set, and the comparison of `scripts/check-changelog-window.py` with the hub's
-copy, which runs only when `METASALMON_PATH` names a metasalmon checkout. These
+set; the check that the pinned SDP tag serves the vendored bundle byte for byte
+(hub B-199), which runs only when `METASALMONPY_RUN_SDP_PIN_TEST=1` is set; and
+the comparison of `scripts/check-changelog-window.py` with the hub's copy,
+which runs only when `METASALMON_PATH` names a metasalmon checkout. These
 counts are a dated measurement, not a target — update them when you add tests
 rather than treating a mismatch as a failure.
 
