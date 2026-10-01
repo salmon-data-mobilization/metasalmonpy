@@ -29,6 +29,8 @@ website:
         href: getting-started.qmd
       - text: "Guides"
         menu:
+          - text: "Configuration"
+            href: guides/configuration.qmd
           - text: "Package lifecycle"
             href: guides/package-lifecycle.qmd
           - text: "Semantic review"
