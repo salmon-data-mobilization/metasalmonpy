@@ -18,6 +18,13 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **HTML context excerpts now follow metasalmon's body selection.** Hub
+  **B-386** excludes head, script and style text when a body exists, while
+  keeping Python's `html.parser`. A document with no body retains metasalmon's
+  whole-document fallback, so a head-only title can still be context text;
+  script and style never are. The existing decoder, chunking, source labels
+  and remaining library-specific extraction scope stay unchanged.
+
 * **EML temporal coverage accepts the SDP UTC-instant spelling.** B-355,
   mirroring B-354 and Brett's 2026-09-25 ruling: each
   `YYYY-MM-DDThh:mm:ssZ` endpoint is split into `calendarDate` and `time`.
