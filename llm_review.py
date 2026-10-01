@@ -1002,6 +1002,13 @@ def _candidates_for_target(
     return suggestions.loc[mask].reset_index(drop=True)
 
 
+def _visible_candidates(candidates: pd.DataFrame, top_n: Optional[int]) -> pd.DataFrame:
+    """Limit package-managed prompts; preserve caller-supplied lists when unset."""
+    if top_n is None:
+        return candidates
+    return candidates.head(max(1, int(top_n)))
+
+
 def _base_assessment(target, config: dict, context: pd.DataFrame) -> dict:
     return {
         **{
@@ -1190,6 +1197,7 @@ def _bundle_payload(
     context: pd.DataFrame,
     source_policy: dict,
     dictionary: pd.DataFrame,
+    top_n: Optional[int],
 ) -> dict:
     first = targets.iloc[0]
     dictionary_row = _dictionary_row(first, dictionary)
@@ -1223,7 +1231,9 @@ def _bundle_payload(
                 }
             )
             continue
-        candidates = _candidates_for_target(suggestions, target)
+        candidates = _visible_candidates(
+            _candidates_for_target(suggestions, target), top_n
+        )
         slots.append(
             {
                 "role": role,
@@ -1310,7 +1320,8 @@ def _bundle_messages(payload) -> list[dict]:
     ]
 
 
-def _assess_generic(target, candidates, context, config) -> dict:
+def _assess_generic(target, candidates, context, config, top_n) -> dict:
+    candidates = _visible_candidates(candidates, top_n)
     try:
         result = _request_json_with_retries(
             _generic_messages(target, candidates, context),
@@ -1334,6 +1345,7 @@ def _assess_bundle(
     config,
     source_policy,
     dictionary,
+    top_n,
 ) -> list[dict]:
     try:
         result = _request_json_with_retries(
@@ -1344,6 +1356,7 @@ def _assess_bundle(
                     context,
                     source_policy,
                     dictionary,
+                    top_n,
                 )
             ),
             config,
@@ -1362,6 +1375,7 @@ def _assess_bundle(
                 _candidates_for_target(suggestions, target),
                 context,
                 config,
+                top_n,
             )
             for _, target in targets.iterrows()
         ]
@@ -1378,10 +1392,12 @@ def _assess_bundle(
     rows = []
     for _, target in targets.iterrows():
         role = str(target["dictionary_role"])
-        candidates = _candidates_for_target(suggestions, target)
+        candidates = _visible_candidates(
+            _candidates_for_target(suggestions, target), top_n
+        )
         item = items_by_role.get(role)
         if item is None or role in duplicated:
-            rows.append(_assess_generic(target, candidates, context, config))
+            rows.append(_assess_generic(target, candidates, context, config, top_n))
             continue
         try:
             rows.append(
@@ -1395,7 +1411,7 @@ def _assess_bundle(
                 )
             )
         except Exception:
-            rows.append(_assess_generic(target, candidates, context, config))
+            rows.append(_assess_generic(target, candidates, context, config, top_n))
     return rows
 
 
@@ -1688,6 +1704,7 @@ def _apply_bundle_retry(
     dictionary,
     search_fn,
     max_per_role,
+    top_n,
 ) -> tuple[pd.DataFrame, list[dict]]:
     original_suggestions = suggestions.copy()
     valid_retry = False
@@ -1753,6 +1770,7 @@ def _apply_bundle_retry(
             config,
             source_policy,
             dictionary,
+            top_n,
         )
         reassessed_by_role = {
             str(row["dictionary_role"]): row for row in reassessed
@@ -1798,6 +1816,7 @@ def _apply_generic_retry(
     source_policy,
     search_fn,
     max_per_role,
+    top_n,
 ) -> tuple[pd.DataFrame, dict]:
     if _text(row.get("llm_decision")) != "retry_search":
         return suggestions, row
@@ -1842,7 +1861,7 @@ def _apply_generic_retry(
         return suggestions, row
 
     candidates = _candidates_for_target(merged, target)
-    reassessed = _assess_generic(target, candidates, context, config)
+    reassessed = _assess_generic(target, candidates, context, config, top_n)
     if not _missing(reassessed.get("llm_error")):
         return suggestions, row
     reassessed["llm_exploration_used"] = True
@@ -2596,7 +2615,7 @@ def _merge_assessments_into_suggestions(
     return out
 
 
-def assess_semantic_suggestions(
+def _assess_semantic_suggestions(
     targets: pd.DataFrame,
     suggestions: pd.DataFrame,
     dictionary: pd.DataFrame,
@@ -2604,6 +2623,7 @@ def assess_semantic_suggestions(
     source_policy: dict,
     search_fn: Callable,
     max_per_role: int,
+    top_n: Optional[int],
     provider: str,
     model: Optional[str],
     api_key: Optional[str],
@@ -2654,6 +2674,7 @@ def assess_semantic_suggestions(
             config,
             source_policy,
             dictionary,
+            top_n,
         )
         suggestions, bundle_rows = _apply_bundle_retry(
             group,
@@ -2665,6 +2686,7 @@ def assess_semantic_suggestions(
             dictionary,
             search_fn,
             max_per_role,
+            top_n,
         )
         bundle_rows, bundle_findings = _apply_validators(
             bundle_rows,
@@ -2684,7 +2706,7 @@ def assess_semantic_suggestions(
         context = _relevant_context(
             chunks, pd.DataFrame([target]), suggestions, excerpt_limit
         )
-        row = _assess_generic(target, candidates, context, config)
+        row = _assess_generic(target, candidates, context, config, top_n)
         initial_row = row.copy()
         suggestions, row = _apply_generic_retry(
             target,
@@ -2695,6 +2717,7 @@ def assess_semantic_suggestions(
             source_policy,
             search_fn,
             max_per_role,
+            top_n,
         )
         _escalate_reject_shortlist(row, initial_row)
         rows.append(row)
@@ -2707,6 +2730,45 @@ def assess_semantic_suggestions(
     return (
         _merge_assessments_into_suggestions(suggestions, assessments),
         assessments,
+    )
+
+
+def assess_semantic_suggestions(
+    targets: pd.DataFrame,
+    suggestions: pd.DataFrame,
+    dictionary: pd.DataFrame,
+    *,
+    source_policy: dict,
+    search_fn: Callable,
+    max_per_role: int,
+    provider: str,
+    model: Optional[str],
+    api_key: Optional[str],
+    base_url: Optional[str],
+    reasoning_effort: Optional[str],
+    context_files,
+    context_text,
+    timeout_seconds: int,
+    request_fn,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Keep the existing unbounded module API; only the package path sets top_n."""
+    return _assess_semantic_suggestions(
+        targets,
+        suggestions,
+        dictionary,
+        source_policy=source_policy,
+        search_fn=search_fn,
+        max_per_role=max_per_role,
+        top_n=None,
+        provider=provider,
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        reasoning_effort=reasoning_effort,
+        context_files=context_files,
+        context_text=context_text,
+        timeout_seconds=timeout_seconds,
+        request_fn=request_fn,
     )
 
 
