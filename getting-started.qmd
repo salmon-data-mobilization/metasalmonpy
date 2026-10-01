@@ -5,12 +5,18 @@ description: "Install metasalmonpy and create a review-ready Salmon Data Package
 
 ## Install
 
-Install from the repository (the `v0.1.6` tag predates the 2026-08-13 rename and still packages the old `salmonpy` name; the first tag installable as `metasalmonpy` will be the next parity release):
+Install the released package from its tagged source archive:
 
 ```bash
 python -m pip install \
-  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@main"
+  "metasalmonpy @ https://github.com/salmon-data-mobilization/metasalmonpy/archive/refs/tags/v0.5.0.tar.gz"
 ```
+
+The package version is a claim of behavioural parity with metasalmon; see the
+[parity guide](guides/parity.qmd). A checkout of `main` can contain unreleased
+changes even while reporting the released version. The tagged archive pins the
+package source and does not require a wheel release asset or local Git. Lock
+dependencies separately when reproducing a complete environment.
 
 For development, clone the repository and install the test dependencies:
 
