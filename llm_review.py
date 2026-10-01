@@ -1002,8 +1002,10 @@ def _candidates_for_target(
     return suggestions.loc[mask].reset_index(drop=True)
 
 
-def _visible_candidates(candidates: pd.DataFrame, top_n: int) -> pd.DataFrame:
-    """Limit what a model sees without discarding retained suggestions."""
+def _visible_candidates(candidates: pd.DataFrame, top_n: Optional[int]) -> pd.DataFrame:
+    """Limit package-managed prompts; preserve caller-supplied lists when unset."""
+    if top_n is None:
+        return candidates
     return candidates.head(max(1, int(top_n)))
 
 
@@ -1195,7 +1197,7 @@ def _bundle_payload(
     context: pd.DataFrame,
     source_policy: dict,
     dictionary: pd.DataFrame,
-    top_n: int,
+    top_n: Optional[int],
 ) -> dict:
     first = targets.iloc[0]
     dictionary_row = _dictionary_row(first, dictionary)
@@ -2621,7 +2623,7 @@ def _assess_semantic_suggestions(
     source_policy: dict,
     search_fn: Callable,
     max_per_role: int,
-    top_n: int,
+    top_n: Optional[int],
     provider: str,
     model: Optional[str],
     api_key: Optional[str],
@@ -2749,7 +2751,7 @@ def assess_semantic_suggestions(
     timeout_seconds: int,
     request_fn,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Keep the existing module API while the package entry point sets top_n."""
+    """Keep the existing unbounded module API; only the package path sets top_n."""
     return _assess_semantic_suggestions(
         targets,
         suggestions,
@@ -2757,7 +2759,7 @@ def assess_semantic_suggestions(
         source_policy=source_policy,
         search_fn=search_fn,
         max_per_role=max_per_role,
-        top_n=max_per_role,
+        top_n=None,
         provider=provider,
         model=model,
         api_key=api_key,

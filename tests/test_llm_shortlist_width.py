@@ -9,6 +9,7 @@ import json
 import pandas as pd
 
 from metasalmonpy import infer_dictionary, suggest_semantics
+from metasalmonpy.llm_review import assess_semantic_suggestions, make_source_policy
 
 
 def _measurement_dictionary():
@@ -147,3 +148,39 @@ def test_non_bundle_target_shows_only_llm_top_n_without_dropping_suggestions():
 
     assert _kept_per_role(result) == {"entity": 6}
     assert seen[0] == ["https://example.org/entity/c1", "https://example.org/entity/c2"]
+
+
+def test_public_assessor_preserves_all_caller_supplied_candidates():
+    data, dictionary = _measurement_dictionary()
+    deterministic = suggest_semantics(
+        data,
+        dictionary,
+        sources="smn",
+        search_fn=_eight_candidate_search,
+        max_per_role=6,
+    )
+    assert set(_kept_per_role(deterministic).values()) == {6}
+    request, seen = _variable_shortlist_recorder()
+
+    # The module-level assessor accepted an already built suggestions table
+    # before llm_top_n existed. max_per_role limits retry retrieval here; it
+    # did not truncate the initial prompt supplied by the caller.
+    assess_semantic_suggestions(
+        deterministic.attrs["semantic_targets"],
+        deterministic.attrs["semantic_suggestions"],
+        dictionary,
+        source_policy=make_source_policy(["smn"]),
+        search_fn=_eight_candidate_search,
+        max_per_role=3,
+        provider="openai",
+        model="stub",
+        api_key=None,
+        base_url=None,
+        reasoning_effort=None,
+        context_files=None,
+        context_text=None,
+        timeout_seconds=1,
+        request_fn=request,
+    )
+
+    assert seen[0] == [f"https://example.org/variable/c{index}" for index in range(1, 7)]
