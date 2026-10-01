@@ -862,6 +862,19 @@ def _mapping_paths(mapping_file: Optional[str]) -> Dict[str, str]:
     try:
         with open(mapping_file, encoding="utf-8") as handle:
             mapping = yaml.safe_load(handle)
+    except yaml.constructor.ConstructorError as error:
+        # SafeLoader gives unknown local tags this specific constructor error.
+        # A tagged path cannot silently turn into both default closure paths.
+        # Other malformed sidecars retain this reader's legacy fallback; EML's
+        # stricter parser cannot be shared until those behaviors are reconciled.
+        # Retires when both readers can share a parser with the same fallback.
+        if (error.problem or "").startswith(
+            "could not determine a constructor for the tag "
+        ):
+            raise ValueError(
+                f"EML mapping sidecar {mapping_file} is not valid YAML: {error}"
+            ) from None
+        return defaults
     except Exception:
         return defaults
     # A mapping, not merely "parsed": a sidecar that parses to a YAML SCALAR

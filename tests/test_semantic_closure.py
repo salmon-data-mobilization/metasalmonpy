@@ -1434,6 +1434,90 @@ def test_a_sidecar_declaring_an_absolute_path_is_refused(tmp_path):
     assert not escape.exists()
 
 
+@_REQUIRES_YAML
+@pytest.mark.parametrize(
+    "tagged_path,tag",
+    [
+        ("!expr 'other/evil.csv'", "!expr"),
+        ("!foo 'other/evil.csv'", "!foo"),
+        (
+            "!<tag:example.org,2026:unknown> 'other/evil.csv'",
+            "tag:example.org,2026:unknown",
+        ),
+    ],
+)
+def test_a_tagged_sidecar_refuses_closure_before_writing(tmp_path, tagged_path, tag):
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(
+        mapping_path.read_text(encoding="utf-8").replace(
+            "  path: metadata/semantic_vocabulary.csv",
+            f"  path: {tagged_path}",
+        ),
+        encoding="utf-8",
+    )
+    before = mapping_path.read_bytes()
+
+    with pytest.raises(ValueError, match="eml-mapping.yml") as caught:
+        write_sdp_semantic_closure(
+            path,
+            evidence=_reviewed_evidence(),
+            search_fn=_search_stub(),
+            quiet=True,
+        )
+
+    assert tag in str(caught.value)
+    assert mapping_path.read_bytes() == before
+    assert not (Path(path) / "metadata" / "semantic_vocabulary.csv").exists()
+    assert not (Path(path) / "reviewed_semantic_selections.csv").exists()
+    assert not (Path(path) / "other" / "evil.csv").exists()
+
+
+@_REQUIRES_YAML
+def test_untagged_sidecar_still_directs_both_closure_paths(tmp_path):
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(
+        mapping_path.read_text(encoding="utf-8")
+        .replace(
+            "  path: metadata/semantic_vocabulary.csv",
+            "  path: metadata/custom-vocabulary.csv",
+        )
+        .replace(
+            "  path: reviewed_semantic_selections.csv",
+            "  path: custom-review.csv",
+        ),
+        encoding="utf-8",
+    )
+
+    closure = write_sdp_semantic_closure(
+        path,
+        evidence=_reviewed_evidence(),
+        search_fn=_search_stub(),
+        quiet=True,
+    )
+
+    assert closure["files"]["vocabulary"] == str(
+        Path(path) / "metadata" / "custom-vocabulary.csv"
+    )
+    assert closure["files"]["review"] == str(Path(path) / "custom-review.csv")
+    assert Path(closure["files"]["vocabulary"]).is_file()
+    assert Path(closure["files"]["review"]).is_file()
+    assert not (Path(path) / "metadata" / "semantic_vocabulary.csv").exists()
+    assert not (Path(path) / "reviewed_semantic_selections.csv").exists()
+
+
+@_REQUIRES_YAML
+def test_malformed_sidecar_keeps_the_closure_reader_legacy_fallback(tmp_path):
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text("semantic_vocabulary: [not valid\n", encoding="utf-8")
+
+    assert closure_module._mapping_paths(str(mapping_path)) == dict(
+        closure_module._DEFAULT_MAPPING_PATHS
+    )
+
+
 # ---------------------------------------------------------------------------
 # WHICH SIDECAR SPELLING IS A SIDECAR. Measured, because a Codex review on
 # pull request #31 read `eml._default_mapping_path()` as supporting `.yaml` and
