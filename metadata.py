@@ -594,8 +594,14 @@ def infer_table_metadata_from_resources(resources: Mapping[str, pd.DataFrame], d
                 "primary_key": id_cols[0] if id_cols else pd.NA,
             }
         )
+    # The inferred frame does not explicitly carry method_iri or other optional
+    # fields the minimal rows lack. Add only what the selected schema declares,
+    # as R's inference does; preserving existing extras remains the writer's
+    # separate responsibility (B-252). Deferred to avoid the module import cycle.
+    from .sdp_field_setters import _in_declared_order
+
     return fill_review_placeholders_table_meta(
-        normalize_table_meta(pd.DataFrame(rows))
+        _in_declared_order(pd.DataFrame(rows), "tables.csv")
     )
 
 
