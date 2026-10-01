@@ -1,0 +1,85 @@
+{
+  "case_id": "ta_gap",
+  "dictionary": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "trawl",
+      "column_name": "STANDARDIZED_CATCH_BIOMASS",
+      "column_label": "Standardized catch biomass",
+      "column_description": "Model-standardized aggregate catch biomass for a trawl event.",
+      "column_role": "measurement",
+      "value_type": "number",
+      "unit_label": "kg",
+      "unit_iri": null,
+      "term_iri": null,
+      "property_iri": null,
+      "entity_iri": null,
+      "constraint_iri": null,
+      "statistical_modifier_iri": null,
+      "method_iri": null,
+      "term_type": null
+    }
+  ],
+  "targets": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "trawl",
+      "column_name": "STANDARDIZED_CATCH_BIOMASS",
+      "code_value": null,
+      "dictionary_role": "variable",
+      "search_role": "variable",
+      "target_scope": "column",
+      "target_sdp_file": "column_dictionary.csv",
+      "target_sdp_field": "term_iri",
+      "target_row_key": "theme_a/trawl/STANDARDIZED_CATCH_BIOMASS",
+      "target_label": "Standardized catch biomass",
+      "target_description": "Model-standardized aggregate catch biomass for a trawl event.",
+      "search_query": "standardized aggregate catch biomass",
+      "target_query_basis": "column_description",
+      "target_query_context": "Model-standardized aggregate catch biomass for a trawl event.",
+      "column_label": "Standardized catch biomass",
+      "column_description": "Model-standardized aggregate catch biomass for a trawl event.",
+      "code_label": null,
+      "code_description": null
+    }
+  ],
+  "candidates": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "trawl",
+      "column_name": "STANDARDIZED_CATCH_BIOMASS",
+      "code_value": null,
+      "dictionary_role": "variable",
+      "search_role": "variable",
+      "target_scope": "column",
+      "target_sdp_file": "column_dictionary.csv",
+      "target_sdp_field": "term_iri",
+      "target_row_key": "theme_a/trawl/STANDARDIZED_CATCH_BIOMASS",
+      "target_label": "Standardized catch biomass",
+      "target_description": "Model-standardized aggregate catch biomass for a trawl event.",
+      "search_query": "standardized aggregate catch biomass",
+      "target_query_basis": "column_description",
+      "target_query_context": "Model-standardized aggregate catch biomass for a trawl event.",
+      "column_label": "Standardized catch biomass",
+      "column_description": "Model-standardized aggregate catch biomass for a trawl event.",
+      "code_label": null,
+      "code_description": null,
+      "label": "Fish weight",
+      "iri": "https://w3id.org/smn/FishWeight",
+      "source": "smn",
+      "ontology": "Salmon Ontology",
+      "role": "variable",
+      "match_type": "label_partial",
+      "definition": "The body mass of an individual fish.",
+      "score": 0.48,
+      "term_type": "owl_class",
+      "definition_status": "curated_paraphrase",
+      "retrieval_query": "standardized aggregate catch biomass",
+      "retrieval_pass": 1
+    }
+  ],
+  "context_text": [
+    "This synthetic field denotes model-standardized aggregate catch biomass. The frozen shortlist contains only an individual-fish weight term, so the whole-variable slot must remain an explicit ontology gap."
+  ],
+  "top_n": 5
+}

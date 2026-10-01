@@ -1,0 +1,814 @@
+{
+  "schema_version": "theme-a-cases-v1",
+  "fixture_version": 1,
+  "evidence_status": "synthetic_regression_exemplar",
+  "description": "Curated Theme A regression exemplars. They encode intended semantic outcomes, not historical model transcripts.",
+  "ontology_provenance": [
+    {
+      "source": "smn",
+      "repository": "salmon-data-mobilization/salmon-domain-ontology",
+      "revision": "b6978b0b6cabc032e6ae2c5a2cd298958a69748e",
+      "revision_url": "https://github.com/salmon-data-mobilization/salmon-domain-ontology/commit/b6978b0b6cabc032e6ae2c5a2cd298958a69748e",
+      "observed_at": "2026-07-28"
+    },
+    {
+      "source": "gcdfo",
+      "repository": "dfo-pacific-science/dfo-salmon-ontology",
+      "revision": "c7a54251eb8f673052fed61f9ca2624e557249c7",
+      "revision_url": "https://github.com/dfo-pacific-science/dfo-salmon-ontology/commit/c7a54251eb8f673052fed61f9ca2624e557249c7",
+      "observed_at": "2026-07-28"
+    },
+    {
+      "source": "qudt",
+      "repository": "qudt/qudt-public-repo",
+      "revision": "e44022acfeb466eacf990bf056625aa81b81f644",
+      "revision_url": "https://github.com/qudt/qudt-public-repo/commit/e44022acfeb466eacf990bf056625aa81b81f644",
+      "observed_at": "2026-07-28"
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "catch_count",
+      "title": "Catch count bundle",
+      "evidence_status": "synthetic_regression_exemplar",
+      "blocking": true,
+      "context": {
+        "dataset_id": "theme_a",
+        "table_id": "trawl",
+        "column_name": "CATCH_COUNT",
+        "column_role": "measurement",
+        "column_label": "Catch count",
+        "column_description": "Number of fish in the retained trawl catch.",
+        "unit": "count",
+        "value_examples": [
+          "0",
+          "14",
+          "86"
+        ],
+        "context_text": "CATCH_COUNT records the number of fish retained in each trawl catch. It does not identify a measurement procedure."
+      },
+      "targets": [
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "CATCH_COUNT",
+          "code_value": null,
+          "dictionary_role": "variable",
+          "search_role": "variable",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "term_iri",
+          "target_row_key": "theme_a/trawl/CATCH_COUNT",
+          "target_label": "Catch count",
+          "target_description": "Number of fish in the retained trawl catch.",
+          "search_query": "catch count",
+          "target_query_basis": "column_description",
+          "target_query_context": "Catch count: number of fish in the retained trawl catch.",
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the retained trawl catch.",
+          "code_label": null,
+          "code_description": null
+        },
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "CATCH_COUNT",
+          "code_value": null,
+          "dictionary_role": "property",
+          "search_role": "property",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "property_iri",
+          "target_row_key": "theme_a/trawl/CATCH_COUNT",
+          "target_label": "Count",
+          "target_description": "Numerical count of fish in a catch.",
+          "search_query": "count of fish in catch",
+          "target_query_basis": "column_description",
+          "target_query_context": "Catch count: number of fish in the retained trawl catch.",
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the retained trawl catch.",
+          "code_label": null,
+          "code_description": null
+        },
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "CATCH_COUNT",
+          "code_value": null,
+          "dictionary_role": "constraint",
+          "search_role": "constraint",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "constraint_iri",
+          "target_row_key": "theme_a/trawl/CATCH_COUNT",
+          "target_label": "Catch context",
+          "target_description": "Optional context that the count refers to fishery catch.",
+          "search_query": "catch measurement context",
+          "target_query_basis": "column_description",
+          "target_query_context": "Catch count: number of fish in the retained trawl catch.",
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the retained trawl catch.",
+          "code_label": null,
+          "code_description": null
+        },
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "CATCH_COUNT",
+          "code_value": null,
+          "dictionary_role": "method",
+          "search_role": "method",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "method_iri",
+          "target_row_key": "theme_a/trawl/CATCH_COUNT",
+          "target_label": "Catch enumeration procedure",
+          "target_description": "No procedure is stated for this field.",
+          "search_query": "procedure used to enumerate catch count",
+          "target_query_basis": "column_description",
+          "target_query_context": "Catch count: number of fish in the retained trawl catch; no procedure supplied.",
+          "column_label": "Catch count",
+          "column_description": "Number of fish in the retained trawl catch.",
+          "code_label": null,
+          "code_description": null
+        }
+      ],
+      "candidates": [
+        {
+          "target_role": "variable",
+          "label": "Catch abundance",
+          "iri": "https://w3id.org/smn/CatchAbundance",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "Abundance of fish represented by a catch observation.",
+          "score": 0.96,
+          "term_type": "owl_class",
+          "definition_status": "curated_paraphrase"
+        },
+        {
+          "target_role": "property",
+          "label": "Count",
+          "iri": "http://qudt.org/vocab/quantitykind/Count",
+          "source": "qudt",
+          "ontology": "QUDT Quantity Kinds",
+          "definition": "The number of items represented by the observation.",
+          "score": 0.93,
+          "term_type": "qudt_quantitykind",
+          "definition_status": "curated_paraphrase"
+        },
+        {
+          "target_role": "constraint",
+          "label": "Catch context",
+          "iri": "https://w3id.org/smn/CatchContext",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "Measurement context indicating that values refer to fishery catch.",
+          "score": 0.79,
+          "term_type": "skos_concept",
+          "definition_status": "curated_paraphrase"
+        },
+        {
+          "target_role": "method",
+          "label": "Fork-length field method",
+          "iri": "https://w3id.org/smn/ForkLengthMeasurementFieldMethod",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "A field procedure for measuring fork length.",
+          "score": 0.31,
+          "term_type": "owl_class",
+          "definition_status": "curated_paraphrase"
+        }
+      ],
+      "oracle": {
+        "required": [
+          {
+            "rule_id": "catch-count-variable",
+            "type": "selection",
+            "role": "variable",
+            "iri": "https://w3id.org/smn/CatchAbundance",
+            "decision": "accept"
+          },
+          {
+            "rule_id": "catch-count-property",
+            "type": "selection",
+            "role": "property",
+            "iri": "http://qudt.org/vocab/quantitykind/Count",
+            "decision": "accept"
+          },
+          {
+            "rule_id": "catch-count-variable-prefill",
+            "type": "prefill",
+            "role": "variable",
+            "iri": "https://w3id.org/smn/CatchAbundance"
+          },
+          {
+            "rule_id": "catch-count-property-prefill",
+            "type": "prefill",
+            "role": "property",
+            "iri": "http://qudt.org/vocab/quantitykind/Count"
+          }
+        ],
+        "allowed_not_required": [
+          {
+            "rule_id": "catch-context-is-legal-but-optional",
+            "type": "selection",
+            "role": "constraint",
+            "iri": "https://w3id.org/smn/CatchContext"
+          }
+        ],
+        "forbidden": [
+          {
+            "rule_id": "no-catch-count-method-acceptance",
+            "type": "selection",
+            "role": "method",
+            "decision": "accept"
+          },
+          {
+            "rule_id": "no-method-prefill",
+            "type": "prefill",
+            "role": "method"
+          },
+          {
+            "rule_id": "no-constraint-prefill",
+            "type": "prefill",
+            "role": "constraint"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "catch_weight_advisory",
+      "title": "Catch weight with advisory whole-variable gap",
+      "evidence_status": "synthetic_regression_exemplar",
+      "blocking": true,
+      "context": {
+        "dataset_id": "theme_a",
+        "table_id": "trawl",
+        "column_name": "CATCH_WEIGHT",
+        "column_role": "measurement",
+        "column_label": "Catch weight",
+        "column_description": "Total mass in kilograms of fish retained in the trawl catch.",
+        "unit": "kg",
+        "value_examples": [
+          "0.0",
+          "12.4",
+          "338.9"
+        ],
+        "context_text": "CATCH_WEIGHT is aggregate catch mass, not the body mass of one fish. The ontology owner has not yet adjudicated the best whole-variable concept."
+      },
+      "targets": [
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "CATCH_WEIGHT",
+          "code_value": null,
+          "dictionary_role": "variable",
+          "search_role": "variable",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "term_iri",
+          "target_row_key": "theme_a/trawl/CATCH_WEIGHT",
+          "target_label": "Catch weight",
+          "target_description": "Total mass in kilograms of fish retained in the trawl catch.",
+          "search_query": "aggregate catch mass",
+          "target_query_basis": "column_description",
+          "target_query_context": "Catch weight: aggregate mass of retained fish, measured in kilograms.",
+          "column_label": "Catch weight",
+          "column_description": "Total mass in kilograms of fish retained in the trawl catch.",
+          "code_label": null,
+          "code_description": null
+        },
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "CATCH_WEIGHT",
+          "code_value": null,
+          "dictionary_role": "property",
+          "search_role": "property",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "property_iri",
+          "target_row_key": "theme_a/trawl/CATCH_WEIGHT",
+          "target_label": "Fish weight",
+          "target_description": "Mass property of the fish represented by the observation.",
+          "search_query": "fish mass weight property",
+          "target_query_basis": "column_description",
+          "target_query_context": "Catch weight: aggregate mass of retained fish, measured in kilograms.",
+          "column_label": "Catch weight",
+          "column_description": "Total mass in kilograms of fish retained in the trawl catch.",
+          "code_label": null,
+          "code_description": null
+        },
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "CATCH_WEIGHT",
+          "code_value": null,
+          "dictionary_role": "constraint",
+          "search_role": "constraint",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "constraint_iri",
+          "target_row_key": "theme_a/trawl/CATCH_WEIGHT",
+          "target_label": "Catch context",
+          "target_description": "Optional context that the mass refers to fishery catch.",
+          "search_query": "catch measurement context",
+          "target_query_basis": "column_description",
+          "target_query_context": "Catch weight: aggregate mass of retained fish, measured in kilograms.",
+          "column_label": "Catch weight",
+          "column_description": "Total mass in kilograms of fish retained in the trawl catch.",
+          "code_label": null,
+          "code_description": null
+        },
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "CATCH_WEIGHT",
+          "code_value": null,
+          "dictionary_role": "method",
+          "search_role": "method",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "method_iri",
+          "target_row_key": "theme_a/trawl/CATCH_WEIGHT",
+          "target_label": "Catch weighing procedure",
+          "target_description": "No weighing procedure is stated for this field.",
+          "search_query": "procedure used to weigh catch",
+          "target_query_basis": "column_description",
+          "target_query_context": "Catch weight: aggregate mass of retained fish; no measurement procedure supplied.",
+          "column_label": "Catch weight",
+          "column_description": "Total mass in kilograms of fish retained in the trawl catch.",
+          "code_label": null,
+          "code_description": null
+        }
+      ],
+      "candidates": [
+        {
+          "target_role": "variable",
+          "label": "Fish weight",
+          "iri": "https://w3id.org/smn/FishWeight",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "The body mass of a fish.",
+          "score": 0.72,
+          "term_type": "owl_class",
+          "definition_status": "curated_paraphrase"
+        },
+        {
+          "target_role": "property",
+          "label": "Fish weight",
+          "iri": "https://w3id.org/smn/FishWeight",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "The body mass property of a fish.",
+          "score": 0.94,
+          "term_type": "owl_class",
+          "definition_status": "curated_paraphrase"
+        },
+        {
+          "target_role": "constraint",
+          "label": "Catch context",
+          "iri": "https://w3id.org/smn/CatchContext",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "Measurement context indicating that values refer to fishery catch.",
+          "score": 0.76,
+          "term_type": "skos_concept",
+          "definition_status": "curated_paraphrase"
+        },
+        {
+          "target_role": "method",
+          "label": "Fork-length field method",
+          "iri": "https://w3id.org/smn/ForkLengthMeasurementFieldMethod",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "A field procedure for measuring fork length.",
+          "score": 0.22,
+          "term_type": "owl_class",
+          "definition_status": "curated_paraphrase"
+        }
+      ],
+      "oracle": {
+        "required": [
+          {
+            "rule_id": "fish-weight-is-property",
+            "type": "selection",
+            "role": "property",
+            "iri": "https://w3id.org/smn/FishWeight",
+            "decision": "accept"
+          },
+          {
+            "rule_id": "fish-weight-property-prefill",
+            "type": "prefill",
+            "role": "property",
+            "iri": "https://w3id.org/smn/FishWeight"
+          },
+          {
+            "rule_id": "whole-variable-gap-is-advisory",
+            "type": "gap",
+            "role": "variable",
+            "advisory": true
+          }
+        ],
+        "allowed_not_required": [
+          {
+            "rule_id": "catch-weight-context-is-optional",
+            "type": "selection",
+            "role": "constraint",
+            "iri": "https://w3id.org/smn/CatchContext"
+          }
+        ],
+        "forbidden": [
+          {
+            "rule_id": "fish-weight-is-not-whole-variable",
+            "type": "selection",
+            "role": "variable",
+            "iri": "https://w3id.org/smn/FishWeight",
+            "decision": "accept"
+          },
+          {
+            "rule_id": "no-catch-weight-method-acceptance",
+            "type": "selection",
+            "role": "method",
+            "decision": "accept"
+          },
+          {
+            "rule_id": "no-catch-weight-method-prefill",
+            "type": "prefill",
+            "role": "method"
+          },
+          {
+            "rule_id": "no-catch-weight-constraint-prefill",
+            "type": "prefill",
+            "role": "constraint"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "fork_length_explicit_procedure",
+      "title": "Fork length with explicit field procedure",
+      "evidence_status": "synthetic_regression_exemplar",
+      "blocking": true,
+      "context": {
+        "dataset_id": "theme_a",
+        "table_id": "biometrics",
+        "column_name": "FORK_LENGTH_MM",
+        "column_role": "measurement",
+        "column_label": "Fork length",
+        "column_description": "Fork length in millimetres measured in the field from the snout tip to the fork of the caudal fin using a measuring board.",
+        "unit": "mm",
+        "value_examples": [
+          "82",
+          "114",
+          "193"
+        ],
+        "context_text": "A technician measured fork length in the field with a measuring board from the snout tip to the caudal-fin fork. This explicit procedure evidence is required for the method oracle."
+      },
+      "targets": [
+        {
+          "dataset_id": "theme_a",
+          "table_id": "biometrics",
+          "column_name": "FORK_LENGTH_MM",
+          "code_value": null,
+          "dictionary_role": "property",
+          "search_role": "property",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "property_iri",
+          "target_row_key": "theme_a/biometrics/FORK_LENGTH_MM",
+          "target_label": "Fork length",
+          "target_description": "Fork length from snout tip to caudal-fin fork.",
+          "search_query": "fish fork length",
+          "target_query_basis": "column_description",
+          "target_query_context": "Fork length measured in the field with a measuring board.",
+          "column_label": "Fork length",
+          "column_description": "Fork length in millimetres measured in the field from the snout tip to the fork of the caudal fin using a measuring board.",
+          "code_label": null,
+          "code_description": null
+        },
+        {
+          "dataset_id": "theme_a",
+          "table_id": "biometrics",
+          "column_name": "FORK_LENGTH_MM",
+          "code_value": null,
+          "dictionary_role": "method",
+          "search_role": "method",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "method_iri",
+          "target_row_key": "theme_a/biometrics/FORK_LENGTH_MM",
+          "target_label": "Fork-length field method",
+          "target_description": "Field procedure using a measuring board from snout tip to caudal-fin fork.",
+          "search_query": "fork length field measuring board procedure",
+          "target_query_basis": "column_description",
+          "target_query_context": "Fork length measured in the field with a measuring board.",
+          "column_label": "Fork length",
+          "column_description": "Fork length in millimetres measured in the field from the snout tip to the fork of the caudal fin using a measuring board.",
+          "code_label": null,
+          "code_description": null
+        }
+      ],
+      "candidates": [
+        {
+          "target_role": "property",
+          "label": "Fork length",
+          "iri": "https://w3id.org/smn/forkLength",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "Length from the tip of the snout to the fork in the caudal fin.",
+          "score": 0.97,
+          "term_type": "owl_class",
+          "definition_status": "curated_paraphrase"
+        },
+        {
+          "target_role": "method",
+          "label": "Fork-length field method",
+          "iri": "https://w3id.org/smn/ForkLengthMeasurementFieldMethod",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "A field procedure for measuring fork length.",
+          "score": 0.95,
+          "term_type": "owl_class",
+          "definition_status": "curated_paraphrase"
+        }
+      ],
+      "oracle": {
+        "required": [
+          {
+            "rule_id": "fork-length-property",
+            "type": "selection",
+            "role": "property",
+            "iri": "https://w3id.org/smn/forkLength",
+            "decision": "accept"
+          },
+          {
+            "rule_id": "fork-length-property-prefill",
+            "type": "prefill",
+            "role": "property",
+            "iri": "https://w3id.org/smn/forkLength"
+          },
+          {
+            "rule_id": "explicit-procedure-allows-method",
+            "type": "selection",
+            "role": "method",
+            "iri": "https://w3id.org/smn/ForkLengthMeasurementFieldMethod",
+            "decision": "accept"
+          }
+        ],
+        "allowed_not_required": [],
+        "forbidden": [
+          {
+            "rule_id": "method-remains-review-only",
+            "type": "prefill",
+            "role": "method"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "ocean_phase_explicit_lifecycle",
+      "title": "Ocean phase with explicit lifecycle evidence",
+      "evidence_status": "synthetic_regression_exemplar",
+      "blocking": true,
+      "context": {
+        "dataset_id": "theme_a",
+        "table_id": "trawl",
+        "column_name": "OCEAN_PHASE_CODE",
+        "column_role": "measurement",
+        "column_label": "Ocean life-cycle phase",
+        "column_description": "Code identifying the salmon ocean life-cycle or assessment phase represented by the observation.",
+        "unit": null,
+        "value_examples": [
+          "early_ocean",
+          "late_ocean"
+        ],
+        "context_text": "The field explicitly denotes the salmon life-cycle and assessment phase in the ocean, rather than merely stating that sampling occurred at sea."
+      },
+      "targets": [
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "OCEAN_PHASE_CODE",
+          "code_value": null,
+          "dictionary_role": "constraint",
+          "search_role": "constraint",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "constraint_iri",
+          "target_row_key": "theme_a/trawl/OCEAN_PHASE_CODE",
+          "target_label": "Ocean phase",
+          "target_description": "Salmon ocean life-cycle or assessment phase.",
+          "search_query": "salmon ocean lifecycle phase",
+          "target_query_basis": "column_description",
+          "target_query_context": "Explicit salmon ocean life-cycle and assessment phase.",
+          "column_label": "Ocean life-cycle phase",
+          "column_description": "Code identifying the salmon ocean life-cycle or assessment phase represented by the observation.",
+          "code_label": null,
+          "code_description": null
+        }
+      ],
+      "candidates": [
+        {
+          "target_role": "constraint",
+          "label": "Ocean phase",
+          "iri": "https://w3id.org/smn/OceanPhase",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "A salmon life-cycle or assessment phase occurring in the ocean.",
+          "score": 0.96,
+          "term_type": "skos_concept",
+          "definition_status": "curated_paraphrase"
+        }
+      ],
+      "oracle": {
+        "required": [
+          {
+            "rule_id": "explicit-ocean-phase-constraint",
+            "type": "selection",
+            "role": "constraint",
+            "iri": "https://w3id.org/smn/OceanPhase",
+            "decision": "accept"
+          }
+        ],
+        "allowed_not_required": [],
+        "forbidden": [
+          {
+            "rule_id": "ocean-phase-remains-review-only",
+            "type": "prefill",
+            "role": "constraint"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "synthetic_structured_gap",
+      "title": "Synthetic structured whole-variable gap",
+      "evidence_status": "synthetic_regression_exemplar",
+      "blocking": true,
+      "context": {
+        "dataset_id": "theme_a",
+        "table_id": "trawl",
+        "column_name": "STANDARDIZED_CATCH_BIOMASS",
+        "column_role": "measurement",
+        "column_label": "Standardized catch biomass",
+        "column_description": "Model-standardized aggregate catch biomass for a trawl event.",
+        "unit": "kg",
+        "value_examples": [
+          "1.8",
+          "24.1",
+          "410.6"
+        ],
+        "context_text": "This synthetic field denotes model-standardized aggregate catch biomass. The frozen shortlist contains only an individual-fish weight term, so the whole-variable slot must remain an explicit ontology gap."
+      },
+      "targets": [
+        {
+          "dataset_id": "theme_a",
+          "table_id": "trawl",
+          "column_name": "STANDARDIZED_CATCH_BIOMASS",
+          "code_value": null,
+          "dictionary_role": "variable",
+          "search_role": "variable",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "term_iri",
+          "target_row_key": "theme_a/trawl/STANDARDIZED_CATCH_BIOMASS",
+          "target_label": "Standardized catch biomass",
+          "target_description": "Model-standardized aggregate catch biomass for a trawl event.",
+          "search_query": "standardized aggregate catch biomass",
+          "target_query_basis": "column_description",
+          "target_query_context": "Model-standardized aggregate catch biomass for a trawl event.",
+          "column_label": "Standardized catch biomass",
+          "column_description": "Model-standardized aggregate catch biomass for a trawl event.",
+          "code_label": null,
+          "code_description": null
+        }
+      ],
+      "candidates": [
+        {
+          "target_role": "variable",
+          "label": "Fish weight",
+          "iri": "https://w3id.org/smn/FishWeight",
+          "source": "smn",
+          "ontology": "Salmon Ontology",
+          "definition": "The body mass of an individual fish.",
+          "score": 0.48,
+          "term_type": "owl_class",
+          "definition_status": "curated_paraphrase"
+        }
+      ],
+      "oracle": {
+        "required": [
+          {
+            "rule_id": "structured-gap-request",
+            "type": "gap",
+            "role": "variable",
+            "scope": "uncertain",
+            "decision": "request_new_term"
+          }
+        ],
+        "allowed_not_required": [],
+        "forbidden": [
+          {
+            "rule_id": "do-not-force-individual-fish-weight",
+            "type": "selection",
+            "role": "variable",
+            "iri": "https://w3id.org/smn/FishWeight",
+            "decision": "accept"
+          },
+          {
+            "rule_id": "do-not-prefill-gap",
+            "type": "prefill",
+            "role": "variable"
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "handcrafted_gcdfo_routing",
+      "title": "Handcrafted DFO-specific term request routing",
+      "evidence_status": "synthetic_regression_exemplar",
+      "blocking": true,
+      "context": {
+        "dataset_id": "theme_a",
+        "table_id": "enumeration",
+        "column_name": "DFO_COUNTER_QA_PROCEDURE",
+        "column_role": "measurement",
+        "column_label": "DFO counter QA procedure",
+        "column_description": "DFO Pacific operational procedure for quality assurance of a fixed-site salmon counter.",
+        "unit": null,
+        "value_examples": [
+          "dual_review",
+          "calibration_pass"
+        ],
+        "context_text": "The requested concept is a DFO Pacific operational procedure and therefore belongs in the GCDFO repository when no precise existing candidate is available."
+      },
+      "targets": [
+        {
+          "dataset_id": "theme_a",
+          "table_id": "enumeration",
+          "column_name": "DFO_COUNTER_QA_PROCEDURE",
+          "code_value": null,
+          "dictionary_role": "method",
+          "search_role": "method",
+          "target_scope": "column",
+          "target_sdp_file": "column_dictionary.csv",
+          "target_sdp_field": "method_iri",
+          "target_row_key": "theme_a/enumeration/DFO_COUNTER_QA_PROCEDURE",
+          "target_label": "DFO counter QA procedure",
+          "target_description": "DFO Pacific operational QA procedure for a fixed-site salmon counter.",
+          "search_query": "DFO fixed-site salmon counter quality assurance procedure",
+          "target_query_basis": "column_description",
+          "target_query_context": "DFO Pacific operational QA procedure for fixed-site enumeration.",
+          "column_label": "DFO counter QA procedure",
+          "column_description": "DFO Pacific operational procedure for quality assurance of a fixed-site salmon counter.",
+          "code_label": null,
+          "code_description": null
+        }
+      ],
+      "candidates": [
+        {
+          "target_role": "method",
+          "label": "Fixed station tally",
+          "iri": "https://w3id.org/gcdfo/salmon#FixedStationTally",
+          "source": "gcdfo",
+          "ontology": "DFO Salmon Ontology",
+          "definition": "A broad fixed-station enumeration method that does not specify the QA procedure.",
+          "score": 0.53,
+          "term_type": "skos_concept",
+          "definition_status": "curated_paraphrase"
+        }
+      ],
+      "oracle": {
+        "required": [
+          {
+            "rule_id": "gcdfo-gap-request",
+            "type": "gap",
+            "role": "method",
+            "scope": "gcdfo",
+            "decision": "request_new_term"
+          },
+          {
+            "rule_id": "gcdfo-repository-route",
+            "type": "routing",
+            "scope": "gcdfo",
+            "repository": "dfo-pacific-science/dfo-salmon-ontology"
+          }
+        ],
+        "allowed_not_required": [],
+        "forbidden": [
+          {
+            "rule_id": "do-not-route-dfo-procedure-to-smn",
+            "type": "routing",
+            "scope": "smn"
+          },
+          {
+            "rule_id": "method-request-is-never-prefilled",
+            "type": "prefill",
+            "role": "method"
+          }
+        ]
+      }
+    }
+  ]
+}

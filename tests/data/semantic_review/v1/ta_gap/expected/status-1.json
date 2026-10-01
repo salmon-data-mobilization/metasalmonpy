@@ -1,0 +1,22 @@
+{
+  "status": "complete",
+  "pass": 1,
+  "packet_id": "92efac616038d6e7045bb15eea71feab8470f2ea27a32570c8d356bdb8139c97",
+  "has_next_packet": false,
+  "summary": {
+    "decisions": {
+      "accept": 0,
+      "review": 0,
+      "retry_search": 0,
+      "request_new_term": 1,
+      "reject_shortlist": 0
+    },
+    "errors": 0,
+    "downgrades": 0,
+    "escalations": 0,
+    "retries": 0,
+    "awaiting_pass_2": 0,
+    "kept_pass_1": 0
+  },
+  "search_calls": 0
+}

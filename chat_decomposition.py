@@ -9,6 +9,7 @@ from typing import Callable, Optional, Sequence
 
 import pandas as pd
 
+from .semantic_review_deprecation import deprecated_on_every_call
 from .semantics import suggest_semantics
 from .term_search import find_terms
 
@@ -344,6 +345,7 @@ def _preview(state: dict) -> str:
     )
 
 
+@deprecated_on_every_call("chat_decomposition")
 def chat_decomposition(
     dict_df: pd.DataFrame,
     column_name: str,

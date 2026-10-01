@@ -1,0 +1,352 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://salmon-data-mobilization.github.io/metasalmon/schema/semantic-review-packet-v1.schema.json",
+  "title": "Semantic review packet, version semantic-review-packet/1.0",
+  "description": "The file contract between a Salmon Data Package tool (metasalmon or metasalmonpy) and a harness that judges ontology candidates. The tool writes a packet (this schema's root, $defs/packet); the harness writes an assessment CSV whose thirty columns are $defs/assessment_row, in that order, and beside it a one-line sidecar <csv>.packet-id holding the packet_id it judged (the frozen row has nowhere to carry it; the tool refuses a file that names no packet, code packet_unbound, or a different one, code packet_mismatch); the tool reads the CSV back, redacts secrets from the harness-owned free-text columns at capture, and persists the same thirty columns as its record, plus a findings CSV of $defs/findings_row. This copy is vendored byte-identically in both packages. Canonical serialisation: UTF-8 with no byte-order mark, two-space indent, one member per line, a colon and one space between a key and its value, empty containers inline as [] and {}, a single trailing line feed, only the double quote, the backslash and U+0000 to U+001F escaped (\\\", \\\\, \\b, \\f, \\n, \\r, \\t, and \\u00XX in lower-case hex for the rest), true/false/null literals, and numbers rendered by value: a finite whole number as an integer literal with no decimal point, any other finite number as the shortest decimal that round-trips in plain notation (never scientific), NaN and infinities as null. Key order is fixed per object as listed here. packet_id is the SHA-256 hex digest of the canonical serialisation with the packet_id and producer members removed, so the same packet built by either implementation has the same id and the id is an integrity check at ingest.",
+  "$ref": "#/$defs/packet",
+  "$defs": {
+    "nullable_string": { "type": ["string", "null"] },
+    "nullable_number": { "type": ["number", "null"] },
+    "nullable_integer": { "type": ["integer", "null"] },
+    "nullable_boolean": { "type": ["boolean", "null"] },
+    "packet": {
+      "type": "object",
+      "description": "Members in this order: packet_version, packet_id, pass, parent_packet_id, producer, pins, instructions, decision_vocabulary, decision_aliases, output, context, units.",
+      "required": ["packet_version", "packet_id", "pass", "parent_packet_id", "producer", "pins", "instructions", "decision_vocabulary", "decision_aliases", "output", "context", "units"],
+      "additionalProperties": false,
+      "properties": {
+        "packet_version": { "const": "semantic-review-packet/1.0" },
+        "packet_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "pass": { "enum": [1, 2] },
+        "parent_packet_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null at pass 1; the pass-1 packet's id at pass 2." },
+        "producer": {
+          "type": "object",
+          "description": "The only member excluded from packet_id together with packet_id itself, and the only member that may differ between the two implementations on the same inputs.",
+          "required": ["implementation", "version", "function"],
+          "additionalProperties": false,
+          "properties": {
+            "implementation": { "enum": ["metasalmon", "metasalmonpy"] },
+            "version": { "type": "string" },
+            "function": { "type": "string" }
+          }
+        },
+        "pins": {
+          "type": "object",
+          "required": ["sdp_profile", "ontologies", "ranking_identity", "retrieval"],
+          "additionalProperties": false,
+          "properties": {
+            "sdp_profile": {
+              "type": "object",
+              "required": ["version", "source"],
+              "additionalProperties": false,
+              "properties": {
+                "version": { "$ref": "#/$defs/nullable_string", "description": "The SDP profile version of the vendored schema bundle, never of a remote load." },
+                "source": { "const": "vendored" }
+              }
+            },
+            "ontologies": {
+              "type": "object",
+              "description": "Nothing pins an ontology today: retrieval reads live endpoints. pinned is therefore false, and the packet records the sources that were searched and, for a package path, the sources that failed to answer.",
+              "required": ["pinned", "sources", "failed_sources"],
+              "additionalProperties": false,
+              "properties": {
+                "pinned": { "const": false },
+                "sources": { "type": "array", "items": { "type": "string" }, "description": "C-sorted, unique." },
+                "failed_sources": { "type": "array", "items": { "type": "string" }, "description": "C-sorted, unique." }
+              }
+            },
+            "ranking_identity": { "$ref": "#/$defs/nullable_string", "description": "metasalmon's ranking identity string for a package path; null otherwise, and always null from metasalmonpy (parity row 39)." },
+            "retrieval": {
+              "type": "object",
+              "description": "What the ingester needs to widen a shortlist at pass 1: the depth and the source policy.",
+              "required": ["top_n", "code_scope", "source_policy"],
+              "additionalProperties": false,
+              "properties": {
+                "top_n": { "type": "integer", "minimum": 1 },
+                "code_scope": { "enum": ["factor", "all", "none"], "description": "Which codes.csv values got a slot when a blank slot was recovered by discovery for a package path (create_sdp's semantic_code_scope). Nothing in a package records the scope it was created with, so the packet records the one used; a blank code-level slot outside it is reported by the exporter as not covered, never silently dropped." },
+                "source_policy": {
+                  "type": "object",
+                  "required": ["mode", "explicit_allowlist", "effective_sources_by_role"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "mode": { "enum": ["role_defaults", "explicit"] },
+                    "explicit_allowlist": { "type": "array", "items": { "type": "string" } },
+                    "effective_sources_by_role": {
+                      "type": "object",
+                      "description": "One member per bundle role, in the order variable, property, entity, unit, constraint, statistical_modifier, method.",
+                      "additionalProperties": { "type": "array", "items": { "type": "string" } }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "instructions": { "type": "string", "description": "The vendored instructions file, verbatim. Byte-identical in both packages." },
+        "decision_vocabulary": {
+          "type": "array",
+          "items": { "type": "string" },
+          "const": ["accept", "review", "retry_search", "request_new_term", "reject_shortlist"]
+        },
+        "decision_aliases": {
+          "type": "object",
+          "const": { "propose_new_term": "request_new_term" }
+        },
+        "output": {
+          "type": "object",
+          "required": ["file", "columns"],
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string", "description": "review/semantic-assessments-pass-1.csv or review/semantic-assessments-pass-2.csv, relative to the package directory." },
+            "columns": {
+              "type": "array",
+              "minItems": 30,
+              "maxItems": 30,
+              "items": {
+                "type": "object",
+                "required": ["name", "owner", "required"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": { "type": "string" },
+                  "owner": { "enum": ["harness", "package", "harness_or_package"], "description": "harness: the harness fills it. package: the package fills it and overwrites anything the harness wrote, with one warning naming the columns. harness_or_package: the harness may declare an error there; otherwise the package writes it." },
+                  "required": { "enum": ["always", "accept", "retry_search", "never"], "description": "always: required on every row. accept: required when the decision is accept. retry_search: required when the decision is retry_search. never: optional or package-owned." }
+                }
+              }
+            }
+          }
+        },
+        "context": {
+          "type": "object",
+          "required": ["inputs", "chunking"],
+          "additionalProperties": false,
+          "properties": {
+            "inputs": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["source", "kind", "sha256"],
+                "additionalProperties": false,
+                "properties": {
+                  "source": { "type": "string", "description": "The label the excerpts carry: a file's basename, disambiguated with its parent directory on a collision, or inline_context[n]." },
+                  "kind": { "enum": ["file", "text"] },
+                  "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "A file: the digest of its bytes. Inline text: the digest of the UTF-8 text." }
+                }
+              }
+            },
+            "chunking": {
+              "type": "object",
+              "const": { "chunk_chars": 2200, "overlap_chars": 200, "max_excerpts": 4, "token_min_chars": 3 }
+            }
+          }
+        },
+        "units": {
+          "type": "array",
+          "description": "Sorted by unit_key in C collation.",
+          "items": { "$ref": "#/$defs/unit" }
+        }
+      }
+    },
+    "unit": {
+      "type": "object",
+      "description": "Members in this order: unit_kind, unit_key, dictionary, current_slots, slots, context_excerpts; a pass-2 bundle unit adds previous_findings. A bundle unit is one measurement column with one slot per targeted I-ADOPT role; a target unit is one slot on its own. A unit may hold a slot with no candidates.",
+      "required": ["unit_kind", "unit_key", "dictionary", "current_slots", "slots", "context_excerpts"],
+      "additionalProperties": false,
+      "properties": {
+        "unit_kind": { "enum": ["bundle", "target"] },
+        "unit_key": { "type": "string", "description": "bundle:<dataset_id>/<table_id>/<column_name> or target:<slot_id>." },
+        "dictionary": {
+          "type": "object",
+          "description": "The dictionary row's context, every key present, null when the row does not carry it or when the target is not a column.",
+          "required": ["dataset_id", "table_id", "column_name", "column_label", "column_description", "column_role", "value_type", "unit_label", "term_type"],
+          "additionalProperties": false,
+          "properties": {
+            "dataset_id": { "$ref": "#/$defs/nullable_string" },
+            "table_id": { "$ref": "#/$defs/nullable_string" },
+            "column_name": { "$ref": "#/$defs/nullable_string" },
+            "column_label": { "$ref": "#/$defs/nullable_string" },
+            "column_description": { "$ref": "#/$defs/nullable_string" },
+            "column_role": { "$ref": "#/$defs/nullable_string" },
+            "value_type": { "$ref": "#/$defs/nullable_string" },
+            "unit_label": { "$ref": "#/$defs/nullable_string" },
+            "term_type": { "$ref": "#/$defs/nullable_string" }
+          }
+        },
+        "current_slots": {
+          "type": "object",
+          "description": "A bundle unit: the current value of each of the six dictionary slot fields, keyed by role in the order variable, property, entity, unit, constraint, statistical_modifier. A target unit: empty.",
+          "additionalProperties": { "$ref": "#/$defs/nullable_string" }
+        },
+        "slots": { "type": "array", "items": { "$ref": "#/$defs/slot" } },
+        "context_excerpts": {
+          "type": "array",
+          "description": "At most four, scored against the unit's targets and candidates, deduplicated across the unit, in score order.",
+          "items": {
+            "type": "object",
+            "required": ["source", "chunk_id", "context_score", "excerpt"],
+            "additionalProperties": false,
+            "properties": {
+              "source": { "type": "string" },
+              "chunk_id": { "type": "string" },
+              "context_score": { "type": "number" },
+              "excerpt": { "type": "string" }
+            }
+          }
+        },
+        "previous_findings": {
+          "type": "array",
+          "description": "Pass 2, bundle units only: the pass-1 findings for this unit.",
+          "items": { "$ref": "#/$defs/findings_row" }
+        }
+      }
+    },
+    "slot": {
+      "type": "object",
+      "description": "Members in this order: dictionary_role, target_sdp_field, status, current_value, slot_id, identity, target, candidates; a pass-2 slot adds reassess and previous_assessment. identity is the nine columns the harness copies into its row; target is the frozen 19-column semantic target row.",
+      "required": ["dictionary_role", "target_sdp_field", "status", "current_value", "slot_id", "identity", "target", "candidates"],
+      "additionalProperties": false,
+      "properties": {
+        "dictionary_role": { "type": "string" },
+        "target_sdp_field": { "$ref": "#/$defs/nullable_string" },
+        "status": { "const": "review" },
+        "current_value": { "$ref": "#/$defs/nullable_string", "description": "The slot's value in the package before review: null when blank, otherwise the value, which may carry the REVIEW: marker." },
+        "slot_id": { "$ref": "#/$defs/nullable_string", "description": "The review console's slot id: <target_sdp_file>|<target_row_key>|<target_sdp_field>." },
+        "identity": {
+          "type": "object",
+          "required": ["dataset_id", "table_id", "column_name", "code_value", "dictionary_role", "target_scope", "target_sdp_file", "target_sdp_field", "search_query"],
+          "additionalProperties": false,
+          "properties": {
+            "dataset_id": { "$ref": "#/$defs/nullable_string" },
+            "table_id": { "$ref": "#/$defs/nullable_string" },
+            "column_name": { "$ref": "#/$defs/nullable_string" },
+            "code_value": { "$ref": "#/$defs/nullable_string" },
+            "dictionary_role": { "$ref": "#/$defs/nullable_string" },
+            "target_scope": { "$ref": "#/$defs/nullable_string" },
+            "target_sdp_file": { "$ref": "#/$defs/nullable_string" },
+            "target_sdp_field": { "$ref": "#/$defs/nullable_string" },
+            "search_query": { "$ref": "#/$defs/nullable_string" }
+          }
+        },
+        "target": {
+          "type": "object",
+          "description": "The 19 target columns, in the frozen order.",
+          "required": ["dataset_id", "table_id", "column_name", "code_value", "dictionary_role", "search_role", "target_scope", "target_sdp_file", "target_sdp_field", "target_row_key", "target_label", "target_description", "search_query", "target_query_basis", "target_query_context", "column_label", "column_description", "code_label", "code_description"],
+          "additionalProperties": false,
+          "properties": {
+            "dataset_id": { "$ref": "#/$defs/nullable_string" },
+            "table_id": { "$ref": "#/$defs/nullable_string" },
+            "column_name": { "$ref": "#/$defs/nullable_string" },
+            "code_value": { "$ref": "#/$defs/nullable_string" },
+            "dictionary_role": { "$ref": "#/$defs/nullable_string" },
+            "search_role": { "$ref": "#/$defs/nullable_string" },
+            "target_scope": { "$ref": "#/$defs/nullable_string" },
+            "target_sdp_file": { "$ref": "#/$defs/nullable_string" },
+            "target_sdp_field": { "$ref": "#/$defs/nullable_string" },
+            "target_row_key": { "$ref": "#/$defs/nullable_string" },
+            "target_label": { "$ref": "#/$defs/nullable_string" },
+            "target_description": { "$ref": "#/$defs/nullable_string" },
+            "search_query": { "$ref": "#/$defs/nullable_string" },
+            "target_query_basis": { "$ref": "#/$defs/nullable_string" },
+            "target_query_context": { "$ref": "#/$defs/nullable_string" },
+            "column_label": { "$ref": "#/$defs/nullable_string" },
+            "column_description": { "$ref": "#/$defs/nullable_string" },
+            "code_label": { "$ref": "#/$defs/nullable_string" },
+            "code_description": { "$ref": "#/$defs/nullable_string" }
+          }
+        },
+        "candidates": {
+          "type": "array",
+          "description": "Retrieval order, which is the ranked order; index is the 1-based position and the only way a harness names a candidate.",
+          "items": { "$ref": "#/$defs/candidate" }
+        },
+        "reassess": { "type": "boolean", "description": "Pass 2 only: whether this slot gained candidates and is to be judged again. A slot with reassess false keeps its pass-1 answer." },
+        "previous_assessment": { "$ref": "#/$defs/assessment_row", "description": "Pass 2 only: the slot's full pass-1 row, after retry bookkeeping." }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "description": "Members in this order: index, label, iri, source, ontology, role, match_type, definition, term_type, resource_kind, type_iris, native_type, role_hints, role_hint_status, role_hint_bonus, lexical_score, alignment_only, agreement_sources, retrieval_query, retrieval_pass, role_collision, role_collision_note, extra. There is no candidate id: selection is by index, because the two implementations fingerprint a blank-IRI candidate differently. extra holds every other candidate column, keys in C order, excluding the target columns, the review console's decision columns, assessment output (llm_*) and internal keys.",
+      "required": ["index", "label", "iri", "source", "ontology", "role", "match_type", "definition", "term_type", "resource_kind", "type_iris", "native_type", "role_hints", "role_hint_status", "role_hint_bonus", "lexical_score", "alignment_only", "agreement_sources", "retrieval_query", "retrieval_pass", "role_collision", "role_collision_note", "extra"],
+      "additionalProperties": false,
+      "properties": {
+        "index": { "type": "integer", "minimum": 1 },
+        "label": { "$ref": "#/$defs/nullable_string" },
+        "iri": { "$ref": "#/$defs/nullable_string" },
+        "source": { "$ref": "#/$defs/nullable_string" },
+        "ontology": { "$ref": "#/$defs/nullable_string" },
+        "role": { "$ref": "#/$defs/nullable_string", "description": "The candidate's ontology role as retrieval labelled it." },
+        "match_type": { "$ref": "#/$defs/nullable_string" },
+        "definition": { "$ref": "#/$defs/nullable_string" },
+        "term_type": { "$ref": "#/$defs/nullable_string" },
+        "resource_kind": { "$ref": "#/$defs/nullable_string" },
+        "type_iris": { "$ref": "#/$defs/nullable_string" },
+        "native_type": { "$ref": "#/$defs/nullable_string", "description": "Derived from term_type, resource_kind and type_iris by the validators' classifier; carried so a harness sees the type the validators will read." },
+        "role_hints": { "$ref": "#/$defs/nullable_string" },
+        "role_hint_status": { "$ref": "#/$defs/nullable_string" },
+        "role_hint_bonus": { "$ref": "#/$defs/nullable_number" },
+        "lexical_score": { "$ref": "#/$defs/nullable_number", "description": "The candidate row's score." },
+        "alignment_only": { "$ref": "#/$defs/nullable_boolean" },
+        "agreement_sources": { "$ref": "#/$defs/nullable_string" },
+        "retrieval_query": { "$ref": "#/$defs/nullable_string" },
+        "retrieval_pass": { "$ref": "#/$defs/nullable_integer" },
+        "role_collision": { "$ref": "#/$defs/nullable_boolean" },
+        "role_collision_note": { "$ref": "#/$defs/nullable_string" },
+        "extra": { "type": "object", "additionalProperties": { "type": ["string", "number", "boolean", "null"] } }
+      }
+    },
+    "assessment_row": {
+      "type": "object",
+      "description": "The frozen 30-column assessment row, in this order. In the harness's CSV every cell is text and the empty field is the only missing value; the ownership and requiredness of each column is given in the packet's output.columns. In the packet (previous_assessment) the same row is an object with null for a missing cell, numbers for llm_confidence, llm_selected_candidate_index and llm_exploration_candidate_gain, and a boolean for llm_exploration_used.",
+      "required": ["dataset_id", "table_id", "column_name", "code_value", "dictionary_role", "target_scope", "target_sdp_file", "target_sdp_field", "search_query", "llm_provider", "llm_model", "llm_decision", "llm_confidence", "llm_selected_candidate_index", "llm_selected_iri", "llm_selected_label", "llm_rationale", "llm_missing_context", "llm_bundle_summary", "llm_retry_query", "llm_new_term_label", "llm_new_term_definition", "llm_new_term_namespace", "llm_context_sources", "llm_exploration_used", "llm_exploration_queries", "llm_exploration_candidate_gain", "llm_error", "llm_escalated_from", "llm_retry_query_rejection_reason"],
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": { "$ref": "#/$defs/nullable_string" },
+        "table_id": { "$ref": "#/$defs/nullable_string" },
+        "column_name": { "$ref": "#/$defs/nullable_string" },
+        "code_value": { "$ref": "#/$defs/nullable_string" },
+        "dictionary_role": { "$ref": "#/$defs/nullable_string" },
+        "target_scope": { "$ref": "#/$defs/nullable_string" },
+        "target_sdp_file": { "$ref": "#/$defs/nullable_string" },
+        "target_sdp_field": { "$ref": "#/$defs/nullable_string" },
+        "search_query": { "$ref": "#/$defs/nullable_string" },
+        "llm_provider": { "$ref": "#/$defs/nullable_string" },
+        "llm_model": { "$ref": "#/$defs/nullable_string" },
+        "llm_decision": { "type": ["string", "null"], "enum": ["accept", "review", "retry_search", "request_new_term", "reject_shortlist", null] },
+        "llm_confidence": { "$ref": "#/$defs/nullable_number" },
+        "llm_selected_candidate_index": { "$ref": "#/$defs/nullable_integer" },
+        "llm_selected_iri": { "$ref": "#/$defs/nullable_string" },
+        "llm_selected_label": { "$ref": "#/$defs/nullable_string" },
+        "llm_rationale": { "$ref": "#/$defs/nullable_string" },
+        "llm_missing_context": { "$ref": "#/$defs/nullable_string" },
+        "llm_bundle_summary": { "$ref": "#/$defs/nullable_string" },
+        "llm_retry_query": { "$ref": "#/$defs/nullable_string" },
+        "llm_new_term_label": { "$ref": "#/$defs/nullable_string" },
+        "llm_new_term_definition": { "$ref": "#/$defs/nullable_string" },
+        "llm_new_term_namespace": { "$ref": "#/$defs/nullable_string" },
+        "llm_context_sources": { "$ref": "#/$defs/nullable_string" },
+        "llm_exploration_used": { "$ref": "#/$defs/nullable_boolean" },
+        "llm_exploration_queries": { "$ref": "#/$defs/nullable_string" },
+        "llm_exploration_candidate_gain": { "$ref": "#/$defs/nullable_integer" },
+        "llm_error": { "$ref": "#/$defs/nullable_string" },
+        "llm_escalated_from": { "$ref": "#/$defs/nullable_string" },
+        "llm_retry_query_rejection_reason": { "$ref": "#/$defs/nullable_string" }
+      }
+    },
+    "findings_row": {
+      "type": "object",
+      "description": "One bundle validator finding: the nine columns of review/semantic-validator-findings.csv, in this order.",
+      "required": ["dataset_id", "table_id", "column_name", "code", "severity", "role", "before_decision", "after_decision", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": { "$ref": "#/$defs/nullable_string" },
+        "table_id": { "$ref": "#/$defs/nullable_string" },
+        "column_name": { "$ref": "#/$defs/nullable_string" },
+        "code": { "enum": ["SEM_METHOD_EVIDENCE_REQUIRED", "SEM_MODIFIER_EVIDENCE_REQUIRED", "SEM_CONSTRAINT_EVIDENCE_REQUIRED", "SEM_ROLE_TYPE_MISMATCH", "SEM_DIMENSION_MISMATCH", "SEM_PROPERTY_UNIT_DIMENSION_MISMATCH", "SEM_REDUNDANT_CATCH_CONTEXT"] },
+        "severity": { "type": "string" },
+        "role": { "type": "string" },
+        "before_decision": { "type": "string" },
+        "after_decision": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
