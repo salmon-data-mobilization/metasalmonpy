@@ -18,6 +18,15 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Date columns keep their temporal role without a date-like name.** B-349,
+  porting Brett's 2026-09-25 ruling: all present date/datetime objects or text
+  accepted by B-188's readr guess infer `temporal`; value typing shares that
+  guess and distinguishes `date` from `datetime`. The bundled NuSEDS
+  `START_DTT` and `END_DTT` columns read by pandas now infer `date` instead
+  of `string`. Identifier and identifier-qualifier precedence, explicit
+  categorical intent, empty/mixed non-date columns and ordinary code lists
+  retain their existing roles. R is unchanged; no new parity-deviation row.
+
 * **EML temporal coverage accepts the SDP UTC-instant spelling.** B-355,
   mirroring B-354 and Brett's 2026-09-25 ruling: each
   `YYYY-MM-DDThh:mm:ssZ` endpoint is split into `calendarDate` and `time`.
