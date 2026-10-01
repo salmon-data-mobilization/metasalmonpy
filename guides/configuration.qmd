@@ -6,10 +6,12 @@ execute:
 ---
 
 Settings are read at call time. Importing the package does not set environment
-variables or supply credentials. Environment settings for the optional model
-provider path do not request a model call; that still requires `llm_assess=True`.
-The ecosystem's S16 plan removes that in-package provider path in 0.7.0. The
-current Python release still carries it; this page describes its current controls.
+variables or supply credentials. Environment settings do not request a model
+call. Model assessment of semantic suggestions requires `llm_assess=True`
+(and `seed_semantics=True` in `infer_dictionary()`). `chat_decomposition()` has a
+separate opt-in path through `chat_provider=` or `chat_request_fn=`. The S16 plan
+removes these in-package provider paths in 0.7.0; this page describes their
+current controls.
 
 ## SDP schema
 
@@ -37,8 +39,8 @@ is maintained with the vendored bundle when a later spec release is implemented.
 | --- | --- |
 | `METASALMONPY_CACHE` | Enable the process-local term-result cache with `1`, `true` or `yes`; unset/empty disables it. |
 | `METASALMONPY_DEBUG_FETCH` | Enable retrieval diagnostics with `1`, `true` or `yes`; unset/empty disables them. |
-| `SALMONPY_CACHE`, `SALMONPY_DEBUG_FETCH` | Deprecated pre-rename fallbacks, consulted only when the corresponding current spelling is unset/empty. They warn once and are scheduled for removal after the S10 parity release. |
-| `BIOPORTAL_APIKEY` | BioPortal credential. A missing key produces one warning per imported module and an empty BioPortal result. |
+| `SALMONPY_CACHE`, `SALMONPY_DEBUG_FETCH` | Deprecated pre-rename fallbacks, consulted only when the corresponding current spelling is unset/empty. Each emits one `DeprecationWarning` per process (which Python may filter by default); both remain supported here. |
+| `BIOPORTAL_APIKEY` | BioPortal credential. The first BioPortal search without a key emits one `RuntimeWarning` per process and returns an empty BioPortal result. |
 
 BioPortal warning bookkeeping is private module state. Session identifier generation
 uses UUIDs without consuming Python's statistical random stream. The R companion's configuration topic is `?metasalmon_configuration`;
@@ -46,7 +48,8 @@ its `metasalmon.*` options and `METASALMON_*` retrieval knobs are R controls.
 
 ## GitHub and DataONE
 
-GitHub access resolves `GITHUB_PAT`, then `GH_TOKEN`, then the Git credential
+A nonempty `token=` argument takes precedence for GitHub readers. Otherwise,
+token discovery checks `GITHUB_PAT`, then `GH_TOKEN`, then the Git credential
 helper. See [GitHub data access](github-access.qmd) for the existing setup and
 read helpers.
 
@@ -66,9 +69,13 @@ for each other, and tokens are never written to a package manifest. Passing
 
 ## Optional in-package model provider path
 
-Explicit `llm_model`, `llm_base_url` and `llm_api_key` arguments take precedence.
-The environment fallbacks below are read only when resolving an explicitly
-requested provider call; setting them does not opt in.
+Model assessment of semantic suggestions selects a provider with `llm_provider`
+(`openai` by default);
+explicit `llm_model`, `llm_base_url` and `llm_api_key` arguments take precedence.
+`chat_decomposition()` uses the corresponding `chat_provider`, `chat_model`,
+`chat_base_url` and `chat_api_key` arguments. Both paths use the provider-specific
+fallbacks below when a call is explicitly requested. Setting an environment
+variable alone does not opt in.
 
 | Provider | Model fallback | Endpoint fallback | Credential fallback |
 | --- | --- | --- | --- |
@@ -78,9 +85,11 @@ requested provider call; setting them does not opt in.
 | `chapi` | `CHAPI_MODEL` | `CHAPI_BASE_URL` | `CHAPI_API_KEY` |
 
 An unset model or endpoint falls back to that provider's package preset where
-one exists; the compatible provider requires a model. `llm_reasoning_effort`
-is supplied as an explicit argument. Model and endpoint fallbacks use the
-provider-specific names in the table above.
+one exists. `openai_compatible` has no preset: a network call requires a model,
+endpoint and credential. An injected `llm_request_fn` or `chat_request_fn`
+replaces the network request and does not require an endpoint or credential.
+Semantic review accepts an explicit `llm_reasoning_effort`;
+`chat_decomposition()` does not have a reasoning-effort argument.
 
 Follow the [semantic review guide](semantic-review.qmd) for the explicit review
 flow. The configuration above supplies inputs to existing calls; it never

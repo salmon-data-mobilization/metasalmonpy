@@ -92,6 +92,7 @@ quartodoc:
         href: getting-started.qmd
       - section: "Guides"
         contents:
+          - guides/configuration.qmd
           - guides/package-lifecycle.qmd
           - guides/semantic-review.qmd
           - guides/term-requests.qmd
