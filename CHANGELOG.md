@@ -25,6 +25,9 @@ and moving it is a separate outward act.
   A shared shape helper uses R's enumerated whitespace class. Blanks keep
   their existing checks, recognized REVIEW markers are reported once, and
   method/protocol placements keep their existing unconditional checks.
+  Existing semicolon-separated `constraint_iri` lists are checked component
+  by component; empty components remain malformed and a REVIEW marker in
+  any component is reported once for that dictionary row.
   Direct dictionary whitespace is present and malformed; missing values and
   exact empty strings retain their checks. CSV checks consume parsed values
   after the reader's existing ASCII trim. Non-strict validation and the separately tracked dataset/codes/extra

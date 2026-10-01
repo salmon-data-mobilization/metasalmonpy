@@ -57,6 +57,7 @@ from typing import Optional, Sequence
 
 import pandas as pd
 
+from .dictionary import _dictionary_iri_components
 from .metadata import (
     align_columns,
     is_review_placeholder,
@@ -505,7 +506,14 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
             if (
                 file_name in _REVIEW_IRI_FILES
                 and str(field).endswith("_iri")
-                and _is_unresolved_iri(value)
+                and any(
+                    _is_unresolved_iri(part)
+                    for part in (
+                        _dictionary_iri_components(str(value), str(field))
+                        if file_name == "column_dictionary.csv" and field == "constraint_iri"
+                        else [value]
+                    )
+                )
             ):
                 add(field, "iri", hint=_iri_hint(field))
                 continue

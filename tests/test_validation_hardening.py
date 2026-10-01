@@ -1555,3 +1555,70 @@ def test_a_unicode_whitespace_enum_is_a_token_not_a_blank(tmp_path):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 validate_salmon_datapackage(str(blank_root), require_iris=True)
+
+
+def test_reviewed_multiple_constraints_survive_strict_validation():
+    from metasalmonpy import apply_semantic_suggestions
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    position = dictionary.index[dictionary["column_role"] == "measurement"][0]
+    dictionary.loc[position, "constraint_iri"] = pd.NA
+    row = dictionary.loc[position]
+    iris = ["https://example.org/constraint/one", "https://example.org/constraint/two"]
+    suggestions = pd.DataFrame({
+        "dataset_id": row["dataset_id"], "table_id": row["table_id"],
+        "column_name": row["column_name"], "dictionary_role": "constraint",
+        "iri": iris, "decision": "accepted",
+    })
+    applied = apply_semantic_suggestions(dictionary, suggestions=suggestions,
+                                         strategy="reviewed", verbose=False)
+    assert applied.loc[position, "constraint_iri"] == "; ".join(iris)
+    validate_dictionary(applied, require_iris=True)
+
+
+def test_package_multiple_constraints_survive_strict_validation(tmp_path):
+    root = _build_example(tmp_path / "multiple-constraints")
+    def editor(frame):
+        frame.loc[0, "constraint_iri"] = "https://example.org/one; https://example.org/two"
+        return frame
+    _edit_csv(root / "metadata/column_dictionary.csv", editor)
+    validate_salmon_datapackage(root, require_iris=True)
+
+
+@pytest.mark.parametrize("value", [
+    "https://example.org/one; foo bar", "https://example.org/one; ",
+    "; https://example.org/one", "https://example.org/one;",
+    "https://example.org/one;; https://example.org/two",
+    " https://example.org/one; https://example.org/two",
+    "https://example.org/one; https://example.org/two ",
+    "https://example.org/one; \u00a0https://example.org/two",
+])
+def test_malformed_constraint_component_is_not_hidden(value):
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    dictionary.loc[0, "constraint_iri"] = value
+    with pytest.raises(ValueError, match="absolute IRI"):
+        validate_dictionary(dictionary, require_iris=True)
+
+
+def test_later_constraint_review_marker_keeps_one_marker_report():
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    dictionary.loc[0, "constraint_iri"] = "https://example.org/one; REVIEW: https://example.org/two"
+    with pytest.raises(ValueError, match="REVIEW-prefixed") as caught:
+        validate_dictionary(dictionary, require_iris=True)
+    assert str(caught.value).count("constraint_iri:") == 1
+    assert "absolute IRI" not in str(caught.value)
+    with pytest.warns(UserWarning, match="REVIEW-prefixed"):
+        validate_dictionary(dictionary, require_iris=False)
+
+
+def test_review_metadata_reports_later_constraint_marker_once(tmp_path):
+    from metasalmonpy import review_metadata
+    root = _build_example(tmp_path / "constraint-marker-review")
+    def editor(frame):
+        frame.loc[0, "constraint_iri"] = "https://example.org/one; REVIEW: https://example.org/two; REVIEW:https://example.org/three"
+        return frame
+    _edit_csv(root / "metadata/column_dictionary.csv", editor)
+    rows = review_metadata(root).rows
+    hits = rows[(rows["file"] == "column_dictionary.csv") &
+                (rows["field"] == "constraint_iri")]
+    assert len(hits) == 1
+    assert hits.iloc[0]["reason"] == "iri"

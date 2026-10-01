@@ -646,6 +646,25 @@ def _collapse_inline(values, trunc: Optional[int] = None) -> str:
     return ", ".join(texts[:-1]) + f", and {texts[-1]}"
 
 
+def _dictionary_iri_components(value: str, field: str) -> list[str]:
+    """Expand the existing reviewed constraint list, without rewriting cells.
+
+    Only constraint_iri has this semicolon representation. ASCII spaces beside
+    separators are presentation; outer cell whitespace and empty components
+    remain malformed under the existing strict shape contract.
+    """
+    if field != "constraint_iri":
+        return [value]
+    parts = value.split(";")
+    for position, part in enumerate(parts):
+        if position > 0:
+            part = part.lstrip(" ")
+        if position < len(parts) - 1:
+            part = part.rstrip(" ")
+        parts[position] = part
+    return parts
+
+
 def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd.DataFrame:
     """
     Validate dictionary structure and value constraints.
@@ -746,7 +765,10 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
         rows = [
             position + 1
             for position, value in enumerate(df[field])
-            if not pd.isna(value) and review_re.match(str(value))
+            if not pd.isna(value) and any(
+                review_re.match(part)
+                for part in _dictionary_iri_components(str(value), field)
+            )
         ]
         if rows:
             names = df["column_name"].iloc[[row - 1 for row in rows]].tolist()
@@ -780,8 +802,14 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
                 for position, value in enumerate(df[field])
                 if not pd.isna(value)
                 and str(value) != ""
-                and not review_re.match(str(value))
-                and not _absolute_iri_shape(str(value))
+                and not any(
+                    review_re.match(part)
+                    for part in _dictionary_iri_components(str(value), field)
+                )
+                and not all(
+                    _absolute_iri_shape(part)
+                    for part in _dictionary_iri_components(str(value), field)
+                )
             ]
             if rows:
                 malformed_summary.append(f"{field} (rows {_collapse_inline(rows)})")
