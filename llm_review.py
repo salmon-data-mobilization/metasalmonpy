@@ -2613,7 +2613,7 @@ def _merge_assessments_into_suggestions(
     return out
 
 
-def assess_semantic_suggestions(
+def _assess_semantic_suggestions(
     targets: pd.DataFrame,
     suggestions: pd.DataFrame,
     dictionary: pd.DataFrame,
@@ -2728,6 +2728,45 @@ def assess_semantic_suggestions(
     return (
         _merge_assessments_into_suggestions(suggestions, assessments),
         assessments,
+    )
+
+
+def assess_semantic_suggestions(
+    targets: pd.DataFrame,
+    suggestions: pd.DataFrame,
+    dictionary: pd.DataFrame,
+    *,
+    source_policy: dict,
+    search_fn: Callable,
+    max_per_role: int,
+    provider: str,
+    model: Optional[str],
+    api_key: Optional[str],
+    base_url: Optional[str],
+    reasoning_effort: Optional[str],
+    context_files,
+    context_text,
+    timeout_seconds: int,
+    request_fn,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Keep the existing module API while the package entry point sets top_n."""
+    return _assess_semantic_suggestions(
+        targets,
+        suggestions,
+        dictionary,
+        source_policy=source_policy,
+        search_fn=search_fn,
+        max_per_role=max_per_role,
+        top_n=max_per_role,
+        provider=provider,
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        reasoning_effort=reasoning_effort,
+        context_files=context_files,
+        context_text=context_text,
+        timeout_seconds=timeout_seconds,
+        request_fn=request_fn,
     )
 
 

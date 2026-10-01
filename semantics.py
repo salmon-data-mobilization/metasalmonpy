@@ -1016,7 +1016,7 @@ def suggest_semantics(
         construction have no suggestion rows at all.
     """
     from .llm_review import (
-        assess_semantic_suggestions,
+        _assess_semantic_suggestions,
         make_source_policy,
         validate_context_files,
     )
@@ -1411,7 +1411,7 @@ def suggest_semantics(
 
             assessments = normalize_assessment_rows()
         else:
-            suggestions_df, assessments = assess_semantic_suggestions(
+            suggestions_df, assessments = _assess_semantic_suggestions(
                 targets_df,
                 suggestions_df,
                 dictionary,
