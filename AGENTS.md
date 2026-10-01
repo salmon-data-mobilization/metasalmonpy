@@ -383,6 +383,13 @@ copy, which runs only when `METASALMON_PATH` names a metasalmon checkout. These
 counts are a dated measurement, not a target — update them when you add tests
 rather than treating a mismatch as a failure.
 
+**2026-10-01, B-355 on main `9304851`:** Python 3.13.11 isolated editable
+environments measured 1,734 passes / two skips with `.[test,eml,context]`
+and 1,587 passes / 149 skips with `.[test]`, plus 291 / 250 subtests.
+The four new public EML cases run only with the existing `[eml]` extra;
+five malformed-text controls run in both legs. Detailed evidence is in
+`.hub/workpads/B-355.md`; the older dated measurements above remain history.
+
 **The suite runs from a checkout at any path.** It did not until 2026-09-23
 (hub **B-191**). The root `__init__.py` and a `tests/__init__.py` made pytest
 name the package after the checkout directory, so under pytest 8 and later a
