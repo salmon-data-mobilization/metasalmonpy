@@ -518,6 +518,7 @@ def test_rejects_duplicate_curie_prefixes(tmp_path):
         "&label !foo X", "[!foo X]", "{item: !foo X}",
         '["literal", &label !!str X]', '{"item":!foo X}',
         "{? !foo x: y}", "[? !foo x: y]", "{? &label !foo x: y}",
+        "[a'b, !foo X, c'd]",
     ],
 )
 def test_reader_refuses_yaml_tags_in_metadata_values(tmp_path, value):
@@ -578,6 +579,7 @@ def test_compact_tag_refusal_preserves_sequence_text(tmp_path, entry, expected):
         ("[value] # [!foo X]", "[value]"),
         ("[value#fragment] # {key: !foo X}", "[value#fragment]"),
         ('["literal # [!foo X]"] # [!foo X]', '["literal # [!foo X]"]'),
+        ("[a'b] # [!foo X] 'ignored", "[a'b]"),
     ],
 )
 def test_tag_scan_excludes_comments_but_preserves_quoted_hashes(tmp_path, value, expected):
@@ -599,6 +601,7 @@ def test_tag_scan_excludes_comments_but_preserves_quoted_hashes(tmp_path, value,
         ('{"item": "Good !foo title"}', '{"item": "Good !foo title"}'),
         ('"? !foo X"', "? !foo X"),
         ('["? !foo X"]', '["? !foo X"]'),
+        ("[a'b, literal, c'd]", "[a'b, literal, c'd]"),
     ],
 )
 def test_tag_refusal_preserves_quoted_exclamations_and_plain_text(tmp_path, value, expected):

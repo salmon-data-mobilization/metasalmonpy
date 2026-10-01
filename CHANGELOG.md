@@ -18,6 +18,14 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **EML temporal coverage accepts the SDP UTC-instant spelling.** B-355,
+  mirroring B-354 and Brett's 2026-09-25 ruling: each
+  `YYYY-MM-DDThh:mm:ssZ` endpoint is split into `calendarDate` and `time`.
+  Joining the two fields with `T` restores the persisted value exactly,
+  including `Z`. Years and dates remain a single `calendarDate`, mixed
+  endpoints work independently, and off-profile text remains intact for
+  validation. The public writer's EML 2.2.0 schema check stays in force.
+
 * **SSSOM metadata refuses explicit YAML tags.** Hub **B-353**, the Python
   half of **B-352**, implements Brett's 2026-09-25 Q62 ruling. Local tags such
   as `!expr`/`!foo`, `!!` tags and verbatim tags now fail with the existing

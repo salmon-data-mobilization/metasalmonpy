@@ -367,14 +367,67 @@ def _read_bytes(path: Union[str, Path], label: str = "SSSOM mapping set") -> byt
 
 # --- restricted YAML-subset parsing for the embedded metadata header --------
 
-_YAML_QUOTED_NODE = re.compile(r'''"(?:[^"\\]|\\.)*"|'(?:[^']|'')*' ''', re.X)
+def _yaml_quoted_nodes(text: str):
+    """Yield quoted-node spans; quotes inside a plain scalar stay plain text.
+
+    This only tracks node boundaries for masking, not YAML values or types.
+    A quote may start a node after a collection delimiter, mapping separator
+    or anchor. An apostrophe in ``a'b`` cannot open a quoted node.
+    """
+    index, flow_depth = 0, 0
+    node_start, after_quote = True, False
+    while index < len(text):
+        char = text[index]
+        if char.isspace():
+            index += 1
+            continue
+        if node_start and char in ('"', "'"):
+            end = index + 1
+            while end < len(text):
+                if char == '"' and text[end] == "\\":
+                    end += 2
+                elif char == "'" and text[end:end + 2] == "''":
+                    end += 2
+                elif text[end] == char:
+                    break
+                else:
+                    end += 1
+            else:
+                return
+            yield index, end + 1
+            index, node_start, after_quote = end + 1, False, True
+            continue
+        separated = index + 1 == len(text) or text[index + 1].isspace()
+        if char in "[{" and node_start:
+            flow_depth += 1
+            node_start = True
+        elif char in "}]" and flow_depth:
+            flow_depth -= 1
+            node_start = False
+        elif char == "," and flow_depth:
+            node_start = True
+        elif char == ":" and (after_quote or separated):
+            node_start = True
+        elif node_start and char in "-?" and separated:
+            pass
+        elif node_start and char == "&":
+            anchor = re.match(r"&[^\s\[\]{},]+", text[index:])
+            if anchor is not None:
+                index += anchor.end()
+                continue
+            node_start = False
+        else:
+            node_start = False
+        index += 1
+        after_quote = False
 
 
 def _strip_yaml_comment(text: str) -> str:
     """Exclude a separated comment, without treating a quoted hash as one."""
-    for token in re.finditer(_YAML_QUOTED_NODE.pattern + r"|(?P<comment>\s+\#)", text, re.X):
-        if token.group("comment") is not None:
-            return text[:token.start()].strip()
+    quoted = list(_yaml_quoted_nodes(text))
+    for comment in re.finditer(r"\s+#", text):
+        if not any(start <= comment.end() - 1 < end for start, end in quoted):
+            return text[:comment.start()].strip()
     return text
 
 
@@ -405,7 +458,11 @@ def _scalar_has_yaml_tag(text: str) -> bool:
         content = content[value_start.end():]
     # Mask complete quoted nodes first. Keep a placeholder for quoted mapping
     # keys, whose colon may directly precede a tagged value in flow syntax.
-    masked = _YAML_QUOTED_NODE.sub('""', content)
+    fragments, previous = [], 0
+    for start, end in _yaml_quoted_nodes(content):
+        fragments.extend((content[previous:start], '""'))
+        previous = end
+    masked = "".join((*fragments, content[previous:]))
     return re.search(
         r'(?:\A|[\[{,]\s*|:\s+|""\s*:\s*)(?:\?\s+)?(?:' + anchor + r")?!",
         masked,
