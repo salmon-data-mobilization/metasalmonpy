@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- Package-origin error and warning bases with validation, model-review,
+  publication and retrieval families (hub B-58). Existing builtin catches,
+  warning filters, specialized errors, metadata and dependency exceptions are
+  preserved. The errors and warnings guide documents the selective catch
+  boundary; no release version is bumped by this change.
+
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
 closed when it set `__version__` to `0.5.0`, and the commit that made that

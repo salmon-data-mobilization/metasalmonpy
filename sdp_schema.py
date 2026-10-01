@@ -48,6 +48,13 @@ when:* the whole bundle is re-vendored from one tag that carries those rules
 
 from __future__ import annotations
 
+from .conditions import (
+    _ValidationKeyError as _KeyError,
+    _ValidationRuntimeError as _RuntimeError,
+    _ValidationRuntimeWarning as _RuntimeWarning,
+    _ValidationValueError as _ValueError,
+)
+
 import json
 import os
 import re
@@ -111,7 +118,7 @@ _CORE_METADATA_RESOURCES = (
 )
 
 
-class SdpSchemaError(RuntimeError):
+class SdpSchemaError(_RuntimeError):
     """A schema bundle that cannot be loaded, or that disagrees with itself."""
 
 
@@ -325,7 +332,7 @@ def set_sdp_schema_source(source: Optional[str]) -> None:
     """
     global _SOURCE_OVERRIDE
     if source is not None and source not in ("auto", "remote", "vendored"):
-        raise ValueError(
+        raise _ValueError(
             "source must be one of 'auto', 'remote', 'vendored'; got " + repr(source)
         )
     _SOURCE_OVERRIDE = source
@@ -361,7 +368,7 @@ def default_sdp_schema_source() -> str:
         return _SOURCE_OVERRIDE
     source = os.environ.get("METASALMONPY_SDP_SCHEMA_SOURCE", "auto") or "auto"
     if source not in ("auto", "remote", "vendored"):
-        raise ValueError(
+        raise _ValueError(
             "METASALMONPY_SDP_SCHEMA_SOURCE must be one of 'auto', 'remote', "
             "'vendored'; got " + repr(source)
         )
@@ -460,7 +467,7 @@ def load_sdp_schema(
 
     resolved = source or default_sdp_schema_source()
     if resolved not in ("auto", "remote", "vendored"):
-        raise ValueError(
+        raise _ValueError(
             "source must be one of 'auto', 'remote', 'vendored'; got " + repr(resolved)
         )
     base_url = default_sdp_schema_base_url()
@@ -498,7 +505,7 @@ def load_sdp_schema(
                 warnings.warn(
                     "Unable to load remote SDP Frictionless schema bundle; using "
                     "the vendored schemas bundled with metasalmonpy: " + failure,
-                    RuntimeWarning,
+                    _RuntimeWarning,
                     stacklevel=2,
                 )
 
@@ -540,7 +547,7 @@ def _vendored_schema_document(table_name: str) -> dict:
     try:
         relative = SDP_METADATA_SCHEMA_PATHS[table_name]
     except KeyError:
-        raise KeyError(
+        raise _KeyError(
             f"Unknown SDP metadata table {table_name!r}; expected one of "
             + ", ".join(sorted(SDP_METADATA_SCHEMA_PATHS))
             + "."
@@ -601,7 +608,7 @@ def sdp_schema_fields(
         schema = load_sdp_schema(source=source, quiet=True)
         document = schema["metadata_schemas"].get(table_name)
     if document is None:
-        raise KeyError(f"Unknown SDP metadata table {table_name!r}.")
+        raise _KeyError(f"Unknown SDP metadata table {table_name!r}.")
     return list(document.get("fields", []))
 
 

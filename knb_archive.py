@@ -31,6 +31,11 @@ need it.
 
 from __future__ import annotations
 
+from .conditions import (
+    _PublicationFileNotFoundError as _FileNotFoundError,
+    _PublicationValueError as _ValueError,
+)
+
 import os
 import re
 import shutil
@@ -79,7 +84,7 @@ def _safe_path_slug(value: object) -> str:
 def _sdp_archive_filename(dataset_id: object) -> str:
     """Mirror ``.ms_knb_sdp_archive_filename``."""
     if dataset_id is None or not str(dataset_id).strip():
-        raise ValueError(
+        raise _ValueError(
             "dataset_id must be one non-empty value for the SDP archive "
             "filename."
         )
@@ -90,17 +95,17 @@ def _sdp_archive_dataset_id(path: Union[str, Path]) -> str:
     """Mirror ``.ms_knb_sdp_archive_dataset_id``."""
     dataset_path = _locate_metadata_file(path, "dataset.csv")
     if dataset_path is None:
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             "SDP archiving requires canonical metadata/dataset.csv."
         )
     dataset = _read_metadata_csv(dataset_path)
     if len(dataset) != 1 or "dataset_id" not in dataset.columns:
-        raise ValueError(
+        raise _ValueError(
             "SDP archiving requires one dataset.csv$dataset_id value."
         )
     dataset_id = str(dataset["dataset_id"].iloc[0])
     if not dataset_id.strip():
-        raise ValueError(
+        raise _ValueError(
             "SDP archiving requires one non-empty dataset.csv$dataset_id "
             "value."
         )
@@ -114,7 +119,7 @@ def _sdp_archive_relative_labels(
     expected_prefix = prefix + ":"
     labels = list(paths.keys())
     if any(not label.startswith(expected_prefix) for label in labels):
-        raise ValueError("Internal SDP archive inventory labels are invalid.")
+        raise _ValueError("Internal SDP archive inventory labels are invalid.")
     return [label[len(expected_prefix):] for label in labels]
 
 
@@ -131,7 +136,7 @@ def _sdp_archive_assert_no_symlink(
     for part in relative.split("/"):
         current = os.path.join(current, part)
         if os.path.islink(current):
-            raise ValueError(
+            raise _ValueError(
                 f"SDP archive member {relative} must not contain a "
                 "symbolic-link path component."
             )
@@ -141,7 +146,7 @@ def _sdp_archive_assert_no_symlink(
     if require_file and (
         not os.path.exists(current) or not os.path.isfile(current)
     ):
-        raise ValueError(
+        raise _ValueError(
             f"SDP archive member {relative} must be a regular file."
         )
     return True
@@ -157,7 +162,7 @@ def _sdp_archive_validate_relative(relative: object) -> str:
         or text.endswith("/")
         or "//" in text
     ):
-        raise ValueError(
+        raise _ValueError(
             f"SDP archive member path {relative} is not a canonical relative "
             "file path."
         )
@@ -167,7 +172,7 @@ def _sdp_archive_validate_relative(relative: object) -> str:
     # plus mutable upload receipts. Neither can be an archive member without
     # making the bundle self-referential or dependent on publication state.
     if text == "metadata/eml.xml" or text.startswith("publication/"):
-        raise ValueError(
+        raise _ValueError(
             "SDP archive inventory cannot include reserved publication path "
             f"{text}."
         )
@@ -178,9 +183,9 @@ def _sdp_archive_inventory(path: Union[str, Path]) -> "Dict[str, str]":
     """Mirror ``.ms_knb_sdp_archive_inventory``: the closed member allowlist."""
     lexical_root = _lexical_absolute_path(path)
     if not os.path.isdir(lexical_root):
-        raise FileNotFoundError(f"SDP directory {path} does not exist.")
+        raise _FileNotFoundError(f"SDP directory {path} does not exist.")
     if os.path.islink(lexical_root):
-        raise ValueError("The SDP directory itself must not be a symbolic link.")
+        raise _ValueError("The SDP directory itself must not be a symbolic link.")
     root = os.path.realpath(lexical_root)
 
     # These two helpers are the single source of truth for the KNB package
@@ -200,7 +205,7 @@ def _sdp_archive_inventory(path: Union[str, Path]) -> "Dict[str, str]":
         {member for member in relative if relative.count(member) > 1}
     )
     if duplicated:
-        raise ValueError(
+        raise _ValueError(
             "SDP archive inventory contains duplicate member path(s): "
             + ", ".join(duplicated)
             + "."
@@ -210,7 +215,7 @@ def _sdp_archive_inventory(path: Union[str, Path]) -> "Dict[str, str]":
         _sdp_archive_assert_no_symlink(root, member)
         resolved = os.path.realpath(_sdp_archive_path(root, member))
         if resolved != paths[index] or _relative_path(root, resolved) != member:
-            raise ValueError(
+            raise _ValueError(
                 f"SDP archive member {member} does not resolve to its "
                 "canonical package path."
             )
@@ -223,7 +228,7 @@ def _sdp_archive_stage(inventory: Dict[str, str], staging: str) -> str:
     """Mirror ``.ms_knb_sdp_archive_stage``."""
     os.makedirs(staging, exist_ok=True)
     if not os.path.isdir(staging):
-        raise ValueError(
+        raise _ValueError(
             "Could not create the temporary SDP archive staging directory."
         )
 
@@ -231,14 +236,14 @@ def _sdp_archive_stage(inventory: Dict[str, str], staging: str) -> str:
         destination = _sdp_archive_path(staging, member)
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         if os.path.exists(destination):
-            raise ValueError(
+            raise _ValueError(
                 f"Could not stage exact bytes for SDP archive member {member}."
             )
         shutil.copyfile(source, destination)
         if _sha256_raw(_object_bytes(source)) != _sha256_raw(
             _object_bytes(destination)
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"Could not stage exact bytes for SDP archive member {member}."
             )
 
@@ -302,7 +307,7 @@ def _archive_bytes(inventory: Dict[str, str], staging: str) -> bytes:
         with zipfile.ZipFile(temporary) as archive:
             archived_members = archive.namelist()
         if archived_members != list(inventory):
-            raise ValueError(
+            raise _ValueError(
                 "Generated SDP archive inventory does not exactly match its "
                 "closed source allowlist."
             )
@@ -343,7 +348,7 @@ def _write_sdp_archive(
 ) -> Dict[str, object]:
     """Mirror ``.ms_knb_write_sdp_archive``."""
     if not isinstance(overwrite, bool):
-        raise ValueError("overwrite must be True or False.")
+        raise _ValueError("overwrite must be True or False.")
 
     inventory = _sdp_archive_inventory(path)
     root = os.path.realpath(str(path))
@@ -354,9 +359,9 @@ def _write_sdp_archive(
         )
     output_path = str(output_path)
     if not output_path.strip():
-        raise ValueError("output_path must be one non-empty path.")
+        raise _ValueError("output_path must be one non-empty path.")
     if os.path.splitext(output_path)[1].lower() != ".zip":
-        raise ValueError("output_path must use a .zip extension.")
+        raise _ValueError("output_path must use a .zip extension.")
 
     lexical_output = _lexical_absolute_path(output_path)
     root_prefix = root + os.sep
@@ -373,7 +378,7 @@ def _write_sdp_archive(
         root, output_path, must_work=os.path.exists(output_path)
     )
     if not output_relative.startswith("publication/"):
-        raise ValueError(
+        raise _ValueError(
             "output_path must remain under the SDP's publication/ directory."
         )
     _sdp_archive_assert_no_symlink(root, output_relative, require_file=False)
@@ -385,7 +390,7 @@ def _write_sdp_archive(
         except OSError:
             pass
     if not os.path.isdir(directory):
-        raise ValueError(
+        raise _ValueError(
             f"Could not create SDP archive output directory {directory}."
         )
     _sdp_archive_assert_no_symlink(
@@ -401,7 +406,7 @@ def _write_sdp_archive(
 
     if os.path.exists(output_path):
         if os.path.islink(output_path):
-            raise ValueError(
+            raise _ValueError(
                 "Refusing to replace symbolic-link SDP archive output."
             )
         existing_bytes = _object_bytes(output_path)
@@ -413,7 +418,7 @@ def _write_sdp_archive(
             # Without the remedy the only way forward was to work out that a
             # manual delete was required, which made every re-plan after a
             # corrected input a dead end (metasalmon 0.2.3).
-            raise ValueError(
+            raise _ValueError(
                 "SDP archive output already exists with different bytes and "
                 "overwrite is False. Review the existing publication artifact "
                 "before replacing it. To rebuild it from the current inputs, "

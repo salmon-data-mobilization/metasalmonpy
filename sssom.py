@@ -22,6 +22,12 @@ uses (see PARITY.md entry 10).
 
 from __future__ import annotations
 
+from .conditions import (
+    _ValidationFileExistsError as _FileExistsError,
+    _ValidationFileNotFoundError as _FileNotFoundError,
+    _ValidationValueError as _ValueError,
+)
+
 import hashlib
 import json
 import os
@@ -324,12 +330,12 @@ def _split_multivalued(value: str) -> List[str]:
 def _scalar_metadata(value: object, name: str) -> str:
     """Mirror ``.ms_sssom_scalar``: one non-empty, trimmed string."""
     if value is None:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM metadata field {name} must contain one non-empty value."
         )
     text = str(value).strip()
     if not text:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM metadata field {name} must contain one non-empty value."
         )
     return text
@@ -344,24 +350,24 @@ def _read_bytes(path: Union[str, Path], label: str = "SSSOM mapping set") -> byt
     """
     path = Path(path)
     if not path.exists() or path.is_dir():
-        raise FileNotFoundError(f"{label} does not exist at {path}.")
+        raise _FileNotFoundError(f"{label} does not exist at {path}.")
     data = path.read_bytes()
     if len(data) == 0:
-        raise ValueError(f"{label} at {path} is empty.")
+        raise _ValueError(f"{label} at {path} is empty.")
     if data[:3] == b"\xef\xbb\xbf":
-        raise ValueError(f"{label} at {path} must not contain a UTF-8 BOM.")
+        raise _ValueError(f"{label} at {path} must not contain a UTF-8 BOM.")
     if b"\r" in data:
-        raise ValueError(
+        raise _ValueError(
             f"{label} at {path} must use LF line endings without carriage returns."
         )
     if b"\x00" in data:
-        raise ValueError(f"{label} at {path} contains a NUL byte.")
+        raise _ValueError(f"{label} at {path} contains a NUL byte.")
     if data[-1:] != b"\n":
-        raise ValueError(f"{label} at {path} must end with an LF newline.")
+        raise _ValueError(f"{label} at {path} must end with an LF newline.")
     try:
         data.decode("utf-8")
     except UnicodeDecodeError:
-        raise ValueError(f"{label} at {path} is not valid UTF-8.") from None
+        raise _ValueError(f"{label} at {path} is not valid UTF-8.") from None
     return data
 
 
@@ -413,7 +419,7 @@ def _parse_yaml_subset(lines: Sequence[str], path: object) -> Dict[str, object]:
     """
 
     def fail(reason: str) -> None:
-        raise ValueError(
+        raise _ValueError(
             f"Embedded SSSOM metadata in {path} is not valid YAML: {reason}"
         )
 
@@ -470,7 +476,7 @@ def _parse_yaml_subset(lines: Sequence[str], path: object) -> Dict[str, object]:
             nested[nested_key] = _parse_scalar(nested_rest, fail)
         result[key] = nested
     if not result:
-        raise ValueError(
+        raise _ValueError(
             f"Embedded SSSOM metadata in {path} must be a named YAML mapping."
         )
     return result
@@ -483,13 +489,13 @@ def _parse_metadata(comment_lines: Sequence[str], path: object) -> Dict[str, obj
 
     unknown = [name for name in metadata if name not in _METADATA_ORDER]
     if unknown:
-        raise ValueError(
+        raise _ValueError(
             f"Embedded metadata in {path} contains unsupported SSSOM fields: "
             f"{', '.join(unknown)}."
         )
     missing = [name for name in _REQUIRED_METADATA if name not in metadata]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             f"Embedded metadata in {path} is missing required fields: "
             f"{', '.join(missing)}."
         )
@@ -509,10 +515,10 @@ def _parse_metadata(comment_lines: Sequence[str], path: object) -> Dict[str, obj
 
     curie_map = metadata["curie_map"]
     if not isinstance(curie_map, dict) or not curie_map:
-        raise ValueError("SSSOM metadata curie_map must not be empty.")
+        raise _ValueError("SSSOM metadata curie_map must not be empty.")
     for prefix in curie_map:
         if not prefix or _PREFIX_RE.match(str(prefix)) is None:
-            raise ValueError(
+            raise _ValueError(
                 "SSSOM metadata curie_map contains an invalid prefix name."
             )
     expansions = {
@@ -521,7 +527,7 @@ def _parse_metadata(comment_lines: Sequence[str], path: object) -> Dict[str, obj
     if any(
         _ABSOLUTE_URI_RE.match(value) is None for value in expansions.values()
     ):
-        raise ValueError(
+        raise _ValueError(
             "Every SSSOM curie_map expansion must be an absolute URI."
         )
     metadata["curie_map"] = {
@@ -539,32 +545,32 @@ def _parse_table(
     """Mirror ``.ms_sssom_parse_table``: strict tab-delimited body."""
     header = lines[header_index].split("\t")
     if len(header) < 2:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM mapping table in {path} must be tab-delimited."
         )
     if any(not name for name in header) or len(set(header)) != len(header):
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM mapping table in {path} has blank or duplicate column names."
         )
     unknown = [name for name in header if name not in _MAPPING_COLUMNS]
     if unknown:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM mapping table in {path} contains unsupported columns: "
             f"{', '.join(unknown)}. Variable decomposition fields such as "
             "component_id belong in SDP semantic artifacts, not SSSOM."
         )
     missing = [name for name in _REQUIRED_COLUMNS if name not in header]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM mapping table in {path} is missing required columns: "
             f"{', '.join(missing)}."
         )
 
     data_lines = list(lines[header_index + 1 :])
     if any(not line for line in data_lines):
-        raise ValueError(f"SSSOM mapping table in {path} contains a blank row.")
+        raise _ValueError(f"SSSOM mapping table in {path} contains a blank row.")
     if any(line.startswith("#") for line in data_lines):
-        raise ValueError(
+        raise _ValueError(
             "SSSOM comments are only allowed in embedded metadata before the "
             "TSV header."
         )
@@ -573,7 +579,7 @@ def _parse_table(
 
     rows = [line.split("\t") for line in data_lines]
     if any(len(row) != len(header) for row in rows):
-        raise ValueError(
+        raise _ValueError(
             f"Every row in the SSSOM mapping table at {path} must contain "
             f"{len(header) - 1} tab delimiters."
         )
@@ -606,18 +612,18 @@ def _validate_reference(
 ) -> None:
     where = "" if row is None else f" in row {row}"
     if not value or _R_SPACE_RE.search(value):
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM {field_name}{where} must be an absolute URI or compact CURIE."
         )
     if _is_unambiguous_uri(value):
         return
     if _CURIE_RE.match(value) is None:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM {field_name}{where} must be an absolute URI or compact CURIE."
         )
     prefix = value.split(":", 1)[0]
     if prefix not in curie_map and prefix not in _BUILTIN_PREFIXES:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM {field_name}{where} uses unknown CURIE prefix '{prefix}'."
         )
 
@@ -645,7 +651,7 @@ def _validate_builtin_prefixes(curie_map: object, path: object) -> None:
         expansion = value.strip(" \t\r\n") if isinstance(value, str) else value
         if isinstance(expansion, str) and expansion == expected:
             continue
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM curie_map in {path} redefines built-in prefix "
             f"'{prefix}' as {expansion!r}. The SSSOM specification fixes "
             f"'{prefix}' to '{expected}'; declare it with that expansion or "
@@ -656,12 +662,12 @@ def _validate_builtin_prefixes(curie_map: object, path: object) -> None:
 def _validate_metadata(metadata: Dict[str, object], path: object) -> None:
     """Mirror ``.ms_sssom_validate_metadata``."""
     if metadata.get("sssom_version") != SSSOM_VERSION:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM metadata in {path} must declare sssom_version: 1.1."
         )
     for field_name in ("mapping_set_id", "license"):
         if not _is_absolute_uri(metadata.get(field_name)):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM metadata {field_name} in {path} must be an absolute URI."
             )
     # The curie_map itself is checked before any CURIE is looked up in it.
@@ -674,7 +680,7 @@ def _validate_metadata(metadata: Dict[str, object], path: object) -> None:
         if field_name in metadata and re.search(
             "literal", str(metadata[field_name]), re.IGNORECASE
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM {field_name} cannot declare a raw literal assignment "
                 "in this SDP profile."
             )
@@ -695,7 +701,7 @@ def _validate_mappings(
         if any(
             value is None or not value.strip() for value in columns[field_name]
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM required column {field_name} contains a blank value "
                 f"in {path}."
             )
@@ -705,7 +711,7 @@ def _validate_mappings(
             value is not None and re.search("literal", value, re.IGNORECASE)
             for value in columns[field_name]
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM {field_name} cannot declare raw literal assignments "
                 "in this SDP profile."
             )
@@ -718,7 +724,7 @@ def _validate_mappings(
             value is not None and re.search(r"[\t\r\n]", value)
             for value in values
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM column {field_name} contains a forbidden control "
                 "character."
             )
@@ -742,14 +748,14 @@ def _validate_mappings(
             and _NO_TERM_FOUND in _split_multivalued(value)
             for value in values
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"'{_NO_TERM_FOUND}' is only valid in subject_id or object_id."
             )
 
     if any(
         value not in _JUSTIFICATIONS for value in columns["mapping_justification"]
     ):
-        raise ValueError(
+        raise _ValueError(
             "SSSOM mapping_justification must use a SSSOM 1.1 SEMAPV "
             "justification."
         )
@@ -762,7 +768,7 @@ def _validate_mappings(
             and (value is None or value != "")
             for value in cardinality
         ):
-            raise ValueError(
+            raise _ValueError(
                 "SSSOM mapping_cardinality contains an invalid value."
             )
         cardinality = [value if value is not None else "" for value in cardinality]
@@ -783,20 +789,20 @@ def _validate_mappings(
         else:
             expected = None
         if expected is not None and cardinality[row] != expected:
-            raise ValueError(
+            raise _ValueError(
                 f"Mappings using '{_NO_TERM_FOUND}' must use the corresponding "
                 "mapping_cardinality value (including '1:0' for an object gap)."
             )
         if expected is None and cardinality[row] in ("1:0", "0:1", "0:0"):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM zero-cardinality mappings must use '{_NO_TERM_FOUND}'."
             )
     if any(object_gap) and not metadata["object_source"]:
-        raise ValueError(
+        raise _ValueError(
             f"A '{_NO_TERM_FOUND}' object requires object_source."
         )
     if any(subject_gap) and not metadata["subject_source"]:
-        raise ValueError(
+        raise _ValueError(
             f"A '{_NO_TERM_FOUND}' subject requires subject_source."
         )
 
@@ -820,7 +826,7 @@ def _validate_mappings(
         and (not effective_source[row] or not effective_version[row])
         for row in range(row_count)
     ):
-        raise ValueError(
+        raise _ValueError(
             f"A '{_NO_TERM_FOUND}' object requires an effective object_source "
             "and object_source_version."
         )
@@ -840,7 +846,7 @@ def _validate_mappings(
         scope_key[row] for row in range(row_count) if not object_gap[row]
     }
     if gap_scopes & positive_scopes:
-        raise ValueError(
+        raise _ValueError(
             "A subject/object-source scope cannot contain both a positive "
             f"mapping and '{_NO_TERM_FOUND}'; the records contradict each other."
         )
@@ -856,7 +862,7 @@ def _validate_mappings(
         for row in range(row_count)
     ]
     if len(set(identities)) != len(identities):
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM mapping set at {path} contains a duplicate "
             "subject/predicate/object mapping."
         )
@@ -907,9 +913,9 @@ def read_sssom_mapping_set(
         ``path``.
     """
     if isinstance(path, (list, tuple)) or path is None or not str(path):
-        raise ValueError("path must name one SSSOM mapping-set file.")
+        raise _ValueError("path must name one SSSOM mapping-set file.")
     if not isinstance(validate, bool):
-        raise ValueError("validate must be True or False.")
+        raise _ValueError("validate must be True or False.")
     resolved = Path(path)
     data = _read_bytes(resolved)
     resolved = resolved.resolve()
@@ -930,10 +936,10 @@ def read_sssom_mapping_set(
         if line and not line.startswith("#")
     ]
     if not non_comment:
-        raise ValueError(f"SSSOM file {resolved} does not contain a TSV header.")
+        raise _ValueError(f"SSSOM file {resolved} does not contain a TSV header.")
     header_index = non_comment[0]
     if header_index == 0:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM file {resolved} must begin with embedded YAML metadata "
             "comments."
         )
@@ -962,7 +968,7 @@ def _normalize_in_memory(mapping_set: object) -> SssomMappingSet:
         mappings = mapping_set["mappings"]
         path = mapping_set.get("path")
     else:
-        raise ValueError(
+        raise _ValueError(
             "Each mapping_sets entry must be a path or a parsed SSSOM "
             "mapping set."
         )
@@ -991,7 +997,7 @@ def _input_sets(mapping_sets: object) -> List[SssomMappingSet]:
             else _normalize_in_memory(entry)
             for entry in mapping_sets
         ]
-    raise ValueError(
+    raise _ValueError(
         "mapping_sets must be None, path(s), or parsed SSSOM mapping set(s)."
     )
 
@@ -1124,7 +1130,7 @@ def _assert_contained(root: Path, candidate: Path, label: str) -> Path:
     real_root = Path(os.path.realpath(str(root)))
     real_candidate = Path(os.path.realpath(str(candidate)))
     if real_candidate != real_root and real_root not in real_candidate.parents:
-        raise ValueError(f"{label} resolves outside the SDP root and is unsafe.")
+        raise _ValueError(f"{label} resolves outside the SDP root and is unsafe.")
     return real_candidate
 
 
@@ -1164,9 +1170,9 @@ def write_sdp_sssom(
     if mapping_sets is None:
         return None
     if isinstance(path, (list, tuple)) or path is None or not Path(path).is_dir():
-        raise ValueError("path must be an existing SDP directory.")
+        raise _ValueError("path must be an existing SDP directory.")
     if not isinstance(overwrite, bool):
-        raise ValueError("overwrite must be True or False.")
+        raise _ValueError("overwrite must be True or False.")
     root = Path(path).resolve()
     sets = _input_sets(mapping_sets)
     if not sets:
@@ -1174,19 +1180,19 @@ def write_sdp_sssom(
 
     ids = [str(entry.metadata["mapping_set_id"]) for entry in sets]
     if len(set(ids)) != len(ids):
-        raise ValueError(
+        raise _ValueError(
             "mapping_sets contains duplicate mapping_set_id values."
         )
     sets = [entry for _, entry in sorted(zip(ids, sets), key=lambda pair: pair[0])]
 
     filenames = [_safe_filename(entry) for entry in sets]
     if len(set(filenames)) != len(filenames):
-        raise ValueError(
+        raise _ValueError(
             "mapping_sets resolves to duplicate output filenames; use "
             "distinct safe source filenames."
         )
     if any(_SAFE_FILENAME_RE.match(name) is None for name in filenames):
-        raise ValueError("A generated SSSOM output filename is unsafe.")
+        raise _ValueError("A generated SSSOM output filename is unsafe.")
 
     payloads = [_canonical_bytes(entry) for entry in sets]
     entries: List[Dict[str, object]] = []
@@ -1218,14 +1224,14 @@ def write_sdp_sssom(
         if candidate.exists() or candidate.is_symlink()
     ]
     if existing and not overwrite:
-        raise FileExistsError(
+        raise _FileExistsError(
             "SSSOM output already exists and overwrite is False. Existing: "
             + ", ".join(str(candidate) for candidate in existing)
             + "."
         )
     symlinks = [candidate for candidate in existing if candidate.is_symlink()]
     if symlinks:
-        raise ValueError(
+        raise _ValueError(
             "Refusing to overwrite SSSOM symlinks: "
             + ", ".join(str(candidate) for candidate in symlinks)
             + "."
@@ -1271,19 +1277,19 @@ def _validate_manifest(root: Path) -> None:
     try:
         manifest = json.loads(data.decode("utf-8"))
     except ValueError as error:
-        raise ValueError(
+        raise _ValueError(
             f"SSSOM manifest at {manifest_path} is not valid JSON: {error}"
         ) from None
     required_top = ("schema_version", "sssom_version", "mapping_sets", "provenance")
     if not isinstance(manifest, dict) or any(
         name not in manifest for name in required_top
     ):
-        raise ValueError("SSSOM manifest is missing required top-level fields.")
+        raise _ValueError("SSSOM manifest is missing required top-level fields.")
     if (
         manifest["schema_version"] != SSSOM_MANIFEST_VERSION
         or manifest["sssom_version"] != SSSOM_VERSION
     ):
-        raise ValueError(
+        raise _ValueError(
             "SSSOM manifest declares an unsupported schema or SSSOM version."
         )
     provenance = manifest["provenance"]
@@ -1293,9 +1299,9 @@ def _validate_manifest(root: Path) -> None:
     # the same manifests. Both sides tighten together or neither does
     # (``provenance.version_ok``'s retirement condition).
     if version_key is None or provenance.get(version_key) is None:
-        raise ValueError("SSSOM manifest provenance is incomplete.")
+        raise _ValueError("SSSOM manifest provenance is incomplete.")
     if not isinstance(manifest["mapping_sets"], list) or not manifest["mapping_sets"]:
-        raise ValueError("SSSOM manifest must contain at least one mapping set.")
+        raise _ValueError("SSSOM manifest must contain at least one mapping set.")
 
     required_entry = (
         "path",
@@ -1315,11 +1321,11 @@ def _validate_manifest(root: Path) -> None:
         if not isinstance(entry, dict) or any(
             name not in entry for name in required_entry
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM manifest mapping-set entry {index} is incomplete."
             )
         if not _manifest_safe_path(entry["path"]):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM manifest entry {index} does not use a safe relative "
                 "mapping-set path."
             )
@@ -1327,7 +1333,7 @@ def _validate_manifest(root: Path) -> None:
         ids.append(entry["mapping_set_id"])
         mapping_path = root / entry["path"]
         if not mapping_path.exists() or mapping_path.is_dir():
-            raise FileNotFoundError(
+            raise _FileNotFoundError(
                 f"SSSOM manifest references missing file {mapping_path}."
             )
         _assert_contained(root, mapping_path, "SSSOM mapping-set path")
@@ -1338,7 +1344,7 @@ def _validate_manifest(root: Path) -> None:
             or _SHA256_RE.match(entry["sha256"]) is None
             or actual_sha256 != entry["sha256"]
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM mapping set {mapping_path} does not match its "
                 "manifest SHA-256 hash."
             )
@@ -1352,22 +1358,22 @@ def _validate_manifest(root: Path) -> None:
             or int(row_count) < 0
             or int(row_count) != len(mapping_set.mappings)
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"SSSOM mapping set {mapping_path} does not match its "
                 "manifest row count."
             )
         for field_name in required_entry[3:]:
             if entry[field_name] != mapping_set.metadata.get(field_name):
-                raise ValueError(
+                raise _ValueError(
                     f"SSSOM manifest field {field_name} does not match "
                     f"{mapping_path}."
                 )
     if len(set(paths)) != len(paths) or len(set(ids)) != len(ids):
-        raise ValueError(
+        raise _ValueError(
             "SSSOM manifest contains duplicate paths or mapping_set_id values."
         )
     if ids != sorted(ids):
-        raise ValueError(
+        raise _ValueError(
             "SSSOM manifest mapping sets must be ordered by mapping_set_id."
         )
 
@@ -1392,7 +1398,7 @@ def validate_sdp_sssom(path: Union[str, Path]) -> bool:
         ``True`` when validation succeeds; otherwise an exception is raised.
     """
     if isinstance(path, (list, tuple)) or path is None or not str(path):
-        raise ValueError("path must name one SDP directory or SSSOM file.")
+        raise _ValueError("path must name one SDP directory or SSSOM file.")
     target = Path(path)
     if target.is_dir():
         _validate_manifest(target.resolve())

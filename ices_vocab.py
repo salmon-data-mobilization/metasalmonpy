@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from .conditions import (
+    _RetrievalRuntimeWarning as _RuntimeWarning,
+    _RetrievalValueError as _ValueError,
+)
+
 import urllib.parse
 import warnings
 
@@ -52,7 +57,7 @@ def _ices_request(url: str):
         f"Failure: {detail}\n"
         "This empty result says nothing about what ICES holds. "
         "An answer with no rows gives no warning.",
-        RuntimeWarning,
+        _RuntimeWarning,
         stacklevel=3,
     )
     return None
@@ -93,7 +98,7 @@ def ices_codes(code_type: str, code: str = "", modified: str = "") -> pd.DataFra
     request fails, which warns (``RuntimeWarning``), naming the request.
     """
     if not code_type:
-        raise ValueError("code_type must be a non-empty ICES code type key (e.g., 'Gear').")
+        raise _ValueError("code_type must be a non-empty ICES code type key (e.g., 'Gear').")
 
     params = {}
     if code:

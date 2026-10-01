@@ -27,6 +27,13 @@ fixtures under ``tests/data/decompositions/``.
 
 from __future__ import annotations
 
+from .conditions import (
+    _ValidationFileExistsError as _FileExistsError,
+    _ValidationFileNotFoundError as _FileNotFoundError,
+    _ValidationUserWarning as _UserWarning,
+    _ValidationValueError as _ValueError,
+)
+
 import csv
 import hashlib
 import io
@@ -130,7 +137,7 @@ def _assert_scalar(value: object, column: str) -> None:
     flag = pd.isna(value)
     if isinstance(flag, bool):
         return
-    raise ValueError(
+    raise _ValueError(
         f"Decomposition column {column} must contain only scalar values."
     )
 
@@ -161,7 +168,7 @@ def _root(path: Union[str, Path]) -> Path:
         or not str(path)
         or not Path(path).is_dir()
     ):
-        raise ValueError(
+        raise _ValueError(
             "path must name one existing Salmon Data Package directory."
         )
     return Path(os.path.realpath(str(path)))
@@ -177,14 +184,14 @@ def _paths(root: Path) -> Tuple[Path, Path]:
 def _validate_row_states(columns: Dict[str, List[str]]) -> None:
     """Mirror ``.ms_sdp_decomposition_validate_row_states``."""
     if any(role not in _ALLOWED_ROLES for role in columns["component_role"]):
-        raise ValueError(
+        raise _ValueError(
             "component_role must be one of: "
             + ", ".join(_ALLOWED_ROLES)
             + "."
         )
     statuses = columns["component_status"]
     if any(status not in ("matched", "gap") for status in statuses):
-        raise ValueError('component_status must be "matched" or "gap".')
+        raise _ValueError('component_status must be "matched" or "gap".')
 
     matched = [status == "matched" for status in statuses]
     gap = [status == "gap" for status in statuses]
@@ -193,29 +200,29 @@ def _validate_row_states(columns: Dict[str, List[str]]) -> None:
         matched[row] and not _is_absolute_iri(_trim(iris[row]))
         for row in range(len(statuses))
     ):
-        raise ValueError(
+        raise _ValueError(
             "Every matched component must have an absolute component_iri IRI."
         )
     if any(gap[row] and _trim(iris[row]) for row in range(len(statuses))):
-        raise ValueError("Every gap row must have a blank component_iri.")
+        raise _ValueError("Every gap row must have a blank component_iri.")
     labels = columns["component_label"]
     if any(gap[row] and not _trim(labels[row]) for row in range(len(statuses))):
-        raise ValueError("Every gap row must have a non-empty component_label.")
+        raise _ValueError("Every gap row must have a non-empty component_label.")
     rationales = columns["rationale"]
     if any(
         gap[row] and not _trim(rationales[row]) for row in range(len(statuses))
     ):
-        raise ValueError("Every gap row must have a non-empty rationale.")
+        raise _ValueError("Every gap row must have a non-empty rationale.")
 
     for field in ("source", "source_version", "provenance"):
         if any(not _trim(value) for value in columns[field]):
-            raise ValueError(
+            raise _ValueError(
                 f"Decomposition field {field} must be non-empty on every row."
             )
     if any(
         not _is_absolute_iri(_trim(value)) for value in columns["source_url"]
     ):
-        raise ValueError("Every source_url must be an absolute IRI.")
+        raise _ValueError("Every source_url must be an absolute IRI.")
 
 
 def _measurement_keys(columns: Dict[str, List[str]]) -> List[Tuple[str, ...]]:
@@ -237,11 +244,11 @@ def _validate_order_and_uniqueness(
             if keys[row] == measurement
         ]
         if len(set(orders)) != len(orders):
-            raise ValueError(
+            raise _ValueError(
                 "component_order must be unique within each bound measurement."
             )
         if sorted(orders) != list(range(1, len(orders) + 1)):
-            raise ValueError(
+            raise _ValueError(
                 "component_order must be contiguous from 1 within each "
                 "bound measurement."
             )
@@ -260,7 +267,7 @@ def _validate_order_and_uniqueness(
         for row in range(len(keys))
     ]
     if len(set(identities)) != len(identities):
-        raise ValueError(
+        raise _ValueError(
             "Duplicate semantic component found within one bound measurement."
         )
 
@@ -278,7 +285,7 @@ def _validate_relations(
     if any(
         has_relation[row] != has_target[row] for row in range(row_count)
     ):
-        raise ValueError(
+        raise _ValueError(
             "component_relation and related_component_order must either "
             "both be populated or both be blank together."
         )
@@ -286,7 +293,7 @@ def _validate_relations(
         has_relation[row] and relations[row] != "value_of_dimension"
         for row in range(row_count)
     ):
-        raise ValueError(
+        raise _ValueError(
             "component_relation currently supports only 'value_of_dimension'."
         )
 
@@ -298,7 +305,7 @@ def _validate_relations(
             continue
         related_order = related_component_order[row]
         if related_order >= component_order[row]:
-            raise ValueError(
+            raise _ValueError(
                 "A component relation must target an earlier component in "
                 "the same measurement."
             )
@@ -309,7 +316,7 @@ def _validate_relations(
             and component_order[index] == related_order
         ]
         if len(targets) != 1:
-            raise ValueError(
+            raise _ValueError(
                 "A component relation must target an earlier component in "
                 "the same measurement."
             )
@@ -320,7 +327,7 @@ def _validate_relations(
             or statuses[target] != "matched"
             or roles[target] != "constraint"
         ):
-            raise ValueError(
+            raise _ValueError(
                 "'value_of_dimension' must connect two matched constraint "
                 "components."
             )
@@ -341,7 +348,7 @@ def _normalize_rows(decompositions: object) -> pd.DataFrame:
     if isinstance(decompositions, dict):
         decompositions = pd.DataFrame(decompositions)
     if not isinstance(decompositions, pd.DataFrame) or len(decompositions) == 0:
-        raise ValueError("decompositions must be a non-empty data frame.")
+        raise _ValueError("decompositions must be a non-empty data frame.")
 
     names = [str(name) for name in decompositions.columns]
     missing_columns = [name for name in _COLUMNS if name not in names]
@@ -359,7 +366,7 @@ def _normalize_rows(decompositions: object) -> pd.DataFrame:
             )
         if duplicate_columns:
             details.append("Column names must be unique.")
-        raise ValueError(
+        raise _ValueError(
             "decompositions does not match the ordered SDP decomposition "
             "schema. " + " ".join(details)
         )
@@ -384,7 +391,7 @@ def _normalize_rows(decompositions: object) -> pd.DataFrame:
             except ValueError:
                 parsed = None
         if text is None or parsed is None or parsed < 1 or text != str(parsed):
-            raise ValueError(
+            raise _ValueError(
                 "component_order must contain positive whole numbers."
             )
         component_order.append(parsed)
@@ -401,7 +408,7 @@ def _normalize_rows(decompositions: object) -> pd.DataFrame:
         except ValueError:
             parsed = None
         if parsed is None or parsed < 1 or text != str(parsed):
-            raise ValueError(
+            raise _ValueError(
                 "related_component_order must be blank or a positive whole "
                 "number."
             )
@@ -533,14 +540,14 @@ def _atomic_write(data: bytes, path: Path) -> None:
 def _assert_output_directory(root: Path, directory: Path) -> None:
     """Mirror ``.ms_sdp_decomposition_assert_output_directory``."""
     if directory.is_symlink():
-        raise ValueError(
+        raise _ValueError(
             "Refusing to write measurement decompositions through a "
             "semantic-directory symlink."
         )
     real_root = Path(os.path.realpath(str(root)))
     real_directory = Path(os.path.realpath(str(directory)))
     if real_directory != real_root and real_root not in real_directory.parents:
-        raise ValueError(
+        raise _ValueError(
             "Measurement-decomposition output directory resolves outside "
             "the SDP and is unsafe."
         )
@@ -551,26 +558,26 @@ def _assert_output_directory(root: Path, directory: Path) -> None:
 
 def _read_raw(path: Path, label: str) -> bytes:
     if not path.exists() or path.is_dir():
-        raise FileNotFoundError(f"Missing {label} at {path}.")
+        raise _FileNotFoundError(f"Missing {label} at {path}.")
     return path.read_bytes()
 
 
 def _text_from_bytes(data: bytes, label: str) -> str:
     if data[:3] == b"\xef\xbb\xbf":
-        raise ValueError(f"{label} must not contain a UTF-8 BOM.")
+        raise _ValueError(f"{label} must not contain a UTF-8 BOM.")
     if b"\r" in data:
-        raise ValueError(
+        raise _ValueError(
             f"{label} must use LF line endings without carriage returns."
         )
     if len(data) == 0 or data[-1:] != b"\n":
-        raise ValueError(f"{label} must end with a final LF newline.")
+        raise _ValueError(f"{label} must end with a final LF newline.")
     # R fails on NUL bytes at rawToChar(); reject them here the same way.
     if b"\x00" in data:
-        raise ValueError(f"{label} must not contain NUL bytes.")
+        raise _ValueError(f"{label} must not contain NUL bytes.")
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:
-        raise ValueError(f"{label} must contain valid UTF-8 text.") from None
+        raise _ValueError(f"{label} must contain valid UTF-8 text.") from None
 
 
 def _read_manifest(path: Path) -> Dict[str, object]:
@@ -579,7 +586,7 @@ def _read_manifest(path: Path) -> Dict[str, object]:
     try:
         return json.loads(text)
     except ValueError as error:
-        raise ValueError(
+        raise _ValueError(
             f"Measurement-decomposition manifest is not valid JSON: {error}"
         ) from None
 
@@ -612,7 +619,7 @@ def _parse_csv(text: str) -> Tuple[List[str], List[List[str]]]:
             "One or more measurement-decomposition CSV rows did not match "
             "the header width and were repaired (mirrors readr's parsing-"
             "problem recovery).",
-            stacklevel=2,
+            stacklevel=2, category=_UserWarning,
         )
     return header, body
 
@@ -623,7 +630,7 @@ def _read_csv(path: Path) -> Tuple[bytes, pd.DataFrame]:
     try:
         header, body = _parse_csv(text)
     except csv.Error as error:
-        raise ValueError(
+        raise _ValueError(
             f"Measurement-decomposition CSV could not be parsed: {error}"
         ) from None
     frame = pd.DataFrame(body, columns=header if header else None, dtype=object)
@@ -650,11 +657,11 @@ def _validate_manifest(
         name not in manifest
         for name in ("schema_version", "artifact", "provenance")
     ):
-        raise ValueError(
+        raise _ValueError(
             "Measurement-decomposition manifest is missing required fields."
         )
     if manifest["schema_version"] != SDP_DECOMPOSITION_SCHEMA_VERSION:
-        raise ValueError(
+        raise _ValueError(
             "Measurement-decomposition manifest has an unsupported schema "
             "version."
         )
@@ -664,7 +671,7 @@ def _validate_manifest(
         or any(name not in artifact for name in ("path", "sha256", "row_count"))
         or artifact["path"] != SDP_DECOMPOSITION_CSV_PATH
     ):
-        raise ValueError(
+        raise _ValueError(
             "Measurement-decomposition manifest artifact binding is "
             "incomplete or unsafe."
         )
@@ -677,7 +684,7 @@ def _validate_manifest(
         or row_count < 0
         or row_count != int(row_count)
     ):
-        raise ValueError(
+        raise _ValueError(
             "Manifest artifact.row_count must be one non-negative whole "
             "number."
         )
@@ -688,12 +695,12 @@ def _validate_manifest(
         or _SHA256_RE.match(artifact["sha256"]) is None
         or artifact["sha256"] != actual_sha256
     ):
-        raise ValueError(
+        raise _ValueError(
             "Measurement-decomposition CSV does not match its manifest "
             "SHA-256 hash."
         )
     if int(row_count) != len(rows):
-        raise ValueError(
+        raise _ValueError(
             "Measurement-decomposition CSV does not match its manifest "
             "row count."
         )
@@ -706,7 +713,7 @@ def _validate_manifest(
         or not isinstance(provenance.get("semantic_profile"), str)
         or not _trim(provenance["semantic_profile"])
     ):
-        raise ValueError(
+        raise _ValueError(
             "Measurement-decomposition manifest writer provenance is "
             "incomplete."
         )
@@ -730,7 +737,7 @@ def _read_dictionary(root: Path) -> pd.DataFrame:
         (candidate for candidate in candidates if candidate.is_file()), None
     )
     if dictionary_path is None:
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             "The SDP does not contain metadata/column_dictionary.csv."
         )
     return normalize_dictionary(read_sdp_csv(dictionary_path))
@@ -758,7 +765,7 @@ def _validate_dictionary(root: Path, rows: pd.DataFrame) -> None:
         for field in _BINDING_FIELDS
         for value in columns[field]
     ):
-        raise ValueError(
+        raise _ValueError(
             "Decomposition binding fields must be non-empty: "
             + ", ".join(_BINDING_FIELDS)
             + "."
@@ -767,7 +774,7 @@ def _validate_dictionary(root: Path, rows: pd.DataFrame) -> None:
         not _is_absolute_iri(_trim(value))
         for value in columns["measurement_concept_iri"]
     ):
-        raise ValueError("measurement_concept_iri must be an absolute IRI.")
+        raise _ValueError("measurement_concept_iri must be an absolute IRI.")
 
     dictionary = _read_dictionary(root)
     dictionary_columns = {
@@ -788,23 +795,23 @@ def _validate_dictionary(root: Path, rows: pd.DataFrame) -> None:
             and dictionary_columns["column_name"][index] == column_name
         ]
         if not dictionary_indices:
-            raise ValueError(
+            raise _ValueError(
                 f"The bound measurement {dataset_id}/{table_id}/{column_name} "
                 "does not exist in the SDP dictionary."
             )
         if len(dictionary_indices) > 1:
-            raise ValueError(
+            raise _ValueError(
                 "The SDP dictionary contains an ambiguous duplicate bound "
                 "measurement."
             )
         dictionary_index = dictionary_indices[0]
         if dictionary_columns["column_role"][dictionary_index] != "measurement":
-            raise ValueError(
+            raise _ValueError(
                 "The bound dictionary row has column_role other than "
                 '"measurement".'
             )
         if dictionary_columns["term_iri"][dictionary_index] != concept_iri:
-            raise ValueError(
+            raise _ValueError(
                 "measurement_concept_iri must equal the bound dictionary "
                 "term_iri."
             )
@@ -831,7 +838,7 @@ def _validate_dictionary(root: Path, rows: pd.DataFrame) -> None:
                 if value not in matched_values
             ]
             if missing_values:
-                raise ValueError(
+                raise _ValueError(
                     f"Dictionary {field} value must appear as a matched "
                     f"{role} component: " + ", ".join(missing_values) + "."
                 )
@@ -878,7 +885,7 @@ def read_sdp_measurement_decompositions(
         if candidate.exists() and candidate.is_symlink()
     ]
     if symlinks:
-        raise ValueError(
+        raise _ValueError(
             "Refusing to read measurement-decomposition symlinks: "
             + ", ".join(symlinks)
             + "."
@@ -887,7 +894,7 @@ def read_sdp_measurement_decompositions(
     data, rows = _read_csv(csv_path)
 
     if not isinstance(validate, bool):
-        raise ValueError("validate must be True or False.")
+        raise _ValueError("validate must be True or False.")
     if validate:
         _validate_manifest(manifest, data, rows)
         _validate_dictionary(root, rows)
@@ -978,7 +985,7 @@ def write_sdp_measurement_decompositions(
         return None
     root = _root(path)
     if not isinstance(overwrite, bool):
-        raise ValueError("overwrite must be True or False.")
+        raise _ValueError("overwrite must be True or False.")
 
     rows = _normalize_rows(decompositions)
     _validate_dictionary(root, rows)
@@ -993,7 +1000,7 @@ def write_sdp_measurement_decompositions(
         if candidate.exists() or candidate.is_symlink()
     ]
     if existing and not overwrite:
-        raise FileExistsError(
+        raise _FileExistsError(
             "Measurement-decomposition output already exists and overwrite "
             "is False. Existing: "
             + ", ".join(str(candidate) for candidate in existing)
@@ -1001,7 +1008,7 @@ def write_sdp_measurement_decompositions(
         )
     symlinks = [candidate for candidate in existing if candidate.is_symlink()]
     if symlinks:
-        raise ValueError(
+        raise _ValueError(
             "Refusing to overwrite measurement-decomposition symlinks: "
             + ", ".join(str(candidate) for candidate in symlinks)
             + "."

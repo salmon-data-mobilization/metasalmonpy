@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from .conditions import (
+    _ValidationRuntimeWarning as _RuntimeWarning,
+    _ValidationTypeError as _TypeError,
+    _ValidationUserWarning as _UserWarning,
+    _ValidationValueError as _ValueError,
+)
+
 import datetime as _dt
 import re
 import string
@@ -62,7 +69,7 @@ def _ensure_dataframe(df, name: str = "df") -> pd.DataFrame:
     try:
         return pd.DataFrame(df)
     except Exception as exc:  # pragma: no cover - defensive
-        raise TypeError(f"{name} must be a pandas DataFrame or convertible object") from exc
+        raise _TypeError(f"{name} must be a pandas DataFrame or convertible object") from exc
 
 
 def infer_value_type(series: pd.Series) -> str:
@@ -482,7 +489,7 @@ def infer_dictionary(
     if not seed_semantics and llm_requested:
         warnings.warn(
             "LLM semantic-review options are ignored when seed_semantics=False.",
-            UserWarning,
+            _UserWarning,
             stacklevel=2,
         )
 
@@ -624,11 +631,11 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
     Validate dictionary structure and value constraints.
     """
     if not isinstance(dict_df, pd.DataFrame):
-        raise TypeError("dict must be a pandas DataFrame")
+        raise _TypeError("dict must be a pandas DataFrame")
 
     missing_cols = [c for c in REQUIRED_COLUMNS if c not in dict_df.columns]
     if missing_cols:
-        raise ValueError(f"Dictionary missing required columns: {missing_cols}")
+        raise _ValueError(f"Dictionary missing required columns: {missing_cols}")
 
     df = normalize_dictionary(dict_df)
 
@@ -678,7 +685,7 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
     invalid_types = declared_types.loc[~declared_types.isin(VALID_VALUE_TYPES)]
     if not invalid_types.empty:
         bad_rows = invalid_types.index.tolist()
-        raise ValueError(f"Invalid value_type in rows {bad_rows}: {invalid_types.tolist()}")
+        raise _ValueError(f"Invalid value_type in rows {bad_rows}: {invalid_types.tolist()}")
 
     # Validate roles
     if "column_role" in df.columns:
@@ -686,14 +693,14 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
         invalid_roles = declared_roles.loc[~declared_roles.isin(VALID_COLUMN_ROLES)]
         if not invalid_roles.empty:
             bad_rows = invalid_roles.index.tolist()
-            raise ValueError(f"Invalid column_role in rows {bad_rows}: {invalid_roles.tolist()}")
+            raise _ValueError(f"Invalid column_role in rows {bad_rows}: {invalid_roles.tolist()}")
 
     # Required flag must be boolean
     if not pd.api.types.is_bool_dtype(df["required"]):
         parsed_required = parse_logical(df["required"])
         invalid_required = parsed_required.isna() & df["required"].notna() & (df["required"].astype(str).str.strip() != "")
         if invalid_required.any():
-            raise ValueError("required must be boolean")
+            raise _ValueError("required must be boolean")
         df["required"] = parsed_required.astype("boolean")
 
     # Measurement guardrail: required in strict mode, optional with warning otherwise
@@ -735,7 +742,7 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
             )
     if review_summary:
         if require_iris:
-            raise ValueError(
+            raise _ValueError(
                 "Validation cannot pass while REVIEW-prefixed IRI values "
                 "remain. Resolve these fields before final validation: "
                 + "; ".join(review_summary)
@@ -746,7 +753,7 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
             + "; ".join(review_summary)
             + ". Before final validation or publication, replace or confirm "
             "the IRI and remove the REVIEW prefix.",
-            UserWarning,
+            _UserWarning,
         )
 
     if measurement_rows.any():
@@ -766,7 +773,7 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
                 if missing_field is None:
                     continue
                 rows = (missing_field[missing_field].index + 1).tolist()
-                raise ValueError(
+                raise _ValueError(
                     f"Measurement columns require {field}; missing in rows "
                     f"{_collapse_inline(rows)}."
                 )
@@ -794,12 +801,12 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
                 + "https://salmon-data-mobilization.github.io/metasalmon/"
                 + "articles/reusing-standards-salmon-data-terms.html"
             )
-            warnings.warn(message, UserWarning)
+            warnings.warn(message, _UserWarning)
 
     duplicates = df[df.duplicated(subset=["dataset_id", "table_id", "column_name"], keep=False)]
     if not duplicates.empty:
         names = duplicates["column_name"].dropna().astype(str).unique().tolist()
-        raise ValueError(f"Duplicate column names found in dictionary: {names}")
+        raise _ValueError(f"Duplicate column names found in dictionary: {names}")
 
     return df
 
@@ -819,8 +826,8 @@ def _coerce_series(series: pd.Series, target: str, strict: bool = True) -> pd.Se
         return series.astype("string")
     except Exception as exc:
         if strict:
-            raise ValueError(f"Failed to coerce column to {target}: {exc}") from exc
-        warnings.warn(f"Coercion to {target} failed; keeping as string", RuntimeWarning)
+            raise _ValueError(f"Failed to coerce column to {target}: {exc}") from exc
+        warnings.warn(f"Coercion to {target} failed; keeping as string", _RuntimeWarning)
         return series.astype("string")
 
 
@@ -855,7 +862,7 @@ def _report_unlisted_code_values(column: str, series: pd.Series, code_values: Se
         )
         warnings.warn(
             f"Column {column!r} has {count} {noun} not in its code list; {verb} missing: {shown}",
-            RuntimeWarning,
+            _RuntimeWarning,
             stacklevel=3,
         )
     return listed
@@ -887,7 +894,7 @@ def _apply_code_labels(series: pd.Series, code_values: Sequence, code_labels: Se
     this module.
     """
     if not isinstance(series, pd.Series):
-        raise TypeError("the data has more than one column with this name")
+        raise _TypeError("the data has more than one column with this name")
     rows = pd.DataFrame({"value": list(code_values), "label": list(code_labels)}, dtype=object)
     rows = rows[_apply_dictionary_present(rows["value"])]
     codes = rows.drop_duplicates(subset="value")
@@ -898,7 +905,7 @@ def _apply_code_labels(series: pd.Series, code_values: Sequence, code_labels: Se
     code_of_value = pd.Index(codes["value"].tolist(), dtype=object).get_indexer(pd.Index(values, dtype=object))
     unmatched = int((values.notna().to_numpy() & (code_of_value < 0)).sum())
     if unmatched:
-        raise ValueError(f"{unmatched} of its values matched no code value")
+        raise _ValueError(f"{unmatched} of its values matched no code value")
     # Each code's label as a position among the categories, or -1 for a code
     # with no label. The -1 appended last is what a missing value's -1 picks.
     label_of_code = pd.Index(categories, dtype=object).get_indexer(codes["label"].tolist())
@@ -936,7 +943,7 @@ def apply_salmon_dictionary(
 
     table_ids = dictionary["table_id"].dropna().unique().tolist()
     if len(table_ids) > 1:
-        warnings.warn(f"Dictionary contains multiple tables; applying first: {table_ids[0]}", RuntimeWarning)
+        warnings.warn(f"Dictionary contains multiple tables; applying first: {table_ids[0]}", _RuntimeWarning)
     table_id = table_ids[0] if table_ids else None
     table_dict = dictionary[dictionary["table_id"] == table_id] if table_id is not None else dictionary
 
@@ -1008,7 +1015,7 @@ def apply_salmon_dictionary(
                     warnings.warn(
                         f"Column {original_name!r} keeps its values as text, because the labels "
                         f"in its code list could not be applied: {exc}",
-                        RuntimeWarning,
+                        _RuntimeWarning,
                         stacklevel=2,
                     )
                     result[new_name] = result[new_name].astype("string")
@@ -1027,7 +1034,7 @@ def apply_salmon_dictionary(
     required_cols = table_dict.loc[table_dict["required"] == True, "column_name"].tolist()
     missing_required = [c for c in required_cols if c not in data.columns]
     if missing_required:
-        warnings.warn(f"Missing required columns in data: {missing_required}", RuntimeWarning)
+        warnings.warn(f"Missing required columns in data: {missing_required}", _RuntimeWarning)
 
     return result
 

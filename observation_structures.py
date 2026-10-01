@@ -23,6 +23,10 @@ for the same rows, including canonical ordering
 
 from __future__ import annotations
 
+from .conditions import (
+    _ValidationFileExistsError as _FileExistsError,
+)
+
 import datetime as _dt
 import json
 import re
@@ -945,7 +949,7 @@ def write_sdp_observation_structures(
         if candidate.exists() or _is_symlink(candidate)
     ]
     if existing and not overwrite:
-        raise FileExistsError(
+        raise _FileExistsError(
             "Observation-structure output already exists and overwrite is False."
         )
     _assert_safe_directory(root, "metadata/structure", create=True)

@@ -22,6 +22,12 @@ current file and restores the originals on failure.
 
 from __future__ import annotations
 
+from .conditions import (
+    _PackageFileNotFoundError as _FileNotFoundError,
+    _PackageNotADirectoryError as _NotADirectoryError,
+    _PackageValueError as _ValueError,
+)
+
 import json
 from pathlib import Path
 from typing import Optional
@@ -94,7 +100,7 @@ def apply_sdp_semantics(
     _assert_review(review)
     target = Path(path)
     if not target.is_dir():
-        raise NotADirectoryError(
+        raise _NotADirectoryError(
             f"path must be an existing Salmon Data Package directory: {target}"
         )
 
@@ -110,7 +116,7 @@ def apply_sdp_semantics(
     target_files = list(dict.fromkeys(decisions["target_file"].map(_text)))
     unsupported = [name for name in target_files if name not in WRITABLE_FILES]
     if unsupported:
-        raise ValueError(
+        raise _ValueError(
             "Cannot write decisions for these metadata files: "
             + ", ".join(unsupported)
         )
@@ -129,7 +135,7 @@ def apply_sdp_semantics(
     for file_name in target_files:
         located = _metadata_path(target, file_name)
         if not located.is_file():
-            raise FileNotFoundError(
+            raise _FileNotFoundError(
                 "Decisions target a metadata file the package does not have: "
                 + file_name
             )
@@ -150,7 +156,7 @@ def apply_sdp_semantics(
             frame[field] = pd.NA
         hits = _review_match_rows(frame, row, keys)
         if len(hits) != 1:
-            raise ValueError(
+            raise _ValueError(
                 "A decision does not address exactly one metadata row: "
                 + file_name
                 + " · "
@@ -262,7 +268,7 @@ def _read_descriptor(descriptor_path: Path) -> dict:
         # text: redacted at capture, per ``text_safety``'s placement rule.
         from .text_safety import redact_secrets
 
-        raise ValueError(
+        raise _ValueError(
             "Could not parse datapackage.json: " + redact_secrets(error)
         ) from None
 

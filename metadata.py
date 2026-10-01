@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PackageAttributeError as _AttributeError,
+    _PackageTypeError as _TypeError,
+    _PackageValueError as _ValueError,
+)
+
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -141,7 +147,7 @@ def __getattr__(name):
     """
     if name == "SDP_PROFILE_VERSION":
         return sdp_profile_version()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    raise _AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 DATASET_META_COLUMNS = [
     "dataset_id",
@@ -536,18 +542,18 @@ def ensure_resource_mapping(resources, table_id: str = "table-1") -> dict[str, p
     if isinstance(resources, pd.DataFrame):
         return {table_id: resources.copy()}
     if not isinstance(resources, Mapping):
-        raise TypeError("resources must be a pandas DataFrame or a named mapping of DataFrames.")
+        raise _TypeError("resources must be a pandas DataFrame or a named mapping of DataFrames.")
     if len(resources) == 0:
-        raise ValueError("resources cannot be empty.")
+        raise _ValueError("resources cannot be empty.")
     if any(not str(name) for name in resources.keys()):
-        raise ValueError("resources names must be non-empty table IDs.")
+        raise _ValueError("resources names must be non-empty table IDs.")
     out: dict[str, pd.DataFrame] = {}
     for name, value in resources.items():
         if not isinstance(value, pd.DataFrame):
-            raise TypeError("All resources must be pandas DataFrames.")
+            raise _TypeError("All resources must be pandas DataFrames.")
         out[str(name)] = value.copy()
     if len(out) != len(resources):
-        raise ValueError("resources names must be unique.")
+        raise _ValueError("resources names must be unique.")
     return out
 
 

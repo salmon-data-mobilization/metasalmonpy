@@ -8,6 +8,19 @@ Frictionless-style Salmon Data Packages.
 
 __version__ = "0.5.0"
 
+from .conditions import (
+    MetasalmonCondition,
+    MetasalmonError,
+    MetasalmonWarning,
+    MetasalmonValidationError,
+    MetasalmonValidationWarning,
+    MetasalmonLlmError,
+    MetasalmonLlmWarning,
+    MetasalmonPublicationError,
+    MetasalmonPublicationWarning,
+    MetasalmonRetrievalError,
+    MetasalmonRetrievalWarning,
+)
 from .dictionary import (
     apply_salmon_dictionary,
     infer_column_role,
@@ -96,6 +109,17 @@ from .version_check import check_for_updates
 from .chat_decomposition import chat_decomposition
 
 __all__ = [
+    'MetasalmonCondition',
+    'MetasalmonError',
+    'MetasalmonWarning',
+    'MetasalmonValidationError',
+    'MetasalmonValidationWarning',
+    'MetasalmonLlmError',
+    'MetasalmonLlmWarning',
+    'MetasalmonPublicationError',
+    'MetasalmonPublicationWarning',
+    'MetasalmonRetrievalError',
+    'MetasalmonRetrievalWarning',
     "__version__",
     "MetadataReview",
     "SemanticReview",

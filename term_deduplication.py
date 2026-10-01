@@ -8,6 +8,10 @@ This module prevents term proliferation by:
 4. Identifying terms that should use constraint_iri instead of new term_iri
 """
 
+from .conditions import (
+    _PackageUserWarning as _UserWarning,
+)
+
 import re
 import warnings
 from typing import Optional
@@ -83,7 +87,7 @@ def deduplicate_proposed_terms(
             f"gpt_proposed_terms has {len(proposed_terms)} rows (threshold: {warn_threshold}). "
             f"This may indicate over-engineering. Expected: 15-25 base terms for a typical dataset. "
             f"Review for: duplicate terms across tables, age/phase variants that should use constraint_iri.",
-            UserWarning
+            _UserWarning
         )
 
     df = proposed_terms.copy()
@@ -205,7 +209,7 @@ def deduplicate_proposed_terms(
         warnings.warn(
             f"After deduplication, still have {len(result)} terms (threshold: {warn_threshold}). "
             f"Consider manual review for additional consolidation opportunities.",
-            UserWarning
+            _UserWarning
         )
 
     return result.reset_index(drop=True)

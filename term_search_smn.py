@@ -14,6 +14,10 @@ implementation exactly; neither package uses an RDF library for this.
 
 from __future__ import annotations
 
+from .conditions import (
+    _RetrievalRuntimeError as _RuntimeError,
+)
+
 import re
 from typing import Dict, List, Mapping, Optional, Tuple
 
@@ -310,7 +314,7 @@ def parse_smn_ttl_modules(texts: Mapping[str, str]) -> pd.DataFrame:
         # 200, or a format change) and silently skipping it would drop every
         # term it carries while the aggregate still looks healthy.
         if not re.search(r"^\s*@prefix\s", text, flags=re.MULTILINE):
-            raise RuntimeError(
+            raise _RuntimeError(
                 f"SMN module '{module_name}' returned non-Turtle content; "
                 "refusing to build a silently partial term index."
             )

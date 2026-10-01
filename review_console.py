@@ -45,6 +45,12 @@ because a static guard cannot see a path it does not model.
 
 from __future__ import annotations
 
+from .conditions import (
+    _PackageFileNotFoundError as _FileNotFoundError,
+    _PackageTypeError as _TypeError,
+    _PackageValueError as _ValueError,
+)
+
 import sys
 from pathlib import Path
 from typing import Iterable, Mapping, Optional, Sequence, Union
@@ -258,7 +264,7 @@ def _semantic_attribute_from(x, attribute: str, arg: str = "x") -> dict:
                 "path": None,
             }
         return {"kind": "object", "value": None, "path": None}
-    raise TypeError(
+    raise _TypeError(
         f"{arg} must be a dictionary, an artifact mapping, or a package path. "
         "Pass the DataFrame returned by suggest_semantics(), the mapping "
         "returned by create_sdp()-style inference, or the package directory."
@@ -436,7 +442,7 @@ def _review_source_frames(x) -> dict:
     if isinstance(x, (str, Path)):
         target = Path(x)
         if not target.is_dir():
-            raise FileNotFoundError(f"Directory {target} does not exist.")
+            raise _FileNotFoundError(f"Directory {target} does not exist.")
 
         def read_one(file_name: str):
             located = target / "metadata" / file_name
@@ -561,7 +567,7 @@ def review_semantics(
     """
     suggestions = semantic_suggestions(x)
     if suggestions is None or suggestions.empty:
-        raise ValueError(
+        raise _ValueError(
             "No semantic suggestions to review. Run suggest_semantics(), or "
             "create_sdp() with seed_semantics=True, first."
         )
@@ -578,7 +584,7 @@ def review_semantics(
     ]
     missing = [name for name in required if name not in suggestions.columns]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             "Suggestions are missing required columns: " + ", ".join(missing)
         )
 
@@ -669,7 +675,7 @@ def review_semantics(
         }
         unknown = [name for name in wanted if name not in known]
         if unknown:
-            raise ValueError(
+            raise _ValueError(
                 "No suggestions target "
                 + ("this column: " if len(unknown) == 1 else "these columns: ")
                 + ", ".join(unknown)
@@ -1144,7 +1150,7 @@ def _render_review_lines(review: SemanticReview, object_name: str) -> list:
 
 def _assert_review(review) -> SemanticReview:
     if not isinstance(review, SemanticReview):
-        raise TypeError(
+        raise _TypeError(
             "review must be a SemanticReview object. Build one with "
             "review_semantics()."
         )
@@ -1188,7 +1194,7 @@ def _resolve_slot(
             )
         )
         asked = (column_text or "<no column>") + " · " + role_text
-        raise ValueError(
+        raise _ValueError(
             "No review slot matches that column and role. Asked for: "
             + asked
             + ". Available: "
@@ -1223,7 +1229,7 @@ def _resolve_slot(
         ambiguous = list(
             dict.fromkeys(option_for(row) for _, row in matched.iterrows())
         )
-        raise ValueError(
+        raise _ValueError(
             "That column and role match more than one review slot. Add one of "
             "these arguments to say which: "
             + "; ".join(ambiguous)
@@ -1292,7 +1298,7 @@ def accept_suggestion(
     """
     _assert_review(review)
     if role is None:
-        raise TypeError("accept_suggestion() requires role.")
+        raise _TypeError("accept_suggestion() requires role.")
     rows = review.rows
     slot = _resolve_slot(rows, column, role, table, code_value)
     in_slot = rows["slot_id"] == slot
@@ -1305,7 +1311,7 @@ def accept_suggestion(
             available = ", ".join(
                 str(value) for value in rows.loc[in_slot, "rank"]
             )
-            raise ValueError(
+            raise _ValueError(
                 "No candidate with that rank in this slot. Ranks available: "
                 f"{available}. To accept a term that is not shortlisted, pass "
                 "iri instead."
@@ -1326,7 +1332,7 @@ def accept_suggestion(
     # edited by hand -- can still hold one.
     if not _review_names_term(accepted_iri):
         if iri is None:
-            raise ValueError(
+            raise _ValueError(
                 "The candidate at that rank names no term. Its IRI is empty, "
                 "or still a REVIEW: marker once one is removed. Rebuild the "
                 "review with review_semantics(), which does not queue such a "
@@ -1344,7 +1350,7 @@ def accept_suggestion(
                 " An accepted IRI is recorded without its REVIEW: marker, and "
                 "nothing follows the marker here."
             )
-        raise ValueError(message)
+        raise _ValueError(message)
 
     if iri is not None:
         # An ``iri`` that a shortlisted candidate carries names that candidate,
@@ -1388,7 +1394,7 @@ def reject_suggestion(
     """
     _assert_review(review)
     if role is None:
-        raise TypeError("reject_suggestion() requires role.")
+        raise _TypeError("reject_suggestion() requires role.")
     rows = review.rows
     slot = _resolve_slot(rows, column, role, table, code_value)
     in_slot = rows["slot_id"] == slot

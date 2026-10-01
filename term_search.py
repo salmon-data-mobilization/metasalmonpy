@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from .conditions import (
+    _RetrievalDeprecationWarning as _DeprecationWarning,
+    _RetrievalRuntimeError as _RuntimeError,
+    _RetrievalRuntimeWarning as _RuntimeWarning,
+)
+
 import json
 import os
 import re
@@ -77,7 +83,7 @@ def _env_flag(name: str) -> bool:
                 f"SALMONPY_{name} is deprecated; set METASALMONPY_{name} "
                 "instead. The old spelling is removed in the first release "
                 "after the S10 parity release.",
-                DeprecationWarning,
+                _DeprecationWarning,
                 stacklevel=3,
             )
             _legacy_env_warned.add(name)
@@ -190,7 +196,7 @@ def _warn_request_timeout(safe_url: str, detail: str) -> None:
     warnings.warn(
         "Vocabulary API request timed out while querying "
         f"{safe_url}. {detail}",
-        RuntimeWarning,
+        _RuntimeWarning,
         stacklevel=3,
     )
 
@@ -454,7 +460,7 @@ def _search_bioportal(query: str, role) -> pd.DataFrame:
                 "Persist it in ~/.Renviron or ~/.zshrc with a line: BIOPORTAL_APIKEY=your_key_here "
                 "Get a key at https://bioportal.bioontology.org/register. "
                 "Do not paste keys into chat; keep them in your environment.",
-                RuntimeWarning,
+                _RuntimeWarning,
             )
             _warned_bioportal_missing = True
         return _empty_terms(role)
@@ -719,7 +725,7 @@ def _fetch_ontology_text(
             last_error = "empty response body"
         else:
             last_error = f"HTTP {response.status_code}"
-    raise RuntimeError(
+    raise _RuntimeError(
         f"Failed to fetch ontology from {', '.join(urls)}; last error: {last_error}"
     )
 
@@ -801,7 +807,7 @@ def _parse_salmon_rdfxml(xml_text: str, iri_pattern: str) -> pd.DataFrame:
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError as exc:
-        raise RuntimeError(f"Failed to parse ontology RDF/XML: {exc}") from exc
+        raise _RuntimeError(f"Failed to parse ontology RDF/XML: {exc}") from exc
 
     about_attr = f"{{{_RDF_NS}}}about"
     ontology_tag = f"{{{_OWL_NS}}}Ontology"
@@ -962,7 +968,7 @@ def _smn_term_index(refresh: bool = False) -> pd.DataFrame:
         )
         index = _parse_salmon_rdfxml(xml_text, iri_pattern=_SMN_IRI_PATTERN)
         if index.empty:
-            raise RuntimeError(
+            raise _RuntimeError(
                 "Salmon Domain Ontology (smn) fetch succeeded but parsed to an empty "
                 "term index; refusing to return a silently empty index."
             )
@@ -985,7 +991,7 @@ def _gcdfo_term_index(refresh: bool = False) -> pd.DataFrame:
         )
         index = _parse_salmon_rdfxml(xml_text, iri_pattern=_GCDFO_IRI_PATTERN)
         if index.empty:
-            raise RuntimeError(
+            raise _RuntimeError(
                 "DFO Salmon Ontology (gcdfo) fetch succeeded but parsed to an empty "
                 "term index; refusing to return a silently empty index."
             )
@@ -1465,7 +1471,7 @@ def find_terms(
                     warnings.warn(
                         f"Vocabulary API lookup timed out for source {src!r} "
                         f"while searching {query_variant!r}. {err_msg}",
-                        RuntimeWarning,
+                        _RuntimeWarning,
                         stacklevel=2,
                     )
                 diagnostics.append(
@@ -1520,7 +1526,7 @@ def find_terms(
             "answer. Treat an empty or short result as unknown rather than as "
             'an ontology gap. See result.attrs["diagnostics"] for per-source '
             "detail.",
-            RuntimeWarning,
+            _RuntimeWarning,
             stacklevel=2,
         )
 

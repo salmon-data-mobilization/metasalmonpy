@@ -35,6 +35,11 @@ against (vendored from emld 0.5.3; see the README there).
 
 from __future__ import annotations
 
+from .conditions import (
+    _PublicationFileNotFoundError as _FileNotFoundError,
+    _PublicationValueError as _ValueError,
+)
+
 import csv
 import hashlib
 import math
@@ -188,12 +193,12 @@ def _scalar(mapping: object, field: str, required: bool = True) -> Optional[str]
     value = mapping.get(field) if isinstance(mapping, dict) else None
     if not _nonempty(value):
         if required:
-            raise ValueError(
+            raise _ValueError(
                 f"EML mapping field {field} must contain one non-empty value."
             )
         return None
     if _length(value) != 1:
-        raise ValueError(
+        raise _ValueError(
             f"EML mapping field {field} must contain exactly one value."
         )
     return _trim(_as_character(_first(value)))
@@ -239,7 +244,7 @@ def _as_integer(value: object) -> Optional[int]:
 def _revision_key(mapping: dict, required: bool = False) -> Optional[str]:
     """Mirror ``.ms_eml_revision_key``."""
     if not isinstance(required, bool):
-        raise ValueError(
+        raise _ValueError(
             "Internal EML export argument required must be one logical value."
         )
     publication = mapping.get("publication")
@@ -251,7 +256,7 @@ def _revision_key(mapping: dict, required: bool = False) -> Optional[str]:
     if key is None:
         return None
     if len(key.encode("utf-8")) > 128 or _REVISION_KEY_RE.fullmatch(key) is None:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping publication.revision_key must be 1-128 ASCII "
             "letters, numbers, periods, underscores, or hyphens, starting "
             "with a letter or number."
@@ -280,7 +285,7 @@ def _split_iris(value: object) -> List[str]:
 def _uuid5(name: object) -> str:
     """Mirror ``.ms_eml_uuid5``: RFC 9562 UUIDv5 in the URL namespace."""
     if not _nonempty(name):
-        raise ValueError("A non-empty name is required to construct a UUIDv5.")
+        raise _ValueError("A non-empty name is required to construct a UUIDv5.")
     return str(uuid.uuid5(uuid.NAMESPACE_URL, _as_character(_first(name))))
 
 
@@ -341,7 +346,7 @@ def _add_party(
 ) -> ET.Element:
     """Mirror ``.ms_eml_add_party``."""
     if not isinstance(party, dict):
-        raise ValueError(
+        raise _ValueError(
             f"Each {element} entry in the EML mapping must be a mapping."
         )
 
@@ -352,11 +357,11 @@ def _add_party(
 
     has_individual = _nonempty(surname)
     if _nonempty(given_name) and not has_individual:
-        raise ValueError(
+        raise _ValueError(
             "An EML party with given_name must also provide surname."
         )
     if not has_individual and not _nonempty(organization) and not _nonempty(position):
-        raise ValueError(
+        raise _ValueError(
             "Each EML party must provide surname, organization_name, or "
             "position_name."
         )
@@ -380,7 +385,7 @@ def _add_party(
     orcid = _scalar(party, "orcid", required=False)
     if _nonempty(orcid):
         if _ORCID_RE.fullmatch(orcid) is None:
-            raise ValueError(
+            raise _ValueError(
                 "EML party orcid must be a full https://orcid.org/ URI."
             )
         _add_text(node, "userId", orcid, attrs={"directory": "https://orcid.org"})
@@ -395,7 +400,7 @@ def _default_mapping_path(path: Union[str, Path]) -> Path:
     yml = Path(path) / "metadata" / "eml-mapping.yml"
     yaml_path = Path(path) / "metadata" / "eml-mapping.yaml"
     if yml.exists() and yaml_path.exists():
-        raise ValueError(
+        raise _ValueError(
             "Both eml-mapping.yml and eml-mapping.yaml exist. Keep one "
             "canonical sidecar; eml-mapping.yml is the default."
         )
@@ -406,7 +411,7 @@ def _attribute_configs(mapping: dict, dictionary: pd.DataFrame) -> List[dict]:
     """Mirror ``.ms_eml_attribute_configs``."""
     tables = mapping.get("tables")
     if not isinstance(tables, dict) or not tables:
-        raise ValueError("EML mapping tables must be keyed by table ID.")
+        raise _ValueError("EML mapping tables must be keyed by table ID.")
 
     dictionary_tables = [_as_character(value) for value in dictionary["table_id"]]
     dictionary_columns = [
@@ -415,7 +420,7 @@ def _attribute_configs(mapping: dict, dictionary: pd.DataFrame) -> List[dict]:
     expected_tables = list(dict.fromkeys(dictionary_tables))
     actual_tables = [str(name) for name in tables.keys()]
     if set(expected_tables) != set(actual_tables):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping tables must describe exactly the SDP tables. "
             f"Expected: {sorted(expected_tables)}. "
             f"Found: {sorted(actual_tables)}."
@@ -427,10 +432,10 @@ def _attribute_configs(mapping: dict, dictionary: pd.DataFrame) -> List[dict]:
         column_name = dictionary_columns[row]
         table_entry = tables[table_id]
         if not isinstance(table_entry, dict):
-            raise ValueError(f"EML mapping tables.{table_id} must be a mapping.")
+            raise _ValueError(f"EML mapping tables.{table_id} must be a mapping.")
         table_mapping = table_entry.get("attributes")
         if not isinstance(table_mapping, dict) or not table_mapping:
-            raise ValueError(
+            raise _ValueError(
                 f"EML mapping tables.{table_id}.attributes must be keyed by "
                 "column name."
             )
@@ -442,7 +447,7 @@ def _attribute_configs(mapping: dict, dictionary: pd.DataFrame) -> List[dict]:
         ]
         actual_columns = [str(name) for name in table_mapping.keys()]
         if set(expected_columns) != set(actual_columns):
-            raise ValueError(
+            raise _ValueError(
                 f"EML mapping tables.{table_id}.attributes must describe "
                 "exactly the SDP columns. "
                 f"Expected: {sorted(expected_columns)}. "
@@ -451,7 +456,7 @@ def _attribute_configs(mapping: dict, dictionary: pd.DataFrame) -> List[dict]:
 
         config = table_mapping.get(column_name)
         if not isinstance(config, dict):
-            raise ValueError(
+            raise _ValueError(
                 f"EML mapping for {table_id}.{column_name} must be a mapping."
             )
         configs.append(config)
@@ -940,7 +945,7 @@ def _validate_mapping_schema(mapping: dict) -> None:
 
     if errors:
         detail = "\n".join(errors[:12])
-        raise ValueError(
+        raise _ValueError(
             "EML mapping sidecar failed the bundled JSON Schema.\n" + detail
         )
 
@@ -963,7 +968,7 @@ def _unit_crosswalk() -> pd.DataFrame:
     """Mirror ``.ms_eml_unit_crosswalk`` (the bundled reviewed crosswalk)."""
     path = _DATA_DIR / "eml-unit-crosswalk.csv"
     if not path.is_file():
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             "Could not locate the bundled reviewed EML unit crosswalk."
         )
     crosswalk = _read_character_csv(path)
@@ -978,7 +983,7 @@ def _unit_crosswalk() -> pd.DataFrame:
         or crosswalk["unit_iri"].duplicated().any()
     )
     if malformed:
-        raise ValueError(
+        raise _ValueError(
             "The bundled EML unit crosswalk is malformed or contains "
             "unreviewed/duplicate entries."
         )
@@ -997,19 +1002,19 @@ def _validate_mapping(
 ) -> List[dict]:
     """Mirror ``.ms_eml_validate_mapping``."""
     if not isinstance(mapping, dict):
-        raise ValueError("The EML mapping sidecar must contain a YAML mapping.")
+        raise _ValueError("The EML mapping sidecar must contain a YAML mapping.")
     _validate_mapping_schema(mapping)
     if _as_integer(mapping.get("version")) != 1:
-        raise ValueError("EML mapping version must be 1.")
+        raise _ValueError("EML mapping version must be 1.")
     status = _scalar(mapping, "status")
     if require_final and status != "final":
-        raise ValueError('EML mapping status must be "final" before export.')
+        raise _ValueError('EML mapping status must be "final" before export.')
 
     dataset = pkg["dataset"]
     dataset_id = _scalar(mapping, "dataset_id")
     package_dataset_id = _trim(_as_character(dataset.iloc[0]["dataset_id"]))
     if dataset_id != package_dataset_id:
-        raise ValueError(
+        raise _ValueError(
             f"EML mapping dataset_id {dataset_id!r} does not match SDP "
             f"dataset ID {package_dataset_id!r}."
         )
@@ -1017,14 +1022,14 @@ def _validate_mapping(
     _scalar(mapping, "series_key")
     system = _scalar(mapping, "system")
     if system != _EML_SYSTEM:
-        raise ValueError(
+        raise _ValueError(
             f"EML mapping system must be {_EML_SYSTEM!r} for the KNB "
             "publication profile."
         )
     _scalar(mapping, "language")
     publication_date = _scalar(mapping, "publication_date")
     if _PUBLICATION_DATE_RE.fullmatch(publication_date) is None:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping publication_date must be YYYY or YYYY-MM-DD."
         )
     calendar_value = (
@@ -1035,12 +1040,12 @@ def _validate_mapping(
     try:
         datetime.strptime(calendar_value, "%Y-%m-%d")
     except ValueError:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping publication_date is not a valid calendar date."
         ) from None
 
     if not isinstance(mapping.get("publisher"), dict):
-        raise ValueError("EML mapping publisher must be a party mapping.")
+        raise _ValueError("EML mapping publisher must be a party mapping.")
     rights = mapping.get("intellectual_rights")
     paragraphs = rights.get("paragraphs") if isinstance(rights, dict) else None
     if isinstance(paragraphs, str):
@@ -1052,54 +1057,54 @@ def _validate_mapping(
         or any(not isinstance(paragraph, str) for paragraph in paragraphs)
         or any(not _trim(paragraph) for paragraph in paragraphs)
     ):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping intellectual_rights.paragraphs must contain "
             "non-empty text."
         )
     methods = mapping.get("methods")
     if not isinstance(methods, list) or len(methods) == 0:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping methods must contain at least one method-step "
             "mapping."
         )
     for method in methods:
         if not isinstance(method, dict):
-            raise ValueError("Each EML method step must be a mapping.")
+            raise _ValueError("Each EML method step must be a mapping.")
         _scalar(method, "description")
 
     semantic_vocabulary = mapping.get("semantic_vocabulary")
     if not isinstance(semantic_vocabulary, dict):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping semantic_vocabulary must be a path/hash mapping."
         )
     vocabulary_path = _scalar(semantic_vocabulary, "path")
     if vocabulary_path != "metadata/semantic_vocabulary.csv":
-        raise ValueError(
+        raise _ValueError(
             "EML mapping semantic_vocabulary.path must be "
             "metadata/semantic_vocabulary.csv."
         )
     vocabulary_sha256 = _scalar(semantic_vocabulary, "sha256")
     if _SHA256_RE.fullmatch(vocabulary_sha256) is None:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping semantic_vocabulary.sha256 must be a lowercase "
             "SHA-256 digest."
         )
 
     semantic_review = mapping.get("semantic_review")
     if not isinstance(semantic_review, dict):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping semantic_review must be a path/hash mapping."
         )
     review_path = _scalar(semantic_review, "path")
     if review_path not in SUPPORTED_REVIEW_PATHS:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping semantic_review.path must use the canonical "
             "reproducibility ledger or its legacy root-level compatibility "
             "path."
         )
     review_sha256 = _scalar(semantic_review, "sha256")
     if _SHA256_RE.fullmatch(review_sha256) is None:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping semantic_review.sha256 must be a lowercase SHA-256 "
             "digest."
         )
@@ -1108,7 +1113,7 @@ def _validate_mapping(
     if not isinstance(publication, dict) or not isinstance(
         publication.get("public"), bool
     ):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping publication.public must be one explicit logical "
             "value."
         )
@@ -1118,7 +1123,7 @@ def _validate_mapping(
     if not isinstance(rights_authorization, dict) or _scalar(
         rights_authorization, "status"
     ) not in ("unconfirmed", "confirmed"):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping rights_authorization.status must be "
             '"unconfirmed" or "confirmed".'
         )
@@ -1126,7 +1131,7 @@ def _validate_mapping(
 
     source_provenance = mapping.get("source_provenance")
     if not isinstance(source_provenance, dict):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping source_provenance must be a structured mapping."
         )
     source_citation = _scalar(source_provenance, "source_citation")
@@ -1134,31 +1139,31 @@ def _validate_mapping(
     package_source_citation = _trim(_as_character(dataset.iloc[0]["source_citation"]))
     package_provenance_note = _trim(_as_character(dataset.iloc[0]["provenance_note"]))
     if source_citation != package_source_citation:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping source_provenance.source_citation does not match "
             "SDP source_citation."
         )
     if provenance_note != package_provenance_note:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping source_provenance.provenance_note does not match "
             "SDP provenance_note."
         )
     supporting_document = source_provenance.get("supporting_document")
     if not isinstance(supporting_document, dict):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping source_provenance.supporting_document must be a "
             "citation/URL/hash mapping."
         )
     _scalar(supporting_document, "citation")
     supporting_url = _scalar(supporting_document, "url")
     if not re.match(r"^https?://", supporting_url):
-        raise ValueError(
+        raise _ValueError(
             "EML mapping source_provenance.supporting_document.url must be "
             "an HTTP(S) URL."
         )
     supporting_sha256 = _scalar(supporting_document, "sha256")
     if _SHA256_RE.fullmatch(supporting_sha256) is None:
-        raise ValueError(
+        raise _ValueError(
             "EML mapping source_provenance.supporting_document.sha256 must "
             "be a lowercase SHA-256 digest."
         )
@@ -1166,20 +1171,20 @@ def _validate_mapping(
     for field in ("creators", "metadata_providers", "contacts"):
         parties = mapping.get(field)
         if not isinstance(parties, list) or len(parties) == 0:
-            raise ValueError(
+            raise _ValueError(
                 f"EML mapping {field} must contain at least one party."
             )
 
     geographic = mapping.get("geographic_coverage")
     if geographic is not None:
         if not isinstance(geographic, dict):
-            raise ValueError("EML mapping geographic_coverage must be a mapping.")
+            raise _ValueError("EML mapping geographic_coverage must be a mapping.")
         _scalar(geographic, "description")
         numeric_bounds: Dict[str, float] = {}
         for field in ("west", "east", "south", "north"):
             value = _as_numeric(geographic.get(field))
             if value is None or not math.isfinite(value):
-                raise ValueError(
+                raise _ValueError(
                     f"EML mapping geographic_coverage.{field} must be one "
                     "finite number."
                 )
@@ -1196,7 +1201,7 @@ def _validate_mapping(
             or numeric_bounds["south"] > 90
             or numeric_bounds["north"] > 90
         ):
-            raise ValueError(
+            raise _ValueError(
                 "EML geographic_coverage bounds are out of range or reversed."
             )
 
@@ -1212,7 +1217,7 @@ def _validate_mapping(
         )
         scale = _scalar(config, "measurement_scale")
         if scale not in _VALID_SCALES:
-            raise ValueError(
+            raise _ValueError(
                 f"EML mapping {field}.measurement_scale must be one of "
                 + ", ".join(_VALID_SCALES)
                 + "."
@@ -1221,7 +1226,7 @@ def _validate_mapping(
         if scale in ("interval", "ratio"):
             value_type = _as_character(dictionary.iloc[row]["value_type"])
             if value_type not in ("integer", "number"):
-                raise ValueError(
+                raise _ValueError(
                     f"EML {scale} scale for {field} requires SDP value_type "
                     f'"integer" or "number", not {value_type!r}.'
                 )
@@ -1231,7 +1236,7 @@ def _validate_mapping(
                 unit_crosswalk["unit_iri"] == unit_iri
             ]
             if len(crosswalk_rows) != 1:
-                raise ValueError(
+                raise _ValueError(
                     "No reviewed EML standard-unit mapping exists for "
                     f"canonical unit IRI {unit_iri!r} on {field}. Add and "
                     "review an exact crosswalk entry before extending the "
@@ -1239,14 +1244,14 @@ def _validate_mapping(
                 )
             expected_unit = crosswalk_rows.iloc[0]["eml_standard_unit"]
             if unit != expected_unit:
-                raise ValueError(
+                raise _ValueError(
                     f"EML mapping {field}.eml_unit must be "
                     f"{expected_unit!r} for canonical unit IRI {unit_iri!r}, "
                     f"not {unit!r}."
                 )
             number_type = _scalar(config, "number_type")
             if number_type not in _VALID_NUMBER_TYPES:
-                raise ValueError(
+                raise _ValueError(
                     f"EML mapping {field}.number_type must be one of "
                     + ", ".join(_VALID_NUMBER_TYPES)
                     + "."
@@ -1259,14 +1264,14 @@ def _validate_mapping(
             if has_minimum:
                 minimum = _as_numeric(minimum)
                 if minimum is None or not math.isfinite(minimum):
-                    raise ValueError(
+                    raise _ValueError(
                         f"EML mapping {field}.minimum must be one finite "
                         "number."
                     )
             if has_maximum:
                 maximum = _as_numeric(maximum)
                 if maximum is None or not math.isfinite(maximum):
-                    raise ValueError(
+                    raise _ValueError(
                         f"EML mapping {field}.maximum must be one finite "
                         "number."
                     )
@@ -1274,12 +1279,12 @@ def _validate_mapping(
                 exclusive_field = bound + "_exclusive"
                 exclusive = config.get(exclusive_field)
                 if exclusive is not None and not isinstance(exclusive, bool):
-                    raise ValueError(
+                    raise _ValueError(
                         f"EML mapping {field}.{exclusive_field} must be one "
                         "logical value."
                     )
                 if exclusive is not None and config.get(bound) is None:
-                    raise ValueError(
+                    raise _ValueError(
                         f"EML mapping {field}.{exclusive_field} requires "
                         f"{field}.{bound}."
                     )
@@ -1297,7 +1302,7 @@ def _validate_mapping(
                     )
                 )
             ):
-                raise ValueError(
+                raise _ValueError(
                     f"EML mapping {field}.minimum must not exceed "
                     f"{field}.maximum or define an empty exclusive interval."
                 )
@@ -1305,13 +1310,13 @@ def _validate_mapping(
         if scale == "dateTime":
             value_type = _as_character(dictionary.iloc[row]["value_type"])
             if value_type not in ("string", "integer", "number", "date", "datetime"):
-                raise ValueError(
+                raise _ValueError(
                     f"EML dateTime scale for {field} is incompatible with "
                     f"SDP value_type {value_type!r}."
                 )
             format_string = _scalar(config, "format_string")
             if format_string not in ("YYYY", "YYYY-MM-DD"):
-                raise ValueError(
+                raise _ValueError(
                     f"EML mapping {field}.format_string must currently be "
                     '"YYYY" or "YYYY-MM-DD" so actual values can be '
                     "validated exactly."
@@ -1320,7 +1325,7 @@ def _validate_mapping(
         if config.get("precision") is not None:
             precision = _as_numeric(config.get("precision"))
             if precision is None or precision <= 0:
-                raise ValueError(
+                raise _ValueError(
                     f"EML mapping {field}.precision must be a positive, "
                     "evidence-backed measurement repeatability value."
                 )
@@ -1471,7 +1476,7 @@ def _read_semantic_review(
     review_path = _resource_path(path, mapping["semantic_review"]["path"])
     actual_sha256 = _file_sha256(review_path)
     if actual_sha256 != mapping["semantic_review"]["sha256"]:
-        raise ValueError(
+        raise _ValueError(
             "The semantic-review ledger SHA-256 does not match the reviewed "
             "EML mapping sidecar."
         )
@@ -1491,7 +1496,7 @@ def _read_semantic_review(
     ]
     missing = [column for column in required if column not in review.columns]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             "The semantic-review ledger is missing required column(s): "
             + ", ".join(missing)
             + "."
@@ -1509,7 +1514,7 @@ def _read_semantic_review(
         for column in nonempty_fields
         for row in range(row_count)
     ):
-        raise ValueError(
+        raise _ValueError(
             "The semantic-review ledger must provide non-empty target, "
             "decision, and IRI fields on every row."
         )
@@ -1532,7 +1537,7 @@ def _read_semantic_review(
         unresolved_decisions = list(
             dict.fromkeys(columns["decision"][row] for row in unresolved_rows)
         )
-        raise ValueError(
+        raise _ValueError(
             "The semantic-review ledger contains non-accepted decision "
             + ", ".join(repr(value) for value in unresolved_decisions)
             + " for target(s) "
@@ -1566,7 +1571,7 @@ def _read_semantic_review(
             target["table_id"], target["column_name"], target["target_sdp_field"]
         )
         if unresolved:
-            raise ValueError(
+            raise _ValueError(
                 "The semantic-review ledger contains unresolved decision "
                 + ", ".join(repr(value) for value in unresolved)
                 + f" for required semantic target {label} and IRI "
@@ -1574,7 +1579,7 @@ def _read_semantic_review(
                 + "."
             )
         if len(matches) != 1 or columns["decision"][matches[0]] != "accepted":
-            raise ValueError(
+            raise _ValueError(
                 "The semantic-review ledger must contain exactly one "
                 f"accepted row for required semantic target {label} and IRI "
                 + target["iri"]
@@ -1607,7 +1612,7 @@ def _read_semantic_review(
             )
         else:
             unexpected_labels = ["duplicate canonical target rows"]
-        raise ValueError(
+        raise _ValueError(
             "The final semantic-review ledger must equal the canonical "
             "non-empty table and measurement semantic target set exactly. "
             "Unexpected or duplicate row(s): "
@@ -1639,7 +1644,7 @@ def _vocabulary_snapshot_sha256(row: Dict[str, object]) -> str:
         field for field in _VOCABULARY_SNAPSHOT_FIELDS if field not in row
     ]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             "Cannot hash reviewed vocabulary snapshot; missing field(s): "
             + ", ".join(missing)
             + "."
@@ -1657,7 +1662,7 @@ def _read_vocabulary(
     """Mirror ``.ms_eml_read_vocabulary``."""
     vocabulary_path = _resource_path(path, mapping["semantic_vocabulary"]["path"])
     if not Path(vocabulary_path).exists():
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             f"Required reviewed vocabulary file {vocabulary_path} does not "
             "exist."
         )
@@ -1678,7 +1683,7 @@ def _read_vocabulary(
     ]
     missing = [column for column in required if column not in vocabulary.columns]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv is missing required column(s): "
             + ", ".join(missing)
             + "."
@@ -1696,13 +1701,13 @@ def _read_vocabulary(
         or any(not value for value in iris if not _is_missing(value))
         or len(set(iris)) != len(iris)
     ):
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv must contain one unique, non-empty row "
             "per IRI."
         )
     labels = list(vocabulary["label"])
     if any(_is_missing(value) or not value for value in labels):
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv must provide a non-empty label for "
             "every IRI."
         )
@@ -1721,7 +1726,7 @@ def _read_vocabulary(
             for value in vocabulary[field]
         ]
         if any(value is None or not value for value in values):
-            raise ValueError(
+            raise _ValueError(
                 "semantic_vocabulary.csv must provide non-empty "
                 f"{field} evidence for every IRI."
             )
@@ -1729,7 +1734,7 @@ def _read_vocabulary(
         not re.match(r"^https?://", _as_character(value))
         for value in vocabulary["source_url"]
     ):
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv source_url values must be HTTP(S) URLs."
         )
     source_artifact_sha256 = [
@@ -1740,7 +1745,7 @@ def _read_vocabulary(
         value and _SHA256_RE.fullmatch(value) is None
         for value in source_artifact_sha256
     ):
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv non-empty source_artifact_sha256 "
             "values must be lowercase SHA-256 digests."
         )
@@ -1751,7 +1756,7 @@ def _read_vocabulary(
     if any(
         _SHA256_RE.fullmatch(value) is None for value in reviewed_snapshot_sha256
     ):
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv reviewed_snapshot_sha256 values must "
             "be lowercase SHA-256 digests."
         )
@@ -1765,13 +1770,13 @@ def _read_vocabulary(
         for row in range(len(vocabulary))
     ]
     if reviewed_snapshot_sha256 != expected_snapshot_sha256:
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv contains a reviewed vocabulary "
             "snapshot hash that does not match its row."
         )
     actual_sha256 = _file_sha256(vocabulary_path)
     if actual_sha256 != mapping["semantic_vocabulary"]["sha256"]:
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv SHA-256 does not match the reviewed "
             "EML mapping sidecar."
         )
@@ -1779,7 +1784,7 @@ def _read_vocabulary(
     expected = sorted(_canonical_measurement_iris(path, pkg))
     actual = sorted(set(iris))
     if expected != actual:
-        raise ValueError(
+        raise _ValueError(
             "semantic_vocabulary.csv must describe exactly the canonical "
             "measurement IRI set. Missing: "
             + ", ".join(sorted(set(expected) - set(actual)))
@@ -1794,12 +1799,12 @@ def _vocabulary_label(vocabulary: pd.DataFrame, iri: object) -> str:
     """Mirror ``.ms_eml_vocabulary_label``."""
     matches = vocabulary[vocabulary["iri"] == iri]
     if len(matches) != 1:
-        raise ValueError(
+        raise _ValueError(
             f"No reviewed vocabulary label exists for canonical IRI {iri}."
         )
     label = matches.iloc[0]["label"]
     if _is_missing(label) or not str(label):
-        raise ValueError(
+        raise _ValueError(
             f"No reviewed vocabulary label exists for canonical IRI {iri}."
         )
     return str(label)
@@ -1813,7 +1818,7 @@ def _measurement_term_annotation(
     raw_term_type = dictionary_row.get("term_type")
     term_type = _trim(_as_character(raw_term_type)).lower()
     if term_type not in ("owl_class", "skos_concept"):
-        raise ValueError(
+        raise _ValueError(
             "EML export requires measurement term_type to be "
             f'"owl_class" or "skos_concept"; found {term_type!r}.'
         )
@@ -1826,7 +1831,7 @@ def _measurement_term_annotation(
             )
         ]
         if len(vocabulary_rows) != 1:
-            raise ValueError(
+            raise _ValueError(
                 "Reviewed vocabulary evidence for measurement term "
                 f"{term_iri} is missing or duplicated."
             )
@@ -1855,7 +1860,7 @@ def _measurement_term_annotation(
             or (term_type == "owl_class" and not evidence_is_owl)
             or (evidence_is_skos and evidence_is_owl)
         ):
-            raise ValueError(
+            raise _ValueError(
                 f"Measurement term_type for {term_iri} conflicts with "
                 "reviewed vocabulary native-type evidence."
             )
@@ -1874,11 +1879,11 @@ def _resource_path(package_path: Union[str, Path], file_name: str) -> str:
     package_root = os.path.realpath(str(package_path))
     candidate = os.path.join(package_root, str(file_name))
     if not os.path.exists(candidate):
-        raise FileNotFoundError(f"SDP data object {candidate} does not exist.")
+        raise _FileNotFoundError(f"SDP data object {candidate} does not exist.")
     resolved = os.path.realpath(candidate)
     prefix = package_root + os.sep
     if not resolved.startswith(prefix):
-        raise ValueError(
+        raise _ValueError(
             f"SDP resource {file_name} resolves outside the package "
             "directory."
         )
@@ -1969,7 +1974,7 @@ def _supplementary_objects(
     if isinstance(objects, dict):
         objects = pd.DataFrame(objects)
     if not isinstance(objects, pd.DataFrame):
-        raise ValueError(
+        raise _ValueError(
             "supplementary_objects must be a data frame with one row per "
             "supplementary object."
         )
@@ -1989,13 +1994,13 @@ def _supplementary_objects(
     missing = [column for column in required if column not in objects.columns]
     unexpected = [column for column in objects.columns if column not in allowed]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             "supplementary_objects is missing required column(s): "
             + ", ".join(missing)
             + "."
         )
     if unexpected:
-        raise ValueError(
+        raise _ValueError(
             "supplementary_objects has unexpected column(s): "
             + ", ".join(unexpected)
             + "."
@@ -2006,7 +2011,7 @@ def _supplementary_objects(
         cells = []
         for value in objects[field]:
             if isinstance(value, (list, tuple, dict, set)):
-                raise ValueError(
+                raise _ValueError(
                     f"Supplementary-object {field} must be one atomic value "
                     "per row."
                 )
@@ -2019,20 +2024,20 @@ def _supplementary_objects(
         for field in required
         for value in values[field]
     ):
-        raise ValueError(
+        raise _ValueError(
             "Every required supplementary-object field must contain a "
             "non-empty value without control characters."
         )
 
     if any(_ABSOLUTE_URI_RE.fullmatch(value) is None for value in values["pid"]):
-        raise ValueError(
+        raise _ValueError(
             "Every supplementary-object pid must be an absolute URI without "
             "whitespace."
         )
     if any(
         _SHA256_RE.fullmatch(value) is None for value in values["checksum"]
     ):
-        raise ValueError(
+        raise _ValueError(
             "Every supplementary-object checksum must be a lowercase "
             "SHA-256 digest."
         )
@@ -2053,7 +2058,7 @@ def _supplementary_objects(
         or any(part in ("", ".", "..") for part in name.split("/"))
     ]
     if unsafe_names:
-        raise ValueError(
+        raise _ValueError(
             "Every supplementary-object object_name must be a safe relative "
             "object path."
         )
@@ -2065,14 +2070,14 @@ def _supplementary_objects(
         and ("/" in name or not re.search(r"\.zip$", name, flags=re.IGNORECASE))
     ]
     if invalid_archive_names:
-        raise ValueError(
+        raise _ValueError(
             'An "application/zip" supplementary-object object_name must be a '
             "basename ending in .zip."
         )
     if len(set(values["pid"])) != len(values["pid"]) or len(
         set(values["object_name"])
     ) != len(values["object_name"]):
-        raise ValueError(
+        raise _ValueError(
             "Supplementary-object pid and object_name values must each be "
             "unique."
         )
@@ -2081,7 +2086,7 @@ def _supplementary_objects(
     for candidate in values["path"]:
         candidate = os.path.expanduser(candidate)
         if not os.path.exists(candidate) or os.path.isdir(candidate):
-            raise ValueError(
+            raise _ValueError(
                 f"Supplementary object {candidate} is not a readable file."
             )
         paths.append(os.path.realpath(candidate))
@@ -2091,7 +2096,7 @@ def _supplementary_objects(
         supplied_sizes: List[Optional[float]] = []
         for value in objects["size"]:
             if isinstance(value, (list, tuple, dict, set)):
-                raise ValueError(
+                raise _ValueError(
                     "Supplementary-object size must be one atomic value per "
                     "row."
                 )
@@ -2107,7 +2112,7 @@ def _supplementary_objects(
             supplied != actual
             for supplied, actual in zip(supplied_sizes, actual_sizes)
         ):
-            raise ValueError(
+            raise _ValueError(
                 "Supplementary-object size must exactly match the file size "
                 "in bytes."
             )
@@ -2119,7 +2124,7 @@ def _supplementary_objects(
         if actual_checksums[row] != values["checksum"][row]
     ]
     if mismatched:
-        raise ValueError(
+        raise _ValueError(
             "Supplementary-object SHA-256 does not match file bytes for "
             + ", ".join(mismatched)
             + "."
@@ -2141,7 +2146,7 @@ def _supplementary_objects(
         (is_archive and method != "zip") or (not is_archive and method is not None)
         for is_archive, method in zip(archive, compression_method)
     ):
-        raise ValueError(
+        raise _ValueError(
             'Only "application/zip" supplementary objects may declare '
             "compression_method = zip."
         )
@@ -2151,7 +2156,7 @@ def _supplementary_objects(
         for value in objects["entity_type"]:
             text = None if _is_missing(value) else _trim(_as_character(value))
             if not text or _CONTROL_CHAR_RE.search(text):
-                raise ValueError(
+                raise _ValueError(
                     "Every supplementary-object entity_type must be non-empty "
                     "and contain no control characters."
                 )
@@ -2243,7 +2248,7 @@ def _add_coverage(
 
     if _nonempty(temporal_start) or _nonempty(temporal_end):
         if not _nonempty(temporal_start) or not _nonempty(temporal_end):
-            raise ValueError(
+            raise _ValueError(
                 "EML temporal coverage requires both temporal_start and "
                 "temporal_end."
             )
@@ -2316,7 +2321,7 @@ def _add_non_numeric_domain(
     order_map = config.get("code_order")
     if scale == "ordinal":
         if not isinstance(order_map, dict) or not order_map:
-            raise ValueError(
+            raise _ValueError(
                 f"Ordinal EML attribute {table_id}.{column_name} requires "
                 "named code_order values."
             )
@@ -2324,7 +2329,7 @@ def _add_non_numeric_domain(
             _as_character(value) for value in codes["code_value"]
         ]
         if set(code_values) != set(str(key) for key in order_map.keys()):
-            raise ValueError(
+            raise _ValueError(
                 f"Ordinal code_order for {table_id}.{column_name} must name "
                 "exactly the SDP code values."
             )
@@ -2343,7 +2348,7 @@ def _add_non_numeric_domain(
         if scale == "ordinal":
             order = _as_integer(order_map.get(value))
             if order is None:
-                raise ValueError(
+                raise _ValueError(
                     f"Ordinal order for code {value!r} in "
                     f"{table_id}.{column_name} must be an integer."
                 )
@@ -2414,7 +2419,7 @@ def _missing_values(config: dict) -> List[object]:
     elif isinstance(values, dict):
         values = list(values.values())
     if not isinstance(values, list):
-        raise ValueError(
+        raise _ValueError(
             "EML missing_values must be a list of code/explanation mappings."
         )
     return values
@@ -2422,7 +2427,7 @@ def _missing_values(config: dict) -> List[object]:
 
 def _missing_value_entry_scalar(value: object, field: str, name: str) -> str:
     if not isinstance(value, dict):
-        raise ValueError(
+        raise _ValueError(
             f"Each missing_values entry for {field} must be a mapping."
         )
     return _scalar(value, name)
@@ -2434,7 +2439,7 @@ def _read_raw_csv_tokens(path: str, table_id: str) -> pd.DataFrame:
         try:
             records = [row for row in csv.reader(handle) if row]
         except csv.Error as error:
-            raise ValueError(
+            raise _ValueError(
                 f"Could not audit the exact CSV tokens for EML table "
                 f"{table_id!r}. The first parse problem is: {error}."
             ) from None
@@ -2444,7 +2449,7 @@ def _read_raw_csv_tokens(path: str, table_id: str) -> pd.DataFrame:
     width = len(header)
     for index, row in enumerate(records[1:], start=1):
         if len(row) != width:
-            raise ValueError(
+            raise _ValueError(
                 f"Could not audit the exact CSV tokens for EML table "
                 f"{table_id!r}. The first parse problem is at row {index}: "
                 f"expected {width} field(s) but found {len(row)}."
@@ -2459,13 +2464,13 @@ def _validate_raw_table(
     raw_names = [str(name) for name in raw.columns]
     parsed_names = [str(name) for name in parsed.columns]
     if raw_names != parsed_names:
-        raise ValueError(
+        raise _ValueError(
             f"Raw-token audit and parsed SDP table {table_id!r} have "
             f"different columns. Raw CSV: {raw_names}. Parsed SDP: "
             f"{parsed_names}."
         )
     if len(raw) != len(parsed):
-        raise ValueError(
+        raise _ValueError(
             f"Raw-token audit found {len(raw)} row(s) for EML table "
             f"{table_id!r}, but the parsed SDP resource has {len(parsed)}."
         )
@@ -2505,7 +2510,7 @@ def _add_missing_values(
     """Mirror ``.ms_eml_add_missing_values``."""
     values = _missing_values(config)
     if len(parsed_values) != len(raw_values):
-        raise ValueError(
+        raise _ValueError(
             "Internal EML export error: parsed and raw values differ in "
             f"length for {field}."
         )
@@ -2517,14 +2522,14 @@ def _add_missing_values(
         dict.fromkeys(code for code in codes if codes.count(code) > 1)
     )
     if duplicates:
-        raise ValueError(
+        raise _ValueError(
             f"EML attribute {field} declares duplicate missing-value "
             "code(s): " + ", ".join(repr(code) for code in duplicates) + "."
         )
 
     absent = [code for code in codes if code not in set(raw_values)]
     if absent:
-        raise ValueError(
+        raise _ValueError(
             f"EML attribute {field} declares missing-value code(s) "
             + ", ".join(repr(code) for code in absent)
             + " that do(es) not occur in the raw CSV bytes."
@@ -2539,7 +2544,7 @@ def _add_missing_values(
         )
     )
     if declared_but_present:
-        raise ValueError(
+        raise _ValueError(
             f"EML attribute {field} declares missing-value code(s) "
             + ", ".join(repr(code) for code in declared_but_present)
             + " where the parsed value is not missing."
@@ -2554,7 +2559,7 @@ def _add_missing_values(
         )
     )
     if undeclared:
-        raise ValueError(
+        raise _ValueError(
             f"EML attribute {field} contains undeclared non-empty missing "
             "token(s): "
             + ", ".join(repr(token) for token in undeclared)
@@ -2607,7 +2612,7 @@ def _validate_observed_domain(
                 token for token in exact_tokens if token not in code_values
             ]
             if undeclared:
-                raise ValueError(
+                raise _ValueError(
                     f"EML enumerated domain for {field} does not contain "
                     "exact raw CSV token(s): "
                     + ", ".join(repr(token) for token in undeclared)
@@ -2630,7 +2635,7 @@ def _validate_observed_domain(
             )
         )
         if offending_tokens:
-            raise ValueError(
+            raise _ValueError(
                 f"EML numeric domain for {field} contains non-numeric or "
                 "non-finite observed value(s): "
                 + ", ".join(repr(token) for token in offending_tokens)
@@ -2645,7 +2650,7 @@ def _validate_observed_domain(
             offending = list(
                 dict.fromkeys(_as_character(value) for value in non_integer)
             )
-            raise ValueError(
+            raise _ValueError(
                 f"EML {number_type!r} number type for {field} requires "
                 "integer-valued observations, but found "
                 + ", ".join(offending)
@@ -2661,7 +2666,7 @@ def _validate_observed_domain(
                     if value <= 0
                 )
             )
-            raise ValueError(
+            raise _ValueError(
                 f'EML "natural" number type for {field} requires strictly '
                 "positive observations, but found "
                 + ", ".join(offending)
@@ -2675,7 +2680,7 @@ def _validate_observed_domain(
                     if value < 0
                 )
             )
-            raise ValueError(
+            raise _ValueError(
                 f'EML "whole" number type for {field} requires nonnegative '
                 "observations, but found " + ", ".join(offending) + "."
             )
@@ -2693,7 +2698,7 @@ def _validate_observed_domain(
                     dict.fromkeys(_as_character(value) for value in violating)
                 )
                 qualifier = "exclusive minimum" if exclusive else "minimum"
-                raise ValueError(
+                raise _ValueError(
                     f"EML numeric domain for {field} has observed value(s) "
                     + ", ".join(offending)
                     + f" outside {qualifier} {_as_character(minimum)}."
@@ -2711,7 +2716,7 @@ def _validate_observed_domain(
                     dict.fromkeys(_as_character(value) for value in violating)
                 )
                 qualifier = "exclusive maximum" if exclusive else "maximum"
-                raise ValueError(
+                raise _ValueError(
                     f"EML numeric domain for {field} has observed value(s) "
                     + ", ".join(offending)
                     + f" outside {qualifier} {_as_character(maximum)}."
@@ -2746,7 +2751,7 @@ def _validate_observed_domain(
                     invalid.append(token)
         if invalid:
             offending = list(dict.fromkeys(invalid))
-            raise ValueError(
+            raise _ValueError(
                 f"EML {field}.format_string {format_string!r} does not "
                 "match observed calendar value(s): "
                 + ", ".join(repr(token) for token in offending)
@@ -2792,7 +2797,7 @@ def _add_attribute(
 
     value_type = _as_character(dictionary_row.get("value_type"))
     if value_type not in _STORAGE_TYPES:
-        raise ValueError(
+        raise _ValueError(
             f"EML export does not support SDP value_type {value_type!r}."
         )
     _add_text(attribute, "storageType", _STORAGE_TYPES[value_type])
@@ -2847,7 +2852,7 @@ def _add_primary_key(
     ]
     unknown = [column for column in columns if column not in known]
     if unknown:
-        raise ValueError(
+        raise _ValueError(
             f"EML primary key for table {table_id!r} names unknown "
             "column(s): " + ", ".join(unknown) + "."
         )
@@ -2964,7 +2969,7 @@ def _record_delimiter(path: str) -> str:
     data = _read_bytes(path)
     first = data.find(b"\n")
     if first < 0:
-        raise ValueError(
+        raise _ValueError(
             f"CSV resource {path} has no detectable record delimiter."
         )
     if first > 0 and data[first - 1 : first] == b"\r":
@@ -3281,14 +3286,14 @@ def _build_document(
         table_id = _as_character(table_row["table_id"])
         data_object_rows = data_objects[data_objects["table_id"] == table_id]
         if len(data_object_rows) != 1:
-            raise ValueError(
+            raise _ValueError(
                 "Internal EML export error: expected one data object for "
                 f"table {table_id!r}."
             )
         data_object = data_object_rows.iloc[0]
         data = pkg["resources"].get(table_id)
         if data is None:
-            raise ValueError(
+            raise _ValueError(
                 f"SDP table {table_id!r} has no loaded data resource."
             )
         raw_data = _read_raw_csv_tokens(str(data_object["path"]), table_id)
@@ -3392,7 +3397,7 @@ def _validate_document_links(
         dict.fromkeys(value for value in ids if ids.count(value) > 1)
     )
     if duplicates:
-        raise ValueError(
+        raise _ValueError(
             "Generated EML contains duplicate XML ID(s): "
             + ", ".join(duplicates)
             + "."
@@ -3407,7 +3412,7 @@ def _validate_document_links(
         dict.fromkeys(value for value in references if value not in ids)
     )
     if unknown:
-        raise ValueError(
+        raise _ValueError(
             "Generated EML contains dangling attribute reference(s): "
             + ", ".join(unknown)
             + "."
@@ -3418,7 +3423,7 @@ def _validate_document_links(
     ]
     annotated_parents = [parents[annotation] for annotation in annotations]
     if any(parent.get("id") is None for parent in annotated_parents):
-        raise ValueError(
+        raise _ValueError(
             "Every EML semantic annotation subject must have a unique XML ID."
         )
 
@@ -3435,7 +3440,7 @@ def _validate_document_links(
         dict.fromkeys(parent.get("id") for parent in annotated_parents)
     )
     if set(expected_measurement_ids) != set(actual_measurement_ids):
-        raise ValueError(
+        raise _ValueError(
             "Generated EML annotation subjects do not exactly match the SDP "
             "measurement columns."
         )
@@ -3463,18 +3468,18 @@ def _validate_document_links(
             _MEASUREMENT_PREDICATES["unit"],
         ]
         if predicates != expected_predicates:
-            raise ValueError(
+            raise _ValueError(
                 f"Generated EML attribute {attribute_id!r} does not contain "
                 "exactly the approved semantic predicates in profile order."
             )
 
     xml_text = ET.tostring(document, encoding="unicode")
     if "REVIEW:" in xml_text:
-        raise ValueError(
+        raise _ValueError(
             'Generated EML contains an unresolved "REVIEW:" marker.'
         )
     if "usedProcedure" in xml_text:
-        raise ValueError(
+        raise _ValueError(
             "The initial EML profile must not emit a procedure annotation."
         )
 
@@ -3521,7 +3526,7 @@ def _require_eml_extra() -> None:
 def _eml_schema_path() -> Path:
     schema_path = _DATA_DIR / "xsd" / "eml-2.2.0" / "eml.xsd"
     if not schema_path.is_file():
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             "Could not locate the bundled EML 2.2.0 schema."
         )
     return schema_path
@@ -3550,7 +3555,7 @@ def _xsd_validate(xml_path: Union[str, Path]) -> bool:
         detail = "\n".join(
             str(entry) for entry in list(schema.error_log)[:10]
         ) or "Unknown EML schema validation error."
-        raise ValueError(
+        raise _ValueError(
             "Generated EML 2.2.0 failed schema validation.\n" + detail
         )
     return True
@@ -3583,7 +3588,7 @@ def _export_reviewed(
     from .sdp_methods import SDP_METHODS_PATH
 
     if (root / SDP_METHODS_PATH).exists():
-        raise ValueError(
+        raise _ValueError(
             "metadata/methods.csv is an sdp-0.2.0 registry; sdp-0.3.0 "
             "packages must not carry one. Run migrate_sdp_methods() to "
             "relocate its content and remove it."
@@ -3639,7 +3644,7 @@ def _export_from_mapping(
     validation = validate_salmon_datapackage(str(root), require_iris=True)
     pkg = validation["package"]
     if len(pkg["dataset"]) != 1:
-        raise ValueError("EML export requires exactly one SDP dataset row.")
+        raise _ValueError("EML export requires exactly one SDP dataset row.")
     return _export_reviewed(
         root,
         pkg,
@@ -3709,7 +3714,7 @@ def _read_mapping_yaml(mapping_path: Union[str, Path]) -> object:
     try:
         return yaml.load(text, Loader=_strict_yaml_loader())
     except yaml.YAMLError as error:
-        raise ValueError(
+        raise _ValueError(
             f"EML mapping sidecar {mapping_path} is not valid YAML: {error}"
         ) from None
 
@@ -3795,16 +3800,16 @@ def write_eml_from_sdp(
     """
     config = _knb_env.knb_config(knb_environment)
     if not isinstance(require_revision_key, bool):
-        raise ValueError("require_revision_key must be one logical value.")
+        raise _ValueError("require_revision_key must be one logical value.")
     _require_eml_extra()
     if not Path(path).is_dir():
-        raise FileNotFoundError(f"SDP directory {path} does not exist.")
+        raise _FileNotFoundError(f"SDP directory {path} does not exist.")
 
     root = Path(os.path.realpath(str(path)))
     if mapping_path is None:
         mapping_path = _default_mapping_path(root)
     if not Path(mapping_path).is_file():
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             f"EML mapping sidecar {mapping_path} does not exist."
         )
     mapping_path = os.path.realpath(str(mapping_path))
@@ -3824,7 +3829,7 @@ def write_eml_from_sdp(
         except OSError:
             pass
     if not os.path.isdir(output_dir):
-        raise ValueError(
+        raise _ValueError(
             f"Could not create EML output directory {output_dir}."
         )
     output_path = os.path.join(
@@ -3836,7 +3841,7 @@ def write_eml_from_sdp(
     validation = validate_salmon_datapackage(str(root), require_iris=True)
     pkg = validation["package"]
     if len(pkg["dataset"]) != 1:
-        raise ValueError("EML export requires exactly one SDP dataset row.")
+        raise _ValueError("EML export requires exactly one SDP dataset row.")
 
     mapping = _read_mapping_yaml(mapping_path)
     exported = _export_reviewed(
@@ -3865,7 +3870,7 @@ def write_eml_from_sdp(
                 # R gates this on isTRUE(overwrite), so only the literal TRUE
                 # authorizes replacing a differing document. A truthiness test
                 # let overwrite="no" destroy the existing file.
-                raise ValueError(
+                raise _ValueError(
                     f"EML output {output_path} already exists with different "
                     "bytes; set overwrite=True to replace it."
                 )

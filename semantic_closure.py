@@ -57,6 +57,12 @@ because R has no such distinction to draw. Reports are Python warnings of the
 
 from __future__ import annotations
 
+from .conditions import (
+    _ValidationRuntimeError as _RuntimeError,
+    _ValidationRuntimeWarning as _RuntimeWarning,
+    _ValidationValueError as _ValueError,
+)
+
 import hashlib
 import os
 import re
@@ -336,7 +342,7 @@ def _normalize_evidence(evidence: object) -> Optional[pd.DataFrame]:
     # hands over a parsed object rather than rows gets an error here, not a
     # confusing failure eight frames down.
     if not isinstance(evidence, pd.DataFrame):
-        raise ValueError(
+        raise _ValueError(
             "evidence must be a data frame of hand-supplied closure rows; got "
             f"{type(evidence).__name__}. Supply one row per IRI with an 'iri' "
             "column."
@@ -344,11 +350,11 @@ def _normalize_evidence(evidence: object) -> Optional[pd.DataFrame]:
     if len(evidence) == 0:
         return None
     if "iri" not in evidence.columns:
-        raise ValueError("evidence must have an 'iri' column.")
+        raise _ValueError("evidence must have an 'iri' column.")
     known = ["iri", "target_sdp_field"] + list(_EVIDENCE_FIELDS)
     unknown = [name for name in evidence.columns if name not in known]
     if unknown:
-        raise ValueError(
+        raise _ValueError(
             "evidence has column(s) this closure cannot use: "
             + ", ".join(unknown)
             + ". Supported columns: "
@@ -360,7 +366,7 @@ def _normalize_evidence(evidence: object) -> Optional[pd.DataFrame]:
         dtype=object,
     )
     if any(not value for value in frame["iri"]):
-        raise ValueError("Every evidence row must name a non-empty 'iri'.")
+        raise _ValueError("Every evidence row must name a non-empty 'iri'.")
     if "target_sdp_field" not in frame.columns:
         frame["target_sdp_field"] = [""] * len(frame)
     keys = [
@@ -369,7 +375,7 @@ def _normalize_evidence(evidence: object) -> Optional[pd.DataFrame]:
     ]
     duplicated = sorted({key for key in keys if keys.count(key) > 1})
     if duplicated:
-        raise ValueError(
+        raise _ValueError(
             "evidence must carry at most one row per IRI and target field: "
             + ", ".join(key.split("\r")[0] for key in duplicated)
             + "."
@@ -1119,18 +1125,18 @@ def write_sdp_semantic_closure(
     ... )
     """
     if isinstance(path, (list, tuple)) or path is None or not str(path):
-        raise ValueError("path must be a single package directory path.")
+        raise _ValueError("path must be a single package directory path.")
     if not Path(path).is_dir():
-        raise ValueError(f"Directory {path} does not exist.")
+        raise _ValueError(f"Directory {path} does not exist.")
     if not callable(search_fn):
-        raise ValueError("search_fn must be a function.")
+        raise _ValueError("search_fn must be a function.")
     source_list: List[str] = []
     for source in (sources,) if isinstance(sources, str) else sources:
         text = _as_character(source).strip()
         if text and text not in source_list:
             source_list.append(text)
     if not source_list:
-        raise ValueError("sources must name at least one vocabulary source.")
+        raise _ValueError("sources must name at least one vocabulary source.")
     evidence = _normalize_evidence(evidence)
 
     pkg = read_salmon_datapackage(str(path))
@@ -1280,7 +1286,7 @@ def write_sdp_semantic_closure(
             if row["search_error"]:
                 line += f" (search failed: {row['search_error']})"
             detail.append(line)
-        raise RuntimeError(
+        raise _RuntimeError(
             f"Vocabulary lookup did not answer for {len(failure_rows)} canonical "
             "measurement IRI(s), so no closure was written:\n  "
             + "\n  ".join(detail)
@@ -1391,7 +1397,7 @@ def write_sdp_semantic_closure(
             "whole document: " + ", ".join(mapping["refused"]) + ". Rewrite each "
             "as a block mapping with `path` and `sha256` on their own lines, "
             "then re-run.",
-            RuntimeWarning,
+            _RuntimeWarning,
             stacklevel=2,
         )
 
@@ -1417,7 +1423,7 @@ def write_sdp_semantic_closure(
             + ". Each is a row of the returned `gaps` table; pass it to "
             "render_ontology_term_request() to file a term request, or supply a "
             "row through `evidence`.",
-            RuntimeWarning,
+            _RuntimeWarning,
             stacklevel=2,
         )
 
@@ -1442,7 +1448,7 @@ def write_sdp_semantic_closure(
             + ". This is not an ontology gap: the term was found. Each is a row "
             "of the returned `incomplete` table. Supply the named field through "
             "`evidence`, or annotate the term in its ontology, then re-run.",
-            RuntimeWarning,
+            _RuntimeWarning,
             stacklevel=2,
         )
 
@@ -1468,7 +1474,7 @@ def write_sdp_semantic_closure(
             )
             + ". Supply `review_rationale` through `evidence`, or record "
             "decision reasons with accept_suggestion(), before publication.",
-            RuntimeWarning,
+            _RuntimeWarning,
             stacklevel=2,
         )
 

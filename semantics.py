@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PackageKeyError as _KeyError,
+    _PackageTypeError as _TypeError,
+    _PackageUserWarning as _UserWarning,
+    _PackageValueError as _ValueError,
+)
+
 from collections.abc import Mapping
 from typing import Callable, Optional, Sequence
 import warnings
@@ -527,7 +534,7 @@ def _merge_semantic_target_candidates(existing_rows, extra_rows, max_per_role) -
     keys = [first_key, *_MERGE_TIE_BREAK_KEYS]
     missing = [key for key in keys if key not in combined.columns]
     if missing:
-        raise KeyError(
+        raise _KeyError(
             "Cannot merge candidate rows without the sort key column(s) "
             + ", ".join(repr(key) for key in missing)
             + "."
@@ -1021,15 +1028,15 @@ def suggest_semantics(
     if (llm_context_files is not None or llm_context_text is not None) and not llm_assess:
         warnings.warn(
             "LLM context is ignored unless llm_assess=True.",
-            UserWarning,
+            _UserWarning,
             stacklevel=2,
         )
     source_policy = make_source_policy(sources)
     if isinstance(df, Mapping):
         if not df:
-            raise ValueError("df cannot be an empty resource mapping.")
+            raise _ValueError("df cannot be an empty resource mapping.")
         if any(not isinstance(value, pd.DataFrame) for value in df.values()):
-            raise TypeError("All df resources must be pandas DataFrames.")
+            raise _TypeError("All df resources must be pandas DataFrames.")
         resource_lookup = {str(key): value for key, value in df.items()}
         default_df = next(iter(resource_lookup.values()))
     elif isinstance(df, pd.DataFrame):
@@ -1039,7 +1046,7 @@ def suggest_semantics(
         resource_lookup = None
         default_df = None
     else:
-        raise TypeError(
+        raise _TypeError(
             "df must be a pandas DataFrame, a named mapping of DataFrames, or None."
         )
 
@@ -1547,14 +1554,14 @@ def apply_semantic_suggestions(
         Updated normalized dictionary.
     """
     if strategy not in {"top", "reviewed", "llm"}:
-        raise ValueError(
+        raise _ValueError(
             "Unsupported strategy: use 'top', 'reviewed' or 'llm'."
         )
     out = normalize_dictionary(dict_df)
     if suggestions is None:
         suggestions = dict_df.attrs.get("semantic_suggestions")
     if suggestions is None:
-        raise ValueError("No semantic suggestions supplied.")
+        raise _ValueError("No semantic suggestions supplied.")
     suggestions_df = pd.DataFrame(suggestions).copy()
     if suggestions_df.empty:
         if verbose:
@@ -1563,19 +1570,19 @@ def apply_semantic_suggestions(
     required = {"column_name", "dictionary_role", "iri"}
     missing = required - set(suggestions_df.columns)
     if missing:
-        raise ValueError(f"Suggestions are missing required columns: {sorted(missing)}")
+        raise _ValueError(f"Suggestions are missing required columns: {sorted(missing)}")
     if min_score is not None and "score" not in suggestions_df.columns:
-        raise ValueError("min_score requires scored suggestions.")
+        raise _ValueError("min_score requires scored suggestions.")
     if strategy == "llm":
         required_llm = {"llm_selected", "llm_decision", "llm_confidence"}
         missing_llm = required_llm - set(suggestions_df.columns)
         if missing_llm:
-            raise ValueError(
+            raise _ValueError(
                 "strategy='llm' requires reviewed suggestions with columns: "
                 f"{sorted(missing_llm)}"
             )
     if strategy == "reviewed" and "decision" not in suggestions_df.columns:
-        raise ValueError(
+        raise _ValueError(
             "strategy='reviewed' requires explicit review decisions. Supply a "
             "decision column whose accepted rows use 'accepted' or 'accept'."
         )
@@ -1591,7 +1598,7 @@ def apply_semantic_suggestions(
     if roles is not None:
         invalid = set(roles) - set(role_to_field)
         if invalid:
-            raise ValueError(f"Unsupported roles: {sorted(invalid)}")
+            raise _ValueError(f"Unsupported roles: {sorted(invalid)}")
 
     suggestions_df["_row_id"] = range(len(suggestions_df))
     suggestions_df = suggestions_df[~suggestions_df["iri"].isna() & (suggestions_df["iri"] != "")]

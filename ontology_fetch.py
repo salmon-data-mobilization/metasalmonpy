@@ -5,6 +5,10 @@ This module downloads the DFO Salmon Ontology using HTTP content negotiation
 and implements ETag/Last-Modified caching for offline work and bandwidth reduction.
 """
 
+from .conditions import (
+    _RetrievalRuntimeError as _RuntimeError,
+)
+
 import os
 import tempfile
 from typing import List, Optional
@@ -104,7 +108,7 @@ def fetch_salmon_ontology(
 
     # All URLs failed
     if response is None:
-        raise RuntimeError(
+        raise _RuntimeError(
             f"Failed to fetch ontology from provided URLs: {', '.join(urls)}; "
             f"last error: {last_error}"
         )

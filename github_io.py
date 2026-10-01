@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PublicationFileNotFoundError as _FileNotFoundError,
+    _PublicationPermissionError as _PermissionError,
+    _PublicationRuntimeError as _RuntimeError,
+    _PublicationValueError as _ValueError,
+)
+
 import io
 import os
 import re
@@ -63,14 +70,14 @@ def read_github_csv(
     resp = _perform_request(target["url"], headers=headers)
 
     if resp.status_code == 401:
-        raise PermissionError("GitHub authentication failed. Refresh your PAT and retry.")
+        raise _PermissionError("GitHub authentication failed. Refresh your PAT and retry.")
 
     if resp.status_code == 403:
         if resp.headers.get("x-github-sso"):
-            raise PermissionError(
+            raise _PermissionError(
                 "Access blocked by org SSO. Re-authorize your PAT for this org in GitHub settings."
             )
-        raise PermissionError("Access to the repository was denied. Confirm your PAT has repo scope.")
+        raise _PermissionError("Access to the repository was denied. Confirm your PAT has repo scope.")
 
     if resp.status_code == 404:
         hint = (
@@ -78,7 +85,7 @@ def read_github_csv(
             " No token was sent; if this is a private repository, set "
             "GITHUB_PAT/GH_TOKEN or configure git credentials."
         )
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             f"{target['path']} not found at ref {target['ref']} in {target['repo']}.{hint}"
         )
 
@@ -101,7 +108,7 @@ def ms_setup_github(repo: Optional[str] = None, token: Optional[str] = None) -> 
     """
     token_val = token or _github_token()
     if not token_val:
-        raise ValueError("No GitHub token found. Set GITHUB_PAT/GH_TOKEN or configure git credentials.")
+        raise _ValueError("No GitHub token found. Set GITHUB_PAT/GH_TOKEN or configure git credentials.")
     if repo is None:
         return token_val
     repo = repo.strip("/")
@@ -115,11 +122,11 @@ def ms_setup_github(repo: Optional[str] = None, token: Optional[str] = None) -> 
         timeout=15,
     )
     if resp.status_code == 401:
-        raise PermissionError("GitHub authentication failed. Refresh your PAT and retry.")
+        raise _PermissionError("GitHub authentication failed. Refresh your PAT and retry.")
     if resp.status_code == 403 and resp.headers.get("x-github-sso"):
-        raise PermissionError("Access blocked by org SSO. Re-authorize your PAT for this org in GitHub settings.")
+        raise _PermissionError("Access blocked by org SSO. Re-authorize your PAT for this org in GitHub settings.")
     if resp.status_code == 404:
-        raise FileNotFoundError(f"Repository '{repo}' was not found or token lacks access.")
+        raise _FileNotFoundError(f"Repository '{repo}' was not found or token lacks access.")
     resp.raise_for_status()
     return token_val
 
@@ -147,7 +154,7 @@ def _perform_request(url: str, headers: Dict[str, str], max_tries: int = 4) -> r
     if last_exc:
         raise last_exc
 
-    raise RuntimeError("Request failed without a response.")
+    raise _RuntimeError("Request failed without a response.")
 
 
 def _github_token() -> Optional[str]:
@@ -187,11 +194,11 @@ def _github_token() -> Optional[str]:
 
 def _resolve_github_path(path: str, ref: str, repo: Optional[str]) -> Dict[str, str]:
     if not isinstance(path, str) or not path.strip():
-        raise ValueError("path must be a non-empty string.")
+        raise _ValueError("path must be a non-empty string.")
     if not isinstance(ref, str) or not ref.strip():
-        raise ValueError("ref must be a non-empty string.")
+        raise _ValueError("ref must be a non-empty string.")
     if repo is not None and (not isinstance(repo, str) or "/" not in repo):
-        raise ValueError("repo must look like 'owner/name'.")
+        raise _ValueError("repo must look like 'owner/name'.")
 
     clean_repo = repo.lstrip("/") if repo else None
     clean_ref = ref.strip()
@@ -225,7 +232,7 @@ def _resolve_github_path(path: str, ref: str, repo: Optional[str]) -> Dict[str, 
 
     clean_path = path.lstrip("/")
     if not clean_repo:
-        raise ValueError("repo is required when path is not a full URL.")
+        raise _ValueError("repo is required when path is not a full URL.")
     return {
         "url": f"https://raw.githubusercontent.com/{clean_repo}/{clean_ref}/{clean_path}",
         "repo": clean_repo,
@@ -326,17 +333,17 @@ def read_github_csv_dir(
         resp = requests.get(api_url, headers=headers, params=params, timeout=15)
 
         if resp.status_code == 401:
-            raise PermissionError("GitHub authentication failed. Refresh your PAT and retry.")
+            raise _PermissionError("GitHub authentication failed. Refresh your PAT and retry.")
 
         if resp.status_code == 403:
             if resp.headers.get("x-github-sso"):
-                raise PermissionError(
+                raise _PermissionError(
                     "Access blocked by org SSO. Re-authorize your PAT for this org in GitHub settings."
                 )
-            raise PermissionError("Access to the repository was denied. Confirm your PAT has repo scope.")
+            raise _PermissionError("Access to the repository was denied. Confirm your PAT has repo scope.")
 
         if resp.status_code == 404:
-            raise FileNotFoundError(
+            raise _FileNotFoundError(
                 f"Directory '{path}' not found at ref '{target['ref']}' in {target['repo']}."
             )
 
@@ -344,11 +351,11 @@ def read_github_csv_dir(
         contents = resp.json()
 
     except requests.RequestException as exc:
-        raise RuntimeError(f"Unable to list directory contents: {exc}") from exc
+        raise _RuntimeError(f"Unable to list directory contents: {exc}") from exc
 
     # Handle single file response (API returns dict, not list)
     if isinstance(contents, dict) and contents.get("type") == "file":
-        raise ValueError(
+        raise _ValueError(
             f"Path '{path}' is a file, not a directory. Use read_github_csv() instead."
         )
 

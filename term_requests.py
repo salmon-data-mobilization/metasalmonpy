@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PackageValueError as _ValueError,
+)
+
 import re
 from typing import Optional, Sequence
 
@@ -221,7 +225,7 @@ def detect_semantic_term_gaps(
     targets = None
     if suggestions is None:
         if dict_df is None:
-            raise ValueError("Provide either dict_df with semantic_suggestions or suggestions.")
+            raise _ValueError("Provide either dict_df with semantic_suggestions or suggestions.")
         suggestions = dict_df.attrs.get("semantic_suggestions")
         assessments = dict_df.attrs.get("semantic_llm_assessments")
         # Targets whose retrieval returned ZERO candidates leave no suggestion
@@ -337,7 +341,7 @@ def detect_semantic_term_gaps(
     if not df.empty:
         missing = [column for column in required_candidate if column not in df]
         if missing:
-            raise ValueError(f"Missing required suggestion columns: {missing}")
+            raise _ValueError(f"Missing required suggestion columns: {missing}")
         df["source"] = (
             df["source"].fillna("").astype(str).str.lower().str.strip()
         )
@@ -395,7 +399,7 @@ def detect_semantic_term_gaps(
                     if str(value).strip()
                 }
                 if len(values) > 1:
-                    raise ValueError(
+                    raise _ValueError(
                         f"Conflicting {column} values for semantic target {key}."
                     )
             assessment_groups[key] = group
@@ -705,9 +709,9 @@ def render_ontology_term_request(
     ]
     missing = [col for col in required if col not in df.columns]
     if missing:
-        raise ValueError(f"Missing required gap columns: {missing}")
+        raise _ValueError(f"Missing required gap columns: {missing}")
     if scope not in {"auto", "smn", "gcdfo", "profile", "uncertain", "skip"}:
-        raise ValueError(
+        raise _ValueError(
             "scope must be one of 'auto', 'smn', 'gcdfo', 'profile', "
             "'uncertain', or 'skip'."
         )
@@ -731,7 +735,7 @@ def render_ontology_term_request(
             df["request_scope"] = scope_overrides
         else:
             if len(scope_overrides) != len(df):
-                raise ValueError("scope_overrides must be length 1 or len(gaps).")
+                raise _ValueError("scope_overrides must be length 1 or len(gaps).")
             df["request_scope"] = list(scope_overrides)
     if ask:
         for idx, row in df.iterrows():
@@ -755,7 +759,7 @@ def render_ontology_term_request(
                 profile_name = entered or "project-profile"
     profile_rows = df["request_scope"] == "profile"
     if profile_rows.any() and not ask and not _first_non_empty(profile_name):
-        raise ValueError(
+        raise _ValueError(
             "Non-interactive profile-scoped requests require profile_name."
         )
     df["request_scope"] = df["request_scope"].where(
@@ -979,7 +983,7 @@ def submit_term_request_issues(
     required = {"request_title", "request_body", "request_scope", "ontology_repo"}
     missing = required - set(df.columns)
     if missing:
-        raise ValueError(f"Missing required request columns: {sorted(missing)}")
+        raise _ValueError(f"Missing required request columns: {sorted(missing)}")
     pending = df[df["request_scope"].isin(["smn", "gcdfo", "profile"])]
     if pending.empty:
         return pd.DataFrame()
@@ -996,7 +1000,7 @@ def submit_term_request_issues(
             }
         )
     if not confirm:
-        raise ValueError(
+        raise _ValueError(
             "Live term-request submission requires confirm=True so every "
             "request receives explicit curator confirmation."
         )
@@ -1005,7 +1009,7 @@ def submit_term_request_issues(
 
         token = _github_token()
     if not token:
-        raise ValueError("No GitHub token available.")
+        raise _ValueError("No GitHub token available.")
     rows = []
     for _, row in pending.iterrows():
         answer = input(
