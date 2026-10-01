@@ -100,26 +100,36 @@ by number.
 Maintenance: add a row in the same PR that introduces the difference, in both
 registers, in the same stream, **at the same number**.
 
-**B-130 transport parity remains unresolved (2026-10-01).** The paired drafts
+**B-130 transport fixes verified in paired drafts (2026-10-01).** The paired
 [metasalmon PR244](https://github.com/salmon-data-mobilization/metasalmon/pull/244)
 and [metasalmonpy PR85](https://github.com/salmon-data-mobilization/metasalmonpy/pull/85)
-now avoid requiring final or redirect response bodies for HTTP resolution and
-bound default attempts to 30 seconds. R uses curl's public multi interface,
-matching the last complete header block to the current status before cancelling;
-Python uses a killed-and-reaped worker and the public Requests adapter seam.
-The retained localhost probe covers direct/redirected success, withheld bodies,
-partial/stale headers, interim responses, terminal failures and redirect loops.
+avoid requiring final or redirect bodies and bound default attempts to30 seconds.
+R uses curl>=6.2.1's public multi interface, matching complete terminal headers
+to current status and preserving its typed failure callback classes. Only default
+malformed-URL/redirect-limit failures receive a permanent marker; existing
+injected curl/error-message rules remain unchanged. Python uses a killed-and-reaped
+worker with HTTPX's public
+`send(stream=True, follow_redirects=False)`/`next_request` flow, closing each
+response before following. HTTPX>=0.28.1 is declared and locked; Requests stays
+for the package's other clients and existing injected-error compatibility.
 
-**Remaining compatibility gap:** Requests reports HTTP103 Early Hints as the
-response instead of continuing to the final200, while R's default waits for
-final200. The probe reproduces this on Python3.13.11 and Requests2.34.2. No private
-urllib3/http.client shim or additional Python client dependency is introduced.
-This is unresolved temporary parity debt, not an approved deliberate difference,
-a merged/release parity claim, or B-130 parity acceptance. Both exported-API
-PRs remain critical drafts for Brett's review. *Retires when:* a supported
-aligned transport handles103 followed by final200, the paired fixture agrees,
-and the reviewed change lands on both sides. No register number or new queue
-item is allocated.
+The earlier Requests103→final200 gap was reproduced before Brett authorized
+a supported backend on2026-10-01. The retained eleven-route localhost fixture
+now requires both default clients to return final200 after103, including the
+same final URL, and covers withheld bodies, partial/stale headers and bounded
+failures. It passes on Python3.9.6 and3.13.11 with HTTPX0.28.1/HTTPcore1.0.9.
+Focused Python controls preserve cookies, origin auth and target-host netrc.
+Proxy routing applies Requests' public per-request environment decision at each
+hop through explicit supported HTTPX clients sharing a raw standard-library
+CookieJar. Local controls cover CIDR/apex bypass, the opposite scheme-qualified
+case, bare proxy URLs and three-hop cookie preservation. Both default public
+reports prove one attempt for malformed URLs/actual redirect limits and three
+for withheld-header timeouts; injected legacy classification remains intact. No private
+urllib3/http.client shim or approved-deviation row is introduced. This closes
+the demonstrated103 transport gap in the tested drafts, not the port's landing
+or B-130 acceptance: both exported APIs still require Brett's critical review.
+*Retires when:* the verified paired implementation is reviewed and lands on
+both sides. No release number, register number or new queue item changes.
 
 Rows 16–28 were re-verified against metasalmon 0.3.0 on 2026-08-16 by reading
 both implementations; rows 17, 18, 20, 22, 23, 25, 26 and 27 carry the

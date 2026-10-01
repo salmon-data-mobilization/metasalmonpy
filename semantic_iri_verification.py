@@ -43,42 +43,84 @@ _REQUEST_TIMEOUT = 30
 # Retires when a shared verified transport provides the same finite deadline.
 _REQUEST_WORKER = """
 import json
+from contextlib import ExitStack
+from http.cookiejar import CookieJar
+import netrc
+import os
+from pathlib import Path
+import ssl
 import sys
-import requests
-from urllib.parse import urljoin, urlparse
+import httpx
+from requests.utils import get_environ_proxies, prepend_scheme_if_needed, select_proxy
 
 iri = json.load(sys.stdin)
 try:
-    with requests.Session() as session:
-        prepared = session.prepare_request(requests.Request("GET", iri, headers={"Accept": "*/*"}))
-        fragment = urlparse(prepared.url).fragment
-        for redirects in range(session.max_redirects + 1):
-            settings = session.merge_environment_settings(prepared.url, {}, True, None, None)
-            # HTTPAdapter.send is the public transport seam. Session.send would
-            # consume a redirect's body even with stream=True/redirects disabled.
-            with session.get_adapter(prepared.url).send(prepared, timeout=30, **settings) as response:
-                if not response.is_redirect:
-                    result = {"status": response.status_code, "final_url": response.url}
+    # Preserve the existing environment conventions through public HTTPX
+    # auth/SSL configuration; no Requests transport or connection shim remains.
+    netrc_info = None
+    locations = ([os.environ["NETRC"]] if "NETRC" in os.environ else
+                 ["~/.netrc", "~/_netrc"])
+    for location in locations:
+        try:
+            path = Path(location).expanduser()
+            if path.exists():
+                netrc_info = netrc.netrc(str(path))
+                break
+        except (OSError, netrc.NetrcParseError):
+            # Requests also ignores unreadable/malformed optional netrc files.
+            # Retires when a reviewed configuration contract replaces that rule.
+            break
+    verify = True
+    bundle = os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("CURL_CA_BUNDLE")
+    if bundle:
+        verify = ssl.create_default_context(
+            capath=bundle if Path(bundle).is_dir() else None,
+            cafile=None if Path(bundle).is_dir() else bundle)
+    # Apply Requests' per-request environment routing decision at each hop.
+    # Native HTTPX NO_PROXY differs for CIDR and scheme-qualified entries.
+    # Clients share the public stdlib jar; no transport or response shim.
+    with ExitStack() as stack:
+        cookies = CookieJar()
+        clients = {}
+        def client_for(url):
+            proxy = select_proxy(str(url), get_environ_proxies(str(url)))
+            if proxy:
+                proxy = prepend_scheme_if_needed(proxy, "http")
+            if proxy not in clients:
+                options = ({"proxy": proxy} if proxy else {"transport":
+                    httpx.HTTPTransport(verify=verify, trust_env=True)})
+                clients[proxy] = stack.enter_context(httpx.Client(
+                    verify=verify, timeout=30, trust_env=True, max_redirects=30,
+                    cookies=cookies, **options))
+            return clients[proxy]
+        request = client_for(iri).build_request("GET", iri, headers={"Accept": "*/*"})
+        for redirects in range(31):
+            client = client_for(request.url)
+            # Automatic follow_redirects reads redirect bodies even with stream.
+            # next_request is HTTPX's documented public manual redirect seam.
+            credentials = (netrc_info.authenticators(request.url.host)
+                           if netrc_info is not None else None)
+            # Missing optional usernames use the current stdlib empty string;
+            # older netrc None values must not break supported BasicAuth.
+            options = ({"auth": (credentials[0] or credentials[1] or "", credentials[2])}
+                       if credentials else {})
+            response = client.send(request, stream=True, follow_redirects=False, **options)
+            try:
+                following = response.next_request
+                if following is None:
+                    result = {"status": response.status_code,
+                              "final_url": str(response.url)}
                     break
-                if redirects == session.max_redirects:
-                    raise requests.exceptions.TooManyRedirects("Exceeded 30 redirects.")
-                target = urljoin(response.url, requests.utils.requote_uri(session.get_redirect_target(response)))
-                parsed = urlparse(target)
-                if not parsed.fragment and fragment:
-                    target = parsed._replace(fragment=fragment).geturl()
-                else:
-                    fragment = parsed.fragment
-                requests.cookies.extract_cookies_to_jar(session.cookies, prepared, response.raw)
-                following = session.prepare_request(requests.Request("GET", target, headers={"Accept": "*/*"}))
-                authorization = prepared.headers.get("Authorization")
-                if authorization and not session.should_strip_auth(prepared.url, following.url):
-                    following.headers["Authorization"] = authorization
-                session.rebuild_auth(following, response)
-                prepared = following
+                if redirects == client.max_redirects:
+                    raise httpx.TooManyRedirects("Exceeded 30 redirects.", request=request)
+                request = following
+            finally:
+                response.close()  # Final and redirect bodies are never needed.
 except Exception as error:
     result = {"error": str(error) or type(error).__name__,
               "transport_failure": isinstance(error, (
-                  requests.exceptions.ConnectionError, requests.exceptions.Timeout))}
+                  httpx.NetworkError, httpx.TimeoutException,
+                  httpx.ProxyError, httpx.RemoteProtocolError))}
 json.dump(result, sys.stdout)
 """
 # Retires when a shared verified transport keeps this bound and failure evidence.
@@ -161,6 +203,10 @@ def _selected_iris(root):
     return sorted(set(iris), key=lambda iri: iri.encode("utf-8"))
 
 
+class _PermanentRequestError(RuntimeError):
+    """Keep the default worker's permanent classification through capture."""
+
+
 def _request(iri):
     process = subprocess.Popen(
         [sys.executable, "-c", _REQUEST_WORKER], stdin=subprocess.PIPE,
@@ -187,7 +233,7 @@ def _request(iri):
         raise RuntimeError("Semantic IRI request worker returned invalid JSON.") from None
     if "error" in response:
         failure = (requests.exceptions.ConnectionError if response.get("transport_failure")
-                   else RuntimeError)
+                   else _PermanentRequestError)
         raise failure(response["error"])
     return response
 
@@ -197,11 +243,12 @@ def _attempt(iri, requester):
         response = requester(iri)
     except Exception as error:
         message = str(error)
-        # requests' connection/timeout families match curl/httr2 transport
-        # failures. InvalidURL and arbitrary implementation errors stay permanent.
-        transient = isinstance(error, (requests.exceptions.ConnectionError,
-                                       requests.exceptions.Timeout)) or bool(
-                                           _TRANSIENT_MESSAGE.search(message))
+        # Keep existing injected Requests errors and the worker's normalized
+        # transport failures. InvalidURL/arbitrary implementation errors stay permanent.
+        transient = not isinstance(error, _PermanentRequestError) and (
+            isinstance(error, (requests.exceptions.ConnectionError,
+                               requests.exceptions.Timeout)) or bool(
+                                   _TRANSIENT_MESSAGE.search(message)))
         return None, None, redact_secrets(message), transient
 
     if not isinstance(response, Mapping):
@@ -287,10 +334,10 @@ def verify_sdp_semantic_iris(
     HTTP success proves resolution only. A fragment's HTTP 200 does not prove
     RDF term presence or semantic suitability. An aborted atomic write keeps
     the prior report; atomic replacement does not promise crash durability.
-    The Requests transport currently treats HTTP 103 Early Hints as the final
-    response rather than continuing to the eventual 200. Such a server fails
-    this check with a retained status 103; it is a client compatibility limit,
-    not proof of a missing identifier. This remains unresolved parity debt.
+    The default HTTPX/HTTPcore transport consumes HTTP 103 Early Hints before
+    returning the complete final response headers. Redirects use the public
+    manual flow so neither final nor redirect bodies need to arrive. Client
+    cookies, origin-aware auth and proxy environment settings are preserved.
     """
     root = _extension_root(path)
     default_path = Path(path) / _DEFAULT_REPORT

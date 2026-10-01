@@ -116,11 +116,15 @@ Candidate suggestions, non-HTTP identifiers and arbitrary data URLs are
 excluded. Manifest-bound SSSOM semantic references are checked after their
 manifest and hashes validate. No model provider is called.
 
-Known compatibility limit: Requests currently treats HTTP103 Early Hints as
-the response instead of waiting for the final200. A server using it therefore
-fails this check with status103 retained in the report; that is a client limit
-and does not establish that the identifier is missing. The paired R requester
-waits for the final response. This gap is recorded in both parity documents.
+The default HTTPX/HTTPcore backend waits through HTTP103 Early Hints for the
+complete final headers. Its public manual redirect flow preserves client cookies,
+origin-bound credentials and target-host netrc credentials without reading
+redirect bodies. Proxy/`NO_PROXY` routing follows the existing Requests
+configuration rules, including CIDR and leading-dot bypass entries; cookies
+survive a switch between proxy and direct connections. Existing
+`REQUESTS_CA_BUNDLE`/`CURL_CA_BUNDLE` aliases and HTTPX's `SSL_CERT_FILE`/`SSL_CERT_DIR`
+configure certificate verification. No private Requests or HTTP connection shim
+is used. The worker deadline also bounds these setup steps.
 
 The complete, deterministically ordered report is written to
 `reproducibility/provenance/semantic-iri-dereference.csv`, including final
