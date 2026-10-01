@@ -26,6 +26,21 @@ and moving it is a separate outward act.
   YAML is unchanged. Metasalmon's corresponding closure reader is B-340, and
   no new parity-deviation row is introduced.
 
+* **Strict validation refuses malformed semantic and table IRIs.** B-343,
+  paired with R's B-342 and the Q63 ruling: the six dictionary semantic IRI
+  fields and every `*_iri` field in `tables.csv` require the existing absolute
+  IRI shape under `require_iris=True`, including undeclared table extensions.
+  A shared shape helper uses R's enumerated whitespace class. Blanks keep
+  their existing checks, recognized REVIEW markers are reported once, and
+  method/protocol placements keep their existing unconditional checks.
+  Existing semicolon-separated `constraint_iri` lists are checked component
+  by component; empty components remain malformed and a REVIEW marker in
+  any component is reported once for that dictionary row.
+  Direct dictionary whitespace is present and malformed; missing values and
+  exact empty strings retain their checks. CSV checks consume parsed values
+  after the reader's existing ASCII trim. Non-strict validation and the separately tracked dataset/codes/extra
+  dictionary scan gaps are unchanged. No term IRI or grammar is selected.
+
 * **Date columns keep their temporal role without a date-like name.** B-349,
   porting Brett's 2026-09-25 ruling: all present date/datetime objects or text
   accepted by B-188's readr guess infer `temporal`; value typing shares that
