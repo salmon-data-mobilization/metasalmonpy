@@ -18,6 +18,18 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Strict validation refuses malformed semantic and table IRIs.** B-343,
+  paired with R's B-342 and the Q63 ruling: the six dictionary semantic IRI
+  fields and every `*_iri` field in `tables.csv` require the existing absolute
+  IRI shape under `require_iris=True`, including undeclared table extensions.
+  A shared shape helper uses R's enumerated whitespace class. Blanks keep
+  their existing checks, recognized REVIEW markers are reported once, and
+  method/protocol placements keep their existing unconditional checks.
+  Direct dictionary whitespace is present and malformed; missing values and
+  exact empty strings retain their checks. CSV checks consume parsed values
+  after the reader's existing ASCII trim. Non-strict validation and the separately tracked dataset/codes/extra
+  dictionary scan gaps are unchanged. No term IRI or grammar is selected.
+
 * **EML temporal coverage accepts the SDP UTC-instant spelling.** B-355,
   mirroring B-354 and Brett's 2026-09-25 ruling: each
   `YYYY-MM-DDThh:mm:ssZ` endpoint is split into `calendarDate` and `time`.

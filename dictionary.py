@@ -14,6 +14,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 from .metadata import (
     READR_TRIM_CHARS,
+    _absolute_iri_shape,
     _code_list_applies,
     ensure_resource_mapping,
     infer_codes_from_resources,
@@ -54,6 +55,7 @@ SEMANTIC_COLUMNS = [
 CORE_SEMANTIC_FIELDS = ["term_iri", "property_iri", "entity_iri", "unit_iri"]
 OPTIONAL_SEMANTIC_FIELDS = ["constraint_iri", "statistical_modifier_iri"]
 MEASUREMENT_SEMANTIC_FIELDS = CORE_SEMANTIC_FIELDS + OPTIONAL_SEMANTIC_FIELDS
+_DICTIONARY_IRI_FIELDS = tuple(MEASUREMENT_SEMANTIC_FIELDS)
 
 
 def _ensure_dataframe(df, name: str = "df") -> pd.DataFrame:
@@ -631,6 +633,9 @@ def _collapse_inline(values, trunc: Optional[int] = None) -> str:
 def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd.DataFrame:
     """
     Validate dictionary structure and value constraints.
+
+    Strict mode also requires absolute-IRI shape in the six semantic fields.
+    Blank cells and recognized REVIEW markers retain their existing checks.
     """
     if not isinstance(dict_df, pd.DataFrame):
         raise TypeError("dict must be a pandas DataFrame")
@@ -716,14 +721,7 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
     # dictionary frame directly never saw them (S10 chunk D).
     iri_fields = [
         field
-        for field in (
-            "term_iri",
-            "property_iri",
-            "entity_iri",
-            "unit_iri",
-            "constraint_iri",
-            "statistical_modifier_iri",
-        )
+        for field in _DICTIONARY_IRI_FIELDS
         if field in df.columns
     ]
     review_re = re.compile(r"^\s*REVIEW\s*:", re.IGNORECASE)
@@ -757,6 +755,25 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
             "the IRI and remove the REVIEW prefix.",
             UserWarning,
         )
+
+    if require_iris:
+        malformed_summary = []
+        for field in iri_fields:
+            rows = [
+                position + 1
+                for position, value in enumerate(df[field])
+                if not pd.isna(value)
+                and str(value) != ""
+                and not review_re.match(str(value))
+                and not _absolute_iri_shape(str(value))
+            ]
+            if rows:
+                malformed_summary.append(f"{field} (rows {_collapse_inline(rows)})")
+        if malformed_summary:
+            raise ValueError(
+                "Semantic IRI fields must contain absolute IRIs; invalid in "
+                + "; ".join(malformed_summary) + "."
+            )
 
     if measurement_rows.any():
         missing_by_field = {}

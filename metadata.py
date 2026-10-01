@@ -46,6 +46,21 @@ R_SPACE_CLASS = (
     "\u2028\u2029\u205f\u3000"
 )
 
+_ABSOLUTE_IRI_SHAPE_RE = re.compile(
+    rf"[A-Za-z][A-Za-z0-9+.\-]*:[^{R_SPACE_CLASS}]+"
+)
+
+
+def _absolute_iri_shape(value: str) -> bool:
+    """R's ``.ms_absolute_iri_shape``; callers own blanks and REVIEW markers.
+
+    This is only scheme/colon/non-whitespace shape, not resolution, scheme
+    selection or HTTP authority validation. Use TRE's enumerated whitespace
+    rather than Python's broader ``\\s``. Fullmatch also rejects a final LF,
+    which Python's ``$`` anchor can otherwise leave outside the match.
+    """
+    return _ABSOLUTE_IRI_SHAPE_RE.fullmatch(value) is not None
+
 # R ``[[:cntrl:]]`` -- C0 and C1 controls plus the Unicode line/paragraph
 # separators.
 R_CNTRL_CLASS = "\x00-\x1f\x7f-\x9f\u2028\u2029"
