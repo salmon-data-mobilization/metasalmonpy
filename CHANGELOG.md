@@ -18,6 +18,14 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **EML temporal coverage accepts the SDP UTC-instant spelling.** B-355,
+  mirroring B-354 and Brett's 2026-09-25 ruling: each
+  `YYYY-MM-DDThh:mm:ssZ` endpoint is split into `calendarDate` and `time`.
+  Joining the two fields with `T` restores the persisted value exactly,
+  including `Z`. Years and dates remain a single `calendarDate`, mixed
+  endpoints work independently, and off-profile text remains intact for
+  validation. The public writer's EML 2.2.0 schema check stays in force.
+
 * **Whole-number float years keep their temporal role when a CSV cell is
   blank.** Hub **B-348**, porting Brett's 2026-09-25 ruling: the year-shape
   predicate reads numeric `2001.0` as `2001`, matching R's `as.character()`.
