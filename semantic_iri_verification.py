@@ -3,6 +3,10 @@
 HTTP resolution is evidence about transport, never term suitability or RDF
 fragment presence. This module makes no model call and never searches for or
 substitutes an identifier. Every requested IRI is already selected metadata.
+
+Integration obligation: when the B-58 condition hierarchy lands, classify this
+module's authored errors in its validation family and extend that source guard.
+The pending R verifier has the same obligation; no conditional shim is added.
 """
 
 from __future__ import annotations
