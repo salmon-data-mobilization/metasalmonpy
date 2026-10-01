@@ -18,6 +18,15 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Optional writer fields follow the selected schema (hub B-252).** A direct
+  `write_salmon_datapackage()` call no longer adds bundled optional fields absent
+  from both the caller's dataset, table or codes frame and the selected schema.
+  Table inference also aligns its minimal frame to that schema. Existing caller
+  extras remain, including fields inference deliberately supplies. Dictionary
+  validation still adds its optional semantic fields, as R does; public reader
+  normalization is unchanged. Paired R/Python probes corrected the original
+  `create_sdp()` premise, and default output bytes match the pre-fix baseline.
+
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
   half of the S16 convergence that precedes the shared review-packet contract
