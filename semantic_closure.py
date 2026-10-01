@@ -848,6 +848,38 @@ def _mapping_file(path: Union[str, Path]) -> Optional[str]:
     return _resolve_write_path(path, _MAPPING_RELATIVE_PATH)
 
 
+def _first_unsupported_sidecar_tag(yaml, source: str) -> Optional[str]:
+    """Find an explicit tag SafeLoader cannot construct, without constructing it.
+
+    ``safe_load`` may report a later document boundary before constructing an
+    earlier tagged node. Parser events retain that node's resolved tag across
+    documents. A syntax error before a tag retains the legacy malformed-file
+    fallback; quoted exclamation text has no event tag.
+    """
+    node_events = (
+        yaml.events.ScalarEvent,
+        yaml.events.SequenceStartEvent,
+        yaml.events.MappingStartEvent,
+    )
+    constructors = yaml.SafeLoader.yaml_constructors
+    multi_constructors = yaml.SafeLoader.yaml_multi_constructors
+    try:
+        for event in yaml.parse(source, Loader=yaml.SafeLoader):
+            if not isinstance(event, node_events):
+                continue
+            tag = event.tag
+            if tag is None or tag == "!" or tag in constructors:
+                continue
+            if any(tag.startswith(prefix) for prefix in multi_constructors):
+                continue
+            return tag
+    except yaml.YAMLError:
+        # Parsing malformed input can stop before a tagged node. The caller
+        # keeps its existing default-path fallback in that case.
+        pass
+    return None
+
+
 def _mapping_paths(mapping_file: Optional[str]) -> Dict[str, str]:
     """The closure paths the reviewed EML sidecar declares.
 
@@ -861,18 +893,20 @@ def _mapping_paths(mapping_file: Optional[str]) -> Dict[str, str]:
     yaml = _require_yaml()
     try:
         with open(mapping_file, encoding="utf-8") as handle:
-            mapping = yaml.safe_load(handle)
-    except yaml.constructor.ConstructorError as error:
-        # SafeLoader gives unknown local tags this specific constructor error.
-        # A tagged path cannot silently turn into both default closure paths.
-        # Other malformed sidecars retain this reader's legacy fallback; EML's
-        # stricter parser cannot be shared until those behaviors are reconciled.
-        # Retires when both readers can share a parser with the same fallback.
-        if (error.problem or "").startswith(
-            "could not determine a constructor for the tag "
-        ):
+            source = handle.read()
+        mapping = yaml.safe_load(source)
+    except yaml.YAMLError:
+        # SafeLoader can raise ComposerError for a later document before it
+        # constructs an earlier unknown tag. Inspect parser node events so that
+        # such a tag still refuses the sidecar before any closure write.
+        # Known tags and malformed input without unknown tags keep the former
+        # default-path fallback. Retires when both EML readers can share a
+        # parser with the same malformed-sidecar behavior.
+        tag = _first_unsupported_sidecar_tag(yaml, source)
+        if tag is not None:
             raise ValueError(
-                f"EML mapping sidecar {mapping_file} is not valid YAML: {error}"
+                f"EML mapping sidecar {mapping_file} is not valid YAML: "
+                f"unsupported tag {tag!r}"
             ) from None
         return defaults
     except Exception:
