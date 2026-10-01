@@ -18,6 +18,14 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Semantic closure refuses unknown YAML tags in its EML sidecar.** Hub
+  **B-341**, the Python half of Brett's Q62 ruling, reports the sidecar file
+  when `!expr` or another tag PyYAML cannot construct appears, before writing
+  either closure file or changing the sidecar. Untagged declared paths remain
+  authoritative; the reader's existing fallback for malformed or non-mapping
+  YAML is unchanged. Metasalmon's corresponding closure reader is B-340, and
+  no new parity-deviation row is introduced.
+
 * **Strict validation refuses malformed semantic and table IRIs.** B-343,
   paired with R's B-342 and the Q63 ruling: the six dictionary semantic IRI
   fields and every `*_iri` field in `tables.csv` require the existing absolute
