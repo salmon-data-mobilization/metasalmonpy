@@ -15,6 +15,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 from .metadata import (
     READR_TRIM_CHARS,
     _code_list_applies,
+    _readr_date_type,
     ensure_resource_mapping,
     infer_codes_from_resources,
     infer_dataset_metadata_from_resources,
@@ -65,6 +66,26 @@ def _ensure_dataframe(df, name: str = "df") -> pd.DataFrame:
         raise TypeError(f"{name} must be a pandas DataFrame or convertible object") from exc
 
 
+def _date_value_type(series: pd.Series) -> Optional[str]:
+    """Recognize typed dates or the same text guess used by the code seeder."""
+    # A factor is the caller's explicit categorical intent, not a date class.
+    if isinstance(series.dtype, pd.CategoricalDtype):
+        return None
+    if pd.api.types.is_datetime64_any_dtype(series.dtype):
+        return "datetime"
+    present = series.dropna()
+    if present.empty:
+        return None
+    if all(isinstance(value, _dt.date) for value in present):
+        # datetime is a date subclass. Preserve any instant in a combination
+        # of date/datetime objects, as readr's mixed date/instant text guess
+        # yields POSIXct; checking only the first cell would erase its time.
+        return "datetime" if any(isinstance(value, _dt.datetime) for value in present) else "date"
+    if all(isinstance(value, str) for value in present):
+        return _readr_date_type(present)
+    return None
+
+
 def infer_value_type(series: pd.Series) -> str:
     """
     Infer a value_type for a column.
@@ -85,18 +106,11 @@ def infer_value_type(series: pd.Series) -> str:
     # ``datetime.date`` is ``date``. A single midnight timestamp is a real
     # instant, and a heuristic that erases its time component silently
     # rewrites a user's data on the round trip.
-    if pd.api.types.is_datetime64_any_dtype(dtype):
-        return "datetime"
-
-    # ``date`` has no pandas dtype, so R's ``Date`` class maps to an object
-    # column of ``datetime.date``. This is also what ``resource_types``
-    # produces for a declared ``date`` column, which is what makes the round
-    # trip stable.
-    non_null = s.dropna()
-    if len(non_null) > 0:
-        sample = non_null.iloc[0]
-        if isinstance(sample, _dt.date) and not isinstance(sample, _dt.datetime):
-            return "date"
+    # ``date`` has no pandas dtype. Read every present object, or apply the
+    # shared readr text guess, rather than infer a whole column from one cell.
+    date_type = _date_value_type(s)
+    if date_type is not None:
+        return date_type
 
     if pd.api.types.is_bool_dtype(dtype):
         return "boolean"
@@ -348,10 +362,12 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
     ):
         return "identifier"
 
-    # Check for date/time patterns in the name or the column type.
+    # Keep this after R's identifier/qualifier branches. pandas.read_csv does
+    # not infer dates, so the B-188 text guess stands in for readr's Date or
+    # POSIXct class here as well as in value typing and code-list selection.
     if (
         re.search(r"date|time|dtt|timestamp", name_lower)
-        or pd.api.types.is_datetime64_any_dtype(series)
+        or _date_value_type(pd.Series(series)) is not None
         or any(token in _TEMPORAL_TOKENS for token in name_tokens)
     ):
         return "temporal"

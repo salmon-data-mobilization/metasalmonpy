@@ -681,8 +681,8 @@ def _readr_reads_as_date_time(text: str) -> bool:
         return True
 
 
-def _text_reads_as_dates(texts) -> bool:
-    """Whether ``readr::read_csv()`` would read this text as a ``Date`` or ``POSIXct`` column.
+def _readr_date_type(texts) -> Optional[str]:
+    """The ``date`` / ``datetime`` kind of readr's column guess, or ``None``.
 
     readr, R's documented reader, guesses one type for each column, and R's
     seeder never selects a ``Date`` or ``POSIXct`` column. ``pandas.read_csv``
@@ -696,15 +696,25 @@ def _text_reads_as_dates(texts) -> bool:
     vroom 1.7.1, and pinned token by token in
     ``tests/test_codes_target_categorical.py``.
 
-    A time of day, which readr reads as ``hms``, is not covered.
+    The role and value-type inferrers share this guess with the seeder
+    (B-349). Date shape wins before the datetime parser, as it did in B-188;
+    this matters because that parser also accepts bare ISO dates. A time of
+    day, which readr reads as ``hms``, is not covered.
     """
     present = [str(text).strip(READR_TRIM_CHARS) for text in texts]
     present = [text for text in present if text]
     if not present:
-        return False
-    return all(_DATE_RE.match(text) for text in present) or all(
-        _readr_reads_as_date_time(text) for text in present
-    )
+        return None
+    if all(_DATE_RE.match(text) for text in present):
+        return "date"
+    if all(_readr_reads_as_date_time(text) for text in present):
+        return "datetime"
+    return None
+
+
+def _text_reads_as_dates(texts) -> bool:
+    """Whether readr guesses a date kind; keep B-188's boolean seeder hook."""
+    return _readr_date_type(texts) is not None
 
 
 def code_list_values(series, code_limit: int = CODE_LIST_LIMIT) -> list:
