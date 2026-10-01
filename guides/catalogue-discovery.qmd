@@ -32,6 +32,12 @@ separate capture. Both endpoints derive from the package's existing production
 KNB/DataONE environment configuration. Queries always restrict results to
 metadata and request stable ID ordering.
 
+The default transport uses a fresh public HTTP client and does not inherit
+process-wide authenticated/cookie handlers or proxy environment variables.
+If your environment needs custom network routing, supply an explicit
+`fetch(url, timeout, max_bytes)` transport configured for public,
+unauthenticated access. Global browser, network and proxy settings are unchanged.
+
 `max_records` bounds a call to 1–1,000 metadata records; `page_size` bounds
 each request to 1–100 records. `max_bytes` bounds each page, and `timeout`
 bounds each request. These are capture limits, not performance benchmarks or

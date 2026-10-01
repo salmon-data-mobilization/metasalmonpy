@@ -12,14 +12,18 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 from .knb_environments import knb_config
 
 _FIELDS = 'id,title,formatId,formatType,authoritativeMN,obsoletes,obsoletedBy,dateUploaded,dateModified,beginDate,endDate,resourceMap'
 
 def _public_get(url, timeout, max_bytes):
     req=Request(url,headers={'User-Agent':'MetaSalmon-public-discovery/0.1','Accept':'application/json'})
-    with urlopen(req,timeout=timeout) as response:
+    # A process-global opener can carry authentication/cookies; environment
+    # proxies can carry credentials. Default capture uses a fresh public client.
+    # Inject fetch explicitly when integrating custom network routing.
+    opener=build_opener(ProxyHandler({}))
+    with opener.open(req,timeout=timeout) as response:
         raw=response.read(max_bytes+1)
     if len(raw)>max_bytes:raise ValueError('Catalogue page exceeds max_bytes')
     return raw
@@ -43,8 +47,22 @@ def capture_catalogue_query(query, out, *, catalogue='knb', max_records=100,
     if isinstance(timeout,bool) or not isinstance(timeout,(int,float)) or not math.isfinite(timeout) or not 0<timeout<=120:
         raise ValueError('timeout must be positive and at most 120 seconds')
     stamp=datetime.now(timezone.utc).isoformat() if captured_at is None else captured_at
-    if not isinstance(stamp,str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})',stamp) or datetime.fromisoformat(stamp.replace('Z','+00:00')).tzinfo is None:
-        raise ValueError('captured_at must include a timezone')
+    if not isinstance(stamp,str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})',stamp):
+        raise ValueError('captured_at must be a valid ISO timestamp including a timezone')
+    # Python 3.14 accepts 24:00:00 as the next day; the capture contract uses
+    # an explicit Gregorian date with time fields in their ordinary ranges.
+    if int(stamp[11:13])>23 or int(stamp[14:16])>59 or int(stamp[17:19])>59:
+        raise ValueError('captured_at must be a valid ISO timestamp including a timezone')
+    # fromisoformat normalizes +02:60 to +03:00. Reject invalid offset fields
+    # before parsing, matching the R capture contract and preserving the input.
+    if not stamp.endswith('Z') and (int(stamp[-5:-3])>23 or int(stamp[-2:])>59):
+        raise ValueError('captured_at must be a valid ISO timestamp including a timezone')
+    try:
+        parsed_stamp=datetime.fromisoformat(stamp.replace('Z','+00:00'))
+    except ValueError as error:
+        raise ValueError('captured_at must be a valid ISO timestamp including a timezone') from error
+    if parsed_stamp.tzinfo is None:
+        raise ValueError('captured_at must be a valid ISO timestamp including a timezone')
     if fetch is not None and not callable(fetch):raise ValueError('fetch must be callable or None')
     config=knb_config('production')
     endpoint=(str(config['mn_endpoint'])+'/query/solr/' if catalogue=='knb' else str(config['solr_endpoint']))

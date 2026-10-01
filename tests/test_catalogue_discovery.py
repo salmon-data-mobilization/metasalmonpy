@@ -5,8 +5,10 @@ import io
 import json
 import socket
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.parse import parse_qs, urlsplit
+import urllib.request
 
 import pytest
 
@@ -15,6 +17,15 @@ from metasalmonpy import catalogue_discovery as discovery
 
 STAMP = "2026-09-30T16:00:00+00:00"
 QUERY = 'text:Fraser AND text:sockeye AND title:"stock recruit"'
+
+
+@pytest.fixture(autouse=True)
+def no_live_socket_in_catalogue_fixtures(monkeypatch):
+    def forbidden(*args, **kwargs):
+        pytest.fail("offline catalogue fixture attempted a live connection")
+
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(socket.socket, "connect", forbidden)
 
 
 def page_bytes(found, start, ids):
@@ -219,7 +230,7 @@ def test_http_failure_is_not_converted_into_empty_success(tmp_path, monkeypatch)
     def unavailable(request, timeout):
         raise HTTPError(request.full_url, 503, "fixture service unavailable", {}, None)
 
-    monkeypatch.setattr(discovery, "urlopen", unavailable)
+    monkeypatch.setattr(discovery, "build_opener", lambda *handlers: SimpleNamespace(open=unavailable))
     with pytest.raises(HTTPError) as raised:
         discovery.capture_catalogue_query(QUERY, tmp_path / "capture", captured_at=STAMP)
     assert raised.value.code == 503
@@ -259,13 +270,51 @@ def test_default_transport_has_no_credentials_and_bounds_response(monkeypatch):
         calls.append((request, timeout))
         return io.BytesIO(b"abcd")
 
-    monkeypatch.setattr(discovery, "urlopen", open_request)
+    monkeypatch.setattr(discovery, "build_opener", lambda *handlers: SimpleNamespace(open=open_request))
     with pytest.raises(ValueError, match="max_bytes"):
         discovery._public_get("https://knb.ecoinformatics.org/query", 5, 3)
     request, timeout = calls[0]
     assert request.get_method() == "GET" and timeout == 5
     headers = {k.lower(): v for k, v in request.header_items()}
     assert set(headers) == {"user-agent", "accept"}
+
+
+def test_default_transport_ignores_installed_auth_opener_and_proxy_credentials(monkeypatch):
+    requests = []
+    factories = []
+    actual_build_opener = urllib.request.build_opener
+
+    class FixtureResponse(io.BytesIO):
+        code = 200
+        msg = "OK"
+
+        def info(self):
+            return {}
+
+    class FixtureHTTPSHandler(urllib.request.HTTPSHandler):
+        def https_open(self, request):
+            requests.append(request)
+            return FixtureResponse(b"{}")
+
+    def fresh_factory(*handlers):
+        factories.append(handlers)
+        return actual_build_opener(*handlers, FixtureHTTPSHandler())
+
+    def global_authenticated_opener(*args, **kwargs):
+        pytest.fail("default public capture reached installed authenticated opener")
+
+    monkeypatch.setattr(urllib.request, "_opener", SimpleNamespace(open=global_authenticated_opener))
+    for name in ("http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        monkeypatch.setenv(name, "http://fixture-user:fixture-password@127.0.0.1:9")
+    monkeypatch.setattr(discovery, "build_opener", fresh_factory)
+    assert discovery._public_get("https://knb.ecoinformatics.org/query", 5, 10) == b"{}"
+    assert len(factories) == 1 and len(factories[0]) == 1
+    proxy = factories[0][0]
+    assert isinstance(proxy, urllib.request.ProxyHandler) and proxy.proxies == {}
+    assert len(requests) == 1 and requests[0].host == "knb.ecoinformatics.org"
+    assert not requests[0].has_proxy()
+    headers = {name.lower() for name, value in requests[0].header_items()}
+    assert not headers & {"authorization", "cookie", "proxy-authorization"}
 
 
 @pytest.mark.parametrize("kwargs", [
@@ -288,11 +337,30 @@ def test_invalid_query_refused_before_any_write(tmp_path, query):
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("stamp", ["", "2026-09-30T16:00:00", "not a timestamp", 123])
+@pytest.mark.parametrize("stamp", ["", "2026-09-30T16:00:00", "not a timestamp", 123,
+                                  "2026-09-30T16:00:00+02:60",
+                                  "2026-09-30T16:00:00-02:60",
+                                  "2026-09-30T16:00:00+24:00",
+                                  "2026-02-30T16:00:00Z",
+                                  "2026-02-29T16:00:00Z",
+                                  "2026-09-30T24:00:00Z",
+                                  "2026-09-30T16:60:00Z",
+                                  "2026-09-30T16:00:60Z"])
 def test_invalid_capture_timestamp_refused_before_any_write(tmp_path, stamp):
     with pytest.raises(ValueError):
         discovery.capture_catalogue_query(QUERY, tmp_path / "capture", captured_at=stamp)
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("stamp", ["2024-02-29T23:59:59Z",
+                                  "2026-09-30T16:00:00+23:59",
+                                  "2026-09-30T16:00:00-23:59",
+                                  "2026-09-30T16:00:00.123456+00:00"])
+def test_valid_capture_timestamp_is_preserved_exactly(tmp_path, stamp):
+    receipt = discovery.capture_catalogue_query(
+        QUERY, tmp_path / "capture", fetch=lambda *args: page_bytes(0, 0, []),
+        captured_at=stamp)
+    assert receipt["captured_at"] == stamp
 
 
 @pytest.mark.parametrize("body", [b"not json", b"{}", page_bytes(0, 0, ["a"]),
