@@ -994,6 +994,11 @@ def suggest_semantics(
     llm_assess
         Enable opt-in LLM assessment. Context alone never enables a provider
         request.
+    max_per_role
+        Minimum number of candidates retained per role for deterministic
+        suggestions. LLM review may widen this to ``llm_top_n``.
+    llm_top_n
+        Maximum number of retained candidates shown to the LLM per target.
     llm_context_files
         Local context file paths. Parsed DataFrames or document objects are
         rejected.
@@ -1322,11 +1327,15 @@ def suggest_semantics(
     # uses (hub B-363): pass 1 here, through the once-per-call search; pass 2
     # in llm_review._retry_candidates(), which still calls search_fn directly.
     search_once = _search_once_per_call(search_fn)
+    # The first retrieval pass needs to keep every candidate the LLM can see.
+    # Its retained width and the number sent in one request are separate:
+    # max_per_role may exceed llm_top_n (hub B-302, port of R's B-57).
+    shortlist_size = max(max_per_role, llm_top_n) if llm_assess else max_per_role
     for target in targets:
         res = _retrieve_semantic_target_candidates(
             target,
             source_policy,
-            max_per_role,
+            shortlist_size,
             search_once,
             retrieval_pass=1,
         )
@@ -1408,7 +1417,8 @@ def suggest_semantics(
                 dictionary,
                 source_policy=source_policy,
                 search_fn=search_fn,
-                max_per_role=max(max_per_role, llm_top_n),
+                max_per_role=shortlist_size,
+                top_n=llm_top_n,
                 provider=llm_provider,
                 model=llm_model,
                 api_key=llm_api_key,

@@ -18,6 +18,17 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Direct opt-in semantic review now keeps enough candidates for the LLM's
+  requested shortlist.** Hub **B-302** ports metasalmon's **B-57**: with
+  `llm_assess=True`, the first retrieval pass keeps
+  `max(max_per_role, llm_top_n)` candidates per role. A request shows at most
+  `llm_top_n`, even when `max_per_role` retains more; without LLM assessment,
+  retrieval still keeps `max_per_role`. Injected-search tests pin all three
+  cases without calling a provider. The new `metasalmonpy[dwc]` optional
+  extra declares Frictionless for `dwc_dp_build_descriptor(validate=True)`;
+  handling its validation report remains the separate B-300 decision. This
+  closes an R-first port, without a new parity-register difference.
+
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
   half of the S16 convergence that precedes the shared review-packet contract
