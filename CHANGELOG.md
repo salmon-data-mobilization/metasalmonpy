@@ -18,6 +18,16 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Vocabulary-backed columns keep their values when applying a dictionary.**
+  Hub **B-347**, paired with metasalmon **B-346**, implements Brett's
+  2026-09-25 ruling: if any codes row for the same table and column names a
+  vocabulary and has no code value, that column skips the code list and its
+  unlisted-value warning. Missing, blank and omitted `code_value` all qualify.
+  A vocabulary-only row beside enumerated codes still backs the whole column;
+  declared type and categorical-role behavior remain in force. Ordinary code
+  lists continue to apply labels and report unlisted values. This is a ruled
+  repair in both packages, with no new parity-deviation row.
+
 * **Whole-number float years keep their temporal role when a CSV cell is
   blank.** Hub **B-348**, porting Brett's 2026-09-25 ruling: the year-shape
   predicate reads numeric `2001.0` as `2001`, matching R's `as.character()`.

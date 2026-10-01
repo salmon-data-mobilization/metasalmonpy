@@ -937,6 +937,10 @@ def apply_salmon_dictionary(
     ``strict`` is, because ``strict`` governs type coercion. Missing and blank
     values are not reported. As in metasalmon, a code list applies to a text or
     Categorical column; a numeric, logical or date column keeps its values.
+    A matching codes row with a nonblank ``vocabulary_iri`` and a missing or
+    blank ``code_value`` backs the whole column with a vocabulary instead of
+    an enumerated code list. Such a column skips code labels and the unlisted
+    value report, while its declared type and role still apply.
     """
     data = _ensure_dataframe(df, "df")
     dictionary = validate_dictionary(dict_df, require_iris=False)
@@ -985,7 +989,21 @@ def apply_salmon_dictionary(
             if table_id is not None:
                 col_codes = col_codes[col_codes["table_id"] == table_id]
             col_codes = col_codes[col_codes["column_name"] == original_name]
-            if not col_codes.empty and new_name in result.columns and _code_list_applies(result[new_name]):
+            # B-347/B-346, ruled by Brett: any vocabulary-only row backs this
+            # column, even beside enumerated codes. Match the table/column
+            # first, and use the same missing/blank rule as the value report.
+            vocabulary_backed = "vocabulary_iri" in col_codes and (
+                _apply_dictionary_present(col_codes["vocabulary_iri"])
+                & ~_apply_dictionary_present(
+                    col_codes.get("code_value", pd.Series(pd.NA, index=col_codes.index))
+                )
+            ).any()
+            if (
+                not col_codes.empty
+                and not vocabulary_backed
+                and new_name in result.columns
+                and _code_list_applies(result[new_name])
+            ):
                 code_values = list(col_codes["code_value"])
                 code_labels = list(col_codes.get("code_label", code_values))
                 # A value the code list does not name has no category, so it
