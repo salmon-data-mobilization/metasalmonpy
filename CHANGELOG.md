@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+* **Selected semantic-IRI resolution leaves evidence even on failure.**
+  `verify_sdp_semantic_iris()` mirrors R B-130/PR244: selected exact HTTP IRIs,
+  including validated manifest-bound SSSOM references, are GET checked in
+  UTF-8/C order with at most three attempts for transient failures. The complete
+  deterministic five-column CSV is written before an aggregate failure;
+  candidate/data URLs and model calls are excluded. HTTP success does not
+  establish RDF term presence or semantic suitability. Offline tests prove
+  retry/report behavior and compare report bytes with R; they assert no live
+  network verification. No release number changes.
+
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
 closed when it set `__version__` to `0.5.0`, and the commit that made that
