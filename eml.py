@@ -2249,10 +2249,24 @@ def _add_coverage(
             )
         temporal = ET.SubElement(coverage, "temporalCoverage")
         date_range = ET.SubElement(temporal, "rangeOfDates")
-        begin = ET.SubElement(date_range, "beginDate")
-        _add_text(begin, "calendarDate", _as_character(temporal_start))
-        end = ET.SubElement(date_range, "endDate")
-        _add_text(end, "calendarDate", _as_character(temporal_end))
+        for endpoint, value in (
+            ("beginDate", temporal_start),
+            ("endDate", temporal_end),
+        ):
+            node = ET.SubElement(date_range, endpoint)
+            # The package file is the rendering baseline. EML's calendarDate
+            # accepts a year/date, with a separate optional xs:time. Split only
+            # the complete SDP UTC-instant spelling; leave off-profile text
+            # intact for validation rather than accepting a truncated date.
+            text = _as_character(value)
+            if re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", text
+            ):
+                date, time = text.split("T")
+                _add_text(node, "calendarDate", date)
+                _add_text(node, "time", time)
+            else:
+                _add_text(node, "calendarDate", text)
 
     if has_taxon:
         taxonomic = ET.SubElement(coverage, "taxonomicCoverage")
