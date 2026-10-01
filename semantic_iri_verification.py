@@ -45,12 +45,36 @@ _REQUEST_WORKER = """
 import json
 import sys
 import requests
+from urllib.parse import urljoin, urlparse
 
 iri = json.load(sys.stdin)
 try:
-    with requests.get(iri, headers={"Accept": "*/*"}, timeout=30,
-                      allow_redirects=True, stream=True) as response:
-        result = {"status": response.status_code, "final_url": response.url}
+    with requests.Session() as session:
+        prepared = session.prepare_request(requests.Request("GET", iri, headers={"Accept": "*/*"}))
+        fragment = urlparse(prepared.url).fragment
+        for redirects in range(session.max_redirects + 1):
+            settings = session.merge_environment_settings(prepared.url, {}, True, None, None)
+            # HTTPAdapter.send is the public transport seam. Session.send would
+            # consume a redirect's body even with stream=True/redirects disabled.
+            with session.get_adapter(prepared.url).send(prepared, timeout=30, **settings) as response:
+                if not response.is_redirect:
+                    result = {"status": response.status_code, "final_url": response.url}
+                    break
+                if redirects == session.max_redirects:
+                    raise requests.exceptions.TooManyRedirects("Exceeded 30 redirects.")
+                target = urljoin(response.url, requests.utils.requote_uri(session.get_redirect_target(response)))
+                parsed = urlparse(target)
+                if not parsed.fragment and fragment:
+                    target = parsed._replace(fragment=fragment).geturl()
+                else:
+                    fragment = parsed.fragment
+                requests.cookies.extract_cookies_to_jar(session.cookies, prepared, response.raw)
+                following = session.prepare_request(requests.Request("GET", target, headers={"Accept": "*/*"}))
+                authorization = prepared.headers.get("Authorization")
+                if authorization and not session.should_strip_auth(prepared.url, following.url):
+                    following.headers["Authorization"] = authorization
+                session.rebuild_auth(following, response)
+                prepared = following
 except Exception as error:
     result = {"error": str(error) or type(error).__name__,
               "transport_failure": isinstance(error, (
@@ -223,7 +247,7 @@ def verify_sdp_semantic_iris(
     """Dereference exact selected HTTP semantic IRIs and persist every result.
 
     GET follows redirects and reads response headers without downloading the
-    final body. The default transport has a 30-second worker deadline, including
+    final or redirect body. The default transport has a 30-second worker deadline, including
     startup, DNS, connection and redirects; an expired worker is killed and
     reaped. Injected requesters keep their own execution behavior.
     Only HTTP 408, 429, 5xx,
@@ -263,6 +287,10 @@ def verify_sdp_semantic_iris(
     HTTP success proves resolution only. A fragment's HTTP 200 does not prove
     RDF term presence or semantic suitability. An aborted atomic write keeps
     the prior report; atomic replacement does not promise crash durability.
+    The Requests transport currently treats HTTP 103 Early Hints as the final
+    response rather than continuing to the eventual 200. Such a server fails
+    this check with a retained status 103; it is a client compatibility limit,
+    not proof of a missing identifier. This remains unresolved parity debt.
     """
     root = _extension_root(path)
     default_path = Path(path) / _DEFAULT_REPORT

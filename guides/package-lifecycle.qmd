@@ -116,6 +116,12 @@ Candidate suggestions, non-HTTP identifiers and arbitrary data URLs are
 excluded. Manifest-bound SSSOM semantic references are checked after their
 manifest and hashes validate. No model provider is called.
 
+Known compatibility limit: Requests currently treats HTTP103 Early Hints as
+the response instead of waiting for the final200. A server using it therefore
+fails this check with status103 retained in the report; that is a client limit
+and does not establish that the identifier is missing. The paired R requester
+waits for the final response. This gap is recorded in both parity documents.
+
 The complete, deterministically ordered report is written to
 `reproducibility/provenance/semantic-iri-dereference.csv`, including final
 status, URL, redacted error and attempt count. A failed check raises an

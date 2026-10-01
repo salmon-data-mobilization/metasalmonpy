@@ -269,6 +269,7 @@ def test_default_transport_is_get_redirecting_bounded_and_no_model(tmp_path, mon
     class Response:
         status_code = 200
         url = "https://example.org/term"
+        is_redirect = False
         def __enter__(self):
             return self
         def __exit__(self, *args):
@@ -276,10 +277,15 @@ def test_default_transport_is_get_redirecting_bounded_and_no_model(tmp_path, mon
         @property
         def content(self):
             pytest.fail("The verifier needs only response headers, not the body")
-    def get(url, **kwargs):
-        calls.append((url, kwargs))
+    def send(adapter, prepared, **kwargs):
+        assert prepared.method == "GET"
+        assert prepared.headers["Accept"] == "*/*"
+        assert kwargs["stream"] is True
+        assert kwargs["timeout"] == 30
+        assert kwargs["verify"] is True
+        calls.append(prepared.url)
         return Response()
-    monkeypatch.setattr(requests, "get", get)
+    monkeypatch.setattr(requests.adapters.HTTPAdapter, "send", send)
     from metasalmonpy import semantic_iri_verification as module
     # Execute the fixed worker with in-process streams so keyword/close behavior
     # is observable. The real subprocess/deadline is exercised separately below.
@@ -303,8 +309,7 @@ def test_default_transport_is_get_redirecting_bounded_and_no_model(tmp_path, mon
         if "request" in name and callable(getattr(llm_review, name)):
             monkeypatch.setattr(llm_review, name, lambda *args, **kwargs: pytest.fail("No model call"))
     rows = verify(tmp_path, sleep_fn=no_sleep)
-    assert calls == [(iri, {"headers": {"Accept": "*/*"}, "timeout": 30,
-                           "allow_redirects": True, "stream": True}), "closed"]
+    assert calls == [iri, "closed"]
     assert rows.final_url.tolist() == [Response.url]
 
 
@@ -367,6 +372,25 @@ def test_local_default_transport_ignores_body_and_bounds_headers(monkeypatch):
             if self.path == "/headers":
                 release.wait(5)  # No headers arrive before the scaled deadline.
                 return
+            if self.path == "/redirect":
+                self.send_response(302)
+                self.send_header("Location", "/body")
+                self.send_header("Content-Length", "1000000")
+                self.end_headers()
+                release.wait(5)  # A redirect's body is also unnecessary.
+                return
+            if self.path == "/redirect-cookie":
+                self.send_response(302)
+                self.send_header("Location", "/cookie")
+                self.send_header("Set-Cookie", "selected=one; Path=/")
+                self.send_header("Content-Length", "1000000")
+                self.end_headers()
+                release.wait(5)
+                return
+            if self.path == "/cookie" and self.headers.get("Cookie") != "selected=one":
+                self.send_response(403)
+                self.end_headers()
+                return
             self.send_response(200)
             self.send_header("Content-Length", "1000000")
             self.end_headers()
@@ -380,6 +404,10 @@ def test_local_default_transport_ignores_body_and_bounds_headers(monkeypatch):
     try:
         assert module._request(root + "/body") == {
             "status": 200, "final_url": root + "/body"}
+        assert module._request(root + "/redirect") == {
+            "status": 200, "final_url": root + "/body"}
+        assert module._request(root + "/redirect-cookie") == {
+            "status": 200, "final_url": root + "/cookie"}
         started = time.monotonic()
         with pytest.raises(requests.exceptions.Timeout, match="timed out"):
             module._request(root + "/headers")

@@ -103,17 +103,23 @@ registers, in the same stream, **at the same number**.
 **B-130 transport parity remains unresolved (2026-10-01).** The paired drafts
 [metasalmon PR244](https://github.com/salmon-data-mobilization/metasalmon/pull/244)
 and [metasalmonpy PR85](https://github.com/salmon-data-mobilization/metasalmonpy/pull/85)
-have matching selected-IRI, retry and report contracts, but Python's follow-up
-default transport reads final response headers in a killed-and-reaped worker
-with a 30-second deadline. R still downloads the body within its total timeout.
-A local server sending complete HTTP200 headers and withholding the body
-therefore succeeds in Python and times out in R. This is temporary parity debt,
-not an approved deliberate difference or a merged/release parity claim; B-130
-is not ready for parity acceptance. `httr2::req_perform_connection()` still
-waited for body data in that probe, so it does not establish a repair.
-*Retires when:* a bounded R header-only GET is demonstrated, both default
-transports agree on the local withheld-body/header controls, and both drafts
-carry that repair. No register number or new queue item is allocated.
+now avoid requiring final or redirect response bodies for HTTP resolution and
+bound default attempts to 30 seconds. R uses curl's public multi interface,
+matching the last complete header block to the current status before cancelling;
+Python uses a killed-and-reaped worker and the public Requests adapter seam.
+The retained localhost probe covers direct/redirected success, withheld bodies,
+partial/stale headers, interim responses, terminal failures and redirect loops.
+
+**Remaining compatibility gap:** Requests reports HTTP103 Early Hints as the
+response instead of continuing to the final200, while R's default waits for
+final200. The probe reproduces this on Python3.13.11 and Requests2.34.2. No private
+urllib3/http.client shim or additional Python client dependency is introduced.
+This is unresolved temporary parity debt, not an approved deliberate difference,
+a merged/release parity claim, or B-130 parity acceptance. Both exported-API
+PRs remain critical drafts for Brett's review. *Retires when:* a supported
+aligned transport handles103 followed by final200, the paired fixture agrees,
+and the reviewed change lands on both sides. No register number or new queue
+item is allocated.
 
 Rows 16–28 were re-verified against metasalmon 0.3.0 on 2026-08-16 by reading
 both implementations; rows 17, 18, 20, 22, 23, 25, 26 and 27 carry the
