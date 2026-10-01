@@ -276,9 +276,13 @@ uv run --with pytest --with pandas --with requests -- python -m pytest tests/ -q
 ```
 
 or `pip install -e ".[test]" && pytest -q`. The suite must stay green in **both**
-dependency configurations, and CI runs both (see *Dependency boundaries*): 1720
-passed / 2 skipped with the extras installed, 1578 / 144 with core dependencies
-only (2026-09-26, measured locally for hub B-382 on `c4aa61a`, branched from
+dependency configurations, and CI runs both (see *Dependency boundaries*): 1739
+passed / 2 skipped with the extras installed, 1596 / 145 with core dependencies
+only (2026-10-01, measured locally for hub B-348, branched from `main` `9304851`,
+under Python 3.13.11, pytest 9.1.1 and pandas 3.0.6 in isolated editable
+environments built from `.[test]` and `.[test,eml,context]`, with
+`METASALMON_PATH` unset; 291 and 250 subtests also passed, respectively);
+1720 / 2 and 1578 / 144 for hub B-382 on `c4aa61a`, branched from
 `main` `82f1fb7`, under Python 3.13.11, pytest 9.1.1 and pandas 3.0.5, in a
 worktree of a full clone with `METASALMON_PATH` unset, by `python -m pytest -q`
 in isolated environments built from `.[test]` and `.[test,eml,context]`; the

@@ -131,8 +131,17 @@ def _character_values(series: pd.Series) -> list[str]:
 
 
 def _values_look_yearish(series: pd.Series) -> bool:
-    """Mirror ``.ms_values_look_yearish``."""
-    values = _character_values(series)
+    """Mirror ``.ms_values_look_yearish``, including whole numeric floats."""
+    # A blank CSV cell makes pandas store integer years as floats. R renders
+    # those whole numbers without a decimal suffix (B-348); normalize only
+    # numeric floats, so text "1850.0" and fractional numbers keep their spelling.
+    values = [
+        str(int(value))
+        if pd.api.types.is_float(value) and float(value).is_integer()
+        else str(value).strip()
+        for value in pd.Series(series).dropna()
+    ]
+    values = [value for value in values if value]
     if not values:
         return False
     if not all(re.fullmatch(r"[12][0-9]{3}", value) for value in values):
