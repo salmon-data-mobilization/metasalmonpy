@@ -367,6 +367,16 @@ def _read_bytes(path: Union[str, Path], label: str = "SSSOM mapping set") -> byt
 
 # --- restricted YAML-subset parsing for the embedded metadata header --------
 
+_YAML_QUOTED_NODE = re.compile(r'''"(?:[^"\\]|\\.)*"|'(?:[^']|'')*' ''', re.X)
+
+
+def _strip_yaml_comment(text: str) -> str:
+    """Exclude a separated comment, without treating a quoted hash as one."""
+    for token in re.finditer(_YAML_QUOTED_NODE.pattern + r"|(?P<comment>\s+\#)", text, re.X):
+        if token.group("comment") is not None:
+            return text[:token.start()].strip()
+    return text
+
 
 def _scalar_has_yaml_tag(text: str) -> bool:
     """Detect explicit node tags without loading or resolving YAML values.
@@ -377,14 +387,25 @@ def _scalar_has_yaml_tag(text: str) -> bool:
     inside a plain scalar are text, so only node-property positions count.
     """
     anchor = r"&[^\s\[\]{},]+\s+"
-    content = re.sub(r"\A" + anchor, "", text, count=1)
-    if content.startswith("!"):
-        return True
-    if not content.startswith(("[", "{")):
-        return False
+    content = text
+    while True:
+        # A block-sequence item can itself be a compact mapping (key: value)
+        # or an explicit key (? node). Inspect its value without interpreting
+        # ordinary embedded exclamations such as "Good !foo title" as tags.
+        content = re.sub(r"\A(?:[-?]\s+)*(?:" + anchor + r")?", "", content, count=1)
+        if content.startswith("!"):
+            return True
+        if content.startswith(("[", "{")):
+            break
+        if content.startswith(('"', "'")):
+            return False
+        value_start = re.search(r":\s+", content)
+        if value_start is None:
+            return False
+        content = content[value_start.end():]
     # Mask complete quoted nodes first. Keep a placeholder for quoted mapping
     # keys, whose colon may directly precede a tagged value in flow syntax.
-    masked = re.sub(r'''"(?:[^"\\]|\\.)*"|'(?:[^']|'')*' ''', '""', content, flags=re.X)
+    masked = _YAML_QUOTED_NODE.sub('""', content)
     return re.search(
         r'(?:\A|[\[{,]\s*|:\s+|""\s*:\s*)(?:\?\s+)?(?:' + anchor + r")?!",
         masked,
@@ -410,11 +431,12 @@ def _parse_scalar(text: str, fail) -> str:
         if len(text) < 2 or not text.endswith("'"):
             fail(f"malformed single-quoted scalar {text!r}")
         return text[1:-1].replace("''", "'")
+    # Comments are presentation, not nodes (YAML 1.2 section 6.6). Exclude
+    # them before the refusal guard as well as from the returned plain value.
+    text = _strip_yaml_comment(text)
     if _scalar_has_yaml_tag(text):
         fail("explicit YAML tags are not supported in SSSOM metadata")
-    # A plain scalar ends at a whitespace-preceded "#" (a YAML comment);
-    # a "#" glued to text (e.g. an IRI fragment) is part of the value.
-    return re.split(r"\s+#", text, maxsplit=1)[0].strip()
+    return text
 
 
 def _split_key_line(line: str, fail):

@@ -545,6 +545,50 @@ def test_subset_parser_refuses_tags_on_nested_and_sequence_values(lines):
 
 
 @pytest.mark.parametrize(
+    "entry", ["key: !foo X", "? !foo X", "key: &label !!str X", "key: [!foo X]", "- !foo X"],
+)
+def test_reader_refuses_tags_in_compact_block_sequence_mappings(tmp_path, entry):
+    path = write_raw(
+        tmp_path / "compact-tagged.sssom.tsv",
+        sssom_text(extra_metadata=["# mapping_set_title:", "#   - " + entry]),
+    )
+    with pytest.raises(ValueError, match="not valid YAML") as error:
+        read_sssom_mapping_set(path)
+    assert str(path) in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "entry,expected",
+    [
+        ("'key: !foo X'", "key: !foo X"), ('"? !foo X"', "? !foo X"),
+        ('"- !foo X"', "- !foo X"), ("Good !foo X", "Good !foo X"),
+    ],
+)
+def test_compact_tag_refusal_preserves_sequence_text(tmp_path, entry, expected):
+    path = write_raw(
+        tmp_path / "sequence-text.sssom.tsv",
+        sssom_text(extra_metadata=["# mapping_set_title:", "#   - " + entry]),
+    )
+    assert read_sssom_mapping_set(path).metadata["mapping_set_title"] == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("[value] # [!foo X]", "[value]"),
+        ("[value#fragment] # {key: !foo X}", "[value#fragment]"),
+        ('["literal # [!foo X]"] # [!foo X]', '["literal # [!foo X]"]'),
+    ],
+)
+def test_tag_scan_excludes_comments_but_preserves_quoted_hashes(tmp_path, value, expected):
+    path = write_raw(
+        tmp_path / "comment-text.sssom.tsv",
+        sssom_text(extra_metadata=["# mapping_set_title: " + value]),
+    )
+    assert read_sssom_mapping_set(path).metadata["mapping_set_title"] == expected
+
+
+@pytest.mark.parametrize(
     "value,expected",
     [
         ('"!expr X"', "!expr X"), ("'!!str X'", "!!str X"),

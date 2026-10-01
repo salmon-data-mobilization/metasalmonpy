@@ -22,7 +22,9 @@ and moving it is a separate outward act.
   half of **B-352**, implements Brett's 2026-09-25 Q62 ruling. Local tags such
   as `!expr`/`!foo`, `!!` tags and verbatim tags now fail with the existing
   not-valid-YAML error naming the file, including anchored, nested and flow
-  values. Quoted exclamations and ordinary plain text remain text. Package
+  values and compact block-list mappings/sequences. Quoted exclamations and
+  ordinary plain text remain text; tag-like text in a trailing YAML comment
+  is ignored, while quoted hashes and IRI fragments remain content. Package
   validation still proves the mapping file was read and no expression was
   evaluated; it now refuses the tagged package. No dependency, public
   signature, canonical writer bytes or parity-register row changed.
