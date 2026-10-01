@@ -26,6 +26,16 @@ and moving it is a separate outward act.
   endpoints work independently, and off-profile text remains intact for
   validation. The public writer's EML 2.2.0 schema check stays in force.
 
+* **Vocabulary-backed columns keep their values when applying a dictionary.**
+  Hub **B-347**, paired with metasalmon **B-346**, implements Brett's
+  2026-09-25 ruling: if any codes row for the same table and column names a
+  vocabulary and has no code value, that column skips the code list and its
+  unlisted-value warning. Missing, blank and omitted `code_value` all qualify.
+  A vocabulary-only row beside enumerated codes still backs the whole column;
+  declared type and categorical-role behavior remain in force. Ordinary code
+  lists continue to apply labels and report unlisted values. This is a ruled
+  repair in both packages, with no new parity-deviation row.
+
 * **SSSOM metadata refuses explicit YAML tags.** Hub **B-353**, the Python
   half of **B-352**, implements Brett's 2026-09-25 Q62 ruling. Local tags such
   as `!expr`/`!foo`, `!!` tags and verbatim tags now fail with the existing
