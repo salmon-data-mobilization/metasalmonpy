@@ -100,6 +100,21 @@ by number.
 Maintenance: add a row in the same PR that introduces the difference, in both
 registers, in the same stream, **at the same number**.
 
+**B-130 transport parity remains unresolved (2026-10-01).** The paired drafts
+[metasalmon PR244](https://github.com/salmon-data-mobilization/metasalmon/pull/244)
+and [metasalmonpy PR85](https://github.com/salmon-data-mobilization/metasalmonpy/pull/85)
+have matching selected-IRI, retry and report contracts, but Python's follow-up
+default transport reads final response headers in a killed-and-reaped worker
+with a 30-second deadline. R still downloads the body within its total timeout.
+A local server sending complete HTTP200 headers and withholding the body
+therefore succeeds in Python and times out in R. This is temporary parity debt,
+not an approved deliberate difference or a merged/release parity claim; B-130
+is not ready for parity acceptance. `httr2::req_perform_connection()` still
+waited for body data in that probe, so it does not establish a repair.
+*Retires when:* a bounded R header-only GET is demonstrated, both default
+transports agree on the local withheld-body/header controls, and both drafts
+carry that repair. No register number or new queue item is allocated.
+
 Rows 16–28 were re-verified against metasalmon 0.3.0 on 2026-08-16 by reading
 both implementations; rows 17, 18, 20, 22, 23, 25, 26 and 27 carry the
 corrections that verification produced. Rows 35–38 were added at the 0.2.0 rung
@@ -232,4 +247,3 @@ the wording drift this pass corrected nor a row that is simply wrong; and it
 needs both checkouts, so it runs in neither repository's CI as things stand.
 Where it runs automatically is an open question. Until it is answered, this is a
 local step before committing a register change.
-

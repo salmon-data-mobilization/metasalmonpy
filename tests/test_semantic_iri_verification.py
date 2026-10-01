@@ -1,7 +1,13 @@
-"""B-130 behavioral mirror: every transport is injected; no live HTTP claims."""
+"""B-130 behavioral mirror: injected and local transports; no external HTTP claims."""
 
+import io
 import json
+import subprocess
+import sys
+import threading
+import time
 from collections import Counter
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pandas as pd
@@ -263,18 +269,126 @@ def test_default_transport_is_get_redirecting_bounded_and_no_model(tmp_path, mon
     class Response:
         status_code = 200
         url = "https://example.org/term"
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            calls.append("closed")
+        @property
+        def content(self):
+            pytest.fail("The verifier needs only response headers, not the body")
     def get(url, **kwargs):
         calls.append((url, kwargs))
         return Response()
     monkeypatch.setattr(requests, "get", get)
+    from metasalmonpy import semantic_iri_verification as module
+    # Execute the fixed worker with in-process streams so keyword/close behavior
+    # is observable. The real subprocess/deadline is exercised separately below.
+    def worker_process(*args, **kwargs):
+        class Process:
+            returncode = 0
+            def communicate(self, input, timeout):
+                output = io.StringIO()
+                with monkeypatch.context() as patch:
+                    patch.setattr(sys, "stdin", io.StringIO(input))
+                    patch.setattr(sys, "stdout", output)
+                    exec(module._REQUEST_WORKER, {})
+                return output.getvalue(), ""
+            def poll(self):
+                return 0
+        return Process()
+    monkeypatch.setattr(subprocess, "Popen", worker_process)
     from metasalmonpy import llm_review
     assert callable(llm_review.request_json)  # Positive control for provider reach.
     for name in dir(llm_review):
         if "request" in name and callable(getattr(llm_review, name)):
             monkeypatch.setattr(llm_review, name, lambda *args, **kwargs: pytest.fail("No model call"))
     rows = verify(tmp_path, sleep_fn=no_sleep)
-    assert calls == [(iri, {"headers": {"Accept": "*/*"}, "timeout": 30, "allow_redirects": True})]
+    assert calls == [(iri, {"headers": {"Accept": "*/*"}, "timeout": 30,
+                           "allow_redirects": True, "stream": True}), "closed"]
     assert rows.final_url.tolist() == [Response.url]
+
+
+def test_worker_uses_fixed_command_and_literal_json_input(monkeypatch):
+    from metasalmonpy import semantic_iri_verification as module
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: pytest.fail("No parent HTTP"))
+    iri = 'https://example.org/term?literal="$(touch never)"#exact'
+    seen = []
+    class Process:
+        returncode = 0
+        def communicate(self, input, timeout):
+            seen.append((json.loads(input), timeout))
+            return json.dumps({"status": 200, "final_url": iri}), ""
+        def poll(self):
+            return 0
+    def launch(command, **kwargs):
+        assert command == [sys.executable, "-c", module._REQUEST_WORKER]
+        assert kwargs == {"stdin": subprocess.PIPE, "stdout": subprocess.PIPE,
+                          "stderr": subprocess.PIPE, "text": True}
+        return Process()
+    monkeypatch.setattr(subprocess, "Popen", launch)
+    assert module._request(iri) == {"status": 200, "final_url": iri}
+    assert seen == [(iri, 30)]
+
+
+def test_blocked_default_worker_is_killed_reaped_and_reported(tmp_path, monkeypatch):
+    from metasalmonpy import semantic_iri_verification as module
+    fixture(tmp_path)
+    write_csv(tmp_path, "metadata/column_dictionary.csv", {
+        "term_iri": ["https://example.org/blocked#one"]})
+    monkeypatch.setattr(module, "_REQUEST_WORKER", "import time; time.sleep(60)")
+    monkeypatch.setattr(module, "_REQUEST_TIMEOUT", 0.1)
+    processes = []
+    popen = subprocess.Popen
+    def launch(*args, **kwargs):
+        process = popen(*args, **kwargs)
+        processes.append(process)
+        return process
+    monkeypatch.setattr(subprocess, "Popen", launch)
+    delays = []
+    started = time.monotonic()
+    with pytest.raises(ValueError, match="blocked#one.*request-error"):
+        verify(tmp_path, sleep_fn=delays.append)
+    assert time.monotonic() - started < 5
+    assert len(processes) == 3
+    assert all(process.poll() is not None for process in processes)
+    assert delays == [0.1, 0.25]
+    row = pd.read_csv(tmp_path / REPORT).iloc[0]
+    assert row.attempts == 3
+    assert pd.isna(row.status)
+    assert "timed out" in row.error
+
+
+def test_local_default_transport_ignores_body_and_bounds_headers(monkeypatch):
+    from metasalmonpy import semantic_iri_verification as module
+    monkeypatch.setattr(module, "_REQUEST_TIMEOUT", 2)
+    release = threading.Event()
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == "/headers":
+                release.wait(5)  # No headers arrive before the scaled deadline.
+                return
+            self.send_response(200)
+            self.send_header("Content-Length", "1000000")
+            self.end_headers()
+            release.wait(5)  # The body never needs to arrive for HTTP resolution.
+        def log_message(self, *args):
+            pass
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    root = f"http://127.0.0.1:{server.server_port}"
+    try:
+        assert module._request(root + "/body") == {
+            "status": 200, "final_url": root + "/body"}
+        started = time.monotonic()
+        with pytest.raises(requests.exceptions.Timeout, match="timed out"):
+            module._request(root + "/headers")
+        assert time.monotonic() - started < 4
+    finally:
+        release.set()
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_canonical_order_non_ascii_and_explicit_report_path(tmp_path):

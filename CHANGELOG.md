@@ -5,7 +5,9 @@
 * **Selected semantic-IRI resolution leaves evidence even on failure.**
   `verify_sdp_semantic_iris()` mirrors R B-130/PR244: selected exact HTTP IRIs,
   including validated manifest-bound SSSOM references, are GET checked in
-  UTF-8/C order with at most three attempts for transient failures. The complete
+  UTF-8/C order with at most three attempts for transient failures. The default
+  GET reads final response headers in a worker with a 30-second deadline,
+  including DNS and redirects, and kills and reaps an expired worker. The complete
   deterministic five-column CSV is written before an aggregate failure;
   candidate/data URLs and model calls are excluded. HTTP success does not
   establish RDF term presence or semantic suitability. Offline tests prove

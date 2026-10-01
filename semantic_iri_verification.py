@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Callable, Mapping, Optional, Union
@@ -34,6 +36,27 @@ from .text_safety import redact_secrets
 _COLUMNS = ("iri", "status", "final_url", "error", "attempts")
 _DEFAULT_REPORT = "reproducibility/provenance/semantic-iri-dereference.csv"
 _DELAYS = (0.1, 0.25)
+_REQUEST_TIMEOUT = 30
+# Fixed source and JSON stdin keep the selected IRI out of shell/code syntax.
+# A separate process gives DNS, headers, redirects and socket waits one real
+# deadline without leaking a blocked thread or requiring notebook main guards.
+# Retires when a shared verified transport provides the same finite deadline.
+_REQUEST_WORKER = """
+import json
+import sys
+import requests
+
+iri = json.load(sys.stdin)
+try:
+    with requests.get(iri, headers={"Accept": "*/*"}, timeout=30,
+                      allow_redirects=True, stream=True) as response:
+        result = {"status": response.status_code, "final_url": response.url}
+except Exception as error:
+    result = {"error": str(error) or type(error).__name__,
+              "transport_failure": isinstance(error, (
+                  requests.exceptions.ConnectionError, requests.exceptions.Timeout))}
+json.dump(result, sys.stdout)
+"""
 # Retires when a shared verified transport keeps this bound and failure evidence.
 _TRANSIENT_MESSAGE = re.compile(
     r"TLS|SSL|connect|connection reset|timed?[ -]?out|timeout|"
@@ -115,8 +138,34 @@ def _selected_iris(root):
 
 
 def _request(iri):
-    response = requests.get(iri, headers={"Accept": "*/*"}, timeout=30, allow_redirects=True)
-    return {"status": response.status_code, "final_url": response.url}
+    process = subprocess.Popen(
+        [sys.executable, "-c", _REQUEST_WORKER], stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    try:
+        output, _ = process.communicate(json.dumps(iri), timeout=_REQUEST_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.communicate()  # Reap the worker before retrying or returning.
+        raise requests.exceptions.Timeout(
+            f"Semantic IRI request timed out after {_REQUEST_TIMEOUT:g} seconds."
+        ) from None
+    except BaseException:
+        process.kill()
+        process.communicate()
+        raise
+    if process.returncode:
+        # stderr may contain external request text; never expose it unredacted.
+        raise RuntimeError(f"Semantic IRI request worker failed (exit {process.returncode}).")
+    try:
+        response = json.loads(output)
+    except (TypeError, ValueError):
+        raise RuntimeError("Semantic IRI request worker returned invalid JSON.") from None
+    if "error" in response:
+        failure = (requests.exceptions.ConnectionError if response.get("transport_failure")
+                   else RuntimeError)
+        raise failure(response["error"])
+    return response
 
 
 def _attempt(iri, requester):
@@ -173,7 +222,11 @@ def verify_sdp_semantic_iris(
 ) -> pd.DataFrame:
     """Dereference exact selected HTTP semantic IRIs and persist every result.
 
-    GET follows redirects, with a 30-second timeout. Only HTTP 408, 429, 5xx,
+    GET follows redirects and reads response headers without downloading the
+    final body. The default transport has a 30-second worker deadline, including
+    startup, DNS, connection and redirects; an expired worker is killed and
+    reaped. Injected requesters keep their own execution behavior.
+    Only HTTP 408, 429, 5xx,
     or classified transient transport failures retry, at most three times,
     after delays of 0.1 and 0.25 seconds. Candidate suggestions, arbitrary data
     URLs and non-HTTP identifiers are excluded; manifest-bound SSSOM semantic
