@@ -18,6 +18,15 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **SSSOM metadata refuses explicit YAML tags.** Hub **B-353**, the Python
+  half of **B-352**, implements Brett's 2026-09-25 Q62 ruling. Local tags such
+  as `!expr`/`!foo`, `!!` tags and verbatim tags now fail with the existing
+  not-valid-YAML error naming the file, including anchored, nested and flow
+  values. Quoted exclamations and ordinary plain text remain text. Package
+  validation still proves the mapping file was read and no expression was
+  evaluated; it now refuses the tagged package. No dependency, public
+  signature, canonical writer bytes or parity-register row changed.
+
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
   half of the S16 convergence that precedes the shared review-packet contract

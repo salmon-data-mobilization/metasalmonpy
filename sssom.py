@@ -368,6 +368,29 @@ def _read_bytes(path: Union[str, Path], label: str = "SSSOM mapping set") -> byt
 # --- restricted YAML-subset parsing for the embedded metadata header --------
 
 
+def _scalar_has_yaml_tag(text: str) -> bool:
+    """Detect explicit node tags without loading or resolving YAML values.
+
+    Node properties may put an anchor before a tag (YAML 1.2 section 6.9).
+    Flow values are left as text by this restricted reader, but must not hide
+    tags that a YAML reader would resolve. Quoted exclamations and exclamations
+    inside a plain scalar are text, so only node-property positions count.
+    """
+    anchor = r"&[^\s\[\]{},]+\s+"
+    content = re.sub(r"\A" + anchor, "", text, count=1)
+    if content.startswith("!"):
+        return True
+    if not content.startswith(("[", "{")):
+        return False
+    # Mask complete quoted nodes first. Keep a placeholder for quoted mapping
+    # keys, whose colon may directly precede a tagged value in flow syntax.
+    masked = re.sub(r'''"(?:[^"\\]|\\.)*"|'(?:[^']|'')*' ''', '""', content, flags=re.X)
+    return re.search(
+        r'(?:\A|[\[{,]\s*|:\s+|""\s*:\s*)(?:\?\s+)?(?:' + anchor + r")?!",
+        masked,
+    ) is not None
+
+
 def _parse_scalar(text: str, fail) -> str:
     """Parse one scalar value: JSON/double-quoted, single-quoted, or plain.
 
@@ -387,6 +410,8 @@ def _parse_scalar(text: str, fail) -> str:
         if len(text) < 2 or not text.endswith("'"):
             fail(f"malformed single-quoted scalar {text!r}")
         return text[1:-1].replace("''", "'")
+    if _scalar_has_yaml_tag(text):
+        fail("explicit YAML tags are not supported in SSSOM metadata")
     # A plain scalar ends at a whitespace-preceded "#" (a YAML comment);
     # a "#" glued to text (e.g. an IRI fragment) is part of the value.
     return re.split(r"\s+#", text, maxsplit=1)[0].strip()
