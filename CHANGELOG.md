@@ -27,6 +27,15 @@ and moving it is a separate outward act.
   evaluated; it now refuses the tagged package. No dependency, public
   signature, canonical writer bytes or parity-register row changed.
 
+* **Whole-number float years keep their temporal role when a CSV cell is
+  blank.** Hub **B-348**, porting Brett's 2026-09-25 ruling: the year-shape
+  predicate reads numeric `2001.0` as `2001`, matching R's `as.character()`.
+  The `BY` column from `BY,n / 2001,1 / ,2 / 2003,3` now types `temporal`
+  through `infer_column_role()`. Fractional values such as `1850.5` and text
+  such as `"1850.0"` remain non-year-shaped; float spawner counts retain their
+  measurement role. Other character rendering and R's implementation are
+  unchanged. This is a ruled port, with no new parity-deviation row.
+
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
   half of the S16 convergence that precedes the shared review-packet contract
