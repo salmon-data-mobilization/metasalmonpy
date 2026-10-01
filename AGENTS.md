@@ -256,15 +256,6 @@ it**, and when a place must be enumerated because the number is the point, give
 it a guard in the same change. An unguarded entry is a thing to remember; a
 guarded one is a thing the suite remembers; a deleted one cannot go stale at all.
 
-Two further mentions of `0.1.6` are deliberately left alone, because they are
-about **tags** rather than about this claim: the install instructions in
-`README.md` and `getting-started.qmd` both say the `v0.1.6` tag is what a user
-can install. That is wrong — `v0.4.0` exists at `3b587e6` — but fixing it is a
-statement about which tag to install, so it waited on the tagging decision
-rather than riding along with a version bump. That decision was made on
-2026-09-24, when `v0.5.0` was tagged on `67fb486`, so the fix is no longer
-blocked and is still owed.
-
 The version is a **parity claim**, so it moves only when the mirrored behaviour
 actually lands; the mirror contract above governs what makes the claim true.
 Verify with `uv lock --check` and both dependency legs before tagging.

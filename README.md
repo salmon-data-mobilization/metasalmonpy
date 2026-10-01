@@ -12,14 +12,18 @@ Python users.
 
 ## Installation
 
-Install from the repository (the `v0.1.6` tag predates the rename and still
-packages the old `salmonpy` name; the next parity release will be the first
-tag installable as `metasalmonpy`):
+Install the released package from its tagged source archive:
 
 ```bash
 python -m pip install \
-  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@main"
+  "metasalmonpy @ https://github.com/salmon-data-mobilization/metasalmonpy/archive/refs/tags/v0.5.0.tar.gz"
 ```
+
+The package version is a claim of behavioural parity with metasalmon; see the
+[parity guide](guides/parity.qmd). A checkout of `main` can contain unreleased
+changes even while reporting the released version. The tagged archive pins the
+package source; no wheel release asset or local Git installation is required.
+Lock dependencies separately when reproducing a complete environment.
 
 For development:
 

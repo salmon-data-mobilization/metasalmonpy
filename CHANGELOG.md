@@ -18,6 +18,11 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* Installation instructions now use the released `v0.5.0` source archive,
+  rather than `main`, and explain the difference between a release parity claim
+  and unreleased changes. The obsolete claim that no tag packages
+  `metasalmonpy` is removed (hub backlog #110).
+
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy
   half of the S16 convergence that precedes the shared review-packet contract
