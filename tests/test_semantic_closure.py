@@ -27,7 +27,9 @@ import pytest
 from metasalmonpy import (
     read_salmon_datapackage,
     render_ontology_term_request,
+    write_salmon_datapackage,
     write_sdp_semantic_closure,
+    write_sdp_observation_structures,
 )
 from metasalmonpy import eml as eml_module
 from metasalmonpy import semantic_closure as closure_module
@@ -86,6 +88,104 @@ def _sdp(tmp_path: Path, measurement_term_iri: str = OBSERVED_IRI) -> str:
     return str(target)
 
 
+def _procedure_sdp(tmp_path: Path) -> str:
+    """Bind a row-varying code column to the count measure as usedProcedure."""
+    path = _sdp(tmp_path)
+    pkg = read_salmon_datapackage(path)
+    resources = dict(pkg["resources"])
+    resources["counts"] = resources["counts"].assign(
+        estimate_method=["mark_recapture", "expanded_count"]
+    )
+    dictionary = pd.concat(
+        [
+            pkg["dictionary"],
+            pd.DataFrame(
+                [
+                    {
+                        "dataset_id": "demo-salmon-2026",
+                        "table_id": "counts",
+                        "column_name": "estimate_method",
+                        "column_label": "Estimate method",
+                        "column_description": "Row-varying count estimation procedure.",
+                        "column_role": "categorical",
+                        "value_type": "string",
+                        "term_type": "skos_concept",
+                        "required": True,
+                    }
+                ]
+            ),
+        ],
+        ignore_index=True,
+    )
+    codes = pd.DataFrame(
+        [
+            {
+                "dataset_id": "demo-salmon-2026",
+                "table_id": "counts",
+                "column_name": "estimate_method",
+                "code_value": "mark_recapture",
+                "code_label": "Mark-recapture estimate",
+                "code_description": "Mark-recapture procedure",
+                "term_iri": "https://example.org/methods/mark-recapture",
+                "term_type": "owl_named_individual",
+            },
+            {
+                "dataset_id": "demo-salmon-2026",
+                "table_id": "counts",
+                "column_name": "estimate_method",
+                "code_value": "expanded_count",
+                "code_label": "Expanded count",
+                "code_description": "Expanded-count procedure",
+                "term_iri": "https://example.org/methods/expanded-count",
+                "term_type": "owl_named_individual",
+            },
+        ],
+        columns=list(pkg["codes"].columns),
+    )
+    # The package writer owns only SDP data/metadata and keeps the EML sidecar.
+    write_salmon_datapackage(
+        resources, pkg["dataset"], pkg["tables"], dictionary, codes,
+        path=path, overwrite=True,
+    )
+    write_sdp_observation_structures(
+        path,
+        structures=pd.DataFrame(
+            [
+                {
+                    "dataset_id": "demo-salmon-2026",
+                    "table_id": "counts",
+                    "observation_structure_id": "count_by_record",
+                    "structure_label": "Count by record",
+                    "structure_description": "One count observation per record.",
+                }
+            ]
+        ),
+        components=pd.DataFrame(
+            [
+                {
+                    "dataset_id": "demo-salmon-2026",
+                    "table_id": "counts",
+                    "observation_structure_id": "count_by_record",
+                    "component_order": order,
+                    "column_name": column,
+                    "component_role": role,
+                    "component_relation_iri": relation,
+                    "required_when_observed": True,
+                }
+                for order, column, role, relation in (
+                    (1, "record_id", "dimension", ""),
+                    (2, "count", "measure", ""),
+                    (
+                        3, "estimate_method", "attribute",
+                        "http://www.w3.org/ns/sosa/usedProcedure",
+                    ),
+                )
+            ]
+        ),
+    )
+    return path
+
+
 def _search_index() -> pd.DataFrame:
     """A deterministic stand-in index for ``find_terms()``, keyed by query text.
 
@@ -137,6 +237,42 @@ def _search_stub(index: pd.DataFrame = None, calls: list = None):
         hits = frame[frame["query"] == query].drop(columns=["query"]).copy()
         hits["score"] = [0.9] * len(hits)
         return hits.reset_index(drop=True)
+
+    return search_fn
+
+
+def _procedure_search_stub(calls: list):
+    """Find code-resolved procedures only when the closure searches as method."""
+    baseline = _search_stub()
+    procedures = {
+        "expanded count": {
+            "iri": "https://example.org/methods/expanded-count",
+            "label": "Expanded count",
+            "definition": "An expanded-count abundance estimation procedure.",
+        },
+        "mark recapture": {
+            "iri": "https://example.org/methods/mark-recapture",
+            "label": "Mark-recapture estimate",
+            "definition": "A mark-recapture abundance estimation procedure.",
+        },
+    }
+
+    def search_fn(query, role=None, sources=None):
+        calls.append((query, role))
+        if role == "method" and query in procedures:
+            return pd.DataFrame(
+                [
+                    {
+                        **procedures[query],
+                        "source": "smn",
+                        "ontology": "smn",
+                        "resource_kind": "Concept",
+                        "type_iris": "http://www.w3.org/ns/sosa/Procedure",
+                        "score": 0.9,
+                    }
+                ]
+            )
+        return baseline(query, role=role, sources=sources)
 
     return search_fn
 
@@ -352,6 +488,54 @@ def test_the_two_canonical_sets_differ_and_the_producer_derives_both(tmp_path):
     assert len(closure["vocabulary"]) == 4
     assert len(closure["review"]) == 5
     assert len(closure["gaps"]) == 0
+
+
+@_REQUIRES_YAML
+def test_a_code_resolved_procedure_is_a_vocabulary_term_and_never_a_review_target(tmp_path):
+    import yaml
+
+    path = _procedure_sdp(tmp_path)
+    procedures = {
+        "https://example.org/methods/expanded-count",
+        "https://example.org/methods/mark-recapture",
+    }
+    calls = []
+    # Neither procedure has a review-target row or hand-supplied evidence.
+    # Its vocabulary row must come from a method-role search result.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        closure = write_sdp_semantic_closure(
+            path,
+            evidence=_reviewed_evidence(),
+            search_fn=_procedure_search_stub(calls),
+            quiet=True,
+        )
+
+    assert set(closure["measurement_iris"]) - set(
+        closure["review_targets"]["iri"]
+    ) == procedures
+    assert set(closure["review_targets"]["iri"]) - set(
+        closure["measurement_iris"]
+    ) == {OBSERVATION_IRI}
+
+    vocabulary = eml_module._read_character_csv(closure["files"]["vocabulary"])
+    review = eml_module._read_character_csv(closure["files"]["review"])
+    assert procedures <= set(vocabulary["iri"])
+    assert procedures.isdisjoint(review["iri"])
+    assert len(vocabulary) == 6
+    assert len(review) == 5
+    assert len(closure["gaps"]) == 0
+
+    # A wrong fallback role produces no procedure hit in this stub, so the
+    # test fails on the role decision as well as on the written file contents.
+    for query in ("expanded count", "mark recapture"):
+        assert [role for searched, role in calls if searched == query] == ["method"]
+
+    pkg = read_salmon_datapackage(path)
+    with open(Path(path) / "metadata" / "eml-mapping.yml", encoding="utf-8") as handle:
+        mapping = yaml.safe_load(handle)
+    assert len(eml_module._read_vocabulary(Path(path), pkg, mapping)) == 6
+    assert len(eml_module._read_semantic_review(Path(path), pkg, mapping)) == 5
 
 
 @_REQUIRES_YAML
