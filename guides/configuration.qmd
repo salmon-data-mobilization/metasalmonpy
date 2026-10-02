@@ -17,7 +17,7 @@ current controls.
 
 | Setting | Meaning and precedence |
 | --- | --- |
-| `METASALMONPY_SDP_SCHEMA_SOURCE` | `auto` (default) tries the pinned remote bundle then the vendored copy; `remote` requires remote loading; `vendored` stays offline. |
+| `METASALMONPY_SDP_SCHEMA_SOURCE` | The loader's `auto` default tries the pinned remote bundle then the vendored copy; `remote` requires remote loading; `vendored` stays offline. Review and setter defaults are described below. |
 | `METASALMONPY_SDP_SCHEMA_BASE_URL` | Select a different schema bundle base URL; unset uses the package's current pinned release. |
 | `set_sdp_schema_source()` | Process override ahead of the source environment variable. Pass `None` to restore environment/default resolution. |
 | `set_sdp_schema_base_url()` | Process override ahead of the base-URL environment variable. Pass `None` to restore environment/default resolution. |
@@ -29,9 +29,14 @@ set_sdp_schema_source("vendored")  # Read the bundled schema offline.
 set_sdp_schema_source(None)        # Restore environment/default resolution.
 ```
 
-Changing either process override clears the schema cache. Package creation,
-metadata review and setters use the selected schema. The default schema pin
-is maintained with the vendored bundle when a later spec release is implemented.
+Changing either process override clears the schema cache. Under the shipped
+`auto` source and pinned base URL, package creation tries the remote bundle
+before falling back to the vendored copy. `review_metadata()` and the four
+`set_sdp_*()` setters instead read the vendored copy offline; this is still
+true if `auto` was selected explicitly with the pinned URL. A different source
+or base URL makes review and setters use the selected loader schema, which may
+contact the network. The default schema pin is maintained with the vendored
+bundle when a later spec release is implemented.
 
 ## Retrieval
 
