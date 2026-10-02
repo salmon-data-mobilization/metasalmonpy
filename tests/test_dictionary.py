@@ -248,6 +248,90 @@ def _call_recording_warnings(call):
     return result, reports, deprecations
 
 
+class ApplyVocabularyBackedDictionaryTests(unittest.TestCase):
+    """B-347/B-346: a vocabulary-only row disables the column's code list."""
+
+    def test_a_vocabulary_only_row_may_omit_the_optional_code_value_field(self):
+        frame = pd.DataFrame({"species": ["Coho", "Chinook", None]})
+        dictionary = _one_column_dictionary("species", "string")
+        dictionary["column_label"] = "Species"
+        codes = _code_list("species", [None]).drop(columns="code_value")
+        codes["vocabulary_iri"] = "https://example.org/vocabulary"
+        result, reports, _ = _call_recording_warnings(
+            lambda: apply_salmon_dictionary(frame, dictionary, codes=codes)
+        )
+        pd.testing.assert_frame_equal(result, apply_salmon_dictionary(frame, dictionary))
+        self.assertEqual(reports, [])
+
+    def test_a_vocabulary_backed_column_keeps_values_without_a_code_report(self):
+        frame = pd.DataFrame({"species": ["Coho", "Chinook", None, ""]})
+        # These are the missing/blank spellings read from codes.csv or supplied
+        # by a caller. Any one matching row suffices, even beside a coded row.
+        for missing_code in (None, pd.NA, float("nan"), "", " \t\r\n"):
+            for strict in (True, False):
+                for mixed in (False, True):
+                    with self.subTest(missing_code=missing_code, strict=strict, mixed=mixed):
+                        codes = _code_list("species", [missing_code], ["Vocabulary"])
+                        codes["vocabulary_iri"] = "https://example.org/vocabulary"
+                        if mixed:
+                            codes = pd.concat([_code_list("species", ["Coho"], ["Coded coho"]), codes])
+                        dictionary = _one_column_dictionary("species", "string")
+                        expected = apply_salmon_dictionary(frame, dictionary)
+                        with mock.patch(
+                            "metasalmonpy.dictionary._report_unlisted_code_values",
+                            side_effect=AssertionError("a vocabulary is not a code list"),
+                        ):
+                            result, reports, _ = _call_recording_warnings(
+                                lambda: apply_salmon_dictionary(frame, dictionary, codes=codes, strict=strict)
+                            )
+                        pd.testing.assert_frame_equal(result, expected)
+                        self.assertNotIsInstance(result["species"].dtype, pd.CategoricalDtype)
+                        self.assertEqual(reports, [])
+
+    def test_independent_categorical_role_and_type_coercion_are_preserved(self):
+        for role, value_type, values in (
+            ("categorical", "string", ["Coho", "Chinook", None]),
+            ("attribute", "integer", ["1", "2", None]),
+        ):
+            with self.subTest(role=role, value_type=value_type):
+                frame = pd.DataFrame({"value": values})
+                dictionary = _one_column_dictionary("value", value_type, role)
+                codes = _code_list("value", [None])
+                codes["vocabulary_iri"] = "https://example.org/vocabulary"
+                result, reports, _ = _call_recording_warnings(
+                    lambda: apply_salmon_dictionary(frame, dictionary, codes=codes)
+                )
+                pd.testing.assert_frame_equal(result, apply_salmon_dictionary(frame, dictionary))
+                self.assertEqual(reports, [])
+
+    def test_only_matching_rows_with_both_a_vocabulary_and_no_code_disable_the_list(self):
+        frame = pd.DataFrame({"species": ["Coho", "Unknown"]})
+        dictionary = _one_column_dictionary("species", "string")
+        ordinary = _code_list("species", ["Coho"], ["Coded coho"])
+        expected, expected_reports, _ = _call_recording_warnings(
+            lambda: apply_salmon_dictionary(frame, dictionary, codes=ordinary)
+        )
+        for other_column, other_table, code, vocabulary in (
+            ("different", "t", None, "https://example.org/vocabulary"),
+            ("species", "different", None, "https://example.org/vocabulary"),
+            ("species", "t", "Coho", "https://example.org/vocabulary"),
+            ("species", "t", None, None),
+            ("species", "t", None, ""),
+            ("species", "t", None, " \t\r\n"),
+        ):
+            with self.subTest(column=other_column, table=other_table, code=code, vocabulary=vocabulary):
+                other = _code_list(other_column, [code], ["Coded coho" if code == "Coho" else None])
+                other["table_id"] = other_table
+                other["vocabulary_iri"] = vocabulary
+                codes = pd.concat([ordinary, other], ignore_index=True)
+                result, reports, _ = _call_recording_warnings(
+                    lambda: apply_salmon_dictionary(frame, dictionary, codes=codes)
+                )
+                pd.testing.assert_frame_equal(result, expected)
+                self.assertEqual(reports, expected_reports)
+                self.assertIn("'Unknown'", reports[0])
+
+
 class ApplyDictionaryFailureReportTests(unittest.TestCase):
     """Both paths of hub item B-241, the mirror half of metasalmon's B-55.
 

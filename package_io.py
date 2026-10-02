@@ -35,6 +35,7 @@ from .metadata import (
     read_sdp_csv,
     scalar_text,
     READR_TRIM_CHARS,
+    _absolute_iri_shape,
 )
 from .nuseds import (
     nuseds_enumeration_method_crosswalk,
@@ -2589,6 +2590,30 @@ def _collect_review_iri_issues(frame: object, source_name: str) -> list[str]:
     return messages
 
 
+def _collect_absolute_iri_issues(
+    frame: object, source_name: str, excluded_fields=()
+) -> list[str]:
+    """Strict metadata shape checks; existing marker/placement owners stay put."""
+    if not isinstance(frame, pd.DataFrame) or len(frame) == 0:
+        return []
+    messages = []
+    for field in frame.columns:
+        if not str(field).endswith("_iri") or field in excluded_fields:
+            continue
+        for position, value in enumerate(frame[field]):
+            if pd.isna(value):
+                continue
+            text = str(value)
+            if not text or _REVIEW_IRI_RE.match(text):
+                continue
+            if not _absolute_iri_shape(text):
+                messages.append(
+                    f"{source_name} row {position + 1} field {field} is not an "
+                    f"absolute IRI: '{text}'."
+                )
+    return messages
+
+
 def _collect_review_issues(package: Dict[str, object]) -> list[str]:
     """Every unresolved review signal across the package's metadata frames.
 
@@ -3451,7 +3476,9 @@ def validate_salmon_datapackage(
     observation-structure, SSSOM mapping-set and measurement-decomposition
     artifacts validate when present; and then runs :func:`validate_dictionary`
     plus :func:`~metasalmonpy.validation.validate_semantics`. Under
-    ``require_iris=True`` it additionally refuses ``REVIEW:`` markers,
+    ``require_iris=True`` it additionally refuses malformed absolute-IRI
+    shapes in the six dictionary semantic fields and table ``*_iri`` fields,
+    ``REVIEW:`` markers,
     unresolved ``MISSING ...:`` placeholders, blank schema-required metadata
     fields and blank table ``observation_unit_iri`` values (a column a metadata
     file does not have counts as blank in every row); in the default mode those
@@ -3570,6 +3597,12 @@ def validate_salmon_datapackage(
         # validation must block it, exactly as it blocks a REVIEW: marker.
         final_review_issues = (
             final_review_issues + table_review_issues + placement_issues
+            # Unconditional table placements already have owners. Excluding
+            # them here prevents duplicate shape reports; the dictionary's
+            # six semantic fields are handled by validate_dictionary above.
+            + _collect_absolute_iri_issues(
+                tables, "metadata/tables.csv", excluded_fields=("method_iri", "protocol_iri")
+            )
         )
         if final_review_issues:
             total = len(final_review_issues)

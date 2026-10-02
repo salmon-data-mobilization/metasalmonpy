@@ -35,7 +35,7 @@ import pytest
 
 import metasalmonpy
 from metasalmonpy import create_sdp, infer_salmon_datapackage_artifacts
-from metasalmonpy.dictionary import infer_column_role
+from metasalmonpy.dictionary import infer_column_role, infer_value_type
 from metasalmonpy.metadata import CODE_LIST_LIMIT, code_list_values, read_sdp_csv
 
 DATA = Path(metasalmonpy.__file__).parent / "data"
@@ -382,6 +382,15 @@ def test_text_readr_reads_as_a_date_or_date_time_seeds_no_code_list(token, readr
     assert code_list_values(series.astype(object)) == expected
 
 
+@pytest.mark.parametrize("token,readr_class", READR_GUESSES)
+def test_date_inference_uses_the_seeders_existing_readr_token_corpus(token, readr_class):
+    series = pd.Series([token, None, token])
+    expected = {"Date": "date", "POSIXct": "datetime"}.get(readr_class, "string")
+    assert infer_value_type(series) == expected
+    if readr_class in ("Date", "POSIXct"):
+        assert infer_column_role("SURVEY_WAVE", series) == "temporal"
+
+
 # readr guesses one type for the whole column, so a mixed column is a date only
 # when every present value fits the same guess. Measured as above.
 READR_COLUMN_GUESSES = [
@@ -403,6 +412,8 @@ READR_COLUMN_GUESSES = [
 def test_a_column_is_a_date_only_when_every_present_value_is(tokens, readr_class):
     expected = [] if readr_class in ("Date", "POSIXct") else tokens
     assert code_list_values(pd.Series(tokens)) == expected
+    value_type = {"Date": "date", "POSIXct": "datetime"}.get(readr_class, "string")
+    assert infer_value_type(pd.Series(tokens)) == value_type
 
 
 def test_date_objects_seed_no_code_list_and_a_categorical_of_dates_still_does():
@@ -422,8 +433,8 @@ def test_date_objects_seed_no_code_list_and_a_categorical_of_dates_still_does():
 def test_a_date_column_is_neither_seeded_nor_typed_categorical():
     # The role heuristic reads the seeder's predicate (hub B-125), so a column
     # of date text whose name has no time word is not left typed categorical
-    # with no code list. R holds that column as a Date and types it temporal
-    # by class. That role difference is not this test's subject.
+    # with no code list. B-349 also carries readr's date guess into the role
+    # and value type, matching the Date column on R's documented read path.
     resources = {
         "surveys": pd.DataFrame(
             {
@@ -440,7 +451,9 @@ def test_a_date_column_is_neither_seeded_nor_typed_categorical():
     dictionary = artifacts["dict"]
     assert set(artifacts["codes"]["column_name"]) == {"AREA"}
     role = dictionary.loc[dictionary["column_name"] == "SURVEY_WAVE", "column_role"].iloc[0]
-    assert role != "categorical"
+    assert role == "temporal"
+    value_type = dictionary.loc[dictionary["column_name"] == "SURVEY_WAVE", "value_type"].iloc[0]
+    assert value_type == "date"
     assert infer_column_role("START_DTT", pd.Series(["2001-11-06", None])) == "temporal"
 
 

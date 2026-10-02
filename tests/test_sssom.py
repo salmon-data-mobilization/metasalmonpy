@@ -511,6 +511,107 @@ def test_rejects_duplicate_curie_prefixes(tmp_path):
         read_sssom_mapping_set(path)
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "!expr X", "!foo X", "!!str X", "!<tag:yaml.org,2002:str> X",
+        "&label !foo X", "[!foo X]", "{item: !foo X}",
+        '["literal", &label !!str X]', '{"item":!foo X}',
+        "{? !foo x: y}", "[? !foo x: y]", "{? &label !foo x: y}",
+        "[a'b, !foo X, c'd]",
+    ],
+)
+def test_reader_refuses_yaml_tags_in_metadata_values(tmp_path, value):
+    """B-353/Q62: refuse tag syntax, including tagged flow/anchored nodes."""
+    path = write_raw(
+        tmp_path / "tagged.sssom.tsv",
+        sssom_text(extra_metadata=["# mapping_set_title: " + value]),
+    )
+    with pytest.raises(ValueError, match="not valid YAML") as error:
+        read_sssom_mapping_set(path)
+    assert str(path) in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ["curie_map:", "  psc: !!str https://example.org/"],
+        ["mapping_set_title:", "  - !foo X"],
+    ],
+    ids=["nested-mapping", "block-sequence"],
+)
+def test_subset_parser_refuses_tags_on_nested_and_sequence_values(lines):
+    with pytest.raises(ValueError, match="nested.sssom.tsv.*not valid YAML"):
+        sssom._parse_yaml_subset(lines, "nested.sssom.tsv")
+
+
+@pytest.mark.parametrize(
+    "entry", ["key: !foo X", "? !foo X", "key: &label !!str X", "key: [!foo X]", "- !foo X"],
+)
+def test_reader_refuses_tags_in_compact_block_sequence_mappings(tmp_path, entry):
+    path = write_raw(
+        tmp_path / "compact-tagged.sssom.tsv",
+        sssom_text(extra_metadata=["# mapping_set_title:", "#   - " + entry]),
+    )
+    with pytest.raises(ValueError, match="not valid YAML") as error:
+        read_sssom_mapping_set(path)
+    assert str(path) in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "entry,expected",
+    [
+        ("'key: !foo X'", "key: !foo X"), ('"? !foo X"', "? !foo X"),
+        ('"- !foo X"', "- !foo X"), ("Good !foo X", "Good !foo X"),
+    ],
+)
+def test_compact_tag_refusal_preserves_sequence_text(tmp_path, entry, expected):
+    path = write_raw(
+        tmp_path / "sequence-text.sssom.tsv",
+        sssom_text(extra_metadata=["# mapping_set_title:", "#   - " + entry]),
+    )
+    assert read_sssom_mapping_set(path).metadata["mapping_set_title"] == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("[value] # [!foo X]", "[value]"),
+        ("[value#fragment] # {key: !foo X}", "[value#fragment]"),
+        ('["literal # [!foo X]"] # [!foo X]', '["literal # [!foo X]"]'),
+        ("[a'b] # [!foo X] 'ignored", "[a'b]"),
+    ],
+)
+def test_tag_scan_excludes_comments_but_preserves_quoted_hashes(tmp_path, value, expected):
+    path = write_raw(
+        tmp_path / "comment-text.sssom.tsv",
+        sssom_text(extra_metadata=["# mapping_set_title: " + value]),
+    )
+    assert read_sssom_mapping_set(path).metadata["mapping_set_title"] == expected
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ('"!expr X"', "!expr X"), ("'!!str X'", "!!str X"),
+        ('["!foo X"]', '["!foo X"]'), ("['!foo X']", "['!foo X']"),
+        ("Good !foo title", "Good !foo title"),
+        ("Good [!foo X] title", "Good [!foo X] title"),
+        ("[https:!text]", "[https:!text]"),
+        ('{"item": "Good !foo title"}', '{"item": "Good !foo title"}'),
+        ('"? !foo X"', "? !foo X"),
+        ('["? !foo X"]', '["? !foo X"]'),
+        ("[a'b, literal, c'd]", "[a'b, literal, c'd]"),
+    ],
+)
+def test_tag_refusal_preserves_quoted_exclamations_and_plain_text(tmp_path, value, expected):
+    path = write_raw(
+        tmp_path / "text.sssom.tsv",
+        sssom_text(extra_metadata=["# mapping_set_title: " + value]),
+    )
+    assert read_sssom_mapping_set(path).metadata["mapping_set_title"] == expected
+
+
 def test_rejects_invalid_curie_prefix_name(tmp_path):
     text = sssom_text(extra_prefixes=["#   9bad: https://example.org/bad/"])
     path = write_raw(tmp_path / "bad-prefix.sssom.tsv", text)
@@ -1040,8 +1141,8 @@ def test_validate_salmon_datapackage_never_evaluates_a_tag_in_sssom_metadata(
     """Twin of metasalmon's "validate_salmon_datapackage never evaluates an
     !expr tag in SSSOM metadata" (``tests/testthat/test-sssom.R``), hub B-189.
 
-    **A guard, not a fix.** ``_parse_yaml_subset()`` evaluates nothing and
-    never calls PyYAML, so this passes on the tree it was written against.
+    B-353 extends the non-evaluation guard with Q62's ruled tag refusal.
+    ``_parse_yaml_subset()`` evaluates nothing and never calls PyYAML.
     Hub B-124 made ``validate_salmon_datapackage()`` reach this reader while
     validating a package somebody else wrote, so a later swap of the subset
     parser for a loader that evaluates tags would run that author's bytes
@@ -1054,14 +1155,9 @@ def test_validate_salmon_datapackage_never_evaluates_a_tag_in_sssom_metadata(
     The spy is the positive control. It shows the validator read the tagged
     file, so the absent side effect is not a read that never happened.
 
-    The title must come back as text carrying the sentinel's path, which
-    neither expression's value does: evaluating either returns ``None``. The
-    exact text is deliberately not pinned. metasalmon's reader drops the tag,
-    returning the expression for the first line and the path alone for the
-    second, where this one returns each line as written (measured 2026-09-25,
-    metasalmon 0.5.0 and yaml 2.3.12). Which is right was an unruled parity
-    question on that date, and this guard holds whichever way it is ruled;
-    once it is, the check can name the one text.
+    Brett ruled on 2026-09-25 that both readers refuse tags. This now checks
+    that the existing not-valid-YAML failure names the file, while still
+    proving that validation reached it and no expression was evaluated.
 
     *Retires when:* nothing validates a package somebody else wrote through
     this reader. It pins a property rather than a defect, so no fix retires it.
@@ -1113,13 +1209,10 @@ def test_validate_salmon_datapackage_never_evaluates_a_tag_in_sssom_metadata(
             verdict = error
 
     assert not sentinel.exists(), f"validation evaluated {value!r}"
-    assert verdict is None, f"validation refused the package: {verdict!r}"
     assert installed.resolve() in reached, "validation never read the mapping set"
-    # The tag reaches the package as text, not as its value; the docstring
-    # says why the text itself is not pinned.
-    title = read_sssom_mapping_set(installed).metadata["mapping_set_title"]
-    assert isinstance(title, str) and sentinel.as_posix() in title, repr(title)
-    assert not sentinel.exists()
+    assert isinstance(verdict, ValueError), f"validation accepted tagged YAML: {verdict!r}"
+    assert "not valid YAML" in str(verdict)
+    assert str(installed) in str(verdict)
 
 
 # --- multi-valued reference columns ------------------------------------------------
