@@ -18,6 +18,12 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Configuration inventory (hub B-59 companion).** Add a guide to the current
+  Python schema overrides, retrieval switches and provider/credential fallbacks,
+  with their precedence and the planned in-package provider removal in 0.7.0.
+  It documents actual Python names and existing private warning/UUID state;
+  no API or runtime behavior changes.
+
 * **Semantic closure refuses unknown YAML tags in its EML sidecar.** Hub
   **B-341**, the Python half of Brett's Q62 ruling, reports the sidecar file
   when `!expr` or another tag PyYAML cannot construct appears, before writing
