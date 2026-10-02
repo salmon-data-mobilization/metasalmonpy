@@ -344,6 +344,16 @@ def test_unresolved_review_bindings_are_dropped_and_reported_not_migrated(tmp_pa
     assert not (root / "metadata" / "methods.csv").exists()
 
 
+def test_migration_drops_the_ruled_spaced_ascii_marker(tmp_path):
+    root = make_migration_test_sdp(tmp_path / "sdp")
+    marked = " review :\thttps://ex.org/m/a"
+    add_legacy_dictionary_methods(root, {"abundance": marked})
+    add_legacy_registry(root)
+    report = migrate_sdp_methods(root)
+    assert len(report["dropped_review"]) == 1
+    assert len(report["tables"]) == 0
+
+
 def test_dry_run_reports_the_migration_without_touching_any_file(tmp_path, capsys):
     root = make_migration_test_sdp(tmp_path / "sdp")
     set_dataset_spec_version(root, "sdp-0.2.0")

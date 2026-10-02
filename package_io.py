@@ -36,6 +36,7 @@ from .metadata import (
     scalar_text,
     READR_TRIM_CHARS,
     _absolute_iri_shape,
+    _is_review_iri,
 )
 from .nuseds import (
     nuseds_enumeration_method_crosswalk,
@@ -315,7 +316,7 @@ def _is_review_value(value) -> bool:
     if not _has_value(value):
         return False
     text = str(value).strip()
-    return text.upper().startswith(("REVIEW:", "MISSING ", "MISSING:"))
+    return _is_review_iri(value) or text.upper().startswith(("MISSING ", "MISSING:"))
 
 
 def _metadata_path(target: Path, name: str) -> Path:
@@ -1928,7 +1929,7 @@ def _mark_review_iri(value):
     if not _has_value(value):
         return value
     text = str(value)
-    return text if text.startswith("REVIEW:") else f"REVIEW:{text}"
+    return text if _is_review_iri(text) else f"REVIEW:{text}"
 
 
 def _auto_apply_package_suggestions(artifacts: dict, llm_assess: bool) -> None:
@@ -2566,9 +2567,6 @@ def _validate_optional_sdp_semantic_artifacts(path: Union[str, Path]) -> bool:
     return True
 
 
-_REVIEW_IRI_RE = re.compile(r"^\s*REVIEW\s*:", re.IGNORECASE)
-
-
 def _collect_review_iri_issues(frame: object, source_name: str) -> list[str]:
     """Mirror ``.ms_collect_review_iri_issues``: REVIEW-prefixed values left
     in any ``*_iri`` column of one metadata file."""
@@ -2580,7 +2578,7 @@ def _collect_review_iri_issues(frame: object, source_name: str) -> list[str]:
             continue
         for position in range(len(frame)):
             value = frame[field].iloc[position]
-            if pd.isna(value) or not _REVIEW_IRI_RE.match(str(value)):
+            if pd.isna(value) or not _is_review_iri(value):
                 continue
             messages.append(
                 f"{source_name} row {position + 1} field {field} still "
@@ -2604,7 +2602,7 @@ def _collect_absolute_iri_issues(
             if pd.isna(value):
                 continue
             text = str(value)
-            if not text or _REVIEW_IRI_RE.match(text):
+            if not text or _is_review_iri(text):
                 continue
             if not _absolute_iri_shape(text):
                 messages.append(
@@ -2677,7 +2675,7 @@ def _collect_placement_iri_issues(
                 continue
             text = str(value).strip()
             # ``REVIEW:`` markers have their own dedicated reporting path.
-            if text.upper().startswith("REVIEW:"):
+            if _is_review_iri(value):
                 continue
             if not _is_absolute_iri(value):
                 context = _validation_row_context(meta, position, id_fields)

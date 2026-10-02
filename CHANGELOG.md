@@ -18,6 +18,20 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Every semantic review marker consumer uses Q63's ASCII spelling.** B-345,
+  paired with R's B-344: optional ASCII spaces/tabs, `REVIEW` in any ASCII
+  case, optional spaces/tabs and a colon. Stripping removes one marker and
+  spaces/tabs after the colon, preserving the suffix. Review decisions,
+  package prefills, dictionary/package validation, method migration,
+  deterministic bundle validation and decoded IRI-bearing EML/OAI-ORE fields
+  share that definition. Document guards retain their existing case-sensitive
+  literal `REVIEW:` serialized check. Titles, abstracts and labels beginning
+  `Review:`, ordinary identifiers, and `Peer review:`/`preview:` narrative
+  remain accepted. Dotless-i, Unicode space and line breaks before the marker
+  or colon are excluded; malformed parsed IRIs retain the strict shape check.
+  The existing CSV reader's trim approximation remains a boundary: a quoted
+  leading LF in an accepted suffix is preserved on write but trimmed on read.
+
 * **Semantic closure refuses unknown YAML tags in its EML sidecar.** Hub
   **B-341**, the Python half of Brett's Q62 ruling, reports the sidecar file
   when `!expr` or another tag PyYAML cannot construct appears, before writing

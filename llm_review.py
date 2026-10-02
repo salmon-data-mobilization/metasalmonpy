@@ -19,6 +19,7 @@ import requests
 
 from .term_search import _normalize_explicit_sources, sources_for_role
 from .text_safety import redact_secrets
+from .metadata import _is_review_iri
 
 
 LLM_ASSESSMENT_COLUMNS = [
@@ -2370,8 +2371,9 @@ def _current_selected_iris(rows, dictionary_row: dict) -> dict:
     the dictionary already carries pairs with a newly accepted constraint."""
     selected = {role: None for role in BUNDLE_SLOT_FIELDS}
     for role, field in BUNDLE_SLOT_FIELDS.items():
-        value = _validator_scalar(dictionary_row.get(field), "")
-        if value and not re.match(r"REVIEW:", value, flags=re.IGNORECASE):
+        raw_value = dictionary_row.get(field)
+        value = _validator_scalar(raw_value, "")
+        if value and not _is_review_iri(raw_value):
             selected[role] = value
     for row in rows:
         iri = _validator_scalar(row.get("llm_selected_iri"), "")

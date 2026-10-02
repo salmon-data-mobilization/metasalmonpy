@@ -68,6 +68,22 @@ def _edit_csv(path: Path, editor) -> None:
     frame.to_csv(path, index=False, na_rep="")
 
 
+def test_spaced_ascii_method_marker_has_only_the_marker_issue(tmp_path):
+    root = _build_example(tmp_path / "sdp")
+    _edit_csv(root / "metadata/tables.csv", lambda frame: frame.assign(method_iri="review :urn:example:m"))
+    with pytest.raises(ValueError, match="REVIEW-prefixed") as caught:
+        validate_salmon_datapackage(root, require_iris=True)
+    assert "absolute IRI" not in str(caught.value)
+
+
+def test_package_excluded_marker_spelling_has_a_shape_issue(tmp_path):
+    root = _build_example(tmp_path / "sdp")
+    _edit_csv(root / "metadata/tables.csv", lambda frame: frame.assign(observation_unit_iri="REVIEW\n:urn:example:x"))
+    with pytest.raises(ValueError, match="absolute IRI") as caught:
+        validate_salmon_datapackage(root, require_iris=True)
+    assert "still contains a REVIEW-prefixed" not in str(caught.value)
+
+
 def _collect(path: Path) -> pd.DataFrame:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -728,20 +744,16 @@ def test_dictionary_strictly_refuses_malformed_semantic_iris(field, value):
     with pytest.raises(ValueError) as excinfo:
         validate_dictionary(dictionary, require_iris=True)
     assert field in str(excinfo.value)
-    # Current Python IGNORECASE recognizes dotless-i. Do not narrow it here:
-    # B-345 is separate. The recognized marker is reported once, as a marker.
-    if "\u0131" in value:
-        assert "REVIEW-prefixed" in str(excinfo.value)
-        assert "not an absolute IRI" not in str(excinfo.value)
-    else:
-        assert "absolute IRI" in str(excinfo.value)
+    # Q-63 excludes dotless-i from the ASCII marker. The existing strict
+    # shape gate now owns it, alongside the other malformed spellings.
+    assert "absolute IRI" in str(excinfo.value)
 
 
 @pytest.mark.parametrize("file_name,field", [
     ("tables.csv", "observation_unit_iri"),
     ("tables.csv", "custom_iri"),
 ])
-@pytest.mark.parametrize("value", MALFORMED_IRIS[:2])
+@pytest.mark.parametrize("value", MALFORMED_IRIS)
 def test_package_strictly_refuses_malformed_metadata_iris(tmp_path, file_name, field, value):
     root = _build_example(tmp_path / "malformed-iri")
     def editor(frame):
@@ -788,7 +800,7 @@ def test_direct_dictionary_whitespace_is_present_and_malformed(field):
 def test_recognized_metadata_marker_is_reported_once(tmp_path):
     root = _build_example(tmp_path / "metadata-marker")
     def editor(frame):
-        frame.loc[0, "observation_unit_iri"] = "REV\u0131EW:https://example.org/unit"
+        frame.loc[0, "observation_unit_iri"] = "ReViEw :\thttps://example.org/unit"
         return frame
     _edit_csv(root / "metadata/tables.csv", editor)
     with pytest.raises(ValueError) as excinfo:
