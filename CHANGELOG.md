@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+* **Selected semantic-IRI resolution leaves evidence even on failure.**
+  `verify_sdp_semantic_iris()` mirrors R B-130/PR244: selected exact HTTP IRIs,
+  including validated manifest-bound SSSOM references, are GET checked in
+  UTF-8/C order with at most three attempts for transient failures. The default
+  GET reads final response headers in a worker with a 30-second deadline,
+  including DNS and redirects, closes redirect responses without reading their
+  bodies, and kills and reaps an expired worker. The complete
+  deterministic five-column CSV is written before an aggregate failure;
+  candidate/data URLs and model calls are excluded. HTTP success does not
+  establish RDF term presence or semantic suitability. Offline tests prove
+  retry/report behavior and compare report bytes with R; they assert no live
+  network verification. No release number changes.
+  The supported HTTPX/HTTPcore default backend now waits through HTTP103 Early
+  Hints for final headers. HTTPX>=0.28.1 is a core dependency; its public manual
+  redirect flow preserves cookies, origin-bound auth, target-host netrc and
+  proxy/CA environment settings without draining bodies or using a private shim.
+  Paired localhost proof passes on Python3.9.6 and3.13.11; critical API review
+  and both merges remain outstanding.
+
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
 closed when it set `__version__` to `0.5.0`, and the commit that made that
