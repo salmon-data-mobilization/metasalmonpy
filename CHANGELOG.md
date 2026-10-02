@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* Add bounded, read-only `capture_catalogue_query()` for public KNB/DataONE metadata. Captures preserve raw pages, hashes and provenance, never overwrite evidence, and leave annotations pending. The mirrored R interface is proposed in the companion MetaSalmon PR. No publication, model calls or version bump.
+
+
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
 closed when it set `__version__` to `0.5.0`, and the commit that made that
