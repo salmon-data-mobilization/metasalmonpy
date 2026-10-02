@@ -135,7 +135,7 @@ def test_eml_public_export_refuses_a_marker_anywhere_in_the_document(tmp_path, m
         # outside the semantic annotation slots checked earlier.
         title = built["document"].find("dataset/title")
         if carrier == "text":
-            title.text = "prefix review :draft"
+            title.text = " review :draft"
         else:
             # ElementTree writes an attribute tab as &#09;. The guard must
             # still see the raw value admitted by the cell predicate.
@@ -156,10 +156,64 @@ def test_knb_public_dry_run_refuses_a_marker_anywhere_in_ore(tmp_path, monkeypat
         document = build(*args, **kwargs)
         note = ET.SubElement(document, "note")
         if carrier == "text":
-            note.text = "prefix review :draft"
+            note.text = " review :draft"
         else:
             note.set("marker", "review\t:draft")
         return document
     monkeypatch.setattr(knb_publication, "_build_ore", marked_document)
+    with pytest.raises(ValueError, match="local/review marker"):
+        publish_sdp_to_knb(target, public=True, dry_run=True, knb_environment="production")
+
+
+@pytest.mark.parametrize("narrative", ["Peer review: ordinary narrative", "preview: ordinary narrative"])
+def test_eml_public_export_keeps_ordinary_review_narrative(tmp_path, narrative):
+    pytest.importorskip("yaml")
+    pytest.importorskip("lxml")
+    target = _fixture_sdp(tmp_path, "eml", "sdp-default")
+    dataset_path = target / "metadata" / "dataset.csv"
+    dataset = read_sdp_csv(dataset_path)
+    dataset.loc[0, "title"] = narrative
+    dataset.to_csv(dataset_path, index=False)
+    write_eml_from_sdp(target, overwrite=True)
+    assert ET.parse(target / "metadata" / "eml.xml").find("dataset/title").text == narrative
+
+
+@pytest.mark.parametrize("narrative", ["Peer review: ordinary narrative", "preview: ordinary narrative"])
+def test_knb_public_dry_run_keeps_ordinary_review_narrative(tmp_path, monkeypatch, narrative):
+    pytest.importorskip("yaml")
+    pytest.importorskip("lxml")
+    target = _fixture_sdp(tmp_path, "knb", "sdp-public")
+    build = knb_publication._build_ore
+    def narrated_document(*args, **kwargs):
+        document = build(*args, **kwargs)
+        ET.SubElement(document, "note").text = narrative
+        return document
+    monkeypatch.setattr(knb_publication, "_build_ore", narrated_document)
+    result = publish_sdp_to_knb(target, public=True, dry_run=True, knb_environment="production")
+    assert result["status"] == "dry_run"
+
+
+def test_eml_public_export_keeps_the_inherited_uppercase_literal_guard(tmp_path):
+    pytest.importorskip("yaml")
+    pytest.importorskip("lxml")
+    target = _fixture_sdp(tmp_path, "eml", "sdp-default")
+    dataset_path = target / "metadata" / "dataset.csv"
+    dataset = read_sdp_csv(dataset_path)
+    dataset.loc[0, "title"] = "Peer REVIEW: inherited conservative refusal"
+    dataset.to_csv(dataset_path, index=False)
+    with pytest.raises(ValueError, match="unresolved.*REVIEW"):
+        write_eml_from_sdp(target, overwrite=True)
+
+
+def test_knb_public_dry_run_keeps_the_inherited_uppercase_literal_guard(tmp_path, monkeypatch):
+    pytest.importorskip("yaml")
+    pytest.importorskip("lxml")
+    target = _fixture_sdp(tmp_path, "knb", "sdp-public")
+    build = knb_publication._build_ore
+    def narrated_document(*args, **kwargs):
+        document = build(*args, **kwargs)
+        ET.SubElement(document, "note").text = "Peer REVIEW: inherited conservative refusal"
+        return document
+    monkeypatch.setattr(knb_publication, "_build_ore", narrated_document)
     with pytest.raises(ValueError, match="local/review marker"):
         publish_sdp_to_knb(target, public=True, dry_run=True, knb_environment="production")

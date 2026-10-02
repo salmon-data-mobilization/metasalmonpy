@@ -16,9 +16,8 @@ from .sdp_schema import sdp_profile_version
 # treats them as whitespace, so neither may this package.
 READR_TRIM_CHARS = " \t\r\n"
 
-# Q-63 (2026-09-25): ASCII case, spaces and tabs only. Keep the spelling
-# unanchored here so whole-document publication guards use the same definition;
-# cell consumers use match(), which requires the marker at the value's start.
+# Q-63 (2026-09-25): ASCII case, spaces and tabs only. Cell and decoded XML
+# value consumers use match(), requiring the marker at the value's start.
 _REVIEW_IRI_RE = re.compile(r"[ \t]*[Rr][Ee][Vv][Ii][Ee][Ww][ \t]*:[ \t]*")
 
 
@@ -46,14 +45,16 @@ def _strip_review_iri(value) -> str:
 
 
 def _contains_review_iri(text: str, document=None) -> bool:
-    """Scan emitted XML and the raw values of its already parsed document.
+    """Keep the literal XML guard and inspect original parsed values.
 
     XML serialization writes a tab in an attribute as a character reference
     (``&#09;``), so matching only its bytes would miss an admitted marker.
-    Keep the serialized scan and inspect original text/tail/attribute values
-    as well, using the same spelling without a second parse or entity decoder.
+    Preserve the existing case-sensitive ``REVIEW:`` serialized check: an
+    unanchored case-insensitive scan also matches narrative ``Peer review:``
+    and ``preview:``. Inspect original text/tail/attribute values with the
+    anchored predicate, without a second parse or entity decoder.
     """
-    if _REVIEW_IRI_RE.search(text) is not None:
+    if "REVIEW:" in text:
         return True
     return document is not None and any(
         _is_review_iri(value)

@@ -23,8 +23,10 @@ and moving it is a separate outward act.
   case, optional spaces/tabs and a colon. Stripping removes one marker and
   spaces/tabs after the colon, preserving the suffix. Review decisions,
   package prefills, dictionary/package validation, method migration,
-  deterministic bundle validation and the EML/OAI-ORE document guards share
-  that definition. Dotless-i, Unicode space and line breaks before the marker
+  deterministic bundle validation and decoded EML/OAI-ORE values share that
+  definition. Document guards retain their existing case-sensitive literal
+  `REVIEW:` serialized check, accepting ordinary `Peer review:`/`preview:`
+  narrative. Dotless-i, Unicode space and line breaks before the marker
   or colon are excluded; malformed parsed IRIs retain the strict shape check.
   The existing CSV reader's trim approximation remains a boundary: a quoted
   leading LF in an accepted suffix is preserved on write but trimmed on read.
