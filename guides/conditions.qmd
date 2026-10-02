@@ -1,0 +1,79 @@
+---
+title: "Errors and warnings"
+description: "Catch package-origin errors and filter warnings by class."
+execute:
+  eval: false
+---
+
+Use condition classes to handle failures selectively. The text of an error is
+for readers; the package does not require callers to match that text.
+
+```python
+from metasalmonpy import MetasalmonValidationError
+from metasalmonpy.sdp_schema import set_sdp_schema_source
+
+try:
+    set_sdp_schema_source("unknown")
+except MetasalmonValidationError as error:
+    print(error)  # Report the schema setting that needs correction.
+```
+
+## Catch surfaces
+
+`MetasalmonCondition` is the common base. `MetasalmonError` covers errors
+explicitly constructed by this package, and `MetasalmonWarning` covers warnings
+explicitly emitted by it. The warning base does not inherit from the error base.
+
+| Family | Error | Warning | Scope |
+| --- | --- | --- | --- |
+| Validation | `MetasalmonValidationError` | `MetasalmonValidationWarning` | Dictionary/schema checks, SDP extension and semantic-file contracts, SSSOM, observation/measurement structures and reproducibility manifests. |
+| LLM | `MetasalmonLlmError` | `MetasalmonLlmWarning` | Model-review adapters and chat decomposition, including their context-file checks. |
+| Publication | `MetasalmonPublicationError` | `MetasalmonPublicationWarning` | KNB/DataONE, EML, EDH, Darwin Core export and GitHub access. |
+| Retrieval | `MetasalmonRetrievalError` | `MetasalmonRetrievalWarning` | Vocabulary/ontology fetching, including ICES. |
+
+These families follow the responsible module. Other modules expose the common
+package error/warning bases. For example, package assembly and structural
+validation in `package_io` use `MetasalmonError`; the structural validation error
+still carries its complete `.issues` frame. A function's name alone does not
+determine its family.
+
+All public bases above are available from `metasalmonpy` and
+`metasalmonpy.conditions`. Concrete implementation subclasses are private.
+
+## Existing handlers and filters
+
+Every package emission retains its original builtin exception or warning type.
+A schema-setting error remains a `ValueError`; invalid context objects remain
+`TypeError`; missing files remain `FileNotFoundError`. Existing
+`except ValueError` and `except OSError` handlers continue to work.
+
+`SdpSchemaError`, `SdpExtensionError`, `ReproducibilityManifestError` and
+`KnbHttpError` keep their existing names, constructors and metadata. The HTTP
+error's `.status` remains available. Messages, `args`, OSError path/errno
+attributes and exception causes remain intact.
+
+Warning filters also retain their previous builtin categories:
+
+```python
+import warnings
+from metasalmonpy import MetasalmonRetrievalWarning
+
+with warnings.catch_warnings():
+    warnings.simplefilter("error", MetasalmonRetrievalWarning)
+    # Run your vocabulary lookup here. Package retrieval warnings now raise.
+```
+
+An existing filter for `RuntimeWarning`, `UserWarning` or `DeprecationWarning`
+still matches the corresponding derived package warning. Converting warnings
+to errors can expose an incomplete retrieval as a failed lookup; handle that
+according to your workflow rather than interpreting it as an ontology gap.
+
+## Dependency failures
+
+Exceptions from a dependency, the operating system or an injected callback
+keep their original identity and type when propagated. Optional/core dependency
+`ImportError` guards and YAML loader `ConstructorError` diagnostics retain their
+existing dependency-specific types. The hierarchy describes package emissions;
+it does not recategorize every error raised during a package call.
+
+No ontology term is selected or approved by catching a condition.

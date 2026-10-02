@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PublicationValueError as _ValueError,
+)
+
 """
 Prototype helpers to assemble a DwC-DP datapackage descriptor and optionally
 run Frictionless validation if the `frictionless` package is available.
@@ -38,7 +42,7 @@ def build_dwc_dp_descriptor(
     res_list = []
     for res in resources_iter:
         if "name" not in res or "path" not in res or "schema" not in res:
-            raise ValueError("Each resource must include 'name', 'path', and 'schema'")
+            raise _ValueError("Each resource must include 'name', 'path', and 'schema'")
         schema_name = res["schema"]
         schema_url = (
             f"https://raw.githubusercontent.com/gbif/dwc-dp/{profile_version}/dwc-dp/table-schemas/{schema_name}.json"

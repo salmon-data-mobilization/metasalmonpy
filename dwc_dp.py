@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PublicationTypeError as _TypeError,
+    _PublicationValueError as _ValueError,
+)
+
 import re
 from typing import List, Optional
 
@@ -117,9 +122,9 @@ def suggest_dwc_mappings(dict_df: pd.DataFrame, max_per_column: int = 3) -> pd.D
     Suggest DwC-DP table/field mappings for dictionary columns.
     """
     if not isinstance(dict_df, pd.DataFrame):
-        raise TypeError("dict_df must be a pandas DataFrame")
+        raise _TypeError("dict_df must be a pandas DataFrame")
     if "column_name" not in dict_df.columns:
-        raise ValueError("dict_df must include 'column_name'")
+        raise _ValueError("dict_df must include 'column_name'")
 
     fields = _load_dwc_dp_fields()
     if fields.empty or dict_df.empty:

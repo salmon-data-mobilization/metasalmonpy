@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PublicationFileExistsError as _FileExistsError,
+    _PublicationFileNotFoundError as _FileNotFoundError,
+    _PublicationValueError as _ValueError,
+)
+
 import hashlib
 import re
 import tempfile
@@ -138,12 +144,12 @@ def edh_build_iso19139_xml(
         XML text, output path when written, and profile metadata.
     """
     if profile not in {"dfo_edh_hnap", "iso19139"}:
-        raise ValueError("profile must be 'dfo_edh_hnap' or 'iso19139'.")
+        raise _ValueError("profile must be 'dfo_edh_hnap' or 'iso19139'.")
     if not isinstance(dataset_meta, pd.DataFrame) or len(dataset_meta) != 1:
-        raise ValueError("dataset_meta must be a single-row DataFrame.")
+        raise _ValueError("dataset_meta must be a single-row DataFrame.")
     missing = [col for col in ["dataset_id", "title", "description"] if col not in dataset_meta.columns]
     if missing:
-        raise ValueError(f"dataset_meta is missing required columns: {missing}")
+        raise _ValueError(f"dataset_meta is missing required columns: {missing}")
 
     row = dataset_meta.iloc[0]
     include_locale = profile == "dfo_edh_hnap"
@@ -343,7 +349,7 @@ def write_edh_xml_from_sdp(
     """Rebuild HNAP XML from reviewed package metadata."""
     package_path = Path(path)
     if not package_path.is_dir():
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             f"Salmon Data Package directory does not exist: {package_path}"
         )
     from .package_io import _collect_review_issues, read_salmon_datapackage
@@ -351,13 +357,13 @@ def write_edh_xml_from_sdp(
     package = read_salmon_datapackage(package_path)
     review_issues = _collect_review_issues(package)
     if review_issues:
-        raise ValueError(
+        raise _ValueError(
             "Cannot rebuild EDH XML from unreviewed package metadata. "
             + " ".join(review_issues[:5])
         )
     dataset_meta = package["dataset"]
     if len(dataset_meta) != 1:
-        raise ValueError(
+        raise _ValueError(
             "metadata/dataset.csv must contain exactly one row."
         )
     target = (
@@ -366,7 +372,7 @@ def write_edh_xml_from_sdp(
         else package_path / "metadata" / "metadata-edh-hnap.xml"
     )
     if target.exists() and not overwrite:
-        raise FileExistsError(
+        raise _FileExistsError(
             f"EDH XML already exists at {target}. Set overwrite=True to replace."
         )
     return edh_build_hnap_xml(

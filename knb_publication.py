@@ -36,6 +36,13 @@ inherits the ``metasalmonpy[eml]`` requirements through the ``[knb]`` extra
 
 from __future__ import annotations
 
+from .conditions import (
+    _PublicationFileNotFoundError as _FileNotFoundError,
+    _PublicationRuntimeError as _RuntimeError,
+    _PublicationUserWarning as _UserWarning,
+    _PublicationValueError as _ValueError,
+)
+
 import base64
 import hashlib
 import json
@@ -135,7 +142,7 @@ _TIMESTAMP_RE = re.compile(
 )
 
 
-class KnbHttpError(RuntimeError):
+class KnbHttpError(_RuntimeError):
     """An HTTP failure that carries its status code.
 
     Mirrors the ``http_<status>`` condition classes httr2 attaches, which
@@ -194,7 +201,7 @@ def _adapter() -> object:
     if callable(adapter) and not _has_adapter_methods(adapter):
         adapter = adapter()
     if adapter is None:
-        raise ValueError(
+        raise _ValueError(
             "set_knb_adapter must provide a KNB adapter object or a "
             "constructor returning one."
         )
@@ -236,7 +243,7 @@ def _validate_adapter(adapter: object) -> object:
         if not callable(getattr(adapter, name, None))
     ]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             "KNB adapter is missing method(s): " + ", ".join(missing) + "."
         )
     return adapter
@@ -250,7 +257,7 @@ def _validate_flag(value: object, field: str, allow_null: bool = False) -> None:
     if allow_null and value is None:
         return
     if not isinstance(value, bool):
-        raise ValueError(
+        raise _ValueError(
             f"{field} must be one explicit, non-missing logical value."
         )
 
@@ -275,7 +282,7 @@ def _nonempty_scalar(value: object, field: str) -> str:
     """Mirror ``.ms_knb_nonempty_scalar``."""
     scalar = _optional_scalar(value)
     if scalar is None:
-        raise ValueError(f"KNB adapter preflight returned invalid {field}.")
+        raise _ValueError(f"KNB adapter preflight returned invalid {field}.")
     return scalar.strip()
 
 
@@ -305,10 +312,10 @@ def _valid_timestamp(value: object) -> bool:
 def _lexical_absolute_path(path: object) -> str:
     """Mirror ``.ms_knb_lexical_absolute_path``: collapse without touching disk."""
     if path is None:
-        raise ValueError("Publication paths must be non-empty scalar values.")
+        raise _ValueError("Publication paths must be non-empty scalar values.")
     text = os.path.expanduser(str(path))
     if not text:
-        raise ValueError("Publication paths must be non-empty scalar values.")
+        raise _ValueError("Publication paths must be non-empty scalar values.")
     slash_path = text.replace("\\", "/")
     is_absolute = slash_path.startswith("/") or re.match(
         r"^[A-Za-z]:/", slash_path
@@ -338,7 +345,7 @@ def _resolve_target_path(path: object, must_work: bool = True) -> str:
     lexical = _lexical_absolute_path(path)
     if must_work:
         if not os.path.exists(lexical):
-            raise FileNotFoundError(f"Publication path {path} does not exist.")
+            raise _FileNotFoundError(f"Publication path {path} does not exist.")
         return os.path.realpath(lexical)
 
     ancestor = lexical
@@ -346,7 +353,7 @@ def _resolve_target_path(path: object, must_work: bool = True) -> str:
     while not os.path.exists(ancestor):
         parent = os.path.dirname(ancestor)
         if parent == ancestor:
-            raise FileNotFoundError(
+            raise _FileNotFoundError(
                 "Could not resolve an existing ancestor for publication path "
                 f"{path}."
             )
@@ -362,9 +369,9 @@ def _package_root(path: object) -> str:
     """Mirror ``.ms_knb_package_root``: an existing, non-symlinked SDP root."""
     lexical = _lexical_absolute_path(path)
     if not os.path.isdir(lexical):
-        raise FileNotFoundError(f"SDP directory {path} does not exist.")
+        raise _FileNotFoundError(f"SDP directory {path} does not exist.")
     if Path(lexical).is_symlink():
-        raise ValueError("The SDP directory itself must not be a symbolic link.")
+        raise _ValueError("The SDP directory itself must not be a symbolic link.")
     return os.path.realpath(lexical)
 
 
@@ -396,7 +403,7 @@ def _inside_path(root: object, target: object, must_work: bool = True) -> str:
         ancestor = parent
     prefix = (lexical_root or "") + os.sep
     if lexical_root is None or not lexical.startswith(prefix):
-        raise ValueError(
+        raise _ValueError(
             f"Publication artifact {target} must remain inside the SDP "
             "directory."
         )
@@ -410,14 +417,14 @@ def _inside_path(root: object, target: object, must_work: bool = True) -> str:
         if Path(os.path.join(root_path, *parts[: index + 1])).is_symlink()
     ]
     if symlinks:
-        raise ValueError(
+        raise _ValueError(
             "Publication artifacts cannot be reached through a symlink: "
             + ", ".join(symlinks)
             + "."
         )
     resolved = _resolve_target_path(candidate, must_work=must_work)
     if not resolved.startswith(root_path + os.sep):
-        raise ValueError(
+        raise _ValueError(
             f"Publication artifact {target} must remain inside the SDP "
             "directory."
         )
@@ -430,7 +437,7 @@ def _relative_path(root: object, target: object, must_work: bool = True) -> str:
     target = _inside_path(root, target, must_work=must_work)
     prefix = root_path + os.sep
     if not target.startswith(prefix):
-        raise ValueError(
+        raise _ValueError(
             f"Publication object {target} resolves outside the SDP directory."
         )
     return target[len(prefix):].replace("\\", "/")
@@ -440,7 +447,7 @@ def _reject_dot_segments(path: object, field: str) -> None:
     """Mirror ``.ms_knb_reject_dot_segments``."""
     parts = str(path).replace("\\", "/").split("/")
     if any(part in (".", "..") for part in parts):
-        raise ValueError(
+        raise _ValueError(
             f"Publication path {path} in {field} contains a forbidden dot "
             "path segment."
         )
@@ -467,12 +474,12 @@ def _declared_data_paths(path: str) -> "Dict[str, str]":
     """Mirror ``.ms_knb_declared_data_paths``: only files ``tables.csv`` names."""
     tables_path = _locate_metadata_file(path, "tables.csv")
     if tables_path is None:
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             "KNB publication requires canonical metadata/tables.csv."
         )
     tables = _read_metadata_csv(tables_path)
     if "file_name" not in tables.columns or len(tables) == 0:
-        raise ValueError(
+        raise _ValueError(
             "KNB publication requires non-empty tables.csv$file_name values."
         )
     paths: Dict[str, str] = {}
@@ -510,13 +517,13 @@ def _require_review_ledger_binding(path: str, mapping: object) -> None:
     )
     if os.path.exists(os.path.join(path, _REPRODUCIBILITY_MANIFEST)):
         if mapped_review != _CANONICAL_REVIEW_LEDGER:
-            raise ValueError(
+            raise _ValueError(
                 "EML mapping semantic_review.path must bind the reviewed "
                 "ledger declared by the reproducibility manifest."
             )
     elif os.path.exists(os.path.join(path, _LEGACY_REVIEW_LEDGER)):
         if mapped_review != _LEGACY_REVIEW_LEDGER:
-            raise ValueError(
+            raise _ValueError(
                 "Legacy KNB packages must bind the root-level reviewed ledger "
                 "in EML mapping semantic_review.path."
             )
@@ -530,7 +537,7 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
         if not os.path.exists(os.path.join(path, name))
     ]
     if missing:
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             "KNB publication requires canonical SDP artifact(s): "
             + ", ".join(missing)
             + "."
@@ -560,14 +567,14 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
             str(artifact["path"]) for artifact in manifest["artifacts"]
         ]
         if _CANONICAL_REVIEW_LEDGER not in declared_paths:
-            raise ValueError(
+            raise _ValueError(
                 "KNB publication requires the canonical reviewed-selection "
                 "ledger to be declared by reproducibility/manifest.json."
             )
         reproducibility_relative = [_REPRODUCIBILITY_MANIFEST] + declared_paths
     else:
         if not os.path.exists(os.path.join(path, _LEGACY_REVIEW_LEDGER)):
-            raise FileNotFoundError(
+            raise _FileNotFoundError(
                 "KNB publication requires a reviewed semantic-selection "
                 "ledger. Use the extended reproducibility/manifest.json layout "
                 "or the legacy root-level ledger."
@@ -618,7 +625,7 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
     # must be migrated, not published.
     methods_relative: List[str] = []
     if os.path.exists(os.path.join(path, "metadata", "methods.csv")):
-        raise ValueError(
+        raise _ValueError(
             "metadata/methods.csv is an sdp-0.2.0 registry; sdp-0.3.0 "
             "packages must not carry one. Run migrate_sdp_methods() to "
             "relocate its content and remove it."
@@ -631,7 +638,7 @@ def _sdp_artifact_paths(path: str) -> "Dict[str, str]":
     structure_relative: List[str] = []
     if any(structure_present):
         if not all(structure_present):
-            raise ValueError(
+            raise _ValueError(
                 "KNB publication requires both canonical observation-structure "
                 "files when either is present."
             )
@@ -703,7 +710,7 @@ def _publication_paths(
         for label in labels
     ]
     if colliding:
-        raise ValueError(
+        raise _ValueError(
             "KNB publication path collision among " + ", ".join(colliding) + "."
         )
     return {
@@ -939,7 +946,7 @@ def _validate_ore(
         or len(set(aggregates)) != len(aggregates)
         or len(aggregates) != len(expected)
     ):
-        raise ValueError(
+        raise _ValueError(
             "Generated OAI-ORE aggregate set does not exactly match the "
             "planned EML/data objects."
         )
@@ -970,7 +977,7 @@ def _validate_ore(
             or len(identifiers) != 1
             or identifiers[0] != identifier
         ):
-            raise ValueError(
+            raise _ValueError(
                 "Generated OAI-ORE lacks the exact DataONE identifier for "
                 f"represented resource {url}."
             )
@@ -988,7 +995,7 @@ def _validate_ore(
         )
     ]
     if described_by != [resource_map_url]:
-        raise ValueError(
+        raise _ValueError(
             "Generated OAI-ORE aggregation must be described by its resource "
             "map."
         )
@@ -1032,7 +1039,7 @@ def _validate_ore(
         or len(locations) != len(expected_locations)
         or len(set(locations)) != len(locations)
     ):
-        raise ValueError(
+        raise _ValueError(
             "Generated OAI-ORE package relationships do not match the "
             "publication profile."
         )
@@ -1043,7 +1050,7 @@ def _validate_ore(
         or "REVIEW:" in xml
         or quote(resource_map_pid, safe="") not in xml
     ):
-        raise ValueError(
+        raise _ValueError(
             "Generated OAI-ORE contains a local/review marker or does not "
             "identify its resource map."
         )
@@ -1062,7 +1069,7 @@ def _atomic_write_raw(payload: bytes, path: str) -> str:
         except OSError:
             pass
     if not os.path.isdir(directory):
-        raise ValueError(
+        raise _ValueError(
             f"Could not create publication artifact directory {directory}."
         )
     # R writes the staging file first and only then compares, but its
@@ -1259,7 +1266,7 @@ def _existing_manifest(path: str) -> Optional[Dict[str, object]]:
         with open(path, encoding="utf-8") as handle:
             return json.load(handle)
     except ValueError as error:
-        raise ValueError(
+        raise _ValueError(
             f"Existing publication manifest {path} is not valid JSON: {error}"
         ) from None
 
@@ -1324,7 +1331,7 @@ def _revision_manifest(
         return None
     _reject_dot_segments(path, "revision_manifest")
     if not os.path.exists(path) or os.path.isdir(path):
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             f"Prior KNB revision manifest {path} does not exist."
         )
     manifest = _existing_manifest(os.path.realpath(path))
@@ -1357,7 +1364,7 @@ def _revision_manifest(
         == _optional_scalar(manifest.get("plan_sha256"))
     )
     if not valid:
-        raise ValueError(
+        raise _ValueError(
             "A KNB revision requires a verified schema-version 2 or 3 "
             "published manifest with an intact plan fingerprint."
         )
@@ -1372,11 +1379,11 @@ def _revision_context(
     if prior is None:
         return None
     if bool(prior.get("public")) is not bool(plan.get("public")):
-        raise ValueError(
+        raise _ValueError(
             "KNB revision planning cannot also change public/private access."
         )
     if _optional_scalar(prior.get("series_id")) != plan.get("series_id"):
-        raise ValueError(
+        raise _ValueError(
             "The prior KNB manifest belongs to a different metadata series."
         )
     objects = _manifest_objects(prior)
@@ -1410,7 +1417,7 @@ def _require_new_revision_pids(
     if not reused:
         return
     role_text = " and ".join(reused)
-    raise ValueError(
+    raise _ValueError(
         f"KNB revision planning would reuse the prior {role_text} PID(s). "
         "Choose a new publication.revision_key so the revision mints new "
         "immutable metadata and resource-map PIDs."
@@ -1457,7 +1464,7 @@ def _assert_resource_map_owned(
         and _object_bytes(resource_map_path) == plan.get("resource_map_bytes")
     )
     if not owned:
-        raise ValueError(
+        raise _ValueError(
             "The pre-existing resource map file is not owned by the exact "
             "matching publication manifest. If it is left over from an "
             "unpublished dry run, pass overwrite=True to replace it."
@@ -1492,7 +1499,7 @@ def _require_reviewed_manifest(
         and reviewed_fingerprint == plan.get("plan_sha256")
     )
     if not valid:
-        raise ValueError(
+        raise _ValueError(
             "Live KNB publication requires a reviewed schema version 3 "
             "manifest with the exact replication policy and recomputed plan "
             "fingerprint."
@@ -1520,7 +1527,7 @@ def _require_rights_authorization(plan: Dict[str, object]) -> None:
         evidence = [str(evidence_value).strip()]
     evidence = [item for item in evidence if item]
     if status != "confirmed" or not evidence:
-        raise ValueError(
+        raise _ValueError(
             "Public KNB publication requires confirmed redistribution rights "
             "in the reviewed EML sidecar. confirm=True approves the exact "
             "plan; it is not rights evidence."
@@ -1534,7 +1541,7 @@ def _reject_review_candidate_annotations(path: str) -> None:
     required = ("iri", "source", "ontology")
     missing = [name for name in required if name not in vocabulary.columns]
     if missing:
-        raise ValueError(
+        raise _ValueError(
             "KNB publication requires semantic_vocabulary.csv fields: "
             + ", ".join(required)
             + "."
@@ -1563,7 +1570,7 @@ def _reject_review_candidate_annotations(path: str) -> None:
     text = "\n".join(text_parts)
     referenced = [iri for iri in candidate_iris if iri in text]
     if referenced:
-        raise ValueError(
+        raise _ValueError(
             "KNB publication cannot emit annotations to review-candidate "
             "vocabulary IRIs: "
             + ", ".join(referenced)
@@ -1730,7 +1737,7 @@ def _build_plan(
 ) -> Dict[str, object]:
     """Mirror ``.ms_knb_build_plan``: the whole pure, offline planner."""
     if representation not in ("archive", "expanded"):
-        raise ValueError(
+        raise _ValueError(
             "representation must be one of \"archive\" or \"expanded\"."
         )
     from . import knb_archive
@@ -1775,7 +1782,7 @@ def _build_plan(
         knb_environment=str(config["knb_environment"]),
     )
     if eml["public"] is not public:
-        raise ValueError(
+        raise _ValueError(
             "Reviewed sidecar publication.public must exactly equal public."
         )
 
@@ -1791,7 +1798,7 @@ def _build_plan(
                 if value and value not in provider_orcids:
                     provider_orcids.append(value)
     if len(provider_orcids) != 1 or _orcid_key(provider_orcids[0]) is None:
-        raise ValueError(
+        raise _ValueError(
             "Live-publication EML must identify exactly one metadata-provider "
             "ORCID URI for authenticated-subject verification."
         )
@@ -1944,7 +1951,7 @@ def _require_replication_policy(
     """Mirror ``.ms_knb_require_replication_policy``."""
     expected = _replication_policy(public, config)
     if policy != expected:
-        raise ValueError(
+        raise _ValueError(
             "The publication plan has an invalid replication policy for the "
             "selected public value."
         )
@@ -1966,7 +1973,7 @@ def _require_replication_policy(
 
 def _abort_safe(error: BaseException) -> None:
     """Mirror ``.ms_knb_abort_safe``: remote text is data, never a template."""
-    raise RuntimeError(
+    raise _RuntimeError(
         "KNB publication failed: " + redact_secrets(str(error))
     ) from None
 
@@ -1979,13 +1986,13 @@ def _normalize_access(access: object) -> List[Tuple[str, str]]:
     if access is None or (isinstance(access, (list, tuple)) and not access):
         return []
     if not isinstance(access, (list, tuple)):
-        raise ValueError("Remote access policy has an unsupported representation.")
+        raise _ValueError("Remote access policy has an unsupported representation.")
     rows = []
     for rule in access:
         if not isinstance(rule, dict):
-            raise ValueError("Remote access policy has an invalid rule.")
+            raise _ValueError("Remote access policy has an invalid rule.")
         if "subject" not in rule or "permission" not in rule:
-            raise ValueError(
+            raise _ValueError(
                 "Remote access policy lacks subject/permission fields."
             )
         rows.append((str(rule["subject"]), str(rule["permission"]).lower()))
@@ -2007,13 +2014,13 @@ def _normalize_member_nodes(nodes: object) -> List[str]:
     values = []
     for node in nodes:
         if node is None:
-            raise ValueError(
+            raise _ValueError(
                 "Remote replication policy has an invalid member-node "
                 "reference."
             )
         text = str(node).strip()
         if not text:
-            raise ValueError(
+            raise _ValueError(
                 "Remote replication policy has an invalid member-node "
                 "reference."
             )
@@ -2058,7 +2065,7 @@ def _validate_system_metadata(
 ) -> bool:
     """Mirror ``.ms_knb_validate_system_metadata``."""
     if not isinstance(remote, dict):
-        raise ValueError(
+        raise _ValueError(
             f"Remote SystemMetadata for {obj.get('pid')} is missing or "
             "malformed."
         )
@@ -2170,7 +2177,7 @@ def _validate_system_metadata(
     if not _valid_timestamp(remote.get("date_sys_metadata_modified")):
         mismatches.append("date_sys_metadata_modified")
     if mismatches:
-        raise ValueError(
+        raise _ValueError(
             f"Remote PID {obj.get('pid')} collides on SystemMetadata "
             "field(s): " + ", ".join(sorted(set(mismatches))) + "."
         )
@@ -2178,7 +2185,7 @@ def _validate_system_metadata(
     access = _normalize_access(remote.get("access"))
     expected_access = [("public", "read")] if public else []
     if access != expected_access:
-        raise ValueError(
+        raise _ValueError(
             f"Remote PID {obj.get('pid')} has a different access policy."
         )
     return True
@@ -2412,12 +2419,12 @@ def _verify_anonymous_denial(
         except Exception as condition:  # noqa: BLE001 - denial is the contract
             status = _anonymous_denial_status(condition)
             if status not in (401, 403, 404):
-                raise ValueError(
+                raise _ValueError(
                     f"Anonymous {kind} non-disclosure could not be verified "
                     f"for private-review PID {obj['pid']}."
                 ) from None
             continue
-        raise ValueError(
+        raise _ValueError(
             f"Anonymous {kind} access unexpectedly succeeded for "
             f"private-review PID {obj['pid']}."
         )
@@ -2440,7 +2447,7 @@ def _verify_object(
     if not isinstance(remote_bytes, (bytes, bytearray)) or bytes(
         remote_bytes
     ) != payload:
-        raise ValueError(
+        raise _ValueError(
             f"Remote byte read-back failed for PID {obj['pid']}."
         )
     remote_metadata = adapter.get_system_metadata(client, obj["pid"])
@@ -2450,7 +2457,7 @@ def _verify_object(
     remote_checksum = adapter.get_checksum(client, obj["pid"], "SHA-256")
     checksum = _optional_scalar(remote_checksum)
     if checksum is None or checksum.lower() != str(obj["sha256"]).lower():
-        raise ValueError(
+        raise _ValueError(
             f"Independent remote checksum failed for PID {obj['pid']}."
         )
 
@@ -2459,7 +2466,7 @@ def _verify_object(
         if not isinstance(anonymous_bytes, (bytes, bytearray)) or bytes(
             anonymous_bytes
         ) != payload:
-            raise ValueError(
+            raise _ValueError(
                 f"Anonymous byte read-back failed for public PID {obj['pid']}."
             )
         anonymous_metadata = adapter.get_anonymous_system_metadata(
@@ -2481,7 +2488,7 @@ def _manifest_set_state(
         if obj.get("pid") == pid:
             obj["state"] = state
             return manifest
-    raise ValueError(
+    raise _ValueError(
         f"Internal manifest error: PID {pid} is not in the plan."
     )
 
@@ -2498,7 +2505,7 @@ def _local_object_spec(obj: Dict[str, object]) -> Dict[str, object]:
     """Mirror ``.ms_knb_local_object_spec``: freeze and re-hash local bytes."""
     payload = _object_bytes(obj["local_path"])
     if len(payload) != obj["size"] or _sha256_raw(payload) != obj["sha256"]:
-        raise ValueError(
+        raise _ValueError(
             f"Local publication object {obj['path']} changed after planning."
         )
     spec = dict(obj)
@@ -2631,13 +2638,13 @@ def _prior_object_spec(
     """Mirror ``.ms_knb_prior_object_spec``."""
     prior = plan.get("prior_manifest")
     if prior is None:
-        raise ValueError(
+        raise _ValueError(
             "Internal KNB revision error: no prior manifest is bound."
         )
     objects = _manifest_objects(prior)
     matches = [obj for obj in objects if _optional_scalar(obj.get("pid")) == pid]
     if len(matches) != 1:
-        raise ValueError(
+        raise _ValueError(
             f"The prior KNB manifest does not identify revision source PID "
             f"{pid} exactly once."
         )
@@ -2661,12 +2668,12 @@ def _validate_revision_source(
 ) -> Optional[str]:
     """Mirror ``.ms_knb_validate_revision_source``."""
     if remote is None:
-        raise ValueError(
+        raise _ValueError(
             f"KNB revision source PID {old_pid} does not exist at KNB."
         )
     linked_to = _optional_scalar(remote.get("obsoleted_by"))
     if linked_to is not None and linked_to != new_pid:
-        raise ValueError(
+        raise _ValueError(
             f"KNB revision source PID {old_pid} is already obsoleted by a "
             "different PID."
         )
@@ -2702,13 +2709,13 @@ def _validate_series_binding(
         else [revision_source, metadata_object["pid"]]
     )
     if remote_pid not in allowed:
-        raise ValueError(
+        raise _ValueError(
             "The metadata series identifier is already bound to a different "
             "metadata PID."
         )
     if revision_source is not None and remote_pid == revision_source:
         if plan is None:
-            raise ValueError(
+            raise _ValueError(
                 "Internal KNB revision error: no plan is available."
             )
         _validate_revision_source(
@@ -2746,7 +2753,7 @@ def _run_publication(
                 plan, manifest, manifest_path, adapter, previous_status
             )
     except Warning as warning:
-        raise RuntimeError(
+        raise _RuntimeError(
             "Live KNB adapter warning: " + redact_secrets(str(warning))
         ) from None
     except Exception as error:  # noqa: BLE001 - redaction is the contract
@@ -2780,16 +2787,16 @@ def _run_publication_body(
     client = adapter.connect(plan["environment"], plan["node_id"])
     preflight = adapter.preflight(client)
     if not isinstance(preflight, dict):
-        raise ValueError("KNB adapter preflight returned no result.")
+        raise _ValueError("KNB adapter preflight returned no result.")
     subject = _nonempty_scalar(preflight.get("subject"), "subject")
     endpoint = _nonempty_scalar(preflight.get("endpoint"), "endpoint")
     preflight_node_id = _nonempty_scalar(preflight.get("node_id"), "node_id")
     if preflight_node_id != plan["node_id"]:
-        raise ValueError(
+        raise _ValueError(
             "KNB preflight returned a different DataONE node identifier."
         )
     if not _same_subject(subject, plan["expected_subject"]):
-        raise ValueError(
+        raise _ValueError(
             "The server-verified DataONE subject does not match the EML "
             "metadata-provider ORCID."
         )
@@ -2799,7 +2806,7 @@ def _run_publication_body(
     planned_formats = {str(obj["format_id"]) for obj in object_specs}
     missing_formats = sorted(planned_formats - available_formats)
     if missing_formats:
-        raise ValueError(
+        raise _ValueError(
             "The live DataONE format registry lacks planned format ID(s): "
             + ", ".join(missing_formats)
             + "."
@@ -2824,7 +2831,7 @@ def _run_publication_body(
                 adapter.get_checksum(client, obj["pid"], "SHA-256")
             )
             if checksum is None or checksum.lower() != str(obj["sha256"]).lower():
-                raise ValueError(
+                raise _ValueError(
                     f"Remote PID {obj['pid']} collides on independent checksum."
                 )
         update_of = _optional_scalar(obj.get("obsoletes"))
@@ -2844,17 +2851,17 @@ def _run_publication_body(
                 or source_checksum.lower()
                 != str(prior_object["sha256"]).lower()
             ):
-                raise ValueError(
+                raise _ValueError(
                     f"KNB revision source PID {update_of} collides on "
                     "independent checksum."
                 )
             if remote is None and linked_to is not None:
-                raise ValueError(
+                raise _ValueError(
                     f"KNB revision source PID {update_of} names the planned "
                     "successor, but that successor cannot be read."
                 )
             if remote is not None and linked_to is None:
-                raise ValueError(
+                raise _ValueError(
                     "The planned revision PID exists, but its predecessor "
                     "does not link to it."
                 )
@@ -2877,7 +2884,7 @@ def _run_publication_body(
         plan=plan,
     )
     if remote_objects[metadata_index] is not None and series_remote is None:
-        raise ValueError(
+        raise _ValueError(
             "The existing metadata PID has an unresolved metadata series "
             "identifier."
         )
@@ -2929,7 +2936,7 @@ def _run_publication_body(
                 source_remote, plan, update_of, str(obj["pid"]), subject
             )
             if linked_to != obj["pid"]:
-                raise ValueError(
+                raise _ValueError(
                     f"KNB did not link revision source PID {update_of} to its "
                     "planned successor."
                 )
@@ -2955,7 +2962,7 @@ def _run_publication_body(
     if plan["public"] is not True and not anonymous_evidence["verified"]:
         manifest["status"] = "published_pending_catalog"
         manifest = _persist_manifest(manifest, manifest_path)
-        raise ValueError(
+        raise _ValueError(
             "Anonymous catalog unexpectedly exposed private-review PID(s): "
             + ", ".join(anonymous_evidence["matching_pids"])
             + "."
@@ -3059,7 +3066,7 @@ def _server_verified_subject(credentials: object, token_subject: object) -> str:
     for candidate in _echo_subjects(credentials):
         if _same_subject(candidate, token_subject):
             return candidate
-    raise ValueError(
+    raise _ValueError(
         "The DataONE Coordinating Node did not verify the JWT subject."
     )
 
@@ -3073,7 +3080,7 @@ def _decode_jwt_claims(token: str) -> Dict[str, object]:
     """
     parts = str(token).split(".")
     if len(parts) != 3:
-        raise ValueError(
+        raise _ValueError(
             "The process-local DataONE JWT is absent, expired, or invalid for "
             "KNB."
         )
@@ -3082,12 +3089,12 @@ def _decode_jwt_claims(token: str) -> Dict[str, object]:
     try:
         claims = json.loads(base64.urlsafe_b64decode(payload).decode("utf-8"))
     except Exception:  # noqa: BLE001 - any decode failure is the same answer
-        raise ValueError(
+        raise _ValueError(
             "The process-local DataONE JWT is absent, expired, or invalid for "
             "KNB."
         ) from None
     if not isinstance(claims, dict):
-        raise ValueError(
+        raise _ValueError(
             "The process-local DataONE JWT is absent, expired, or invalid for "
             "KNB."
         )
@@ -3106,13 +3113,13 @@ def _token_subject(token: str, now: Optional[float] = None) -> str:
         except (TypeError, ValueError):
             expired = True
         if expired:
-            raise ValueError(
+            raise _ValueError(
                 "The process-local DataONE JWT is absent, expired, or invalid "
                 "for KNB."
             )
     subject = _optional_scalar(claims.get("sub"))
     if subject is None:
-        raise ValueError(
+        raise _ValueError(
             "The process-local DataONE JWT is absent, expired, or invalid for "
             "KNB."
         )
@@ -3130,7 +3137,7 @@ def _capabilities_document(capabilities: object) -> ET.Element:
         capabilities = capabilities.decode("utf-8")
     if isinstance(capabilities, str):
         return ET.fromstring(capabilities)
-    raise ValueError("KNB returned an unreadable capabilities document.")
+    raise _ValueError("KNB returned an unreadable capabilities document.")
 
 
 def _validate_live_capabilities(
@@ -3138,7 +3145,7 @@ def _validate_live_capabilities(
 ) -> bool:
     """Mirror ``.ms_knb_validate_live_capabilities``."""
     if _local_name(document.tag) != "node":
-        raise ValueError(
+        raise _ValueError(
             f"Direct unauthenticated KNB capabilities did not identify "
             f"{node_id}."
         )
@@ -3148,7 +3155,7 @@ def _validate_live_capabilities(
         if _local_name(node.tag) == "identifier"
     ]
     if len(identifiers) != 1 or identifiers[0] != node_id:
-        raise ValueError(
+        raise _ValueError(
             f"Direct unauthenticated KNB capabilities did not identify "
             f"{node_id}."
         )
@@ -3163,7 +3170,7 @@ def _validate_live_capabilities(
     if expected_endpoint is None or re.sub(r"/+$", "", endpoint) != re.sub(
         r"/+$", "", expected_endpoint
     ):
-        raise ValueError(
+        raise _ValueError(
             "Direct KNB capabilities returned an unexpected service endpoint."
         )
 
@@ -3178,7 +3185,7 @@ def _validate_live_capabilities(
     if not storage or not any(
         re.search(r"(^|/)v?2($|/)", version) for version in versions
     ):
-        raise ValueError(
+        raise _ValueError(
             "Direct KNB capabilities do not advertise available MNStorage v2."
         )
     read_only = [
@@ -3187,7 +3194,7 @@ def _validate_live_capabilities(
         if node.get("key") == "read_only_mode"
     ]
     if not read_only or any(value != "false" for value in read_only):
-        raise ValueError(
+        raise _ValueError(
             "Direct KNB capabilities do not explicitly report "
             "read_only_mode=false."
         )
@@ -3378,7 +3385,7 @@ class DataOneRestAdapter:
         # only ever the one belonging to ``node_id``.
         config = _knb_env.config_for_node(node_id)
         if environment != config["dataone_network"]:
-            raise ValueError(
+            raise _ValueError(
                 "The requested DataONE network mixes KNB environments. Node "
                 f"{node_id!r} belongs to the "
                 f"{config['dataone_network']!r} network, but "
@@ -3407,7 +3414,7 @@ class DataOneRestAdapter:
             "GET", re.sub(r"/+$", "", endpoint) + "/monitor/ping", False
         )
         if ping.status_code != 200:
-            raise ValueError("Direct KNB MN ping did not succeed.")
+            raise _ValueError("Direct KNB MN ping did not succeed.")
 
         # AuthenticationManager checks token claims locally but does not
         # verify the JWT signature. The CN diagnostic endpoint performs the
@@ -3587,7 +3594,7 @@ class DataOneRestAdapter:
             "GET", _catalog_url(plan), True, config=client.config
         )
         if response.status_code != 200:
-            raise ValueError(
+            raise _ValueError(
                 "Authenticated DataONE catalog lookup failed after HTTP "
                 f"{response.status_code}."
             )
@@ -3603,7 +3610,7 @@ class DataOneRestAdapter:
 
     def _require_authenticated(self, client: KnbClient) -> None:
         if not getattr(client, "authenticated", False):
-            raise ValueError(
+            raise _ValueError(
                 "The default KNB client has not completed authenticated "
                 "preflight."
             )
@@ -3662,12 +3669,12 @@ class DataOneRestAdapter:
         }
         if kind.startswith("series"):
             if len(identifiers) != 1 or None in identifiers:
-                raise ValueError(
+                raise _ValueError(
                     "The metadata series identifier has an ambiguous DataONE "
                     "binding."
                 )
         elif identifiers != {identifier}:
-            raise ValueError("The planned PID has an ambiguous DataONE binding.")
+            raise _ValueError("The planned PID has an ambiguous DataONE binding.")
         return results[0]
 
     @staticmethod
@@ -3694,7 +3701,7 @@ def _lookup_http_status(status: object, identifier: str, kind: str) -> str:
         return "present"
     if code == 404:
         return "absent"
-    raise ValueError(
+    raise _ValueError(
         f"DataONE {kind} existence for {identifier} is ambiguous after HTTP "
         f"{status}; no create is safe."
     )
@@ -3839,7 +3846,7 @@ def publish_sdp_to_knb(
         SDP-archive path, the representation, and the manifest itself.
     """
     if representation not in ("archive", "expanded"):
-        raise ValueError(
+        raise _ValueError(
             'representation must be one of "archive" or "expanded".'
         )
     _validate_flag(overwrite, "overwrite")
@@ -3849,7 +3856,7 @@ def publish_sdp_to_knb(
     # is never a substitute for approving the plan, and a live call has to
     # satisfy both this and the explicit-environment rule below.
     if not dry_run and confirm is not True:
-        raise ValueError(
+        raise _ValueError(
             "Live KNB publication requires an explicit confirm=True. This "
             "approves the pre-existing exact dry-run manifest; redistribution "
             "authority is recorded separately."
@@ -3862,7 +3869,7 @@ def publish_sdp_to_knb(
             f"environment ({config['node_id']}): a rehearsal that is "
             "non-durable, not promotable to production, unsuitable for "
             "sensitive data, and cannot receive a DOI.",
-            stacklevel=2,
+            stacklevel=2, category=_UserWarning,
         )
     _require_knb_extra()
     root = _package_root(path)
@@ -3873,7 +3880,7 @@ def publish_sdp_to_knb(
     if prior_manifest is not None:
         prior_manifest_path = os.path.realpath(str(revision_manifest))
         if prior_manifest_path.startswith(root + os.sep):
-            raise ValueError(
+            raise _ValueError(
                 "A KNB revision requires a fresh versioned SDP directory. "
                 "Keep the preceding package and verified manifest unchanged; "
                 "build the revised SDP and its new manifest in a different "
@@ -3901,7 +3908,7 @@ def publish_sdp_to_knb(
     resource_map_path = str(publication_paths["resource_map_path"])
     previous = _existing_manifest(manifest_path)
     if not dry_run and previous is None:
-        raise ValueError(
+        raise _ValueError(
             "Live KNB publication requires a pre-existing exact matching "
             "reviewed dry-run manifest."
         )
@@ -3913,7 +3920,7 @@ def publish_sdp_to_knb(
         except OSError:
             pass
     if not os.path.isdir(manifest_parent):
-        raise ValueError(
+        raise _ValueError(
             "Could not create publication artifact directory "
             f"{manifest_parent}."
         )
@@ -3931,7 +3938,7 @@ def publish_sdp_to_knb(
         previous is None or previous_status == "dry_run"
     )
     if overwrite is True and not overwrite_eligible:
-        raise ValueError(
+        raise _ValueError(
             "overwrite cannot replace artifacts described by a published "
             f"manifest. Existing manifest status: {previous_status!r}. "
             "DataONE PIDs are immutable. Supply revision_manifest and a new "
@@ -3968,7 +3975,7 @@ def publish_sdp_to_knb(
                 else "DataONE PIDs are immutable. Supply revision_manifest "
                 "and a new manifest_path for a reviewed revision."
             )
-            raise ValueError(
+            raise _ValueError(
                 "The existing publication manifest describes a different "
                 "plan. " + remedy
             )

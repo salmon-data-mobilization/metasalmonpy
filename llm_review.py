@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from .conditions import (
+    _LlmFileNotFoundError as _FileNotFoundError,
+    _LlmTypeError as _TypeError,
+    _LlmUserWarning as _UserWarning,
+    _LlmValueError as _ValueError,
+)
+
 import hashlib
 import html
 import json
@@ -144,7 +151,7 @@ def _cast_logical_cell(value, column: str) -> bool:
             return True
         if text in _LOGICAL_FALSE_TOKENS:
             return False
-    raise ValueError(
+    raise _ValueError(
         f"Assessment column {column!r} contains values that cannot be "
         f"normalized to the required type: {value!r}."
     )
@@ -328,7 +335,7 @@ def _read_context_file(path: Path) -> Optional[str]:
         warnings.warn(
             f"Skipping unsupported context file {path}. Supported extensions: "
             + ", ".join(SUPPORTED_CONTEXT_EXTENSIONS),
-            stacklevel=2,
+            stacklevel=2, category=_UserWarning,
         )
         return None
     if extension in {"xls", "xlsx", "xlsm"}:
@@ -357,7 +364,7 @@ def _read_context_file(path: Path) -> Optional[str]:
         text = _read_text_file(path)
     text = _r_trimws(text)
     if not text:
-        warnings.warn(f"Skipping empty context file {path}.", stacklevel=2)
+        warnings.warn(f"Skipping empty context file {path}.", stacklevel=2, category=_UserWarning)
         return None
     return text
 
@@ -372,19 +379,19 @@ def _normalize_context_files(context_files) -> list[Path]:
     ):
         values = list(context_files)
     else:
-        raise TypeError(
+        raise _TypeError(
             "llm_context_files must contain local file paths, not parsed "
             "data frames, XML objects, or other in-memory objects."
         )
     paths = []
     for value in values:
         if not isinstance(value, (str, os.PathLike)):
-            raise TypeError(
+            raise _TypeError(
                 "llm_context_files must contain only local file paths."
             )
         path = Path(value).expanduser()
         if not path.is_file():
-            raise FileNotFoundError(f"LLM context file does not exist: {path}")
+            raise _FileNotFoundError(f"LLM context file does not exist: {path}")
         paths.append(path)
     return paths
 
@@ -593,7 +600,7 @@ def load_context_chunks(
         )
         for value in values:
             if not isinstance(value, str):
-                raise TypeError("llm_context_text must contain only strings.")
+                raise _TypeError("llm_context_text must contain only strings.")
             value = _r_trimws(value)
             if value:
                 inline.append(value)
@@ -683,7 +690,7 @@ def resolve_llm_config(
         },
     }
     if provider not in presets:
-        raise ValueError(
+        raise _ValueError(
             "llm_provider must be openai, openrouter, openai_compatible, or chapi."
         )
     preset = presets[provider]
@@ -701,13 +708,13 @@ def resolve_llm_config(
         "request_fn": request_fn,
     }
     if not resolved["model"]:
-        raise ValueError("llm_model is required for this provider.")
+        raise _ValueError("llm_model is required for this provider.")
     if request_fn is None and not resolved["api_key"]:
-        raise ValueError(
+        raise _ValueError(
             f"No API key is configured for llm_provider={provider!r}."
         )
     if request_fn is None and not resolved["base_url"]:
-        raise ValueError(
+        raise _ValueError(
             "llm_base_url is required for an OpenAI-compatible provider."
         )
     return resolved
@@ -1040,12 +1047,12 @@ def _base_assessment(target, config: dict, context: pd.DataFrame) -> dict:
 
 def _validate_item(item, candidates: pd.DataFrame, role: str) -> dict:
     if not isinstance(item, dict):
-        raise ValueError("Assessment item must be a JSON object.")
+        raise _ValueError("Assessment item must be a JSON object.")
     decision = str(item.get("decision") or "").strip().lower()
     if decision == "propose_new_term":
         decision = "request_new_term"
     if decision not in ALLOWED_DECISIONS:
-        raise ValueError(f"Unsupported LLM decision for {role}: {decision!r}.")
+        raise _ValueError(f"Unsupported LLM decision for {role}: {decision!r}.")
 
     payload = _candidate_payload(candidates, role)
     selected_index = item.get("selected_candidate_index")
@@ -1057,7 +1064,7 @@ def _validate_item(item, candidates: pd.DataFrame, role: str) -> dict:
             if candidate["candidate_id"] == selected_id
         ]
         if len(matching) != 1:
-            raise ValueError(
+            raise _ValueError(
                 f"Unknown selected_candidate_id for role {role}: {selected_id}"
             )
         selected_index = matching[0]
@@ -1065,7 +1072,7 @@ def _validate_item(item, candidates: pd.DataFrame, role: str) -> dict:
         try:
             selected_index = int(selected_index)
         except (TypeError, ValueError) as exc:
-            raise ValueError("selected_candidate_index must be an integer.") from exc
+            raise _ValueError("selected_candidate_index must be an integer.") from exc
         if selected_index < 1 or selected_index > len(candidates):
             decision = "review"
             selected_index = None

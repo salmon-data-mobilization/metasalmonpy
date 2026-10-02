@@ -41,6 +41,10 @@ the other direction would be a cycle.
 
 from __future__ import annotations
 
+from .conditions import (
+    _PublicationValueError as _ValueError,
+)
+
 from typing import Dict, List, Optional, Tuple
 
 # --- the registry ---------------------------------------------------------------------
@@ -189,7 +193,7 @@ def validate_environment_config(
             details.append("Missing field(s): " + ", ".join(missing) + ".")
         if unexpected:
             details.append("Unexpected field(s): " + ", ".join(unexpected) + ".")
-        raise ValueError(
+        raise _ValueError(
             f"KNB environment {knb_environment!r} is not a complete registry "
             "record. " + " ".join(details)
         )
@@ -204,18 +208,18 @@ def validate_environment_config(
     for field in string_fields:
         value = config[field]
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(
+            raise _ValueError(
                 f"KNB environment {knb_environment!r} field {field!r} must be "
                 "one non-empty string."
             )
     replicas = config["max_replicas"]
     if not isinstance(replicas, int) or isinstance(replicas, bool) or replicas < 0:
-        raise ValueError(
+        raise _ValueError(
             f"KNB environment {knb_environment!r} field 'max_replicas' must be "
             "one non-negative count."
         )
     if not isinstance(config["durable"], bool):
-        raise ValueError(
+        raise _ValueError(
             f"KNB environment {knb_environment!r} field 'durable' must be one "
             "boolean value."
         )
@@ -234,7 +238,7 @@ def knb_config(knb_environment: object) -> Dict[str, object]:
     """Mirror ``.ms_knb_config``: exact selection from the closed registry."""
     supported = environment_ids()
     if not isinstance(knb_environment, str):
-        raise ValueError(
+        raise _ValueError(
             "knb_environment must be exactly one of "
             + ", ".join(repr(value) for value in supported)
             + ". There is no partial matching, no custom endpoint, and no "
@@ -244,7 +248,7 @@ def knb_config(knb_environment: object) -> Dict[str, object]:
     # Exact match only: partial matching an environment name is how a
     # rehearsal becomes a production deposit.
     if knb_environment not in registry:
-        raise ValueError(
+        raise _ValueError(
             f"Unknown KNB environment {knb_environment!r}. Supported "
             "environment(s): " + ", ".join(repr(value) for value in supported) + "."
         )
@@ -264,7 +268,7 @@ def config_for_node(node_id: object) -> Dict[str, object]:
     matches = [name for name, config in registry.items() if config["node_id"] == node]
     if len(matches) != 1:
         registered = [registry[name]["node_id"] for name in environment_ids()]
-        raise ValueError(
+        raise _ValueError(
             f"{node!r} is not a registered KNB member node. Registered "
             "node(s): " + ", ".join(repr(value) for value in registered) + "."
         )
@@ -282,7 +286,7 @@ def plan_config(plan: Dict[str, object]) -> Dict[str, object]:
     config = config_for_node(plan.get("node_id"))
     network = plan.get("environment")
     if not isinstance(network, str) or network != config["dataone_network"]:
-        raise ValueError(
+        raise _ValueError(
             "The publication plan mixes KNB environments. Node "
             f"{str(plan.get('node_id'))!r} belongs to the "
             f"{config['dataone_network']!r} DataONE network, but the plan "
@@ -290,7 +294,7 @@ def plan_config(plan: Dict[str, object]) -> Dict[str, object]:
         )
     declared = plan.get("knb_environment")
     if declared is not None and str(declared) != config["knb_environment"]:
-        raise ValueError(
+        raise _ValueError(
             "The publication plan mixes KNB environments. Node "
             f"{str(plan.get('node_id'))!r} is the "
             f"{config['knb_environment']!r} environment, but the plan records "
@@ -314,7 +318,7 @@ def resolve_environment(
     if knb_environment is None:
         if dry_run is True:
             return knb_config("test")
-        raise ValueError(
+        raise _ValueError(
             "Live KNB publication requires an explicit knb_environment. Pass "
             'knb_environment="test" to deposit to the KNB Test Node, or '
             'knb_environment="production" to deposit to KNB. Only a dry run '
@@ -369,7 +373,7 @@ def require_token(config: Dict[str, object]) -> str:
 
     token = get_token(str(config["token_option"]))
     if not _nonempty(token):
-        raise ValueError(
+        raise _ValueError(
             "A short-lived DataONE JWT for the "
             f"{config['knb_environment']!r} environment is required in the "
             "process-local "

@@ -26,6 +26,11 @@ implementation's provenance so an R-written package stays readable).
 
 from __future__ import annotations
 
+from .conditions import (
+    _ValidationFileExistsError as _FileExistsError,
+    _ValidationValueError as _ValueError,
+)
+
 import hashlib
 import json
 import os
@@ -60,7 +65,7 @@ _MEDIA_TYPE_CHARS = set(
 _MANIFEST_WRITER = "write_sdp_reproducibility_manifest"
 
 
-class ReproducibilityManifestError(ValueError):
+class ReproducibilityManifestError(_ValueError):
     """Raised for every reproducibility-manifest contract violation."""
 
 
@@ -422,7 +427,7 @@ def write_sdp_reproducibility_manifest(
     entries = [_file_entry(declaration) for declaration in declarations]
     manifest_path = root / SDP_REPRODUCIBILITY_PATH
     if manifest_path.exists() and not overwrite:
-        raise FileExistsError(
+        raise _FileExistsError(
             "Reproducibility manifest already exists and overwrite is False. "
             f"Existing: {manifest_path}."
         )

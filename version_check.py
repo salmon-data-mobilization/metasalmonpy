@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PackageUserWarning as _UserWarning,
+    _PackageValueError as _ValueError,
+)
+
 import re
 import warnings
 from typing import Optional
@@ -10,7 +15,7 @@ import requests
 def _version_parts(value: str) -> tuple[int, ...]:
     match = re.search(r"\d+(?:\.\d+)*", str(value))
     if not match:
-        raise ValueError(f"Version {value!r} is not usable.")
+        raise _ValueError(f"Version {value!r} is not usable.")
     return tuple(int(part) for part in match.group(0).split("."))
 
 
@@ -26,9 +31,9 @@ def check_for_updates(
         r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
         repo.strip(),
     ):
-        raise ValueError("repo must use the 'owner/name' form.")
+        raise _ValueError("repo must use the 'owner/name' form.")
     if timeout <= 0:
-        raise ValueError("timeout must be greater than zero.")
+        raise _ValueError("timeout must be greater than zero.")
     if current is None:
         from . import __version__
 
@@ -97,14 +102,14 @@ def check_for_updates(
             warnings.warn(
                 f"A newer metasalmonpy release is available: {current} -> "
                 f"{result['latest_version']}. Upgrade with: {install_command}",
-                UserWarning,
+                _UserWarning,
                 stacklevel=2,
             )
         elif result["status"] == "unavailable":
             warnings.warn(
                 f"Could not check for a newer metasalmonpy release: "
                 f"{result['message']}",
-                UserWarning,
+                _UserWarning,
                 stacklevel=2,
             )
     return result

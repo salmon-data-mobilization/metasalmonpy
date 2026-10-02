@@ -29,6 +29,12 @@ them.
 
 from __future__ import annotations
 
+from .conditions import (
+    _ValidationNotImplementedError as _NotImplementedError,
+    _ValidationUserWarning as _UserWarning,
+    _ValidationValueError as _ValueError,
+)
+
 import csv
 import io
 import json
@@ -85,7 +91,7 @@ _HTTP_AUTHORITY_RE = re.compile(
 _REVIEW_RE = re.compile(r"^REVIEW:", re.IGNORECASE)
 
 
-class SdpExtensionError(ValueError):
+class SdpExtensionError(_ValueError):
     """Raised for every SDP metadata-extension contract violation.
 
     R signals all of these through ``.ms_sdp_extension_abort()``. A single
@@ -267,7 +273,7 @@ def _atomic_write_set(
                     warnings.warn(
                         f"Could not restore SDP metadata backup for '{path}'; "
                         f"the original bytes are preserved at '{backup}'.",
-                        stacklevel=2,
+                        stacklevel=2, category=_UserWarning,
                     )
 
     try:
@@ -752,7 +758,7 @@ def write_sdp_methods(*args, **kwargs):
     NotImplementedError
         Always.
     """
-    raise NotImplementedError(
+    raise _NotImplementedError(
         "metasalmonpy does not write metadata/methods.csv. SDP 0.3.0 removed "
         "the registry from the specification: method labels and descriptions "
         "belong in the shared vocabulary, a table-constant procedure lives in "
@@ -1386,7 +1392,7 @@ def migrate_sdp_methods(path: Union[str, Path], dry_run: bool = False) -> dict:
                         "Could not restore metadata/methods.csv after a "
                         "failed migration; recover it from "
                         f"'{os.path.basename(registry_backup)}'.",
-                        stacklevel=2,
+                        stacklevel=2, category=_UserWarning,
                     )
             raise
     if registry_backup and os.path.exists(registry_backup):

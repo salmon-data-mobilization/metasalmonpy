@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from .conditions import (
+    _LlmFileNotFoundError as _FileNotFoundError,
+    _LlmValueError as _ValueError,
+)
+
 import json
 import re
 import uuid
@@ -53,7 +58,7 @@ def _session_root(path=None) -> Path:
 
 def _session_dir(session_id: str, root=None) -> Path:
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", str(session_id)):
-        raise ValueError("session_id must contain only letters, numbers, '.', '-', and '_'.")
+        raise _ValueError("session_id must contain only letters, numbers, '.', '-', and '_'.")
     return _session_root(root) / str(session_id)
 
 
@@ -88,7 +93,7 @@ def _load_session(session_id: str, root=None) -> tuple[dict, list[dict], Path]:
             state_path = legacy / "state.json"
             transcript_path = legacy / "transcript.json"
     if not state_path.exists() or not transcript_path.exists():
-        raise FileNotFoundError(f"No persisted decomposition session found for {session_id!r}.")
+        raise _FileNotFoundError(f"No persisted decomposition session found for {session_id!r}.")
     state = json.loads(state_path.read_text(encoding="utf-8"))
     transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
     return state, transcript, directory
@@ -101,34 +106,34 @@ def _target_row(
     dataset_id: Optional[str],
 ) -> dict:
     if not isinstance(dictionary, pd.DataFrame) or dictionary.empty:
-        raise ValueError("dict_df must contain at least one dictionary row.")
+        raise _ValueError("dict_df must contain at least one dictionary row.")
     if "column_name" not in dictionary:
-        raise ValueError("dict_df must contain a column_name column.")
+        raise _ValueError("dict_df must contain a column_name column.")
 
     keep = dictionary["column_name"].astype(str) == str(column_name)
     if table_id is not None:
         if "table_id" not in dictionary:
-            raise ValueError("table_id was supplied but dict_df has no table_id column.")
+            raise _ValueError("table_id was supplied but dict_df has no table_id column.")
         keep &= dictionary["table_id"].astype(str) == str(table_id)
     if dataset_id is not None:
         if "dataset_id" not in dictionary:
-            raise ValueError("dataset_id was supplied but dict_df has no dataset_id column.")
+            raise _ValueError("dataset_id was supplied but dict_df has no dataset_id column.")
         keep &= dictionary["dataset_id"].astype(str) == str(dataset_id)
 
     matched = dictionary.loc[keep]
     if matched.empty:
-        raise ValueError(
+        raise _ValueError(
             f"Could not find {column_name!r} with the supplied dataset/table filters."
         )
     if len(matched) > 1:
-        raise ValueError(
+        raise _ValueError(
             "chat_decomposition matched more than one row; pass table_id and/or "
             "dataset_id to disambiguate the column."
         )
     row = matched.iloc[0]
     role = row.get("column_role")
     if not _missing(role) and str(role).strip().lower() != "measurement":
-        raise ValueError("chat_decomposition currently supports measurement rows only.")
+        raise _ValueError("chat_decomposition currently supports measurement rows only.")
     return _json_value(row.to_dict())
 
 

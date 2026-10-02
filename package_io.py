@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from .conditions import (
+    _PackageDeprecationWarning as _DeprecationWarning,
+    _PackageFileExistsError as _FileExistsError,
+    _PackageFileNotFoundError as _FileNotFoundError,
+    _PackageUserWarning as _UserWarning,
+    _PackageValueError as _ValueError,
+)
+
 import json
 import shutil
 import datetime as _dt
@@ -380,7 +388,7 @@ def _assert_managed_paths_contained(target: Path, managed_paths) -> None:
     """
     root = _lexical_dir(target)
     if _ends_in_parent_ref(root):
-        raise ValueError(
+        raise _ValueError(
             f"Refusing to update {target}: the package root ends in '..'. Which "
             "directory that names depends on whether an earlier component is a "
             "symbolic link. Write to the directory itself instead."
@@ -389,7 +397,7 @@ def _assert_managed_paths_contained(target: Path, managed_paths) -> None:
     # link to ``/private/tmp``, so walking ancestors would reject every
     # ordinary tempdir write.
     if root.is_symlink():
-        raise ValueError(
+        raise _ValueError(
             f"Refusing to update {target}: the package root is a symbolic link. "
             "Write to the directory the link points at, or replace the link "
             "with a real directory."
@@ -407,7 +415,7 @@ def _assert_managed_paths_contained(target: Path, managed_paths) -> None:
                 continue
             current = current / part
             if current.is_symlink():
-                raise ValueError(
+                raise _ValueError(
                     f"Refusing to update {target}: {relative} contains a "
                     "symbolic-link path component. Replace the link with a real "
                     "directory or file, or write to a new directory."
@@ -504,18 +512,18 @@ def _check_package_write_dir(
     destroyed the caller's package.
     """
     if prune and not overwrite:
-        raise ValueError("prune=True requires overwrite=True.")
+        raise _ValueError("prune=True requires overwrite=True.")
     if not target.exists():
         target.mkdir(parents=True, exist_ok=True)
         return
     if not list(target.iterdir()):
         return
     if not overwrite:
-        raise FileExistsError(
+        raise _FileExistsError(
             f"Directory {target} already exists. Set overwrite=True to replace."
         )
     if not _is_owned_package_dir(target):
-        raise ValueError(
+        raise _ValueError(
             f"Refusing to overwrite non-metasalmonpy directory {target}. "
             "Use a new or empty directory, or clean it manually."
         )
@@ -557,7 +565,7 @@ def _warn_pruning_recorded_decisions(target: Path, writes) -> None:
         "prune=True is about to delete semantic_suggestions.csv, which records "
         f"{len(decisions)} review decision{plural}. Copy it first if you want "
         "to keep the record of what was accepted and why.",
-        UserWarning,
+        _UserWarning,
         stacklevel=2,
     )
 
@@ -641,11 +649,11 @@ def _force_data_path(file_name, resource_name: str, format: str) -> str:
         file_name = f"{resource_name}.{format}"
     normalized = str(file_name).replace("\\", "/").strip()
     if re.match(r"^(?:[A-Za-z]:)?/", normalized):
-        raise ValueError("Resource file_name must be a relative package path.")
+        raise _ValueError("Resource file_name must be a relative package path.")
     if ".." in normalized.split("/"):
-        raise ValueError("Resource file_name must not contain '..' path segments.")
+        raise _ValueError("Resource file_name must not contain '..' path segments.")
     if not normalized or normalized.endswith("/"):
-        raise ValueError("Resource file_name must name a file.")
+        raise _ValueError("Resource file_name must name a file.")
     if normalized.startswith("data/"):
         return normalized
     return f"data/{Path(normalized).name}"
@@ -775,7 +783,7 @@ def _license_descriptor(license_value) -> dict:
     text = raw.strip(READR_TRIM_CHARS)
     if _is_canonical_rights_url(text):
         return {"path": text}
-    raise ValueError(f"Unknown SDP publication license: {raw!r}.")
+    raise _ValueError(f"Unknown SDP publication license: {raw!r}.")
 
 
 # ---------------------------------------------------------------------------
@@ -1108,16 +1116,16 @@ def write_salmon_datapackage(
     call does not write.
     """
     if format != "csv":
-        raise ValueError("Only CSV format is supported. Use format='csv'.")
+        raise _ValueError("Only CSV format is supported. Use format='csv'.")
 
     if not isinstance(dataset_meta, pd.DataFrame) or len(dataset_meta) != 1:
-        raise ValueError("dataset_meta must be a single-row DataFrame.")
+        raise _ValueError("dataset_meta must be a single-row DataFrame.")
     if not isinstance(table_meta, pd.DataFrame) or len(table_meta) == 0:
-        raise ValueError("table_meta must be a non-empty DataFrame.")
+        raise _ValueError("table_meta must be a non-empty DataFrame.")
     if not isinstance(resources, Mapping) or len(resources) == 0:
-        raise ValueError("resources must be a named mapping of DataFrames.")
+        raise _ValueError("resources must be a named mapping of DataFrames.")
     if any(not isinstance(v, pd.DataFrame) for v in resources.values()):
-        raise ValueError("All resources must be pandas DataFrames.")
+        raise _ValueError("All resources must be pandas DataFrames.")
 
     dict_valid = normalize_dictionary(validate_dictionary(dict_df, require_iris=False))
     dataset_meta = normalize_dataset_meta(dataset_meta)
@@ -1188,7 +1196,7 @@ def write_salmon_datapackage(
             warnings.warn(
                 f"No table metadata found for resource {resource_name!r}; "
                 "skipping it.",
-                UserWarning,
+                _UserWarning,
                 stacklevel=2,
             )
             continue
@@ -1235,7 +1243,7 @@ def write_salmon_datapackage(
             f"metadata/dataset.csv declares {declared_spec_version!r} but the loaded "
             f"SDP schema is {sdp_bundle['version']!r}. The package will carry both "
             "values; clear spec_version to adopt the loaded schema version.",
-            UserWarning,
+            _UserWarning,
             stacklevel=2,
         )
 
@@ -1306,7 +1314,7 @@ def write_salmon_datapackage(
         warnings.warn(
             "Removed data resource(s) no longer declared in tables.csv: "
             + ", ".join(sorted(orphaned)),
-            UserWarning,
+            _UserWarning,
             stacklevel=2,
         )
 
@@ -1328,7 +1336,7 @@ def create_salmon_datapackage(
         "create_salmon_datapackage() is deprecated; use "
         "write_salmon_datapackage() for manual writes or create_sdp() "
         "for the one-shot workflow.",
-        DeprecationWarning,
+        _DeprecationWarning,
         stacklevel=2,
     )
     return write_salmon_datapackage(
@@ -1349,7 +1357,7 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
     """
     target = Path(path)
     if not target.exists():
-        raise FileNotFoundError(f"Directory {target} does not exist.")
+        raise _FileNotFoundError(f"Directory {target} does not exist.")
 
     dataset_path = _metadata_path(target, "dataset.csv")
     tables_path = _metadata_path(target, "tables.csv")
@@ -1364,7 +1372,7 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
         dictionary["required"] = parse_logical(dictionary["required"])
     else:
         if not json_path.exists():
-            raise FileNotFoundError(
+            raise _FileNotFoundError(
                 f"No Salmon Data Package metadata found in {target}; expected canonical CSV metadata or datapackage.json."
             )
 
@@ -1472,7 +1480,7 @@ def read_salmon_datapackage(path: str) -> Dict[str, object]:
             # resource as a typed issue on top of this.
             warnings.warn(
                 f"Resource file '{file_path}' not found, skipping",
-                UserWarning,
+                _UserWarning,
                 stacklevel=2,
             )
 
@@ -1729,7 +1737,7 @@ def infer_salmon_datapackage_artifacts(
         ``semantic_llm_assessments`` when available.
     """
     if semantic_code_scope not in {"factor", "all", "none"}:
-        raise ValueError(
+        raise _ValueError(
             "semantic_code_scope must be 'factor', 'all', or 'none'."
         )
     resource_map = ensure_resource_mapping(resources, table_id=table_id)
@@ -1820,7 +1828,7 @@ def infer_salmon_datapackage_artifacts(
     elif llm_assess:
         warnings.warn(
             "LLM review options are ignored when seed_semantics=False.",
-            UserWarning,
+            _UserWarning,
             stacklevel=2,
         )
 
@@ -2123,7 +2131,7 @@ def create_sdp(
     if (llm_context_files is not None or llm_context_text is not None) and not llm_assess:
         warnings.warn(
             "LLM context is ignored unless llm_assess=True.",
-            UserWarning,
+            _UserWarning,
             stacklevel=2,
         )
     if path is None or not str(path).strip():
@@ -2245,7 +2253,7 @@ def create_sdp(
                 "Created EDH XML is a draft because package metadata still "
                 "contains unresolved review values. Review the package and "
                 "run write_edh_xml_from_sdp() to rebuild it.",
-                UserWarning,
+                _UserWarning,
                 stacklevel=2,
             )
     return pkg_path
@@ -2279,7 +2287,7 @@ def create_salmon_datapackage_from_data(
     """Deprecated one-shot wrapper with its legacy call contract preserved."""
     warnings.warn(
         "create_salmon_datapackage_from_data() is deprecated; use create_sdp().",
-        DeprecationWarning,
+        _DeprecationWarning,
         stacklevel=2,
     )
     package_path = create_sdp(
@@ -2982,7 +2990,7 @@ def _collect_package_validation_issues(
                 + ", ".join(placeholder_fields[:6])
                 + ". Replace them before publication; require_iris=True "
                 "reports these as errors.",
-                UserWarning,
+                _UserWarning,
                 stacklevel=3,
             )
 
@@ -3026,7 +3034,7 @@ def _collect_package_validation_issues(
                 "require_iris=True reports "
                 f"{'it' if count == 1 else 'these'} as "
                 f"{'an error' if count == 1 else 'errors'}.",
-                UserWarning,
+                _UserWarning,
                 stacklevel=3,
             )
     if not isinstance(dictionary, pd.DataFrame) or len(dictionary) == 0:
@@ -3205,7 +3213,7 @@ def _collect_package_validation_issues(
                 + ". Tidy data puts each variable in a column and each "
                 "observation in a row. Consider pandas.melt() before "
                 "packaging.",
-                UserWarning,
+                _UserWarning,
                 stacklevel=3,
             )
 
@@ -3456,7 +3464,7 @@ def _abort_package_validation_issues(issues: pd.DataFrame) -> None:
     if total > preview_n:
         remaining = total - preview_n
         lines.append(f"{remaining} more issue{'' if remaining == 1 else 's'} not shown.")
-    error = ValueError("\n".join(lines))
+    error = _ValueError("\n".join(lines))
     error.issues = issues
     raise error
 
@@ -3507,7 +3515,7 @@ def validate_salmon_datapackage(
         if str(value).strip()
     }
     if len(dataset_ids) > 1:
-        raise ValueError(
+        raise _ValueError(
             f"Dataset IDs are not aligned across package metadata: "
             f"{sorted(dataset_ids)}"
         )
@@ -3623,7 +3631,7 @@ def validate_salmon_datapackage(
                     f"{remaining} more unresolved review "
                     f"issue{'' if remaining == 1 else 's'} not shown."
                 )
-            raise ValueError("\n".join(lines))
+            raise _ValueError("\n".join(lines))
 
     sem_issues = semantic_validation.get("issues")
     if isinstance(sem_issues, pd.DataFrame) and len(sem_issues) > 0:
@@ -3642,7 +3650,7 @@ def validate_salmon_datapackage(
                 f"{remaining} more semantic issue{'' if remaining == 1 else 's'} "
                 "returned in the result."
             )
-        warnings.warn("\n".join(lines), UserWarning, stacklevel=2)
+        warnings.warn("\n".join(lines), _UserWarning, stacklevel=2)
 
     return {
         "package": package,

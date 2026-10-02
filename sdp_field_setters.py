@@ -51,6 +51,12 @@ the fix.
 
 from __future__ import annotations
 
+from .conditions import (
+    _PackageFileNotFoundError as _FileNotFoundError,
+    _PackageNotADirectoryError as _NotADirectoryError,
+    _PackageValueError as _ValueError,
+)
+
 import re
 from pathlib import Path
 from typing import Optional, Sequence
@@ -669,7 +675,7 @@ def review_metadata(path) -> MetadataReview:
 
     target = Path(path)
     if not target.is_dir():
-        raise NotADirectoryError(
+        raise _NotADirectoryError(
             f"path must be an existing Salmon Data Package directory: {target}"
         )
 
@@ -866,19 +872,19 @@ def _render_metadata_lines(review: MetadataReview, path_expr: str) -> list:
 
 def _assert_metadata_value(value, field: str) -> object:
     if isinstance(value, (list, tuple, set, dict, pd.Series)):
-        raise ValueError(f"{field} must be a single value.")
+        raise _ValueError(f"{field} must be a single value.")
     if value is None or (not isinstance(value, str) and pd.isna(value)):
         return pd.NA
     text = _text(value)
     if _is_value_template(text):
-        raise ValueError(
+        raise _ValueError(
             f"{field} still holds the placeholder from review_metadata(): "
             + text
             + ". Replace the <...> text with the real value before running "
             "the call."
         )
     if not text:
-        raise ValueError(
+        raise _ValueError(
             f"{field} must not be blank. Pass None to clear a field on purpose."
         )
     return text
@@ -899,7 +905,7 @@ def _resolve_metadata_row(
         if value is None:
             continue
         if key not in frame.columns:
-            raise ValueError(
+            raise _ValueError(
                 f"{file_name} has no {key} column to match on."
             )
         keep &= frame[key].map(_text) == _text(value)
@@ -922,14 +928,14 @@ def _resolve_metadata_row(
                 for index in frame.index
             )
         )
-        raise ValueError(
+        raise _ValueError(
             f"No {file_name} row matches that address. Asked for: "
             + asked
             + ". Available: "
             + "; ".join(available[:20])
             + "."
         )
-    raise ValueError(
+    raise _ValueError(
         f"That address matches {len(hits)} rows in {file_name}. Asked for: "
         + asked
         + ". Add table= to say which."
@@ -1070,13 +1076,13 @@ def _set_sdp_metadata(
 
     target = Path(path)
     if not target.is_dir():
-        raise NotADirectoryError(
+        raise _NotADirectoryError(
             f"path must be an existing Salmon Data Package directory: {target}"
         )
 
     values = {name: value for name, value in values.items() if value is not None}
     if not values:
-        raise ValueError(
+        raise _ValueError(
             'Nothing to set. Name at least one field, for example '
             'creator="...".'
         )
@@ -1085,7 +1091,7 @@ def _set_sdp_metadata(
     declared = sdp_schema_field_names(table_name, source=_schema_source())
     unknown = [name for name in values if name not in declared]
     if unknown:
-        raise ValueError(
+        raise _ValueError(
             f"{file_name} has no such field"
             + ("" if len(unknown) == 1 else "s")
             + ": "
@@ -1098,7 +1104,7 @@ def _set_sdp_metadata(
         name for name in values if name in METADATA_KEY_FIELDS.get(file_name, ())
     ]
     if protected:
-        raise ValueError(
+        raise _ValueError(
             ("This field addresses" if len(protected) == 1 else "These fields address")
             + " the row and cannot be set: "
             + ", ".join(protected)
@@ -1112,7 +1118,7 @@ def _set_sdp_metadata(
 
     located = _metadata_path(target, file_name)
     if not located.is_file():
-        raise FileNotFoundError(
+        raise _FileNotFoundError(
             f"This package has no {file_name}. Rebuild it with create_sdp() or "
             "write_salmon_datapackage()."
         )

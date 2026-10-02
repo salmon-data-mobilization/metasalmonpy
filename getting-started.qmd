@@ -108,3 +108,5 @@ resources = package["resources"]
 Continue with the [package lifecycle](guides/package-lifecycle.qmd) for
 multi-table packages and manual assembly, or the
 [semantic review guide](guides/semantic-review.qmd) for ontology suggestions.
+
+Handle failures selectively with the [errors and warnings guide](guides/conditions.qmd).
