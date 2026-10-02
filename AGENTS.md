@@ -120,11 +120,13 @@ violation like a failing test.
 
 ## Coordination hub
 
-The metasalmon repo is the coordinating hub for this family of repos
-(metasalmon, metasalmonpy, smn-data-pkg, salmon-domain-ontology,
-dfo-salmon-ontology, psc-salmon-vocabularies). Sequencing, execplans, and the
-cross-repo release index live in metasalmon's `knowledge/` OKF bundle — start
-at its `ROADMAP` card. Do not maintain a competing roadmap here.
+For ecosystem work, read [metasalmon's HUB.md](https://github.com/salmon-data-mobilization/metasalmon/blob/main/HUB.md).
+It governs claims, isolation, handoffs, reporting, review/merge authority and review budgets.
+Planning state lives in the hub's `queue/`; sequencing and the release index live in `knowledge/roadmap.md`.
+Do not maintain a competing roadmap here.
+**Repository-local adoption (2026-10-01):** metasalmonpy adopts HUB's coherent-batch default,
+effective when both the reviewed HUB policy and this companion merge.
+This changes process only; the scientific, parity, dependency, testing and release contracts here remain in force.
 
 ## Salmon knowledge goes to the commons, not into a PR body
 
