@@ -21,6 +21,7 @@ import pandas as pd
 import pytest
 
 from metasalmonpy import read_salmon_datapackage, write_salmon_datapackage
+from metasalmonpy.package_io import PACKAGE_SENTINEL, _package_ownership_bytes
 
 R_PACKAGE = Path(__file__).resolve().parent / "data" / "resource_types" / "r-package"
 
@@ -38,7 +39,7 @@ SIDECARS = (
 def _package(tmp_path, name="pkg"):
     target = tmp_path / name
     shutil.copytree(R_PACKAGE, target)
-    (target / ".metasalmonpy-package").write_text("metasalmonpy-owned\n", encoding="utf-8")
+    (target / PACKAGE_SENTINEL).write_bytes(_package_ownership_bytes())
     for relative in SIDECARS:
         path = target / relative
         path.parent.mkdir(parents=True, exist_ok=True)
