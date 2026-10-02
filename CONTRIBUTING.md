@@ -16,9 +16,8 @@ python -m pip install -e ".[context,docs,test]"
 
 ## Workflow
 
-Use the repository issue, branch, pull request, and Project workflow described
-in `AGENTS.md`. Keep a change focused and update the issue and Project status
-as it moves through review.
+Follow `AGENTS.md` → **Coordination hub** for the ecosystem workflow and canonical HUB rules.
+Record progress through those queue, claim and handoff procedures.
 
 Do not commit credentials. LLM review must remain strictly opt-in, and routine
 tests must use injected deterministic provider responses.
