@@ -26,6 +26,13 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Semantic closure reports actual code-row addresses (hub B-266).** A
+  code-resolved procedure's gap or incomplete-evidence report names every
+  carrying `codes.csv term_iri` row, with its dataset/table/column/code keys,
+  rather than a nonexistent `method_iri` field. Shared IRIs retain separate
+  addresses and request drafts. Warnings distinguish unique IRIs from package
+  addresses, and code ordering follows the R B-265 port.
+
 * **Configuration inventory (hub B-59 companion).** Add a guide to the current
   Python schema overrides, retrieval switches and provider/credential fallbacks,
   with their precedence and the planned in-package provider removal in 0.7.0.
