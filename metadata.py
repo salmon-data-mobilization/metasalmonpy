@@ -44,23 +44,20 @@ def _strip_review_iri(value) -> str:
     return text[marker.end():] if marker else text
 
 
-def _contains_review_iri(text: str, document=None) -> bool:
-    """Keep the literal XML guard and inspect original parsed values.
+def _contains_review_iri(text: str, iri_values=()) -> bool:
+    """Keep the literal XML guard and inspect original IRI-bearing values.
 
     XML serialization writes a tab in an attribute as a character reference
     (``&#09;``), so matching only its bytes would miss an admitted marker.
     Preserve the existing case-sensitive ``REVIEW:`` serialized check: an
     unanchored case-insensitive scan also matches narrative ``Peer review:``
-    and ``preview:``. Inspect original text/tail/attribute values with the
-    anchored predicate, without a second parse or entity decoder.
+    and ``preview:``. The consumer selects its emitted IRI fields: free text
+    beginning ``Review:`` is also ordinary narrative. Inspect selected raw
+    values with the anchored predicate, without reparsing or entity decoding.
     """
     if "REVIEW:" in text:
         return True
-    return document is not None and any(
-        _is_review_iri(value)
-        for element in document.iter()
-        for value in (element.text, element.tail, *element.attrib.values())
-    )
+    return any(_is_review_iri(value) for value in iri_values)
 
 # metasalmon calls ``grepl()`` WITHOUT ``perl = TRUE`` in every validator that
 # uses a POSIX character class, so those classes are resolved by TRE, which is

@@ -123,49 +123,132 @@ def _fixture_sdp(tmp_path, family, name):
     return target
 
 
-@pytest.mark.parametrize("carrier", ["text", "attribute"])
-def test_eml_public_export_refuses_a_marker_anywhere_in_the_document(tmp_path, monkeypatch, carrier):
+@pytest.mark.parametrize("carrier", [
+    "propertyURI", "valueURI", "url", "userId", "directory",
+    "DataONE", "packageId", "schemaLocation",
+])
+def test_eml_iri_inventory_reaches_real_emitted_fixture_fields(carrier):
+    from metasalmonpy.metadata import _contains_review_iri
+    document = ET.parse(Path(__file__).parent / "data/eml/eml-supplementary.xml").getroot()
+    marker = "review\t:draft"
+    if carrier in ("propertyURI", "valueURI", "url", "userId"):
+        document.find(".//" + carrier).text = marker
+    elif carrier == "directory":
+        document.find(".//userId").set("directory", marker)
+    elif carrier == "DataONE":
+        document.find(".//otherEntity/alternateIdentifier[@system='DataONE']").text = marker
+    elif carrier == "packageId":
+        document.set("packageId", marker)
+    else:
+        document.set("{http://www.w3.org/2001/XMLSchema-instance}schemaLocation",
+                     "https://eml.ecoinformatics.org/eml-2.2.0 " + marker)
+    assert _contains_review_iri(ET.tostring(document, encoding="unicode"), eml._eml_iri_values(document))
+
+
+def test_eml_code_vocabulary_source_uses_the_actual_emitter():
+    from metasalmonpy.metadata import _contains_review_iri
+    document = ET.Element("eml")
+    codes = pd.DataFrame([{
+        "table_id": "counts", "column_name": "sex", "code_value": "F",
+        "code_label": "Female", "code_description": "Female fish",
+        "vocabulary_iri": "review\t:draft",
+    }])
+    eml._add_non_numeric_domain(document, {"measurement_scale": "nominal"},
+                                {"table_id": "counts", "column_name": "sex"}, {"codes": codes})
+    assert document.find(".//codeDefinition/source").text == "review\t:draft"
+    assert _contains_review_iri(ET.tostring(document, encoding="unicode"), eml._eml_iri_values(document))
+
+
+@pytest.mark.parametrize("prefix,expected", [("\t", True), ("\n", False), ("\u00a0", False)])
+@pytest.mark.parametrize("leading", ["", " ", "\t"])
+@pytest.mark.parametrize("position", ["first", "second"])
+def test_eml_schema_pair_keeps_both_uris_raw(prefix, expected, leading, position):
+    from metasalmonpy.metadata import _contains_review_iri
+    marker = prefix + "review :draft"
+    pair = marker + " https://example.org/eml.xsd" if position == "first" else "https://eml.ecoinformatics.org/eml-2.2.0 " + marker
+    document = ET.Element("eml", {
+        "{http://www.w3.org/2001/XMLSchema-instance}schemaLocation":
+            leading + pair,
+    })
+    assert _contains_review_iri(ET.tostring(document, encoding="unicode"), eml._eml_iri_values(document)) is expected
+
+
+@pytest.mark.parametrize("carrier", ["about", "resource", "datatype"])
+def test_ore_iri_inventory_reaches_real_namespace_qualified_fixture_fields(carrier):
+    from metasalmonpy.metadata import _contains_review_iri
+    document = ET.parse(Path(__file__).parent / "data/knb/r/public/resource-map.rdf").getroot()
+    attribute = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}" + carrier
+    element = next(element for element in document.iter() if attribute in element.attrib)
+    element.set(attribute, "review\t:draft")
+    xml = ET.tostring(document, encoding="unicode")
+    assert "review&#09;:draft" in xml
+    assert _contains_review_iri(xml, knb_publication._ore_iri_values(document))
+
+
+@pytest.mark.parametrize("carrier", ["identifier", "modified", "atLocation"])
+def test_ore_string_date_and_local_path_text_are_not_decoded_iri_slots(carrier):
+    from metasalmonpy.metadata import _contains_review_iri
+    document = ET.parse(Path(__file__).parent / "data/knb/r/public/resource-map.rdf").getroot()
+    element = next(element for element in document.iter() if knb_publication._local_name(element.tag) == carrier)
+    element.text = "Review: ordinary value"
+    assert not _contains_review_iri(ET.tostring(document, encoding="unicode"), knb_publication._ore_iri_values(document))
+
+
+@pytest.mark.parametrize("carrier", ["valueURI", "directory"])
+def test_eml_public_export_refuses_markers_on_emitted_iri_fields(tmp_path, monkeypatch, carrier):
     pytest.importorskip("yaml")
     pytest.importorskip("lxml")
     target = _fixture_sdp(tmp_path, "eml", "sdp-default")
     build = eml._build_document
     def marked_document(*args, **kwargs):
         built = build(*args, **kwargs)
-        # The final guard scans the whole generated document, even a value
-        # outside the semantic annotation slots checked earlier.
-        title = built["document"].find("dataset/title")
-        if carrier == "text":
-            title.text = " review :draft"
+        document = built["document"]
+        if carrier == "valueURI":
+            document.find(".//annotation/valueURI").text = " review :draft"
         else:
-            # ElementTree writes an attribute tab as &#09;. The guard must
-            # still see the raw value admitted by the cell predicate.
-            title.set("{http://www.w3.org/XML/1998/namespace}lang", "review\t:draft")
+            # The builder emits this actual URI attribute for an ORCID party.
+            # Serialization escapes its tab, so the original value must reach
+            # the marker guard. xml:lang/title are not IRI carriers.
+            document.find(".//userId").set("directory", "review\t:draft")
+            assert "review&#09;:draft" in ET.tostring(document, encoding="unicode")
         return built
     monkeypatch.setattr(eml, "_build_document", marked_document)
     with pytest.raises(ValueError, match="unresolved.*REVIEW"):
         write_eml_from_sdp(target, overwrite=True)
 
 
-@pytest.mark.parametrize("carrier", ["text", "attribute"])
-def test_knb_public_dry_run_refuses_a_marker_anywhere_in_ore(tmp_path, monkeypatch, carrier):
+@pytest.mark.parametrize("carrier", ["resource", "about", "datatype"])
+def test_knb_public_dry_run_refuses_markers_on_emitted_rdf_iri_fields(tmp_path, monkeypatch, carrier):
     pytest.importorskip("yaml")
     pytest.importorskip("lxml")
     target = _fixture_sdp(tmp_path, "knb", "sdp-public")
     build = knb_publication._build_ore
+    resolve = knb_publication._resolve_url
     def marked_document(*args, **kwargs):
+        if carrier == "about":
+            # Change an actual emitted member URL in both builder and expected
+            # plan relationships. A membership/identifier mismatch would fail
+            # before the marker guard and would not establish its reach.
+            member_pid = next(str(member["pid"]) for member in args[3] if member["role"] == "data")
+            def marked_member_url(pid, config):
+                value = resolve(pid, config)
+                return "review\t:" + value if str(pid) == member_pid else value
+            monkeypatch.setattr(knb_publication, "_resolve_url", marked_member_url)
         document = build(*args, **kwargs)
-        note = ET.SubElement(document, "note")
-        if carrier == "text":
-            note.text = " review :draft"
+        if carrier == "resource":
+            next(element for element in document.iter() if element.tag == "dcterms:creator").set("rdf:resource", "review\t:draft")
+        elif carrier == "about":
+            assert any(element.get("rdf:about", "").startswith("review\t:") for element in document)
         else:
-            note.set("marker", "review\t:draft")
+            next(element for element in document.iter() if "rdf:datatype" in element.attrib).set("rdf:datatype", "review\t:draft")
+        assert "review&#09;:" in ET.tostring(document, encoding="unicode")
         return document
     monkeypatch.setattr(knb_publication, "_build_ore", marked_document)
     with pytest.raises(ValueError, match="local/review marker"):
         publish_sdp_to_knb(target, public=True, dry_run=True, knb_environment="production")
 
 
-@pytest.mark.parametrize("narrative", ["Peer review: ordinary narrative", "preview: ordinary narrative"])
+@pytest.mark.parametrize("narrative", ["Review: counts were independently checked.", "Peer review: ordinary narrative", "preview: ordinary narrative"])
 def test_eml_public_export_keeps_ordinary_review_narrative(tmp_path, narrative):
     pytest.importorskip("yaml")
     pytest.importorskip("lxml")
@@ -178,7 +261,47 @@ def test_eml_public_export_keeps_ordinary_review_narrative(tmp_path, narrative):
     assert ET.parse(target / "metadata" / "eml.xml").find("dataset/title").text == narrative
 
 
-@pytest.mark.parametrize("narrative", ["Peer review: ordinary narrative", "preview: ordinary narrative"])
+@pytest.mark.parametrize("family,name,writer", [
+    ("eml", "sdp-default", "eml"), ("knb", "sdp-public", "knb"),
+])
+def test_public_export_keeps_an_abstract_beginning_review(tmp_path, family, name, writer):
+    pytest.importorskip("yaml")
+    pytest.importorskip("lxml")
+    target = _fixture_sdp(tmp_path, family, name)
+    dataset_path = target / "metadata" / "dataset.csv"
+    dataset = read_sdp_csv(dataset_path)
+    narrative = "Review: counts were independently checked."
+    dataset.loc[0, "description"] = narrative
+    dataset.to_csv(dataset_path, index=False)
+    if writer == "eml":
+        write_eml_from_sdp(target, overwrite=True)
+    else:
+        result = publish_sdp_to_knb(target, public=True, dry_run=True, knb_environment="production")
+        assert result["status"] == "dry_run"
+    assert ET.parse(target / "metadata" / "eml.xml").find("dataset/abstract/para").text == narrative
+
+
+@pytest.mark.parametrize("carrier", ["label", "alternateIdentifier", "system"])
+def test_eml_public_export_keeps_review_in_non_iri_values(tmp_path, monkeypatch, carrier):
+    pytest.importorskip("yaml")
+    pytest.importorskip("lxml")
+    target = _fixture_sdp(tmp_path, "eml", "sdp-default")
+    build = eml._build_document
+    def narrated_document(*args, **kwargs):
+        built = build(*args, **kwargs)
+        document = built["document"]
+        if carrier == "label":
+            document.find(".//annotation/valueURI").set("label", "Review: counted terms")
+        elif carrier == "alternateIdentifier":
+            document.find("dataset/alternateIdentifier").text = "Review: ordinary identifier"
+        else:
+            document.set("system", "Review: repository label")
+        return built
+    monkeypatch.setattr(eml, "_build_document", narrated_document)
+    write_eml_from_sdp(target, overwrite=True)
+
+
+@pytest.mark.parametrize("narrative", ["Review: counts were independently checked.", "Peer review: ordinary narrative", "preview: ordinary narrative"])
 def test_knb_public_dry_run_keeps_ordinary_review_narrative(tmp_path, monkeypatch, narrative):
     pytest.importorskip("yaml")
     pytest.importorskip("lxml")
