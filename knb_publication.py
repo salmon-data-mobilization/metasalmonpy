@@ -52,6 +52,7 @@ from urllib.parse import quote
 from . import eml as _eml
 from . import knb_environments as _knb_env
 from .atomic_io import atomic_write
+from .metadata import _contains_review_iri
 from .text_safety import redact_secrets
 
 # --- constants ----------------------------------------------------------------------
@@ -1040,7 +1041,7 @@ def _validate_ore(
     xml = _xml_bytes(document).decode("utf-8")
     if (
         "file:" in xml
-        or "REVIEW:" in xml
+        or _contains_review_iri(xml, document)
         or quote(resource_map_pid, safe="") not in xml
     ):
         raise ValueError(

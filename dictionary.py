@@ -15,6 +15,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 from .metadata import (
     READR_TRIM_CHARS,
     _absolute_iri_shape,
+    _is_review_iri,
     _code_list_applies,
     _readr_date_type,
     ensure_resource_mapping,
@@ -759,14 +760,13 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
         for field in _DICTIONARY_IRI_FIELDS
         if field in df.columns
     ]
-    review_re = re.compile(r"^\s*REVIEW\s*:", re.IGNORECASE)
     review_summary = []
     for field in iri_fields:
         rows = [
             position + 1
             for position, value in enumerate(df[field])
             if not pd.isna(value) and any(
-                review_re.match(part)
+                _is_review_iri(part)
                 for part in _dictionary_iri_components(str(value), field)
             )
         ]
@@ -803,7 +803,7 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
                 if not pd.isna(value)
                 and str(value) != ""
                 and not any(
-                    review_re.match(part)
+                    _is_review_iri(part)
                     for part in _dictionary_iri_components(str(value), field)
                 )
                 and not all(

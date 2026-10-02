@@ -472,6 +472,38 @@ def test_create_sdp_prefills_and_marks_constraint_and_statistical_modifier(
     assert row["unit_iri"] == "REVIEW:http://qudt.org/vocab/unit/NUM"
 
 
+@pytest.mark.parametrize("check", ["marker_emitter", "review_value"])
+def test_public_create_sdp_reuses_marker_recognition_at_both_prefill_sites(tmp_path, monkeypatch, check):
+    import metasalmonpy.package_io as io
+    resources, dataset, tables, dictionary = _reviewed_artifacts()
+    dictionary["statistical_modifier_iri"] = pd.NA
+    dictionary.loc[dictionary["column_name"] == "catch_count", "term_iri"] = pd.NA
+    tables["observation_unit_iri"] = pd.NA
+    tables["observation_unit"] = " review :catch observation"
+    marked = "review :https://w3id.org/smn/CatchAbundance"
+    suggestions = pd.DataFrame([
+        {"dataset_id": "demo", "table_id": "observations", "column_name": "catch_count",
+         "dictionary_role": "variable", "target_scope": "column", "target_sdp_file": "column_dictionary.csv",
+         "target_sdp_field": "term_iri", "iri": marked, "label": "Catch abundance",
+         "source": "smn", "ontology": "smn", "match_type": "label_exact", "score": 4.9},
+        {"dataset_id": "demo", "table_id": "observations", "column_name": "",
+         "dictionary_role": "entity", "target_scope": "table", "target_sdp_file": "tables.csv",
+         "target_sdp_field": "observation_unit_iri", "iri": "https://w3id.org/smn/CatchObservation", "label": "Catch observation",
+         "target_query_basis": "description", "target_query_context": "catch observation",
+         "source": "smn", "ontology": "smn", "match_type": "label_exact", "score": 4.9},
+    ])
+    artifacts = {"resources": resources, "dataset_meta": dataset, "table_meta": tables,
+                 "dict": dictionary, "codes": None, "semantic_suggestions": suggestions}
+    monkeypatch.setattr(io, "infer_salmon_datapackage_artifacts", lambda **kwargs: artifacts)
+    path = create_sdp(resources, path=tmp_path / "sdp", seed_verbose=False)
+    if check == "marker_emitter":
+        written = pd.read_csv(path / "metadata/column_dictionary.csv", keep_default_na=False)
+        assert written.loc[written["column_name"] == "catch_count", "term_iri"].iloc[0] == marked
+    else:
+        written = pd.read_csv(path / "metadata/tables.csv", keep_default_na=False)
+        assert written["observation_unit"].iloc[0] == "Catch observation"
+
+
 def test_create_sdp_leaves_the_two_qualifier_slots_empty_without_column_evidence(
     tmp_path, monkeypatch
 ):

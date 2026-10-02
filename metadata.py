@@ -16,6 +16,51 @@ from .sdp_schema import sdp_profile_version
 # treats them as whitespace, so neither may this package.
 READR_TRIM_CHARS = " \t\r\n"
 
+# Q-63 (2026-09-25): ASCII case, spaces and tabs only. Keep the spelling
+# unanchored here so whole-document publication guards use the same definition;
+# cell consumers use match(), which requires the marker at the value's start.
+_REVIEW_IRI_RE = re.compile(r"[ \t]*[Rr][Ee][Vv][Ii][Ee][Ww][ \t]*:[ \t]*")
+
+
+def _review_iri_text(value) -> str:
+    """Render one marker input without trimming a character from it."""
+    if isinstance(value, pd.Series):
+        value = value.iloc[0] if len(value) else None
+    elif isinstance(value, (list, tuple)):
+        value = value[0] if len(value) else None
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return ""
+    return str(value)
+
+
+def _is_review_iri(value) -> bool:
+    """Recognize the ruled marker on the raw scalar, before other trimming."""
+    return _REVIEW_IRI_RE.match(_review_iri_text(value)) is not None
+
+
+def _strip_review_iri(value) -> str:
+    """Remove one marker and adjacent ASCII spaces/tabs; preserve everything else."""
+    text = _review_iri_text(value)
+    marker = _REVIEW_IRI_RE.match(text)
+    return text[marker.end():] if marker else text
+
+
+def _contains_review_iri(text: str, document=None) -> bool:
+    """Scan emitted XML and the raw values of its already parsed document.
+
+    XML serialization writes a tab in an attribute as a character reference
+    (``&#09;``), so matching only its bytes would miss an admitted marker.
+    Keep the serialized scan and inspect original text/tail/attribute values
+    as well, using the same spelling without a second parse or entity decoder.
+    """
+    if _REVIEW_IRI_RE.search(text) is not None:
+        return True
+    return document is not None and any(
+        _is_review_iri(value)
+        for element in document.iter()
+        for value in (element.text, element.tail, *element.attrib.values())
+    )
+
 # metasalmon calls ``grepl()`` WITHOUT ``perl = TRUE`` in every validator that
 # uses a POSIX character class, so those classes are resolved by TRE, which is
 # Unicode-aware in a UTF-8 locale. The exact membership below was enumerated by

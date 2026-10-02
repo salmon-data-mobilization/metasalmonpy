@@ -51,7 +51,7 @@ import pandas as pd
 
 from . import knb_environments as _knb_env
 from .atomic_io import apply_default_file_mode
-from .metadata import R_CNTRL_CLASS, R_SPACE_CLASS, csv_na_token, read_sdp_csv
+from .metadata import R_CNTRL_CLASS, R_SPACE_CLASS, _contains_review_iri, csv_na_token, read_sdp_csv
 
 EML_VERSION = "2.2.0"
 _EML_NAMESPACE = "https://eml.ecoinformatics.org/eml-2.2.0"
@@ -3483,7 +3483,7 @@ def _validate_document_links(
             )
 
     xml_text = ET.tostring(document, encoding="unicode")
-    if "REVIEW:" in xml_text:
+    if _contains_review_iri(xml_text, document):
         raise ValueError(
             'Generated EML contains an unresolved "REVIEW:" marker.'
         )
