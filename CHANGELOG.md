@@ -16,6 +16,14 @@ keeps the same shape with its *(development version)* heading, which is what
 this heading mirrors. **The number does not move here**: it is a parity claim,
 and moving it is a separate outward act.
 
+### Internal
+
+* **Contributor workflow adopts coherent hub batches** after the canonical
+  MetaSalmon policy and this repository adoption both merge. Related eligible
+  items held by one owner may share implementation and detailed evidence while
+  retaining per-item claims, handoff refs and acceptance. Contributor guidance
+  routes common workflow to the canonical `HUB.md` policy.
+
 ### Fixed
 
 * **Configuration inventory (hub B-59 companion).** Add a guide to the current
