@@ -1,7 +1,7 @@
 dataset_id,table_id,column_name,column_label,column_description,column_role,value_type,unit_label,unit_iri,term_iri,term_type,required,property_iri,entity_iri,constraint_iri,statistical_modifier_iri
 nuseds_fraser_coho_sample,nuseds_fraser_coho,POP_ID,Population ID,NuSEDS population identifier,identifier,string,,,,,TRUE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,POPULATION,Population name,Population name with area context,attribute,string,,,,,FALSE,,,,
-nuseds_fraser_coho_sample,nuseds_fraser_coho,AREA,PFMA area,Pacific Fishery Management Area code,attribute,string,,,,,FALSE,,,,
+nuseds_fraser_coho_sample,nuseds_fraser_coho,AREA,DFO sub-district,NuSEDS sub-district code,attribute,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,WATERBODY,Waterbody name,Local stream or river name,attribute,string,,,,,FALSE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,ANALYSIS_YR,Run year,Brood/run year of escapement estimate,temporal,integer,,,,,TRUE,,,,
 nuseds_fraser_coho_sample,nuseds_fraser_coho,SPECIES,Species code,Species common name/code (Coho),categorical,string,,,,,TRUE,,,,

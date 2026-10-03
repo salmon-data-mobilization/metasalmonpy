@@ -26,6 +26,11 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **NuSEDS AREA is labelled as a sub-district (hub B-402).** The sample
+  column dictionary now describes AREA as a DFO sub-district code, matching
+  metasalmon's B-401 correction. Its identifiers and semantic IRI fields stay
+  unchanged.
+
 * **Semantic closure reports actual code-row addresses (hub B-266).** A
   code-resolved procedure's gap or incomplete-evidence report names every
   carrying `codes.csv term_iri` row, with its dataset/table/column/code keys,
