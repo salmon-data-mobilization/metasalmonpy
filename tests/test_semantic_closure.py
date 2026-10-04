@@ -1689,6 +1689,121 @@ def test_malformed_sidecar_keeps_the_closure_reader_legacy_fallback(tmp_path):
     )
 
 
+@_REQUIRES_YAML
+@pytest.mark.parametrize(
+    "tagged_value",
+    ["!e!foo other/evil.csv", "!e!foo [one, two]", "!e!foo {key: value}"],
+    ids=["scalar", "sequence", "mapping"],
+)
+def test_native_undefined_handle_is_unsupported_before_a_tag_event(tagged_value):
+    import yaml
+
+    source = f"semantic_vocabulary:\n  path: {tagged_value}\n"
+    # Positive control: this is the native pre-event undefined-handle failure,
+    # not an arbitrary malformed YAML error carrying a lexical exclamation.
+    with pytest.raises(yaml.parser.ParserError) as caught:
+        list(yaml.parse(source, Loader=yaml.SafeLoader))
+    assert caught.value.problem == "found undefined tag handle '!e!'"
+    assert closure_module._first_unsupported_sidecar_tag(yaml, source) is not None
+
+
+@_REQUIRES_YAML
+@pytest.mark.parametrize(
+    "tagged_value",
+    ["!e!foo other/evil.csv", "!e!foo [one, two]", "!e!foo {key: value}"],
+    ids=["scalar", "sequence", "mapping"],
+)
+@pytest.mark.parametrize("existing_outputs", [False, True], ids=["absent", "existing"])
+def test_undefined_handle_refuses_public_closure_without_changing_bytes(
+    tmp_path, tagged_value, existing_outputs
+):
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(
+        f"semantic_vocabulary:\n  path: {tagged_value}\n"
+        "semantic_review:\n  path: other/review.csv\n",
+        encoding="utf-8",
+    )
+    targets = [
+        Path(path) / "metadata" / "semantic_vocabulary.csv",
+        Path(path) / "reviewed_semantic_selections.csv",
+    ]
+    if existing_outputs:
+        for target in targets:
+            target.write_bytes(b"B429-ORIGINAL-OUTPUT-SENTINEL\n")
+    before_targets = [target.read_bytes() if target.exists() else None for target in targets]
+    before_mapping = mapping_path.read_bytes()
+    error = None
+    try:
+        write_sdp_semantic_closure(
+            path, evidence=_reviewed_evidence(), search_fn=_search_stub(), quiet=True
+        )
+    except ValueError as caught:
+        error = caught
+    # Collect the refusal and all byte controls so RED reports actual writer
+    # damage as well as a missing exception. Existing sentinels must survive.
+    observed = {
+        "refused_undefined_handle": isinstance(error, ValueError) and "!e!" in str(error),
+        "names_sidecar": "eml-mapping.yml" in str(error),
+        "sidecar_bytes_preserved": mapping_path.read_bytes() == before_mapping,
+        "closure_output_bytes_preserved": [
+            target.read_bytes() if target.exists() else None for target in targets
+        ] == before_targets,
+        "declared_outputs_unwritten": not (Path(path) / "other").exists(),
+    }
+    assert observed == dict.fromkeys(observed, True)
+
+
+@_REQUIRES_YAML
+@pytest.mark.parametrize("prefix", ["", "!!str ", "! "])
+def test_known_core_and_bare_tags_keep_declared_closure_paths(tmp_path, prefix):
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(
+        f"semantic_vocabulary:\n  path: {prefix}metadata/custom-vocabulary.csv\n"
+        "semantic_review:\n  path: custom-review.csv\n"
+        'notes: "found undefined tag handle !e!foo is literal"\n',
+        encoding="utf-8",
+    )
+    closure = write_sdp_semantic_closure(
+        path, evidence=_reviewed_evidence(), search_fn=_search_stub(), quiet=True
+    )
+    assert closure["files"]["vocabulary"] == str(
+        Path(path) / "metadata" / "custom-vocabulary.csv"
+    )
+    assert closure["files"]["review"] == str(Path(path) / "custom-review.csv")
+    assert Path(closure["files"]["vocabulary"]).is_file()
+    assert Path(closure["files"]["review"]).is_file()
+    assert not (Path(path) / "metadata" / "semantic_vocabulary.csv").exists()
+    assert not (Path(path) / "reviewed_semantic_selections.csv").exists()
+
+
+@_REQUIRES_YAML
+@pytest.mark.parametrize(
+    "source",
+    [
+        "semantic_vocabulary: [unterminated\n",
+        "semantic_vocabulary: [unterminated\nnext: !e!foo later.csv\n",
+        'notes: "found undefined tag handle !e!foo"\n---\nignored: true\n',
+        "a scalar",
+        "[one, two]",
+        "null",
+    ],
+)
+def test_undefined_handle_port_preserves_other_malformed_and_nonmapping_fallback(
+    tmp_path, source
+):
+    import yaml
+
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(source, encoding="utf-8")
+    assert closure_module._first_unsupported_sidecar_tag(yaml, source) is None
+    assert closure_module._mapping_paths(str(mapping_path)) == dict(
+        closure_module._DEFAULT_MAPPING_PATHS
+    )
+
+
 # ---------------------------------------------------------------------------
 # WHICH SIDECAR SPELLING IS A SIDECAR. Measured, because a Codex review on
 # pull request #31 read `eml._default_mapping_path()` as supporting `.yaml` and
