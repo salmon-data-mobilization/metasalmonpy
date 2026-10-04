@@ -892,7 +892,9 @@ def _first_unsupported_sidecar_tag(yaml, source: str) -> Optional[str]:
     ``safe_load`` may report a later document boundary before constructing an
     earlier tagged node. Parser events retain that node's resolved tag across
     documents. A syntax error before a tag retains the legacy malformed-file
-    fallback; quoted exclamation text has no event tag.
+    fallback; quoted exclamation text has no event tag. An undefined handle
+    fails natively before its node event, so that specific ParserError is
+    unsupported-tag evidence too.
     """
     node_events = (
         yaml.events.ScalarEvent,
@@ -911,6 +913,13 @@ def _first_unsupported_sidecar_tag(yaml, source: str) -> Optional[str]:
             if any(tag.startswith(prefix) for prefix in multi_constructors):
                 continue
             return tag
+    except yaml.parser.ParserError as error:
+        # An undefined handle is a native node-resolution failure, not the
+        # ordinary malformed-file fallback. Use only the parser's diagnostic;
+        # no scan of source text chooses which exclamations are real tags.
+        if error.context == "while parsing a node" and isinstance(error.problem, str):
+            if error.problem.startswith("found undefined tag handle "):
+                return error.problem
     except yaml.YAMLError:
         # Parsing malformed input can stop before a tagged node. The caller
         # keeps its existing default-path fallback in that case.
