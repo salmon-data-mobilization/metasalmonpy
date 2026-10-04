@@ -6,6 +6,8 @@ from typing import Optional, Sequence
 import pandas as pd
 import requests
 
+from .commons_term_gaps import _read_commons_term_gaps, _render_commons_term_requests
+
 
 TERM_REQUEST_DEFAULT_TEMPLATE = (
     "https://github.com/salmon-data-mobilization/salmon-domain-ontology/"
@@ -181,6 +183,7 @@ def detect_semantic_term_gaps(
     include_target_scopes: Sequence[str] = ("column", "code", "table", "dataset"),
     include_dictionary_roles: Optional[Sequence[str]] = None,
     min_score: Optional[float] = None,
+    commons_gaps=None,
 ) -> pd.DataFrame:
     """
     Detect structured ontology gaps from candidate and final LLM evidence.
@@ -209,13 +212,30 @@ def detect_semantic_term_gaps(
     min_score
         Candidate score threshold. Final LLM ``request_new_term`` evidence is
         not removed by this threshold.
+    commons_gaps
+        Optional path to a ``scripts/okf-check.py --gaps`` JSON export from
+        salmon-knowledge-commons. This concept evidence is exclusive with the
+        SDP dictionary and suggestion inputs and does not use their filters.
 
     Returns
     -------
     pandas.DataFrame
         Stable structured gap rows with candidate evidence, detection basis,
         LLM rationale, proposed-term metadata, and escalation provenance.
+        Commons input keeps those columns and appends source provenance and
+        lifecycle fields; held rows remain visible but cannot be requested.
     """
+    if commons_gaps is not None:
+        if dict_df is not None or suggestions is not None:
+            raise ValueError("`commons_gaps` is mutually exclusive with dict_df and suggestions.")
+        if (
+            tuple(include_target_scopes) != ("column", "code", "table", "dataset")
+            or include_dictionary_roles is not None
+            or min_score is not None
+        ):
+            raise ValueError("SDP-only filters cannot be supplied with `commons_gaps`.")
+        return _read_commons_term_gaps(commons_gaps, GAP_COLUMNS)
+
     suggestions_explicit = suggestions is not None
     assessments = None
     targets = None
@@ -683,6 +703,21 @@ def render_ontology_term_request(
     This function only renders drafts. It never submits an issue.
     """
     df = pd.DataFrame(gaps).copy()
+    # A commons row carries its own source lifecycle and routing. Detecting
+    # any commons field (or its basis after fields were deleted) fails closed
+    # into source revalidation instead of using ordinary SDP scope controls.
+    if any(isinstance(column, str) and column.startswith("commons_") for column in df.columns) or (
+        "gap_detection_basis" in df.columns
+        and any(value == "commons_register" for value in df["gap_detection_basis"] if isinstance(value, str))
+    ):
+        return _render_commons_term_requests(
+            df,
+            issue_labels=issue_labels,
+            smn_template=term_request_template,
+            smn_repo=ontology_repo,
+            gcdfo_template=gcdfo_term_request_template,
+            gcdfo_repo=gcdfo_repo,
+        )
     if df.empty:
         return pd.DataFrame()
     required = [

@@ -16,6 +16,15 @@ keeps the same shape with its *(development version)* heading, which is what
 this heading mirrors. **The number does not move here**: it is a parity claim,
 and moving it is a separate outward act.
 
+### Added
+
+* `detect_semantic_term_gaps(commons_gaps="commons-gaps.json")` reads the
+  Salmon Knowledge Commons `okf-check.py --gaps` export (hub B-279, mirroring
+  metasalmon B-278). The reader keeps every concept record, its lifecycle and
+  source order. Request rendering retains held rows for review and sends only
+  open, unheld SMN/GCDFO targets to a dry-run preview. No term IRI, definition,
+  or type is selected; existing SDP gap behavior and columns remain intact.
+
 ### Internal
 
 * **Contributor workflow adopts coherent hub batches** after the canonical

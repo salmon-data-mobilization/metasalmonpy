@@ -233,3 +233,19 @@ needs both checkouts, so it runs in neither repository's CI as things stand.
 Where it runs automatically is an open question. Until it is answered, this is a
 local step before committing a register change.
 
+## Commons-reader measurement, 2026-10-04 (B-278/B-279)
+
+At R `3e8a9a1` and Python `d01b93f`, the full 110-record commons export and
+both shared fixtures yield the same 49 gap fields, ordered holds, routes,
+repositories, titles and bodies after missing-value normalization. The actual
+export retains 35 explicit draft routes and 75 holds. Fixtures are byte-identical;
+no term definition, type, IRI or verification decision is inferred.
+
+This measurement covers default labels. Existing nondefault `issue_labels`
+behavior differs: R replaces exact empty strings with missing values, removes
+duplicates and supports row-aligned lists; Python preserves the supplied label
+object on each row. B-278/B-279 preserve their respective ordinary SDP behavior.
+This is a preexisting difference, not a new design ruling or an assertion of
+universal payload parity; choosing a common normalization remains unresolved.
+No numbered deliberate-difference row is opened or claimed closed here.
+
