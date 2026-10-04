@@ -46,6 +46,23 @@ def _write_export(document):
 
 
 class CommonsTermGapTests(unittest.TestCase):
+    def test_ordinary_gap_with_integer_extra_column_keeps_sdp_route(self):
+        suggestions = pd.DataFrame({
+            "dataset_id": ["d1"], "table_id": ["t1"], "column_name": ["run_id"],
+            "code_value": [pd.NA], "dictionary_role": ["variable"],
+            "target_scope": ["column"], "target_sdp_file": ["column_dictionary.csv"],
+            "target_sdp_field": ["term_iri"], "target_row_key": ["run_id"],
+            "search_query": ["run id"], "column_label": ["Run ID"],
+            "column_description": ["Dataset run identifier"], "label": ["run id"],
+            "iri": [pd.NA], "source": ["gbif"], "ontology": ["gbif"],
+            "match_type": ["label"], "definition": [pd.NA], "score": [0.9],
+        })
+        gaps = detect_semantic_term_gaps(suggestions=suggestions)
+        self.assertEqual(len(gaps), 1)
+        gaps[1] = "ordinary sidecar"
+        requests = render_ontology_term_request(gaps, scope="smn", ask=False)
+        self.assertEqual(requests["request_scope"].tolist(), ["smn"])
+
     def test_register_rows_keep_order_evidence_types_and_existing_prefix(self):
         raw = _export()
         gaps = detect_semantic_term_gaps(commons_gaps=FIXTURES / "register-excerpt.json")
