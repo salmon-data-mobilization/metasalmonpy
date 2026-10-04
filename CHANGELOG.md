@@ -35,6 +35,13 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Semantic closure refuses undefined YAML tag handles** (hub B-429, the
+  separately tracked Q62 port after B-341). An undeclared handle such as
+  `!e!foo` now reports `eml-mapping.yml` before either closure output is written
+  or its sidecar bytes change. Known core tags, bare `!` and quoted lookalikes
+  remain accepted; unrelated malformed and non-mapping YAML retain their
+  existing default-path fallback.
+
 * **NuSEDS AREA is labelled as a sub-district (hub B-402).** The sample
   column dictionary now describes AREA as a DFO sub-district code, matching
   metasalmon's B-401 correction. Its identifiers and semantic IRI fields stay
