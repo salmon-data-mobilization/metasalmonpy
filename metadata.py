@@ -16,9 +16,11 @@ from .sdp_schema import sdp_profile_version
 # treats them as whitespace, so neither may this package.
 READR_TRIM_CHARS = " \t\r\n"
 
-# metasalmon calls ``grepl()`` WITHOUT ``perl = TRUE`` in every validator that
-# uses a POSIX character class, so those classes are resolved by TRE, which is
-# Unicode-aware in a UTF-8 locale. The exact membership below was enumerated by
+# metasalmon's POSIX-class validators use TRE without ``perl = TRUE``, which is
+# Unicode-aware in a UTF-8 locale. Its shared absolute-IRI predicate now also
+# explicitly rejects the same 15 non-ASCII whitespace members under C (B-137,
+# metasalmon PR 230), retaining TRE's ASCII/POSIX component. The exact classes
+# below were enumerated by
 # running ``grepl()`` over every codepoint up to U+2FFFF under metasalmon
 # v0.1.7's R 4.5.2. Approximating either class with Python's ``\s``/``\S`` is
 # wrong in BOTH directions and must never be done:
@@ -34,10 +36,10 @@ READR_TRIM_CHARS = " \t\r\n"
 # verified by the same enumeration — so an ASCII class is correct there and
 # these constants must NOT be applied to it.
 #
-# Retirement condition: these constants stay for as long as metasalmon resolves
-# POSIX classes through TRE. They are only removable if metasalmon itself
-# switches those validators to ``perl = TRUE`` (or to explicit ranges), at which
-# point the replacement must be re-enumerated against that release, not guessed.
+# Retirement condition: keep these constants while their effective membership
+# matches the corresponding R validators, including explicit supplements. A
+# change of engine or spelling alone does not retire them. If R changes that
+# membership, re-enumerate the replacement against that release, not by guessing.
 #
 # R ``[[:space:]]`` -- note the deliberate gaps: U+2007, U+00A0, U+0085 and
 # U+202F are NOT whitespace to TRE.
