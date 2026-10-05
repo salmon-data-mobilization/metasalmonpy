@@ -29,6 +29,19 @@ python3 -m venv .venv
 pip install -e ".[test]"
 ```
 
+The core package requires pandas and Requests. The default selected semantic-IRI
+verifier adds its HTTPX backend through the optional `verify` extra:
+
+```bash
+pip install -e ".[verify]"
+```
+
+`verify_sdp_semantic_iris()` with an injected `requester` remains available with
+core dependencies alone. Using its default requester without the extra raises
+an installation message before requests or report replacement. Development
+transport tests run with `pip install -e ".[test,verify]"`; core tests still
+collect and run without HTTPX, skipping only backend-dependent controls.
+
 ## Quickstart
 
 ```python

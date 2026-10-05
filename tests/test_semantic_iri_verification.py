@@ -11,7 +11,12 @@ from collections import Counter
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import httpx
+try:
+    import httpx
+except ModuleNotFoundError as error:
+    if error.name != "httpx":
+        raise
+    httpx = None
 import pandas as pd
 import pytest
 import requests
@@ -19,6 +24,8 @@ import requests
 import metasalmonpy as ms
 
 REPORT = "reproducibility/provenance/semantic-iri-dereference.csv"
+requires_httpx = pytest.mark.skipif(
+    httpx is None, reason="Default transport control needs metasalmonpy[verify]")
 
 
 @pytest.fixture
@@ -302,6 +309,7 @@ def test_atomic_write_failure_preserves_old_report(tmp_path, monkeypatch):
     assert list((tmp_path / REPORT).parent.iterdir()) == [tmp_path / REPORT]
 
 
+@requires_httpx
 def test_default_transport_is_get_redirecting_bounded_and_no_model(tmp_path, monkeypatch, isolated_transport_env):
     fixture(tmp_path)
     iri = "https://example.org/term#exact"
@@ -349,6 +357,7 @@ def test_default_transport_is_get_redirecting_bounded_and_no_model(tmp_path, mon
     assert rows.final_url.tolist() == ["https://example.org/term"]
 
 
+@requires_httpx
 def test_worker_uses_fixed_command_and_literal_json_input(monkeypatch):
     from metasalmonpy import semantic_iri_verification as module
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: pytest.fail("No parent HTTP"))
@@ -371,6 +380,7 @@ def test_worker_uses_fixed_command_and_literal_json_input(monkeypatch):
     assert seen == [(iri, 30)]
 
 
+@requires_httpx
 def test_blocked_default_worker_is_killed_reaped_and_reported(tmp_path, monkeypatch):
     from metasalmonpy import semantic_iri_verification as module
     fixture(tmp_path)
@@ -399,6 +409,7 @@ def test_blocked_default_worker_is_killed_reaped_and_reported(tmp_path, monkeypa
     assert "timed out" in row.error
 
 
+@requires_httpx
 def test_local_default_transport_ignores_body_and_bounds_headers(monkeypatch, isolated_transport_env):
     from metasalmonpy import semantic_iri_verification as module
     monkeypatch.setattr(module, "_REQUEST_TIMEOUT", 2)
@@ -488,6 +499,7 @@ def test_report_bytes_match_r_success_redirect_http_and_transport(tmp_path):
     assert (tmp_path / REPORT).read_bytes() == expected.read_bytes()
 
 
+@requires_httpx
 def test_httpx_redirect_auth_is_origin_bound(local_servers, isolated_transport_env):
     from metasalmonpy import semantic_iri_verification as module
     observed = []
@@ -512,6 +524,7 @@ def test_httpx_redirect_auth_is_origin_bound(local_servers, isolated_transport_e
                         ("/foreign", header), ("/final", None)]
 
 
+@requires_httpx
 def test_httpx_matching_netrc_survives_redirect(local_servers, isolated_transport_env):
     from metasalmonpy import semantic_iri_verification as module
     isolated_transport_env.write_text(
@@ -536,6 +549,7 @@ def test_httpx_matching_netrc_survives_redirect(local_servers, isolated_transpor
                         (b"origin-user:origin-pass", b"target-user:target-pass")]
 
 
+@requires_httpx
 def test_httpx_proxy_environment_auth_bypass_and_error(local_servers, isolated_transport_env, monkeypatch):
     from metasalmonpy import semantic_iri_verification as module
     seen = []
@@ -570,6 +584,7 @@ def test_httpx_proxy_environment_auth_bypass_and_error(local_servers, isolated_t
     assert seen[-1] == ("selected.invalid:443", header)
 
 
+@requires_httpx
 def test_httpx_redirect_loop_is_bounded_and_permanent(tmp_path, local_servers, isolated_transport_env):
     from metasalmonpy import semantic_iri_verification as module
     calls = []
@@ -593,15 +608,17 @@ def test_httpx_redirect_loop_is_bounded_and_permanent(tmp_path, local_servers, i
 
 
 @pytest.mark.parametrize("error, transient", [
-    (httpx.ConnectError("temporary outage"), True),
-    (httpx.ReadTimeout("temporary outage"), True),
-    (httpx.ProxyError("temporary outage"), True),
-    (httpx.RemoteProtocolError("temporary outage"), True),
-    (httpx.InvalidURL("invalid identifier"), False),
-    (httpx.LocalProtocolError("invalid request"), False),
-    (httpx.TooManyRedirects("Exceeded 30 redirects"), False),
+    (("ConnectError", "temporary outage"), True),
+    (("ReadTimeout", "temporary outage"), True),
+    (("ProxyError", "temporary outage"), True),
+    (("RemoteProtocolError", "temporary outage"), True),
+    (("InvalidURL", "invalid identifier"), False),
+    (("LocalProtocolError", "invalid request"), False),
+    (("TooManyRedirects", "Exceeded 30 redirects"), False),
 ])
+@requires_httpx
 def test_httpx_worker_preserves_transport_failure_classes(error, transient, isolated_transport_env, monkeypatch):
+    error = getattr(httpx, error[0])(error[1])
     def fail(*args, **kwargs):
         raise error
     monkeypatch.setattr(httpx.Client, "send", fail)
@@ -612,6 +629,7 @@ def test_httpx_worker_preserves_transport_failure_classes(error, transient, isol
 
 @pytest.mark.parametrize("name, directory", [
     ("REQUESTS_CA_BUNDLE", False), ("CURL_CA_BUNDLE", False), ("REQUESTS_CA_BUNDLE", True)])
+@requires_httpx
 def test_httpx_preserves_existing_ca_bundle_aliases(name, directory, tmp_path, isolated_transport_env, monkeypatch):
     import certifi
     import ssl
@@ -635,6 +653,8 @@ def test_httpx_preserves_existing_ca_bundle_aliases(name, directory, tmp_path, i
 
 @pytest.mark.parametrize("default, attempts", [(True, 1), (False, 3)])
 def test_worker_permanent_error_preserves_injected_message_heuristic(tmp_path, default, attempts, isolated_transport_env):
+    if default and httpx is None:
+        pytest.skip("Default transport control needs metasalmonpy[verify]")
     fixture(tmp_path)
     write_csv(tmp_path, "metadata/column_dictionary.csv", {
         "term_iri": ["http://selected.invalid:connection/term"]})
@@ -650,6 +670,7 @@ def test_worker_permanent_error_preserves_injected_message_heuristic(tmp_path, d
     assert delays == ([] if default else [0.1, 0.25])
 
 
+@requires_httpx
 def test_httpx_password_only_netrc_has_empty_username(local_servers, isolated_transport_env):
     from metasalmonpy import semantic_iri_verification as module
     observed = []
@@ -670,6 +691,7 @@ def test_httpx_password_only_netrc_has_empty_username(local_servers, isolated_tr
 @pytest.mark.parametrize("no_proxy, host, bypass", [
     ("127.0.0.0/8", "127.0.0.1", True), (".localhost", "localhost", True),
     ("scheme-qualified", "localhost", False)])
+@requires_httpx
 def test_httpx_retains_requests_proxy_bypass(no_proxy, host, bypass, local_servers, isolated_transport_env, monkeypatch):
     from metasalmonpy import semantic_iri_verification as module
     seen = []
@@ -695,6 +717,7 @@ def test_httpx_retains_requests_proxy_bypass(no_proxy, host, bypass, local_serve
     assert seen == ([("origin", "/bypass")] if bypass else [("proxy", iri)])
 
 
+@requires_httpx
 def test_httpx_proxy_to_direct_redirect_retains_cookie_and_host_netrc(local_servers, isolated_transport_env, monkeypatch):
     from metasalmonpy import semantic_iri_verification as module
     seen = []

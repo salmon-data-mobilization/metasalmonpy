@@ -15,7 +15,10 @@
   retry/report behavior and compare report bytes with R; they assert no live
   network verification. No release number changes.
   The supported HTTPX/HTTPcore default backend now waits through HTTP103 Early
-  Hints for final headers. HTTPX>=0.28.1 is a core dependency; its public manual
+  Hints for final headers. The optional `[verify]` extra supplies HTTPX>=0.28.1;
+  core remains pandas + Requests, including injected verifier requesters. Using
+  the default backend without the extra fails clearly before request/report work.
+  Its public manual
   redirect flow preserves cookies, origin-bound auth, target-host netrc and
   proxy/CA environment settings without draining bodies or using a private shim.
   Paired localhost proof passes on Python3.9.6 and3.13.11; both implementation
@@ -64,6 +67,10 @@ and moving it is a separate outward act.
   separators; unknown extension fields keep their existing representation.
   The verifier previously could report success after checking a truncated
   scalar prefix. No identifier, report column or retry policy is changed.
+
+* Selected semantic-IRI verification removes credentials embedded in an
+  external final URL before returning results or writing the deterministic
+  report. Exact selected identifiers and other URL components are preserved.
 
 * **Every semantic review marker consumer uses Q63's ASCII spelling.** B-345,
   paired with R's B-344: optional ASCII spaces/tabs, `REVIEW` in any ASCII

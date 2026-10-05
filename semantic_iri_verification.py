@@ -12,6 +12,7 @@ The pending R verifier has the same obligation; no conditional shim is added.
 from __future__ import annotations
 
 import json
+from importlib import import_module
 import re
 import subprocess
 import sys
@@ -221,7 +222,23 @@ class _PermanentRequestError(RuntimeError):
     """Keep the default worker's permanent classification through capture."""
 
 
+def _require_httpx():
+    # Core imports and injected requesters need only pandas + Requests. Check
+    # the optional backend only when the default verifier is actually used;
+    # do not start a worker that can only produce an opaque import failure.
+    try:
+        import_module("httpx")
+    except ModuleNotFoundError as error:
+        if error.name != "httpx":
+            raise  # An installed but broken backend keeps its real diagnosis.
+        raise ImportError(
+            "The default semantic IRI verifier needs the optional HTTPX backend. "
+            "Install metasalmonpy[verify] or supply a requester callable."
+        ) from None
+
+
 def _request(iri):
+    _require_httpx()
     process = subprocess.Popen(
         [sys.executable, "-c", _REQUEST_WORKER], stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -294,6 +311,13 @@ def _attempt(iri, requester):
         error = "Requester returned neither an HTTP status nor an error."
     transient = (status in (408, 429) or 500 <= status <= 599) if status is not None else (
         not malformed and error is not None and bool(_TRANSIENT_MESSAGE.search(error)))
+    if final_url is not None:
+        # External redirect targets may contain HTTP Basic-auth userinfo.
+        # Remove the entire authority prefix through its last @ before any
+        # capture, preserving scheme/host/path/query/fragment bytes otherwise.
+        # This is URL normalization, not a second generic text redactor.
+        final_url = re.sub(r"^(https?://)[^/?#]*@", r"\1", final_url,
+                           count=1, flags=re.IGNORECASE)
     return (status, redact_secrets(final_url) if final_url is not None else None,
             redact_secrets(error) if error is not None else None, transient)
 
@@ -311,6 +335,8 @@ def verify_sdp_semantic_iris(
     final or redirect body. The default transport has a 30-second worker deadline, including
     startup, DNS, connection and redirects; an expired worker is killed and
     reaped. Injected requesters keep their own execution behavior.
+    The default backend requires ``metasalmonpy[verify]``; package imports and
+    injected requesters remain available with core pandas + Requests alone.
     Only HTTP 408, 429, 5xx,
     or classified transient transport failures retry, at most three times,
     after delays of 0.1 and 0.25 seconds. Candidate suggestions, arbitrary data
@@ -342,6 +368,9 @@ def verify_sdp_semantic_iris(
         Invalid metadata, no selected HTTP IRI, or failed dereferences. For
         dereference failures, the complete report is atomically written before
         an aggregate exception names every failed IRI and final status.
+    ImportError
+        The default requester was selected without the optional HTTPX backend.
+        No request worker starts and an existing report is left unchanged.
 
     Notes
     -----
@@ -352,6 +381,8 @@ def verify_sdp_semantic_iris(
     returning the complete final response headers. Redirects use the public
     manual flow so neither final nor redirect bodies need to arrive. Client
     cookies, origin-aware auth and proxy environment settings are preserved.
+    Captured final URLs omit embedded userinfo before returning or persistence;
+    the selected ``iri`` column and input metadata remain exact.
     """
     root = _extension_root(path)
     default_path = Path(path) / _DEFAULT_REPORT
@@ -365,6 +396,8 @@ def verify_sdp_semantic_iris(
     iris = _selected_iris(root)
     if not iris:
         raise ValueError("At least one HTTP semantic IRI is required for dereference checking.")
+    if requester is _request:
+        _require_httpx()
     rows = []
     for iri in iris:
         for attempt in range(1, len(_DELAYS) + 2):
