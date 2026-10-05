@@ -224,10 +224,8 @@ _BUILTIN_PREFIXES = {
 _REFERENCE_COLUMNS = (
     "record_id",
     "subject_id",
-    "subject_category",
     "predicate_id",
     "object_id",
-    "object_category",
     "mapping_justification",
     "author_id",
     "reviewer_id",
@@ -235,16 +233,26 @@ _REFERENCE_COLUMNS = (
     "license",
     "subject_source",
     "object_source",
-    "predicate_type",
     "mapping_provider",
     "mapping_source",
     "mapping_tool_id",
     "curation_rule",
     "subject_match_field",
     "object_match_field",
-    "similarity_measure",
     "see_also",
     "issue_tracker_item",
+)
+
+# Mirror R B-269's pinned SSSOM 1.1 entity_type_enum. The schema forbids
+# ``rdfs literal`` and ``composed entity expression`` in predicate_type.
+# Categories and similarity_measure have string ranges, so they are not
+# reference columns and need no prefix declaration. Update this set only when
+# this profile adopts a schema whose enum changes.
+# https://github.com/mapping-commons/sssom/blob/667d3c579d92ad2e1a480503625eeef1e6af8e6d/src/sssom_schema/schema/sssom_schema.yaml
+_PREDICATE_TYPES = (
+    "owl class", "owl object property", "owl data property",
+    "owl annotation property", "owl named individual", "skos concept",
+    "rdfs resource", "rdfs class", "rdfs datatype", "rdf property",
 )
 
 _NO_TERM_FOUND = "sssom:NoTermFound"
@@ -782,6 +790,18 @@ def _validate_metadata(metadata: Dict[str, object], path: object) -> None:
                 f"SSSOM {field_name} cannot declare a raw literal assignment "
                 "in this SDP profile."
             )
+    if "predicate_type" in metadata:
+        _validate_predicate_type(str(metadata["predicate_type"]))
+
+
+def _validate_predicate_type(value: Optional[str], row: Optional[int] = None) -> None:
+    """Check the same schema range in row slots and propagated metadata."""
+    # Optional table blanks remain blank; a supplied enum spelling is exact.
+    if value is not None and value and value not in _PREDICATE_TYPES:
+        where = "" if row is None else f" in row {row}"
+        raise ValueError(
+            f"SSSOM predicate_type{where} must be an allowed SSSOM entity_type_enum value."
+        )
 
 
 def _column_values(mappings: pd.DataFrame, name: str) -> List[Optional[str]]:
@@ -813,6 +833,10 @@ def _validate_mappings(
                 f"SSSOM {field_name} cannot declare raw literal assignments "
                 "in this SDP profile."
             )
+
+    if "predicate_type" in columns:
+        for row, value in enumerate(columns["predicate_type"], start=1):
+            _validate_predicate_type(value, row)
 
     # Tabs and newlines are structural in embedded TSV. The parser has
     # already split tabs, while this catches other controls before
