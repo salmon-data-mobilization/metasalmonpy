@@ -233,13 +233,14 @@ class _TextExtractor(HTMLParser):
             self._body_depth += 1
             self._head_depth = 0
         elif (
-            tag not in {"html", "base", "link", "meta"}
+            tag not in {"html", "base", "link", "meta", "frameset", "frame"}
             and not self._title_depth
             and not self._hidden_depth
         ):
             # An omitted body still has a scope when body elements are empty
             # (for example <p><img></p> or <br>). Do not infer that scope only
             # from nonempty text, which would incorrectly expose a head title.
+            # Frameset/frame are no-body markup and keep the native fallback.
             self._saw_implicit_body = True
             # A body element also ends head when its optional end tag is
             # omitted. Markup inside an open title retains the existing

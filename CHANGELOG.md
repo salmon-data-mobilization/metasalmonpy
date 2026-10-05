@@ -68,8 +68,9 @@ and moving it is a separate outward act.
 * **Implicit empty HTML bodies no longer expose head titles as context.**
   Hub B-435 records body-element scope even when body or optional head-end
   tags are omitted and the elements contain no visible text. Such files are
-  skipped with the existing empty-context warning; genuine head-only fallback, hidden
-  script/style exclusion, text decoding and chunking remain unchanged.
+  skipped with the existing empty-context warning; genuine head-only and
+  frameset/frame no-body fallback, hidden script/style exclusion, text
+  decoding and chunking remain unchanged.
 
 * **HTML context excerpts now follow metasalmon's body selection.** Hub
   **B-386** excludes head, script and style text when a body exists, while
