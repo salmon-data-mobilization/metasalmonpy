@@ -235,6 +235,31 @@ def test_html_context_skips_an_empty_body_despite_head_text(tmp_path):
         assert load_context_chunks([page]).empty
 
 
+@pytest.mark.parametrize(
+    "body_markup",
+    ["<p><img></p>", "<p> \n\t </p>", "<br>"],
+    ids=["empty-element", "whitespace-only", "void-element"],
+)
+def test_html_context_skips_an_implicit_empty_body_despite_head_text(tmp_path, body_markup):
+    # B435: native xml2 synthesizes an empty body for each of these documents
+    # despite the omitted body tag. The title must not become evidence merely
+    # because that body has no visible text. A genuinely head-only document
+    # still uses the distinct fallback pinned above; no parser unification is
+    # claimed by this HTML body-scope regression.
+    page = tmp_path / "implicit-empty-body.html"
+    page.write_text(
+        "<html><head><title>Hidden</title></head>"
+        + body_markup
+        + "</html>",
+        encoding="utf-8",
+    )
+
+    with pytest.warns(UserWarning, match="empty context file"):
+        chunks = load_context_chunks([page])
+    assert chunks.empty
+    assert list(chunks.columns) == ["source", "chunk_id", "text"]
+
+
 def test_text_decoding_follows_read_text_utf8():
     # UTF-8 first; a byte-order mark is discarded as readLines() discards it.
     assert _decode_context_bytes(b"\xef\xbb\xbfcaf\xc3\xa9") == "café"
