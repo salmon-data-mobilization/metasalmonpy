@@ -2648,6 +2648,7 @@ def _collect_review_issues(package: Dict[str, object]) -> list[str]:
         + _collect_review_placeholder_issues(
             codes, "metadata/codes.csv", ("table_id", "column_name", "code_value")
         )
+        + _collect_review_iri_issues(dataset, "metadata/dataset.csv")
         + _collect_review_iri_issues(tables, "metadata/tables.csv")
         + _collect_review_iri_issues(dictionary, "metadata/column_dictionary.csv")
         + _collect_review_iri_issues(codes, "metadata/codes.csv")
@@ -3574,8 +3575,13 @@ def validate_salmon_datapackage(
         require_iris=require_iris,
     )
 
-    table_review_issues = _collect_review_iri_issues(
-        tables, source_name="metadata/tables.csv"
+    # The dictionary retains its fixed-field validator. The other three
+    # metadata files share the EDH *_iri marker sweep, as landed R B177 does.
+    # Keep these findings visible as warnings in the default mode as well.
+    metadata_review_issues = (
+        _collect_review_iri_issues(dataset, source_name="metadata/dataset.csv")
+        + _collect_review_iri_issues(tables, source_name="metadata/tables.csv")
+        + _collect_review_iri_issues(codes, source_name="metadata/codes.csv")
     )
     # Unconditional: a method or protocol placement that is not an absolute
     # IRI is malformed in every validation mode, not only under
@@ -3590,7 +3596,7 @@ def validate_salmon_datapackage(
         id_fields=("dataset_id",),
         fields=("protocol_iri",),
     )
-    appended_semantic_issues = table_review_issues + placement_issues
+    appended_semantic_issues = metadata_review_issues + placement_issues
     if appended_semantic_issues:
         issue_frame = pd.DataFrame({"message": appended_semantic_issues})
         existing = semantic_validation.get("issues")
@@ -3602,7 +3608,7 @@ def validate_salmon_datapackage(
         # A malformed placement IRI is worse than an unreviewed one: strict
         # validation must block it, exactly as it blocks a REVIEW: marker.
         final_review_issues = (
-            final_review_issues + table_review_issues + placement_issues
+            final_review_issues + metadata_review_issues + placement_issues
             # Unconditional table placements already have owners. Excluding
             # them here prevents duplicate shape reports; the dictionary's
             # six semantic fields are handled by validate_dictionary above.

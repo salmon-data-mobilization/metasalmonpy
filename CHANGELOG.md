@@ -39,6 +39,14 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Strict REVIEW marker checks cover all four metadata files** (hub B-230,
+  mirroring landed metasalmon B-177). Dataset and codes markers now join table
+  and dictionary findings in strict refusal and default semantic warnings.
+  The EDH collector includes dataset markers, and the metadata scan retires
+  its interim file allowlist while keeping schema-declared fields and the
+  dictionary validator's fixed six IRI fields. Marker spelling, placement and
+  malformed-IRI checks remain unchanged.
+
 * **Multiline context uses its first token for phrase anchors** (hub B-385,
   porting metasalmon B-384). An underscore or hyphen on a later line no longer
   rejects an otherwise anchored procedure chunk. Identifier-like leading
