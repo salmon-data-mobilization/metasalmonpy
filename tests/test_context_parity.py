@@ -260,6 +260,21 @@ def test_html_context_skips_an_implicit_empty_body_despite_head_text(tmp_path, b
     assert list(chunks.columns) == ["source", "chunk_id", "text"]
 
 
+def test_html_context_skips_an_empty_body_when_optional_head_end_is_omitted(tmp_path):
+    # The body paragraph implicitly closes head in the unchanged native reader.
+    # Even with the optional head end tag omitted, no title becomes evidence.
+    page = tmp_path / "optional-head-close-empty.html"
+    page.write_text(
+        "<html><head><title>Hidden title</title><p></p></html>",
+        encoding="utf-8",
+    )
+
+    with pytest.warns(UserWarning, match="empty context file"):
+        chunks = load_context_chunks([page])
+    assert chunks.empty
+    assert list(chunks.columns) == ["source", "chunk_id", "text"]
+
+
 def test_text_decoding_follows_read_text_utf8():
     # UTF-8 first; a byte-order mark is discarded as readLines() discards it.
     assert _decode_context_bytes(b"\xef\xbb\xbfcaf\xc3\xa9") == "café"
