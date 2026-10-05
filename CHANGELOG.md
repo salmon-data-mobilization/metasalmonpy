@@ -40,7 +40,7 @@ and moving it is a separate outward act.
   `similarity_measure` accept text without a CURIE prefix declaration.
   `predicate_type` uses the predicate-legal SSSOM entity-type enum in rows and
   propagated metadata; invalid values and the two schema-forbidden predicate
-  types remain refused. Genuine reference, package-profile and byte contracts
+  types are refused. Genuine reference, package-profile and byte contracts
   stay intact, and packages round-trip all four fields.
 
 * **Semantic closure refuses undefined YAML tag handles** (hub B-429, the
