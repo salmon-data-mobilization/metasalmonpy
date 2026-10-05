@@ -46,6 +46,15 @@ _SCALAR_FIELDS = {
                    "statistical_modifier_iri"),
     "codes": ("term_iri", "vocabulary_iri"),
 }
+# These already-read extension files also own scalar IRIs. The first retains
+# the frozen SDP-0.2 legacy registry contract; this does not restore that table
+# to the current profile. Other extension columns keep their existing handling.
+_EXTENSION_SCALAR_FIELDS = {
+    "metadata/methods.csv": ("method_iri", "protocol_iri"),
+    "metadata/semantic/measurement-decompositions.csv": (
+        "measurement_concept_iri", "component_iri"),
+    "metadata/structure/observation_components.csv": ("component_relation_iri",),
+}
 _DELAYS = (0.1, 0.25)
 _REQUEST_TIMEOUT = 30
 # Fixed source and JSON stdin keep the selected IRI out of shell/code syntax.
@@ -196,7 +205,8 @@ def _selected_iris(root):
     for relative in ("metadata/methods.csv",
                      "metadata/semantic/measurement-decompositions.csv",
                      "metadata/structure/observation_components.csv"):
-        iris.extend(_from_csv(root / relative))
+        iris.extend(_from_csv(root / relative,
+                              scalar_fields=_EXTENSION_SCALAR_FIELDS[relative]))
     iris.extend(_from_csv(root / "metadata/semantic_vocabulary.csv", fields=["iri"]))
     for relative in ("reviewed_semantic_selections.csv",
                      "reproducibility/reviewed_semantic_selections.csv"):

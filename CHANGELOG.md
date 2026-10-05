@@ -67,6 +67,12 @@ and moving it is a separate outward act.
   separators; unknown extension fields keep their existing representation.
   The verifier previously could report success after checking a truncated
   scalar prefix. No identifier, report column or retry policy is changed.
+  The same exactness now covers five scalar slots in the three extension
+  files already collected: observation component relations, decomposition
+  concepts/components, and the retained legacy procedure/protocol registry.
+  A bound decomposition concept was already checked through its dictionary
+  term; its illicit extra prefix request is now removed as well. The legacy
+  registry is not reinstated in the current SDP profile.
 
 * Selected semantic-IRI verification removes credentials embedded in an
   external final URL before returning results or writing the deterministic
