@@ -35,7 +35,154 @@ keeps the same shape with its *(development version)* heading, which is what
 this heading mirrors. **The number does not move here**: it is a parity claim,
 and moving it is a separate outward act.
 
+### Added
+
+* `detect_semantic_term_gaps(commons_gaps="commons-gaps.json")` reads the
+  Salmon Knowledge Commons `okf-check.py --gaps` export (hub B-279, mirroring
+  metasalmon B-278). The reader keeps every concept record, its lifecycle and
+  source order. Request rendering retains held rows for review and sends only
+  open, unheld SMN/GCDFO targets to a dry-run preview. No term IRI, definition,
+  or type is selected; existing SDP gap behavior and columns remain intact.
+
+### Internal
+
+* Document R's explicit Unicode-whitespace supplement in parity row 28 and
+  the shared-class comments (hub B-431, companion to R B-137). The effective
+  Python memberships and runtime behavior are unchanged.
+
+* **Contributor workflow adopts coherent hub batches** after the canonical
+  MetaSalmon policy and this repository adoption both merge. Related eligible
+  items held by one owner may share implementation and detailed evidence while
+  retaining per-item claims, handoff refs and acceptance. Contributor guidance
+  routes common workflow to the canonical `HUB.md` policy.
+
 ### Fixed
+
+* **Strict REVIEW marker checks cover all four metadata files** (hub B-230,
+  mirroring landed metasalmon B-177). Dataset and codes markers now join table
+  and dictionary findings in strict refusal and default semantic warnings.
+  The EDH collector includes dataset markers, and the metadata scan retires
+  its interim file allowlist while keeping schema-declared fields and the
+  dictionary validator's fixed six IRI fields. Marker spelling, placement and
+  malformed-IRI checks remain unchanged.
+
+* **Multiline context uses its first token for phrase anchors** (hub B-385,
+  porting metasalmon B-384). An underscore or hyphen on a later line no longer
+  rejects an otherwise anchored procedure chunk. Identifier-like leading
+  tokens, mismatched phrases and exact identifier anchors keep their existing
+  checks. The shared evidence pin is regenerated from landed R source.
+
+* **Optional writer fields follow the selected schema (hub B-252).** A direct
+  `write_salmon_datapackage()` call no longer adds bundled optional fields absent
+  from both the caller's dataset, table or codes frame and the selected schema.
+  Table inference also aligns its minimal frame to that schema. Existing caller
+  extras remain, including fields inference deliberately supplies. Dictionary
+  validation still adds its optional semantic fields, as R does; public reader
+  normalization is unchanged. Paired R/Python probes corrected the original
+  `create_sdp()` premise, and default output bytes match the pre-fix baseline.
+
+* **SSSOM optional fields use their schema ranges** (hub B-270, mirroring
+  metasalmon B-269). `subject_category`, `object_category` and
+  `similarity_measure` accept text without a CURIE prefix declaration.
+  `predicate_type` uses the predicate-legal SSSOM entity-type enum in rows and
+  propagated metadata; invalid values and the two schema-forbidden predicate
+  types are refused. Genuine reference, package-profile and byte contracts
+  stay intact, and packages round-trip all four fields.
+
+* **Semantic closure refuses undefined YAML tag handles** (hub B-429, the
+  separately tracked Q62 port after B-341). An undeclared handle such as
+  `!e!foo` now reports `eml-mapping.yml` before either closure output is written
+  or its sidecar bytes change. Known core tags, bare `!` and quoted lookalikes
+  remain accepted; unrelated malformed and non-mapping YAML retain their
+  existing default-path fallback.
+
+* **NuSEDS AREA is labelled as a sub-district (hub B-402).** The sample
+  column dictionary now describes AREA as a DFO sub-district code, matching
+  metasalmon's B-401 correction. Its identifiers and semantic IRI fields stay
+  unchanged.
+
+* **Semantic closure reports actual code-row addresses (hub B-266).** A
+  code-resolved procedure's gap or incomplete-evidence report names every
+  carrying `codes.csv term_iri` row, with its dataset/table/column/code keys,
+  rather than a nonexistent `method_iri` field. Shared IRIs retain separate
+  addresses and request drafts. Warnings distinguish unique IRIs from package
+  addresses, and code ordering follows the R B-265 port.
+
+* **Configuration inventory (hub B-59 companion).** Add a guide to the current
+  Python schema overrides, retrieval switches and provider/credential fallbacks,
+  with their precedence and the planned in-package provider removal in 0.7.0.
+  It documents actual Python names and existing private warning/UUID state;
+  no API or runtime behavior changes.
+
+* **Semantic closure refuses unknown YAML tags in its EML sidecar.** Hub
+  **B-341**, the Python half of Brett's Q62 ruling, reports the sidecar file
+  when `!expr` or another tag PyYAML cannot construct appears, before writing
+  either closure file or changing the sidecar. Untagged declared paths remain
+  authoritative; the reader's existing fallback for malformed or non-mapping
+  YAML is unchanged. Metasalmon's corresponding closure reader is B-340, and
+  no new parity-deviation row is introduced.
+
+* **Strict validation refuses malformed semantic and table IRIs.** B-343,
+  paired with R's B-342 and the Q63 ruling: the six dictionary semantic IRI
+  fields and every `*_iri` field in `tables.csv` require the existing absolute
+  IRI shape under `require_iris=True`, including undeclared table extensions.
+  A shared shape helper uses R's enumerated whitespace class. Blanks keep
+  their existing checks, recognized REVIEW markers are reported once, and
+  method/protocol placements keep their existing unconditional checks.
+  Existing semicolon-separated `constraint_iri` lists are checked component
+  by component; empty components remain malformed and a REVIEW marker in
+  any component is reported once for that dictionary row.
+  Direct dictionary whitespace is present and malformed; missing values and
+  exact empty strings retain their checks. CSV checks consume parsed values
+  after the reader's existing ASCII trim. Non-strict validation and the separately tracked dataset/codes/extra
+  dictionary scan gaps are unchanged. No term IRI or grammar is selected.
+
+* **Date columns keep their temporal role without a date-like name.** B-349,
+  porting Brett's 2026-09-25 ruling: all present date/datetime objects or text
+  accepted by B-188's readr guess infer `temporal`; value typing shares that
+  guess and distinguishes `date` from `datetime`. The bundled NuSEDS
+  `START_DTT` and `END_DTT` columns read by pandas now infer `date` instead
+  of `string`. Identifier and identifier-qualifier precedence, explicit
+  categorical intent, empty/mixed non-date columns and ordinary code lists
+  retain their existing roles. R is unchanged; no new parity-deviation row.
+
+* **EML temporal coverage accepts the SDP UTC-instant spelling.** B-355,
+  mirroring B-354 and Brett's 2026-09-25 ruling: each
+  `YYYY-MM-DDThh:mm:ssZ` endpoint is split into `calendarDate` and `time`.
+  Joining the two fields with `T` restores the persisted value exactly,
+  including `Z`. Years and dates remain a single `calendarDate`, mixed
+  endpoints work independently, and off-profile text remains intact for
+  validation. The public writer's EML 2.2.0 schema check stays in force.
+
+* **Vocabulary-backed columns keep their values when applying a dictionary.**
+  Hub **B-347**, paired with metasalmon **B-346**, implements Brett's
+  2026-09-25 ruling: if any codes row for the same table and column names a
+  vocabulary and has no code value, that column skips the code list and its
+  unlisted-value warning. Missing, blank and omitted `code_value` all qualify.
+  A vocabulary-only row beside enumerated codes still backs the whole column;
+  declared type and categorical-role behavior remain in force. Ordinary code
+  lists continue to apply labels and report unlisted values. This is a ruled
+  repair in both packages, with no new parity-deviation row.
+
+* **SSSOM metadata refuses explicit YAML tags.** Hub **B-353**, the Python
+  half of **B-352**, implements Brett's 2026-09-25 Q62 ruling. Local tags such
+  as `!expr`/`!foo`, `!!` tags and verbatim tags now fail with the existing
+  not-valid-YAML error naming the file, including anchored, nested and flow
+  values and compact block-list mappings/sequences. Quoted exclamations and
+  ordinary plain text remain text; tag-like text in a trailing YAML comment
+  is ignored, while quoted hashes and IRI fragments remain content. Package
+  validation still proves the mapping file was read and no expression was
+  evaluated; it now refuses the tagged package. No dependency, public
+  signature, canonical writer bytes or parity-register row changed.
+
+* **Whole-number float years keep their temporal role when a CSV cell is
+  blank.** Hub **B-348**, porting Brett's 2026-09-25 ruling: the year-shape
+  predicate reads numeric `2001.0` as `2001`, matching R's `as.character()`.
+  The `BY` column from `BY,n / 2001,1 / ,2 / 2003,3` now types `temporal`
+  through `infer_column_role()`. Fractional values such as `1850.5` and text
+  such as `"1850.0"` remain non-year-shaped; float spawner counts retain their
+  measurement role. Other character rendering and R's implementation are
+  unchanged. This is a ruled port, with no new parity-deviation row.
 
 * **A persisted assessment reads back as written, and a retry query gets the
   verdict metasalmon gives it.** Hub queue item **B-362**, the metasalmonpy

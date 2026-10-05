@@ -17,18 +17,16 @@ That is the control: if the year-shape rule ever narrows so that a fixture
 stops being year-shaped, the test fails on the control instead of passing
 without exercising the case it exists for.
 
-**The fixtures use this package's year-shaped storage types, not R's.** Most of
-R's fixtures are doubles, and here a ``float64`` column is never year-shaped:
-``_character_values()`` renders through ``str()``, and ``str(1850.0)`` is
-``"1850.0"``. So R's doubles are ``int64`` here, which is what pandas reads a
-whole-number column with no missing cell as. R's integer is the nullable
-``Int64``, and R's character is text at pandas' default dtype. A ``float64``
-fixture would fail its own control, which is the control doing its job. That
-the two predicates disagree about a float column is a separate divergence, not
-this file's subject.
+The original fixtures cover integer, nullable integer, categorical and text
+storage. Hub **B-348** adds whole-number floats, including the float64 column
+``pandas.read_csv()`` creates when a year cell is blank. Brett ruled that these
+read as their integers, as R's ``as.character()`` reads numeric years; a float
+with a fractional part and text spelling a decimal remain non-year-shaped.
 """
 
 from __future__ import annotations
+
+from io import StringIO
 
 import pandas as pd
 import pytest
@@ -57,6 +55,7 @@ YEAR_SHAPED_MEASUREMENTS = [
     ("avg_weight", [1900, 2100], "int64"),
     ("Water depth(mm)", [1850, 1920], "int64"),
     ("adult/count", ["1850", "2003", "1999"], None),
+    ("spawner_count", [1850.0, None, 2003.0], "float64"),
 ]
 
 # The invariant is stated over more than the measurement branch. An explicit
@@ -127,6 +126,41 @@ def _off_the_year_range(series):
 
 def _ids(cases):
     return [f"{name}-{dtype or 'text'}" for name, _, dtype in cases]
+
+
+def _csv_years_with_a_blank_cell():
+    # This is the documented ingestion path, rather than a manually cast dtype.
+    frame = pd.read_csv(StringIO("BY,n\n2001,1\n,2\n2003,3\n"))
+    assert str(frame["BY"].dtype) == "float64"
+    assert frame["BY"].isna().sum() == 1
+    return frame["BY"]
+
+
+def test_csv_years_with_a_blank_cell_are_year_shaped_and_temporal():
+    years = _csv_years_with_a_blank_cell()
+    assert _values_look_yearish(years)
+    assert infer_column_role("BY", years) == "temporal"
+
+
+def test_csv_years_with_a_blank_cell_reach_the_public_role_path():
+    # Independent role assertion demonstrates the public failure even while
+    # the private predicate's RED prevents its following assertion from running.
+    assert infer_column_role("BY", _csv_years_with_a_blank_cell()) == "temporal"
+
+
+@pytest.mark.parametrize("dtype", ["float64", "Float64", "float32", "object"])
+def test_whole_numeric_floats_are_year_shaped_in_supported_storage(dtype):
+    years = pd.Series([1800.0, None, 2500.0], dtype=dtype)
+    assert _values_look_yearish(years)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [[1850.5], ["1850.0"], [1799.0], [2501.0], [float("inf")], [None]],
+    ids=["fractional", "decimal-text", "below-range", "above-range", "infinite", "empty"],
+)
+def test_float_year_rendering_preserves_non_year_values(values):
+    assert not _values_look_yearish(pd.Series(values))
 
 
 @pytest.mark.parametrize(

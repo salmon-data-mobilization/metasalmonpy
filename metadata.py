@@ -16,9 +16,11 @@ from .sdp_schema import sdp_profile_version
 # treats them as whitespace, so neither may this package.
 READR_TRIM_CHARS = " \t\r\n"
 
-# metasalmon calls ``grepl()`` WITHOUT ``perl = TRUE`` in every validator that
-# uses a POSIX character class, so those classes are resolved by TRE, which is
-# Unicode-aware in a UTF-8 locale. The exact membership below was enumerated by
+# metasalmon's POSIX-class validators use TRE without ``perl = TRUE``, which is
+# Unicode-aware in a UTF-8 locale. Its shared absolute-IRI predicate now also
+# explicitly rejects the same 15 non-ASCII whitespace members under C (B-137,
+# metasalmon PR 230), retaining TRE's ASCII/POSIX component. The exact classes
+# below were enumerated by
 # running ``grepl()`` over every codepoint up to U+2FFFF under metasalmon
 # v0.1.7's R 4.5.2. Approximating either class with Python's ``\s``/``\S`` is
 # wrong in BOTH directions and must never be done:
@@ -34,10 +36,10 @@ READR_TRIM_CHARS = " \t\r\n"
 # verified by the same enumeration — so an ASCII class is correct there and
 # these constants must NOT be applied to it.
 #
-# Retirement condition: these constants stay for as long as metasalmon resolves
-# POSIX classes through TRE. They are only removable if metasalmon itself
-# switches those validators to ``perl = TRUE`` (or to explicit ranges), at which
-# point the replacement must be re-enumerated against that release, not guessed.
+# Retirement condition: keep these constants while their effective membership
+# matches the corresponding R validators, including explicit supplements. A
+# change of engine or spelling alone does not retire them. If R changes that
+# membership, re-enumerate the replacement against that release, not by guessing.
 #
 # R ``[[:space:]]`` -- note the deliberate gaps: U+2007, U+00A0, U+0085 and
 # U+202F are NOT whitespace to TRE.
@@ -45,6 +47,21 @@ R_SPACE_CLASS = (
     "\t-\r\x20\u1680\u2000-\u2006\u2008-\u200a"
     "\u2028\u2029\u205f\u3000"
 )
+
+_ABSOLUTE_IRI_SHAPE_RE = re.compile(
+    rf"[A-Za-z][A-Za-z0-9+.\-]*:[^{R_SPACE_CLASS}]+"
+)
+
+
+def _absolute_iri_shape(value: str) -> bool:
+    """R's ``.ms_absolute_iri_shape``; callers own blanks and REVIEW markers.
+
+    This is only scheme/colon/non-whitespace shape, not resolution, scheme
+    selection or HTTP authority validation. Use TRE's enumerated whitespace
+    rather than Python's broader ``\\s``. Fullmatch also rejects a final LF,
+    which Python's ``$`` anchor can otherwise leave outside the match.
+    """
+    return _ABSOLUTE_IRI_SHAPE_RE.fullmatch(value) is not None
 
 # R ``[[:cntrl:]]`` -- C0 and C1 controls plus the Unicode line/paragraph
 # separators.
@@ -594,8 +611,14 @@ def infer_table_metadata_from_resources(resources: Mapping[str, pd.DataFrame], d
                 "primary_key": id_cols[0] if id_cols else pd.NA,
             }
         )
+    # The inferred frame does not explicitly carry method_iri or other optional
+    # fields the minimal rows lack. Add only what the selected schema declares,
+    # as R's inference does; preserving existing extras remains the writer's
+    # separate responsibility (B-252). Deferred to avoid the module import cycle.
+    from .sdp_field_setters import _in_declared_order
+
     return fill_review_placeholders_table_meta(
-        normalize_table_meta(pd.DataFrame(rows))
+        _in_declared_order(pd.DataFrame(rows), "tables.csv")
     )
 
 
@@ -681,8 +704,8 @@ def _readr_reads_as_date_time(text: str) -> bool:
         return True
 
 
-def _text_reads_as_dates(texts) -> bool:
-    """Whether ``readr::read_csv()`` would read this text as a ``Date`` or ``POSIXct`` column.
+def _readr_date_type(texts) -> Optional[str]:
+    """The ``date`` / ``datetime`` kind of readr's column guess, or ``None``.
 
     readr, R's documented reader, guesses one type for each column, and R's
     seeder never selects a ``Date`` or ``POSIXct`` column. ``pandas.read_csv``
@@ -696,15 +719,25 @@ def _text_reads_as_dates(texts) -> bool:
     vroom 1.7.1, and pinned token by token in
     ``tests/test_codes_target_categorical.py``.
 
-    A time of day, which readr reads as ``hms``, is not covered.
+    The role and value-type inferrers share this guess with the seeder
+    (B-349). Date shape wins before the datetime parser, as it did in B-188;
+    this matters because that parser also accepts bare ISO dates. A time of
+    day, which readr reads as ``hms``, is not covered.
     """
     present = [str(text).strip(READR_TRIM_CHARS) for text in texts]
     present = [text for text in present if text]
     if not present:
-        return False
-    return all(_DATE_RE.match(text) for text in present) or all(
-        _readr_reads_as_date_time(text) for text in present
-    )
+        return None
+    if all(_DATE_RE.match(text) for text in present):
+        return "date"
+    if all(_readr_reads_as_date_time(text) for text in present):
+        return "datetime"
+    return None
+
+
+def _text_reads_as_dates(texts) -> bool:
+    """Whether readr guesses a date kind; keep B-188's boolean seeder hook."""
+    return _readr_date_type(texts) is not None
 
 
 def code_list_values(series, code_limit: int = CODE_LIST_LIMIT) -> list:

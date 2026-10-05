@@ -15,7 +15,10 @@ The pin is one set of cases scored by both packages:
   functions in ``R/semantic-bundle-validators.R`` returned for them, written by
   ``expected-from-r.R`` beside it (run with
   ``R_LIBS=/tmp/metasalmon-lib Rscript expected-from-r.R . expected.json``
-  against metasalmon ``main`` at ``98cb9e6``, 2026-09-25);
+  against metasalmon ``main`` at ``98cb9e6``, 2026-09-25). B-385 regenerated
+  the pin against landed B-384 merge ``126e576e`` at canonical head
+  ``cb390928`` on 2026-10-05 UTC, with the loaded namespace/helper body bound
+  to that exact source. Only the multiline phrase-anchor evidence changed;
 * the offline tests below hold this package to that file, and the last test
   re-runs the R script wherever R and an installed metasalmon are available
   (the ``parity`` job of ``.github/workflows/parity.yml``), so a change on the
@@ -35,6 +38,7 @@ import pytest
 from metasalmonpy.llm_review import (
     VALIDATOR_FINDING_COLUMNS,
     _apply_validators,
+    _chunk_has_anchor,
     _bundle_validator_evidence,
     _dimension,
     _has_constraint_evidence,
@@ -89,6 +93,35 @@ def _context(chunks: list[str]) -> pd.DataFrame:
 
 
 # --- the pieces, each against R's verdicts ------------------------------------
+
+# B-385 ports R B-384's first-token boundary. Later punctuation must not
+# reject an otherwise anchored chunk; identifier-like leading tokens remain
+# excluded from phrase anchors and identifier anchors keep their own route.
+@pytest.mark.parametrize(
+    "text,anchor,expected",
+    [
+        ("Catch count was enumerated using a visual survey protocol.\nLater table_2 note.",
+         "phrase_start:catch count", True),
+        ("Catch count was enumerated using a visual survey protocol.\nLater format-v2 note.",
+         "phrase_start:catch count", True),
+        ("Catch count was enumerated using a visual survey protocol.\nLater protocol note.",
+         "phrase_start:catch count", True),
+        ("CATCH_COUNT_ESTIMATE was counted.\nLater table_2 note.",
+         "phrase_start:catch count", False),
+        ("Catch-count was counted.\nLater protocol note.",
+         "phrase_start:catch count", False),
+        ("Spawner count was counted.\nLater table_2 note.",
+         "phrase_start:catch count", False),
+        ("CATCH_COUNT was counted.\nLater table_2 note.",
+         "identifier:catch_count", True),
+    ],
+    ids=["later_underscore", "later_hyphen", "plain_multiline",
+         "leading_underscore", "leading_hyphen", "mismatched_phrase",
+         "identifier_route"],
+)
+def test_phrase_anchors_use_first_token_across_newlines(text, anchor, expected):
+    assert _chunk_has_anchor(text, anchor) is expected
+
 
 
 @pytest.mark.parametrize("index", range(len(CASES["dimension"])))

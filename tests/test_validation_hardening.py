@@ -23,6 +23,7 @@ import pytest
 
 import metasalmonpy
 from metasalmonpy import (
+    validate_dictionary,
     validate_salmon_datapackage,
     write_salmon_datapackage,
 )
@@ -709,6 +710,95 @@ def test_unresolved_placeholders_warn_in_default_mode(tmp_path):
 # --- strict-path parity ----------------------------------------------------------
 
 
+IRI_FIELDS = (
+    "term_iri", "property_iri", "entity_iri", "unit_iri", "constraint_iri",
+    "statistical_modifier_iri",
+)
+MALFORMED_IRIS = ("foo bar", "\u00a0https://example.org/term", "REV\u0131EW:https://example.org/term")
+
+
+@pytest.mark.parametrize("field", IRI_FIELDS)
+@pytest.mark.parametrize("value", MALFORMED_IRIS)
+def test_dictionary_strictly_refuses_malformed_semantic_iris(field, value):
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    dictionary.loc[0, field] = value
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        validate_dictionary(dictionary, require_iris=False)
+    with pytest.raises(ValueError) as excinfo:
+        validate_dictionary(dictionary, require_iris=True)
+    assert field in str(excinfo.value)
+    # Current Python IGNORECASE recognizes dotless-i. Do not narrow it here:
+    # B-345 is separate. The recognized marker is reported once, as a marker.
+    if "\u0131" in value:
+        assert "REVIEW-prefixed" in str(excinfo.value)
+        assert "not an absolute IRI" not in str(excinfo.value)
+    else:
+        assert "absolute IRI" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("file_name,field", [
+    ("tables.csv", "observation_unit_iri"),
+    ("tables.csv", "custom_iri"),
+])
+@pytest.mark.parametrize("value", MALFORMED_IRIS[:2])
+def test_package_strictly_refuses_malformed_metadata_iris(tmp_path, file_name, field, value):
+    root = _build_example(tmp_path / "malformed-iri")
+    def editor(frame):
+        frame.loc[0, field] = value
+        return frame
+    _edit_csv(root / "metadata" / file_name, editor)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        validate_salmon_datapackage(root, require_iris=False)
+    with pytest.raises(ValueError) as excinfo:
+        validate_salmon_datapackage(root, require_iris=True)
+    message = str(excinfo.value)
+    assert file_name in message
+    assert field in message
+    assert "absolute IRI" in message
+
+
+@pytest.mark.parametrize("value", [
+    "https://example.org/term", "urn:example:term", "mailto:review@example.org",
+    "doi:10.1/term", "x+.-:value", "https:term", "https://example.org/\u00a0term",
+])
+def test_existing_absolute_iri_shape_accepts_ordinary_schemes(value):
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    dictionary.loc[0, "constraint_iri"] = value
+    validate_dictionary(dictionary, require_iris=True)
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_blank_optional_iris_keep_existing_checks(value):
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    dictionary.loc[0, "constraint_iri"] = value
+    validate_dictionary(dictionary, require_iris=True)
+
+
+@pytest.mark.parametrize("field", IRI_FIELDS)
+def test_direct_dictionary_whitespace_is_present_and_malformed(field):
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    dictionary.loc[0, field] = " "
+    validate_dictionary(dictionary, require_iris=False)
+    with pytest.raises(ValueError, match="absolute IRI"):
+        validate_dictionary(dictionary, require_iris=True)
+
+
+def test_recognized_metadata_marker_is_reported_once(tmp_path):
+    root = _build_example(tmp_path / "metadata-marker")
+    def editor(frame):
+        frame.loc[0, "observation_unit_iri"] = "REV\u0131EW:https://example.org/unit"
+        return frame
+    _edit_csv(root / "metadata/tables.csv", editor)
+    with pytest.raises(ValueError) as excinfo:
+        validate_salmon_datapackage(root, require_iris=True)
+    message = str(excinfo.value)
+    assert "1 unresolved review issue" in message
+    assert "still contains a REVIEW-prefixed IRI" in message
+    assert "not an absolute IRI" not in message
+
+
 def test_review_dictionary_iris_warn_default_and_block_strict(tmp_path):
     root = _build_example(tmp_path / "review-dict")
 
@@ -772,8 +862,9 @@ def test_bad_placement_iri_warns_default_and_blocks_strict(tmp_path):
     assert len(semantic_issues) == 1
     assert "method_iri is not an absolute IRI" in semantic_issues["message"].iloc[0]
 
-    with pytest.raises(ValueError, match="is not an absolute IRI"):
+    with pytest.raises(ValueError, match="is not an absolute IRI") as excinfo:
         validate_salmon_datapackage(str(root), require_iris=True)
+    assert "Final validation failed with 1 unresolved review issue." in str(excinfo.value)
 
 
 def test_blank_observation_unit_iri_blocks_strict_only(tmp_path):
@@ -1464,3 +1555,70 @@ def test_a_unicode_whitespace_enum_is_a_token_not_a_blank(tmp_path):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 validate_salmon_datapackage(str(blank_root), require_iris=True)
+
+
+def test_reviewed_multiple_constraints_survive_strict_validation():
+    from metasalmonpy import apply_semantic_suggestions
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    position = dictionary.index[dictionary["column_role"] == "measurement"][0]
+    dictionary.loc[position, "constraint_iri"] = pd.NA
+    row = dictionary.loc[position]
+    iris = ["https://example.org/constraint/one", "https://example.org/constraint/two"]
+    suggestions = pd.DataFrame({
+        "dataset_id": row["dataset_id"], "table_id": row["table_id"],
+        "column_name": row["column_name"], "dictionary_role": "constraint",
+        "iri": iris, "decision": "accepted",
+    })
+    applied = apply_semantic_suggestions(dictionary, suggestions=suggestions,
+                                         strategy="reviewed", verbose=False)
+    assert applied.loc[position, "constraint_iri"] == "; ".join(iris)
+    validate_dictionary(applied, require_iris=True)
+
+
+def test_package_multiple_constraints_survive_strict_validation(tmp_path):
+    root = _build_example(tmp_path / "multiple-constraints")
+    def editor(frame):
+        frame.loc[0, "constraint_iri"] = "https://example.org/one; https://example.org/two"
+        return frame
+    _edit_csv(root / "metadata/column_dictionary.csv", editor)
+    validate_salmon_datapackage(root, require_iris=True)
+
+
+@pytest.mark.parametrize("value", [
+    "https://example.org/one; foo bar", "https://example.org/one; ",
+    "; https://example.org/one", "https://example.org/one;",
+    "https://example.org/one;; https://example.org/two",
+    " https://example.org/one; https://example.org/two",
+    "https://example.org/one; https://example.org/two ",
+    "https://example.org/one; \u00a0https://example.org/two",
+])
+def test_malformed_constraint_component_is_not_hidden(value):
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    dictionary.loc[0, "constraint_iri"] = value
+    with pytest.raises(ValueError, match="absolute IRI"):
+        validate_dictionary(dictionary, require_iris=True)
+
+
+def test_later_constraint_review_marker_keeps_one_marker_report():
+    dictionary = read_sdp_csv(DATA / "column_dictionary.csv")
+    dictionary.loc[0, "constraint_iri"] = "https://example.org/one; REVIEW: https://example.org/two"
+    with pytest.raises(ValueError, match="REVIEW-prefixed") as caught:
+        validate_dictionary(dictionary, require_iris=True)
+    assert str(caught.value).count("constraint_iri:") == 1
+    assert "absolute IRI" not in str(caught.value)
+    with pytest.warns(UserWarning, match="REVIEW-prefixed"):
+        validate_dictionary(dictionary, require_iris=False)
+
+
+def test_review_metadata_reports_later_constraint_marker_once(tmp_path):
+    from metasalmonpy import review_metadata
+    root = _build_example(tmp_path / "constraint-marker-review")
+    def editor(frame):
+        frame.loc[0, "constraint_iri"] = "https://example.org/one; REVIEW: https://example.org/two; REVIEW:https://example.org/three"
+        return frame
+    _edit_csv(root / "metadata/column_dictionary.csv", editor)
+    rows = review_metadata(root).rows
+    hits = rows[(rows["file"] == "column_dictionary.csv") &
+                (rows["field"] == "constraint_iri")]
+    assert len(hits) == 1
+    assert hits.iloc[0]["reason"] == "iri"
