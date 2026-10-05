@@ -90,9 +90,9 @@ def no_sleep(*args):
 def test_complete_failures_bounded_retries_and_repeat_bytes(tmp_path):
     fixture(tmp_path)
     write_csv(tmp_path, "metadata/column_dictionary.csv", {
-        "term_iri": ["https://example.org/z#exact; https://example.org/a#exact"],
+        "term_iri": ["https://example.org/z#exact"],
         "property_iri": ["https://example.org/b#exact"],
-        "constraint_iri": ["https://example.org/c#exact"],
+        "constraint_iri": ["https://example.org/c#exact; https://example.org/a#exact"],
         "unrelated_url": ["https://example.org/not-selected"],
     })
     calls, delays = Counter(), []
@@ -223,7 +223,7 @@ def test_partial_canonical_uses_descriptor(tmp_path):
 def test_malformed_response_does_not_interrupt_sweep(tmp_path, response):
     fixture(tmp_path)
     write_csv(tmp_path, "metadata/column_dictionary.csv", {
-        "term_iri": ["https://example.org/a#bad;https://example.org/b#good"]})
+        "term_iri": ["https://example.org/a#bad", "https://example.org/b#good"]})
     seen = []
     def request(iri):
         seen.append(iri)
@@ -463,7 +463,7 @@ def test_local_default_transport_ignores_body_and_bounds_headers(monkeypatch, is
 def test_canonical_order_non_ascii_and_explicit_report_path(tmp_path):
     fixture(tmp_path)
     iris = [f"https://example.org/{part}#one" for part in ["z", "A", "é", "Z", "a"]]
-    write_csv(tmp_path, "metadata/column_dictionary.csv", {"term_iri": [";".join(iris)]})
+    write_csv(tmp_path, "metadata/column_dictionary.csv", {"term_iri": iris})
     target = tmp_path / "custom" / "report.csv"
     rows = verify(tmp_path, report_path=target, requester=good, sleep_fn=no_sleep)
     assert rows.iri.tolist() == sorted(iris, key=lambda iri: iri.encode("utf-8"))
@@ -729,3 +729,52 @@ def test_httpx_proxy_to_direct_redirect_retains_cookie_and_host_netrc(local_serv
     basic = "Basic " + base64.b64encode(b"user:demo").decode()
     assert seen == [("proxy", None, basic), ("direct", "selected=one", basic),
                     ("direct", "selected=one", basic)]
+
+
+@pytest.mark.parametrize("relative,field", [
+    ("metadata/column_dictionary.csv", "property_iri"),
+    ("metadata/column_dictionary.csv", "term_iri"),
+    ("metadata/codes.csv", "term_iri"),
+    ("metadata/codes.csv", "vocabulary_iri"),
+])
+def test_b130_public_scalar_metadata_iri_preserves_legal_semicolon(tmp_path, relative, field):
+    """A successful report must check the exact selected scalar, not its prefix."""
+    fixture(tmp_path)
+    iri = f"https://example.org/{field};variant#one"
+    target = write_csv(tmp_path, relative, {field: [iri]})
+    inputs = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    seen = []
+    def request(selected):
+        seen.append(selected)
+        return good(selected)
+    result = verify(tmp_path, requester=request, sleep_fn=no_sleep)
+    # The defective public path returns success and writes a passing report.
+    # Pin its output contract and untouched inputs before the exact-ID assertion.
+    assert list(result.columns) == ["iri", "status", "final_url", "error", "attempts"]
+    assert result.attempts.tolist() == [1]
+    assert {p: p.read_bytes() for p in inputs} == inputs
+    report = pd.read_csv(tmp_path / "reproducibility/provenance/semantic-iri-dereference.csv", dtype=str)
+    assert seen == [iri], "Public verifier falsely succeeded after requesting a truncated scalar IRI"
+    assert result.iri.tolist() == [iri]
+    assert report.iri.tolist() == [iri]
+
+
+def test_b130_public_declared_constraint_list_and_scalar_ledger_are_preserved(tmp_path):
+    """Only the declared list is split; an accepted scalar retains its semicolon."""
+    fixture(tmp_path)
+    write_csv(tmp_path, "metadata/column_dictionary.csv", {
+        "constraint_iri": ["https://example.org/constraint-A; https://example.org/constraint-B"]
+    })
+    ledger = "https://example.org/review;variant#accepted"
+    write_csv(tmp_path, "reviewed_semantic_selections.csv", {"iri": [ledger], "decision": ["accepted"]})
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    seen = []
+    def request(iri):
+        seen.append(iri)
+        return good(iri)
+    result = verify(tmp_path, requester=request, sleep_fn=no_sleep)
+    expected = sorted(["https://example.org/constraint-A", "https://example.org/constraint-B", ledger], key=lambda s: s.encode("utf-8"))
+    assert seen == expected
+    assert result.iri.tolist() == expected
+    assert result.attempts.tolist() == [1, 1, 1]
+    assert {p: p.read_bytes() for p in before} == before
