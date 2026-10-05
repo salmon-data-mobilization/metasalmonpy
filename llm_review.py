@@ -204,15 +204,17 @@ class _TextExtractor(HTMLParser):
         self._body_depth = 0
         self._hidden_depth = 0
         self._saw_body = False
+        self._saw_implicit_body = False
 
     @property
     def parts(self):
         # xml2 selects the body when it finds one. For a fragment it creates a
-        # body around visible content; for a head-only document it finds none
-        # and R falls back to the document, including its title.
+        # body around ordinary body markup, including markup with no visible
+        # text; for a head-only document it finds none and R falls back to the
+        # document, including its title.
         if self._saw_body:
             return self._body_parts
-        if self._outside_head_parts:
+        if self._saw_implicit_body or self._outside_head_parts:
             return self._outside_head_parts
         return self._all_parts
 
@@ -227,6 +229,15 @@ class _TextExtractor(HTMLParser):
             self._saw_body = True
             self._body_depth += 1
             self._head_depth = 0
+        elif (
+            tag not in {"html", "base", "link", "meta"}
+            and not self._head_depth
+            and not self._hidden_depth
+        ):
+            # An omitted body still has a scope when body elements are empty
+            # (for example <p><img></p> or <br>). Do not infer that scope only
+            # from nonempty text, which would incorrectly expose a head title.
+            self._saw_implicit_body = True
 
     def handle_endtag(self, tag):
         if tag in {"script", "style"}:
