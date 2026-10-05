@@ -120,6 +120,31 @@ def test_unqualified_sidecar_preserves_the_existing_two_ledger_union(tmp_path, s
 
 
 @requires_yaml
+@pytest.mark.parametrize('selected', [ROOT_LEDGER, CANONICAL_LEDGER])
+def test_native_invalid_singleton_path_sequence_does_not_choose_a_ledger(tmp_path, selected):
+    core(tmp_path)
+    ledger(tmp_path, ROOT_LEDGER, 'https://fallback.invalid/root')
+    ledger(tmp_path, CANONICAL_LEDGER, 'https://fallback.invalid/canonical')
+    sidecar = f'semantic_review: {{path: [{selected}], sha256: {"0" * 64}}}\n'
+    mapping_path = tmp_path / 'metadata/eml-mapping.yml'
+    mapping_path.write_text(sidecar)
+    mapping = eml._read_mapping_yaml(mapping_path)
+    # The native scalar helper coerces one-item sequences, but the governing
+    # mapping schema rejects this shape before the native EML writer uses it.
+    errors = []
+    eml._schema_hash_sidecar(errors, 'semantic_review', mapping['semantic_review'],
+                             eml.SUPPORTED_REVIEW_PATHS)
+    assert any('semantic_review.path' in error for error in errors)
+    before = raw_inputs(tmp_path)
+    seen = []
+    rows = ms.verify_sdp_semantic_iris(tmp_path, requester=lambda iri:
+                                     (seen.append(iri) or {'status': 200, 'final_url': iri}))
+    assert seen == ['https://fallback.invalid/canonical', 'https://fallback.invalid/root']
+    assert rows.iri.tolist() == seen
+    assert_inputs(before)
+
+
+@requires_yaml
 @pytest.mark.parametrize('tagged', ['semantic_review: !opaque {path: reviewed_semantic_selections.csv}\n',
                                    '!opaque [value]\n---\n42\n',
                                    'semantic_review: !unknown!value {path: reviewed_semantic_selections.csv}\n'])
