@@ -27,6 +27,10 @@ and moving it is a separate outward act.
 
 ### Internal
 
+* Document R's explicit Unicode-whitespace supplement in parity row 28 and
+  the shared-class comments (hub B-431, companion to R B-137). The effective
+  Python memberships and runtime behavior are unchanged.
+
 * **Contributor workflow adopts coherent hub batches** after the canonical
   MetaSalmon policy and this repository adoption both merge. Related eligible
   items held by one owner may share implementation and detailed evidence while
