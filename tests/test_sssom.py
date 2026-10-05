@@ -1342,3 +1342,100 @@ def test_reference_columns_use_r_tre_whitespace(tmp_path, codepoint, accepted):
     else:
         with pytest.raises(ValueError, match="absolute URI or compact CURIE"):
             read_sssom_mapping_set(path)
+
+
+# B-270: twins of R B-269's schema-range regressions. Categories and similarity
+# measures are text; predicate_type is an enum rather than an entity reference.
+def with_optional_schema_slots(values):
+    """Add optional slots to every row of this helper's single-row fixture."""
+    lines = sssom_text().rstrip("\n").split("\n")
+    header = next(i for i, line in enumerate(lines) if not line.startswith("#"))
+    lines[header] += "\t" + "\t".join(values)
+    for index in range(header + 1, len(lines)):
+        lines[index] += "\t" + "\t".join(values.values())
+    return "\n".join(lines) + "\n"
+
+
+_SCHEMA_OPTIONAL_VALUES = {
+    "predicate_type": "owl annotation property",
+    "subject_category": "fishing gear",
+    "object_category": "sampling method",
+    "similarity_measure": "Levenshtein distance",
+}
+
+
+@pytest.mark.parametrize("field,value", _SCHEMA_OPTIONAL_VALUES.items())
+def test_optional_slots_follow_schema_ranges(tmp_path, field, value):
+    path = write_raw(
+        tmp_path / f"{field}.sssom.tsv", with_optional_schema_slots({field: value})
+    )
+    result = read_sssom_mapping_set(path)
+    assert result.mappings[field].tolist() == [value]
+    assert validate_sdp_sssom(path) is True
+
+
+def test_free_text_does_not_require_a_prefix_but_references_still_do(tmp_path):
+    path = write_raw(
+        tmp_path / "free-text.sssom.tsv",
+        with_optional_schema_slots({"subject_category": "undeclared:category"}),
+    )
+    assert read_sssom_mapping_set(path).mappings["subject_category"].tolist() == [
+        "undeclared:category"
+    ]
+    write_raw(path, with_optional_schema_slots({"mapping_tool_id": "plain tool name"}))
+    with pytest.raises(ValueError, match="mapping_tool_id.*absolute URI or compact CURIE"):
+        read_sssom_mapping_set(path)
+
+
+@pytest.mark.parametrize("location", ["row", "metadata"])
+@pytest.mark.parametrize(
+    "value",
+    ["not an entity type", "owl:Class", "rdfs literal", "composed entity expression"],
+)
+def test_predicate_type_rejects_values_the_schema_forbids(tmp_path, location, value):
+    text = (
+        with_optional_schema_slots({"predicate_type": value})
+        if location == "row"
+        else sssom_text(extra_metadata=(f"# predicate_type: {value}",))
+    )
+    path = write_raw(tmp_path / "invalid-enum.sssom.tsv", text)
+    with pytest.raises(ValueError, match="predicate_type.*entity_type_enum"):
+        read_sssom_mapping_set(path)
+
+
+@pytest.mark.parametrize("location", ["row", "metadata"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "owl class", "owl object property", "owl data property",
+        "owl annotation property", "owl named individual", "skos concept",
+        "rdfs resource", "rdfs class", "rdfs datatype", "rdf property",
+    ],
+)
+def test_all_predicate_legal_enum_values_in_rows_and_metadata(tmp_path, location, value):
+    text = (
+        with_optional_schema_slots({"predicate_type": value})
+        if location == "row"
+        else sssom_text(extra_metadata=(f"# predicate_type: {value}",))
+    )
+    path = write_raw(tmp_path / "valid-enum.sssom.tsv", text)
+    result = read_sssom_mapping_set(path)
+    actual = (
+        result.mappings["predicate_type"].iloc[0]
+        if location == "row" else result.metadata["predicate_type"]
+    )
+    assert actual == value
+    assert validate_sdp_sssom(path) is True
+
+
+def test_schema_typed_optional_fields_round_trip_in_a_package(tmp_path):
+    path = write_raw(
+        tmp_path / "optional.sssom.tsv", with_optional_schema_slots(_SCHEMA_OPTIONAL_VALUES)
+    )
+    root = tmp_path / "sdp"
+    root.mkdir()
+    write_sdp_sssom(root, mapping_sets=path)
+    assert validate_sdp_sssom(root) is True
+    written = read_sssom_mapping_set(root / "metadata/semantic/optional.sssom.tsv")
+    for field, value in _SCHEMA_OPTIONAL_VALUES.items():
+        assert written.mappings[field].tolist() == [value]
