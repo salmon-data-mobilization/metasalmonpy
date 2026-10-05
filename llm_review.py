@@ -201,6 +201,7 @@ class _TextExtractor(HTMLParser):
         self._outside_head_parts = []
         self._body_parts = []
         self._head_depth = 0
+        self._title_depth = 0
         self._body_depth = 0
         self._hidden_depth = 0
         self._saw_body = False
@@ -225,25 +226,33 @@ class _TextExtractor(HTMLParser):
             # xml2 also places a loose title in an implicit head when body
             # content follows it; head-only input still uses the fallback.
             self._head_depth += 1
+            if tag == "title":
+                self._title_depth += 1
         elif tag == "body":
             self._saw_body = True
             self._body_depth += 1
             self._head_depth = 0
         elif (
             tag not in {"html", "base", "link", "meta"}
-            and not self._head_depth
+            and not self._title_depth
             and not self._hidden_depth
         ):
             # An omitted body still has a scope when body elements are empty
             # (for example <p><img></p> or <br>). Do not infer that scope only
             # from nonempty text, which would incorrectly expose a head title.
             self._saw_implicit_body = True
+            # A body element also ends head when its optional end tag is
+            # omitted. Markup inside an open title retains the existing
+            # title treatment rather than implying this body boundary.
+            self._head_depth = 0
 
     def handle_endtag(self, tag):
         if tag in {"script", "style"}:
             self._hidden_depth = max(0, self._hidden_depth - 1)
         elif tag in {"head", "title"}:
             self._head_depth = max(0, self._head_depth - 1)
+            if tag == "title":
+                self._title_depth = max(0, self._title_depth - 1)
         elif tag == "body":
             self._body_depth = max(0, self._body_depth - 1)
 
