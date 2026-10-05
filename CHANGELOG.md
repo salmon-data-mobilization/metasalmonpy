@@ -35,6 +35,14 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **SSSOM optional fields use their schema ranges** (hub B-270, mirroring
+  metasalmon B-269). `subject_category`, `object_category` and
+  `similarity_measure` accept text without a CURIE prefix declaration.
+  `predicate_type` uses the predicate-legal SSSOM entity-type enum in rows and
+  propagated metadata; invalid values and the two schema-forbidden predicate
+  types remain refused. Genuine reference, package-profile and byte contracts
+  stay intact, and packages round-trip all four fields.
+
 * **Semantic closure refuses undefined YAML tag handles** (hub B-429, the
   separately tracked Q62 port after B-341). An undeclared handle such as
   `!e!foo` now reports `eml-mapping.yml` before either closure output is written
