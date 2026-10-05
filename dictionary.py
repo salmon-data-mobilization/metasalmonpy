@@ -14,7 +14,10 @@ except ImportError as exc:  # pragma: no cover - import guard
 
 from .metadata import (
     READR_TRIM_CHARS,
+    _absolute_iri_shape,
+    _is_review_iri,
     _code_list_applies,
+    _readr_date_type,
     ensure_resource_mapping,
     infer_codes_from_resources,
     infer_dataset_metadata_from_resources,
@@ -54,6 +57,7 @@ SEMANTIC_COLUMNS = [
 CORE_SEMANTIC_FIELDS = ["term_iri", "property_iri", "entity_iri", "unit_iri"]
 OPTIONAL_SEMANTIC_FIELDS = ["constraint_iri", "statistical_modifier_iri"]
 MEASUREMENT_SEMANTIC_FIELDS = CORE_SEMANTIC_FIELDS + OPTIONAL_SEMANTIC_FIELDS
+_DICTIONARY_IRI_FIELDS = tuple(MEASUREMENT_SEMANTIC_FIELDS)
 
 
 def _ensure_dataframe(df, name: str = "df") -> pd.DataFrame:
@@ -63,6 +67,26 @@ def _ensure_dataframe(df, name: str = "df") -> pd.DataFrame:
         return pd.DataFrame(df)
     except Exception as exc:  # pragma: no cover - defensive
         raise TypeError(f"{name} must be a pandas DataFrame or convertible object") from exc
+
+
+def _date_value_type(series: pd.Series) -> Optional[str]:
+    """Recognize typed dates or the same text guess used by the code seeder."""
+    # A factor is the caller's explicit categorical intent, not a date class.
+    if isinstance(series.dtype, pd.CategoricalDtype):
+        return None
+    if pd.api.types.is_datetime64_any_dtype(series.dtype):
+        return "datetime"
+    present = series.dropna()
+    if present.empty:
+        return None
+    if all(isinstance(value, _dt.date) for value in present):
+        # datetime is a date subclass. Preserve any instant in a combination
+        # of date/datetime objects, as readr's mixed date/instant text guess
+        # yields POSIXct; checking only the first cell would erase its time.
+        return "datetime" if any(isinstance(value, _dt.datetime) for value in present) else "date"
+    if all(isinstance(value, str) for value in present):
+        return _readr_date_type(present)
+    return None
 
 
 def infer_value_type(series: pd.Series) -> str:
@@ -85,18 +109,11 @@ def infer_value_type(series: pd.Series) -> str:
     # ``datetime.date`` is ``date``. A single midnight timestamp is a real
     # instant, and a heuristic that erases its time component silently
     # rewrites a user's data on the round trip.
-    if pd.api.types.is_datetime64_any_dtype(dtype):
-        return "datetime"
-
-    # ``date`` has no pandas dtype, so R's ``Date`` class maps to an object
-    # column of ``datetime.date``. This is also what ``resource_types``
-    # produces for a declared ``date`` column, which is what makes the round
-    # trip stable.
-    non_null = s.dropna()
-    if len(non_null) > 0:
-        sample = non_null.iloc[0]
-        if isinstance(sample, _dt.date) and not isinstance(sample, _dt.datetime):
-            return "date"
+    # ``date`` has no pandas dtype. Read every present object, or apply the
+    # shared readr text guess, rather than infer a whole column from one cell.
+    date_type = _date_value_type(s)
+    if date_type is not None:
+        return date_type
 
     if pd.api.types.is_bool_dtype(dtype):
         return "boolean"
@@ -348,10 +365,12 @@ def infer_column_role(col_name: str, series: pd.Series) -> str:
     ):
         return "identifier"
 
-    # Check for date/time patterns in the name or the column type.
+    # Keep this after R's identifier/qualifier branches. pandas.read_csv does
+    # not infer dates, so the B-188 text guess stands in for readr's Date or
+    # POSIXct class here as well as in value typing and code-list selection.
     if (
         re.search(r"date|time|dtt|timestamp", name_lower)
-        or pd.api.types.is_datetime64_any_dtype(series)
+        or _date_value_type(pd.Series(series)) is not None
         or any(token in _TEMPORAL_TOKENS for token in name_tokens)
     ):
         return "temporal"
@@ -628,9 +647,31 @@ def _collapse_inline(values, trunc: Optional[int] = None) -> str:
     return ", ".join(texts[:-1]) + f", and {texts[-1]}"
 
 
+def _dictionary_iri_components(value: str, field: str) -> list[str]:
+    """Expand the existing reviewed constraint list, without rewriting cells.
+
+    Only constraint_iri has this semicolon representation. ASCII spaces beside
+    separators are presentation; outer cell whitespace and empty components
+    remain malformed under the existing strict shape contract.
+    """
+    if field != "constraint_iri":
+        return [value]
+    parts = value.split(";")
+    for position, part in enumerate(parts):
+        if position > 0:
+            part = part.lstrip(" ")
+        if position < len(parts) - 1:
+            part = part.rstrip(" ")
+        parts[position] = part
+    return parts
+
+
 def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd.DataFrame:
     """
     Validate dictionary structure and value constraints.
+
+    Strict mode also requires absolute-IRI shape in the six semantic fields.
+    Blank cells and recognized REVIEW markers retain their existing checks.
     """
     if not isinstance(dict_df, pd.DataFrame):
         raise TypeError("dict must be a pandas DataFrame")
@@ -716,23 +757,18 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
     # dictionary frame directly never saw them (S10 chunk D).
     iri_fields = [
         field
-        for field in (
-            "term_iri",
-            "property_iri",
-            "entity_iri",
-            "unit_iri",
-            "constraint_iri",
-            "statistical_modifier_iri",
-        )
+        for field in _DICTIONARY_IRI_FIELDS
         if field in df.columns
     ]
-    review_re = re.compile(r"^\s*REVIEW\s*:", re.IGNORECASE)
     review_summary = []
     for field in iri_fields:
         rows = [
             position + 1
             for position, value in enumerate(df[field])
-            if not pd.isna(value) and review_re.match(str(value))
+            if not pd.isna(value) and any(
+                _is_review_iri(part)
+                for part in _dictionary_iri_components(str(value), field)
+            )
         ]
         if rows:
             names = df["column_name"].iloc[[row - 1 for row in rows]].tolist()
@@ -757,6 +793,31 @@ def validate_dictionary(dict_df: pd.DataFrame, require_iris: bool = False) -> pd
             "the IRI and remove the REVIEW prefix.",
             UserWarning,
         )
+
+    if require_iris:
+        malformed_summary = []
+        for field in iri_fields:
+            rows = [
+                position + 1
+                for position, value in enumerate(df[field])
+                if not pd.isna(value)
+                and str(value) != ""
+                and not any(
+                    _is_review_iri(part)
+                    for part in _dictionary_iri_components(str(value), field)
+                )
+                and not all(
+                    _absolute_iri_shape(part)
+                    for part in _dictionary_iri_components(str(value), field)
+                )
+            ]
+            if rows:
+                malformed_summary.append(f"{field} (rows {_collapse_inline(rows)})")
+        if malformed_summary:
+            raise ValueError(
+                "Semantic IRI fields must contain absolute IRIs; invalid in "
+                + "; ".join(malformed_summary) + "."
+            )
 
     if measurement_rows.any():
         missing_by_field = {}
@@ -937,6 +998,10 @@ def apply_salmon_dictionary(
     ``strict`` is, because ``strict`` governs type coercion. Missing and blank
     values are not reported. As in metasalmon, a code list applies to a text or
     Categorical column; a numeric, logical or date column keeps its values.
+    A matching codes row with a nonblank ``vocabulary_iri`` and a missing or
+    blank ``code_value`` backs the whole column with a vocabulary instead of
+    an enumerated code list. Such a column skips code labels and the unlisted
+    value report, while its declared type and role still apply.
     """
     data = _ensure_dataframe(df, "df")
     dictionary = validate_dictionary(dict_df, require_iris=False)
@@ -985,7 +1050,21 @@ def apply_salmon_dictionary(
             if table_id is not None:
                 col_codes = col_codes[col_codes["table_id"] == table_id]
             col_codes = col_codes[col_codes["column_name"] == original_name]
-            if not col_codes.empty and new_name in result.columns and _code_list_applies(result[new_name]):
+            # B-347/B-346, ruled by Brett: any vocabulary-only row backs this
+            # column, even beside enumerated codes. Match the table/column
+            # first, and use the same missing/blank rule as the value report.
+            vocabulary_backed = "vocabulary_iri" in col_codes and (
+                _apply_dictionary_present(col_codes["vocabulary_iri"])
+                & ~_apply_dictionary_present(
+                    col_codes.get("code_value", pd.Series(pd.NA, index=col_codes.index))
+                )
+            ).any()
+            if (
+                not col_codes.empty
+                and not vocabulary_backed
+                and new_name in result.columns
+                and _code_list_applies(result[new_name])
+            ):
                 code_values = list(col_codes["code_value"])
                 code_labels = list(col_codes.get("code_label", code_values))
                 # A value the code list does not name has no category, so it

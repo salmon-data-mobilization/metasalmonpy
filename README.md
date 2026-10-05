@@ -29,6 +29,23 @@ python3 -m venv .venv
 pip install -e ".[test]"
 ```
 
+The core package requires pandas and Requests. The default selected semantic-IRI
+verifier adds its HTTPX backend through the optional `verify` extra:
+
+```bash
+pip install -e ".[verify]"
+```
+
+For packages without `metadata/eml-mapping.yml`, `verify_sdp_semantic_iris()`
+with an injected `requester` remains available with core dependencies alone.
+A present sidecar uses the existing native YAML parser, requiring PyYAML from
+`pip install -e ".[eml]"`; its explicit supported `semantic_review.path`
+selects the reviewed ledger. Using the default requester without `[verify]`,
+or reading a sidecar without PyYAML, raises an installation message before
+requests or report replacement. Development transport tests use
+`pip install -e ".[test,verify]"`; mapped-sidecar controls also need `[eml]`.
+Core tests still collect, skipping only controls for missing optional backends.
+
 ## Quickstart
 
 ```python

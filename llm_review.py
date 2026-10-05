@@ -19,6 +19,7 @@ import requests
 
 from .term_search import _normalize_explicit_sources, sources_for_role
 from .text_safety import redact_secrets
+from .metadata import _is_review_iri
 
 
 LLM_ASSESSMENT_COLUMNS = [
@@ -2031,10 +2032,9 @@ def _chunk_has_anchor(text, anchor: str) -> bool:
     phrase anchor must start the chunk once leading markup (ASCII punctuation
     and digits) is stripped, and the chunk's leading token may not carry ``_``
     or ``-``, so ``CATCH_COUNT_ESTIMATE ...`` does not vouch for
-    ``catch_count``. Both regexes are R's, quirks included: the leading-token
-    pattern spans to the end of the string, so on a multi-line chunk it does
-    not match, the whole chunk stands in as the leading token, and any ``_`` or
-    ``-`` in it fails the phrase anchor.
+    ``catch_count``. The leading-token substitution consumes later lines so
+    only the captured first token is checked for ``_`` or ``-``, matching R's
+    B-384 correction. Punctuation on a later line cannot defeat a phrase anchor.
     """
     raw_text = "" if _missing(text) else str(text)
     lowered = raw_text.lower()
@@ -2049,7 +2049,8 @@ def _chunk_has_anchor(text, anchor: str) -> bool:
         r"^\s*(?:[!-/:-@\[-`{-~0-9]+\s*)+", "", raw_text, flags=re.ASCII
     )
     leading_token = re.sub(
-        r"^\s*([a-zA-Z0-9][a-zA-Z0-9_-]*).*$", r"\1", unmarked, flags=re.ASCII
+        r"^\s*([a-zA-Z0-9][a-zA-Z0-9_-]*).*$", r"\1", unmarked,
+        flags=re.ASCII | re.DOTALL,
     )
     if re.search(r"[_-]", leading_token):
         return False
@@ -2413,8 +2414,9 @@ def _current_selected_iris(rows, dictionary_row: dict) -> dict:
     the dictionary already carries pairs with a newly accepted constraint."""
     selected = {role: None for role in BUNDLE_SLOT_FIELDS}
     for role, field in BUNDLE_SLOT_FIELDS.items():
-        value = _validator_scalar(dictionary_row.get(field), "")
-        if value and not re.match(r"REVIEW:", value, flags=re.IGNORECASE):
+        raw_value = dictionary_row.get(field)
+        value = _validator_scalar(raw_value, "")
+        if value and not _is_review_iri(raw_value):
             selected[role] = value
     for row in rows:
         iri = _validator_scalar(row.get("llm_selected_iri"), "")
