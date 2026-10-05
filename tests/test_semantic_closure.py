@@ -539,6 +539,122 @@ def test_a_code_resolved_procedure_is_a_vocabulary_term_and_never_a_review_targe
 
 
 @_REQUIRES_YAML
+@pytest.mark.parametrize("report_kind", ["gaps", "incomplete"])
+def test_procedure_reports_use_carrying_code_addresses(tmp_path, report_kind):
+    """B-266: mirror both outcomes of R B-265's first public control."""
+    path = _procedure_sdp(tmp_path)
+    codes = read_salmon_datapackage(path)["codes"]
+    if report_kind == "gaps":
+        # Make code and IRI ordering disagree: R B-265 orders addresses by
+        # code_value before IRI, and the ordinary fixture cannot tell them apart.
+        codes["term_iri"] = list(reversed(codes["term_iri"]))
+        codes.to_csv(Path(path) / "metadata" / "codes.csv", index=False, na_rep="")
+    procedures = set(codes["term_iri"])
+    search = _search_stub() if report_kind == "gaps" else _procedure_search_stub([])
+
+    def search_without_definitions(query, role=None, sources=None):
+        hits = search(query, role=role, sources=sources)
+        hits.loc[hits["iri"].isin(procedures), "definition"] = ""
+        return hits
+
+    with warnings.catch_warnings(record=True) as messages:
+        warnings.simplefilter("always")
+        closure = write_sdp_semantic_closure(
+            path, evidence=_reviewed_evidence(),
+            search_fn=search_without_definitions, quiet=True,
+        )
+    iri_field = "unresolved_iri" if report_kind == "gaps" else "iri"
+    rows = closure[report_kind]
+    rows = rows[rows[iri_field].isin(procedures)]
+    carrying = codes.set_index("term_iri").loc[list(rows[iri_field])]
+    assert len(rows) == 2
+    assert list(rows["target_sdp_field"]) == ["term_iri"] * 2
+    assert list(rows["target_sdp_file"]) == ["codes.csv"] * 2
+    for field in ["dataset_id", "table_id", "column_name", "code_value"]:
+        assert list(rows[field]) == list(carrying[field])
+    keys = ["/".join(str(row[field]) for field in
+                     ["dataset_id", "table_id", "column_name", "code_value"])
+            for row in carrying.to_dict("records")]
+    assert list(rows["target_row_key"]) == keys
+    warning_text = "\n".join(str(message.message) for message in messages)
+    assert "codes.csv term_iri" in warning_text
+    assert all(key in warning_text for key in keys)
+    if report_kind == "gaps":
+        assert list(rows["code_value"]) == sorted(codes["code_value"])
+        assert all("term_iri" in value for value in rows["placement_rationale"])
+        assert all("method_iri" not in value for value in rows["placement_rationale"])
+        requests = render_ontology_term_request(rows, scope="smn", ask=False)
+        assert list(requests["target_row_key"]) == keys
+
+
+@_REQUIRES_YAML
+def test_shared_procedure_iri_keeps_every_code_address(tmp_path):
+    """B-266: an IRI is unique; its carrying package rows need not be."""
+    path = _procedure_sdp(tmp_path)
+    codes = read_salmon_datapackage(path)["codes"]
+    codes.loc[codes.index[1], "term_iri"] = codes["term_iri"].iloc[0]
+    codes.to_csv(Path(path) / "metadata" / "codes.csv", index=False, na_rep="")
+    with warnings.catch_warnings(record=True) as messages:
+        warnings.simplefilter("always")
+        closure = write_sdp_semantic_closure(
+            path, evidence=_reviewed_evidence(), search_fn=_search_stub(), quiet=True,
+        )
+    gaps = closure["gaps"]
+    gaps = gaps[gaps["unresolved_iri"] == codes["term_iri"].iloc[0]]
+    keys = {"/".join(str(row[field]) for field in
+                    ["dataset_id", "table_id", "column_name", "code_value"])
+            for row in codes.to_dict("records")}
+    assert len(gaps) == 2
+    assert set(gaps["target_row_key"]) == keys
+    assert set(gaps["code_value"]) == set(codes["code_value"])
+    assert set(gaps["target_sdp_field"]) == {"term_iri"}
+    requests = render_ontology_term_request(gaps, scope="smn", ask=False)
+    assert len(requests) == 2
+    assert set(requests["target_row_key"]) == keys
+    assert requests["request_body"].nunique() == 2
+    warning_text = "\n".join(str(message.message) for message in messages)
+    assert "1 canonical measurement IRI(s)" in warning_text
+    assert "2 package address(es)" in warning_text
+
+
+@pytest.mark.parametrize("codes", [
+    None,
+    pd.DataFrame({"term_iri": [INVENTED_IRI]}),
+    pd.DataFrame([{
+        "dataset_id": "dataset", "table_id": "table", "column_name": "column",
+        "code_value": "code", "term_iri": STOCK_IRI,
+    }]),
+])
+def test_code_only_context_refuses_a_fictional_address(codes):
+    with pytest.raises(ValueError, match="codes.csv"):
+        closure_module._target_context(
+            INVENTED_IRI, pd.DataFrame(columns=["iri"]), pd.DataFrame(), codes,
+        )
+
+
+def test_code_context_uses_the_dataset_qualified_parent_and_code_label_fallback():
+    parents = pd.DataFrame([
+        {"dataset_id": "other", "table_id": "table", "column_name": "column",
+         "column_label": "Wrong parent", "column_description": "Wrong description"},
+        {"dataset_id": "dataset", "table_id": "table", "column_name": "column",
+         "column_label": "Right parent", "column_description": "Right description"},
+    ])
+    codes = pd.DataFrame([
+        {"dataset_id": "dataset", "table_id": "table", "column_name": "column",
+         "code_value": value, "term_iri": INVENTED_IRI,
+         "code_label": "", "code_description": ""}
+        for value in ["z", "a"]
+    ])
+    contexts = closure_module._target_context(
+        INVENTED_IRI, pd.DataFrame(columns=["iri"]), parents, codes,
+    )
+    assert [row["code_value"] for row in contexts] == ["a", "z"]
+    assert [row["target_label"] for row in contexts] == ["a", "z"]
+    assert [row["label"] for row in contexts] == ["Right parent"] * 2
+    assert [row["target_description"] for row in contexts] == ["Right description"] * 2
+
+
+@_REQUIRES_YAML
 def test_both_written_files_satisfy_the_validators_that_had_no_producer(tmp_path):
     import yaml
 
@@ -1568,6 +1684,121 @@ def test_malformed_sidecar_keeps_the_closure_reader_legacy_fallback(tmp_path):
     mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
     mapping_path.write_text("semantic_vocabulary: [not valid\n", encoding="utf-8")
 
+    assert closure_module._mapping_paths(str(mapping_path)) == dict(
+        closure_module._DEFAULT_MAPPING_PATHS
+    )
+
+
+@_REQUIRES_YAML
+@pytest.mark.parametrize(
+    "tagged_value",
+    ["!e!foo other/evil.csv", "!e!foo [one, two]", "!e!foo {key: value}"],
+    ids=["scalar", "sequence", "mapping"],
+)
+def test_native_undefined_handle_is_unsupported_before_a_tag_event(tagged_value):
+    import yaml
+
+    source = f"semantic_vocabulary:\n  path: {tagged_value}\n"
+    # Positive control: this is the native pre-event undefined-handle failure,
+    # not an arbitrary malformed YAML error carrying a lexical exclamation.
+    with pytest.raises(yaml.parser.ParserError) as caught:
+        list(yaml.parse(source, Loader=yaml.SafeLoader))
+    assert caught.value.problem == "found undefined tag handle '!e!'"
+    assert closure_module._first_unsupported_sidecar_tag(yaml, source) is not None
+
+
+@_REQUIRES_YAML
+@pytest.mark.parametrize(
+    "tagged_value",
+    ["!e!foo other/evil.csv", "!e!foo [one, two]", "!e!foo {key: value}"],
+    ids=["scalar", "sequence", "mapping"],
+)
+@pytest.mark.parametrize("existing_outputs", [False, True], ids=["absent", "existing"])
+def test_undefined_handle_refuses_public_closure_without_changing_bytes(
+    tmp_path, tagged_value, existing_outputs
+):
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(
+        f"semantic_vocabulary:\n  path: {tagged_value}\n"
+        "semantic_review:\n  path: other/review.csv\n",
+        encoding="utf-8",
+    )
+    targets = [
+        Path(path) / "metadata" / "semantic_vocabulary.csv",
+        Path(path) / "reviewed_semantic_selections.csv",
+    ]
+    if existing_outputs:
+        for target in targets:
+            target.write_bytes(b"B429-ORIGINAL-OUTPUT-SENTINEL\n")
+    before_targets = [target.read_bytes() if target.exists() else None for target in targets]
+    before_mapping = mapping_path.read_bytes()
+    error = None
+    try:
+        write_sdp_semantic_closure(
+            path, evidence=_reviewed_evidence(), search_fn=_search_stub(), quiet=True
+        )
+    except ValueError as caught:
+        error = caught
+    # Collect the refusal and all byte controls so RED reports actual writer
+    # damage as well as a missing exception. Existing sentinels must survive.
+    observed = {
+        "refused_undefined_handle": isinstance(error, ValueError) and "!e!" in str(error),
+        "names_sidecar": "eml-mapping.yml" in str(error),
+        "sidecar_bytes_preserved": mapping_path.read_bytes() == before_mapping,
+        "closure_output_bytes_preserved": [
+            target.read_bytes() if target.exists() else None for target in targets
+        ] == before_targets,
+        "declared_outputs_unwritten": not (Path(path) / "other").exists(),
+    }
+    assert observed == dict.fromkeys(observed, True)
+
+
+@_REQUIRES_YAML
+@pytest.mark.parametrize("prefix", ["", "!!str ", "! "])
+def test_known_core_and_bare_tags_keep_declared_closure_paths(tmp_path, prefix):
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(
+        f"semantic_vocabulary:\n  path: {prefix}metadata/custom-vocabulary.csv\n"
+        "semantic_review:\n  path: custom-review.csv\n"
+        'notes: "found undefined tag handle !e!foo is literal"\n',
+        encoding="utf-8",
+    )
+    closure = write_sdp_semantic_closure(
+        path, evidence=_reviewed_evidence(), search_fn=_search_stub(), quiet=True
+    )
+    assert closure["files"]["vocabulary"] == str(
+        Path(path) / "metadata" / "custom-vocabulary.csv"
+    )
+    assert closure["files"]["review"] == str(Path(path) / "custom-review.csv")
+    assert Path(closure["files"]["vocabulary"]).is_file()
+    assert Path(closure["files"]["review"]).is_file()
+    assert not (Path(path) / "metadata" / "semantic_vocabulary.csv").exists()
+    assert not (Path(path) / "reviewed_semantic_selections.csv").exists()
+
+
+@_REQUIRES_YAML
+@pytest.mark.parametrize(
+    "source",
+    [
+        "semantic_vocabulary: [unterminated\n",
+        "semantic_vocabulary: [unterminated\nnext: !e!foo later.csv\n",
+        'notes: "found undefined tag handle !e!foo"\n---\nignored: true\n',
+        "a scalar",
+        "[one, two]",
+        "null",
+    ],
+)
+def test_undefined_handle_port_preserves_other_malformed_and_nonmapping_fallback(
+    tmp_path, source
+):
+    import yaml
+
+    path = _sdp(tmp_path)
+    mapping_path = Path(path) / "metadata" / "eml-mapping.yml"
+    mapping_path.write_text(source, encoding="utf-8")
+    assert closure_module._first_unsupported_sidecar_tag(yaml, source) is None
     assert closure_module._mapping_paths(str(mapping_path)) == dict(
         closure_module._DEFAULT_MAPPING_PATHS
     )

@@ -29,6 +29,41 @@ An explicit final LLM gap remains visible even when SMN candidates exist.
 Duplicate assessments with conflicting proposed-term fields are rejected rather
 than silently collapsed.
 
+## Review gaps recorded in the Salmon Knowledge Commons
+
+The commons publishes its concept gap register as JSON through
+`scripts/okf-check.py . --gaps`. Pass the resulting **export file path** to the
+same detector; a compiled `gaps.json` with build metadata is a different
+envelope. This input is exclusive with a dictionary, suggestions, and SDP-only
+filters.
+
+```python
+from metasalmonpy import (
+    detect_semantic_term_gaps,
+    render_ontology_term_request,
+    submit_term_request_issues,
+)
+
+commons_gaps = detect_semantic_term_gaps(commons_gaps="commons-gaps.json")
+commons_requests = render_ontology_term_request(commons_gaps, ask=False)
+preview = submit_term_request_issues(commons_requests, dry_run=True)
+```
+
+Every source row remains visible in source order, including repeated concepts
+and rows held for review. The result keeps the existing SDP gap columns and
+adds `commons_` source fields, including lifecycle, proposed mint target,
+verification state, and `commons_hold_reason`. The SDP dataset and column
+fields remain missing because a commons concept is not a dataset column.
+
+Only open, unheld gaps explicitly targeted to SMN or GCDFO reach the dry-run
+preview. Proposed or rejected gaps, blocked or contested gaps, gaps needing
+evidence, do-not-mint declarations, and unsupported targets remain held.
+`scope`, `scope_overrides`, and `ask` cannot reopen them or redirect a commons
+declaration. Request bodies cite the concept card and retain its draft note;
+they leave the definition and term type to a curator. No term IRI is chosen.
+The `issue_labels` argument retains the same handling as ordinary Python
+request rendering.
+
 ## Route and render requests
 
 ```python

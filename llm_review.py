@@ -1989,10 +1989,9 @@ def _chunk_has_anchor(text, anchor: str) -> bool:
     phrase anchor must start the chunk once leading markup (ASCII punctuation
     and digits) is stripped, and the chunk's leading token may not carry ``_``
     or ``-``, so ``CATCH_COUNT_ESTIMATE ...`` does not vouch for
-    ``catch_count``. Both regexes are R's, quirks included: the leading-token
-    pattern spans to the end of the string, so on a multi-line chunk it does
-    not match, the whole chunk stands in as the leading token, and any ``_`` or
-    ``-`` in it fails the phrase anchor.
+    ``catch_count``. The leading-token substitution consumes later lines so
+    only the captured first token is checked for ``_`` or ``-``, matching R's
+    B-384 correction. Punctuation on a later line cannot defeat a phrase anchor.
     """
     raw_text = "" if _missing(text) else str(text)
     lowered = raw_text.lower()
@@ -2007,7 +2006,8 @@ def _chunk_has_anchor(text, anchor: str) -> bool:
         r"^\s*(?:[!-/:-@\[-`{-~0-9]+\s*)+", "", raw_text, flags=re.ASCII
     )
     leading_token = re.sub(
-        r"^\s*([a-zA-Z0-9][a-zA-Z0-9_-]*).*$", r"\1", unmarked, flags=re.ASCII
+        r"^\s*([a-zA-Z0-9][a-zA-Z0-9_-]*).*$", r"\1", unmarked,
+        flags=re.ASCII | re.DOTALL,
     )
     if re.search(r"[_-]", leading_token):
         return False
