@@ -39,6 +39,15 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Optional writer fields follow the selected schema (hub B-252).** A direct
+  `write_salmon_datapackage()` call no longer adds bundled optional fields absent
+  from both the caller's dataset, table or codes frame and the selected schema.
+  Table inference also aligns its minimal frame to that schema. Existing caller
+  extras remain, including fields inference deliberately supplies. Dictionary
+  validation still adds its optional semantic fields, as R does; public reader
+  normalization is unchanged. Paired R/Python probes corrected the original
+  `create_sdp()` premise, and default output bytes match the pre-fix baseline.
+
 * **SSSOM optional fields use their schema ranges** (hub B-270, mirroring
   metasalmon B-269). `subject_category`, `object_category` and
   `similarity_measure` accept text without a CURIE prefix declaration.

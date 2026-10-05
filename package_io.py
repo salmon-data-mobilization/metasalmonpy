@@ -1120,9 +1120,16 @@ def write_salmon_datapackage(
         raise ValueError("All resources must be pandas DataFrames.")
 
     dict_valid = normalize_dictionary(validate_dictionary(dict_df, require_iris=False))
-    dataset_meta = normalize_dataset_meta(dataset_meta)
-    table_meta = normalize_table_meta(table_meta)
-    codes = normalize_codes(codes)
+    # Writer inputs follow the selected schema, rather than the reader's static
+    # return contract. Adding a bundled optional column here would turn an
+    # absent caller field into a preserved extra at the final alignment (B-252).
+    # Dictionary validation retains its own optional semantic-column contract,
+    # which also supplies constraint_iri in R under a schema that omits it.
+    from .sdp_field_setters import _in_declared_order
+
+    dataset_meta = _in_declared_order(dataset_meta, "dataset.csv")
+    table_meta = _in_declared_order(table_meta, "tables.csv")
+    codes = None if codes is None else _in_declared_order(codes, "codes.csv")
     dataset_meta, table_meta, dict_valid = _fill_review_placeholders(
         dataset_meta,
         table_meta,
@@ -1269,9 +1276,8 @@ def write_salmon_datapackage(
     # Each file in the order of the schema the settings select, as the
     # setters write it and as metasalmon's writers align through
     # `.ms_dataset_meta_cols()` and its siblings, which read the session
-    # schema. Deferred for the reason the blank-required collector gives.
-    from .sdp_field_setters import _in_declared_order
-
+    # schema. The earlier alignment also prevents bundled-only fields from
+    # being synthesized before this final serialization.
     writes[metadata_dir / "dataset.csv"] = _metadata_csv_bytes(
         _in_declared_order(dataset_meta, "dataset.csv")
     )

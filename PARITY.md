@@ -214,6 +214,32 @@ rather than open, the shape row 56 had between its ruling and the second side's
 move. Its hub twin carries the same number and is added by the metasalmon pull
 request that files B-310.
 
+**B-252 closes the remaining selected-schema writer port (2026-09-30).**
+The original hub description inferred R's behavior from alignment source and
+never ran the R fixture. Paired probes at R `3364b975` and Python `e81cacd`
+show that `create_sdp()` writes both `update_frequency` and `constraint_iri`
+under a schema omitting them: inference already supplies those columns, and
+alignment preserves caller extras. Removing them here would introduce a
+new difference. R's dictionary validator also adds `constraint_iri` when the
+caller did not supply it, so that semantic-column contract remains.
+
+The demonstrated port is narrower. A direct writer given dataset, table and
+codes frames that truly lack `update_frequency`, `method_iri` and
+`vocabulary_iri` leaves them absent in R, while Python's static normalizers
+added them. This branch aligns those writer inputs to the selected schema
+before placeholder filling. R table inference already aligns its minimal
+frame this way; Python now does too. The public reader and its normalizers
+stay unchanged, existing extras are preserved, and shipped-setting output
+bytes match the pre-fix baseline. The setters and review write-back already
+read raw CSVs and align to the selected schema; tests execute all four setters
+and a review apply to pin that existing behavior.
+
+No register row is spent: this is a port, not a chosen divergence. The exact
+hub debt-passage and queue-premise corrections are in `.hub/workpads/B-252.md`
+for a companion documentation change. This branch is pending review; it does
+not assert a merge or a dependency closure. Paired runnable probes and captured
+headers are retained under `.hub/evidence/`.
+
 **Row numbers have collided twice**, both times because a row was numbered in
 one repository without seeing what the other had spent: rows 29/33 (2026-08-17)
 and rows 35/41 (2026-08-21). Both were resolved the same way — **the committed,
