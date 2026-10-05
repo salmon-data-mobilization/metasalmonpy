@@ -186,6 +186,57 @@ def _from_csv(path, fields=None, accepted_only=False, scalar_fields=()):
                       scalar_fields=scalar_fields)
 
 
+def _review_ledger_paths(root):
+    """An explicit reviewed sidecar owns one ledger; unqualified inputs retain fallback."""
+    from .eml import SUPPORTED_REVIEW_PATHS, _read_mapping_yaml, _resource_path, _scalar
+    from .semantic_closure import _first_unsupported_sidecar_tag, _mapping_file
+
+    fallback = tuple(root / relative for relative in (
+        "reviewed_semantic_selections.csv",
+        "reproducibility/reviewed_semantic_selections.csv"))
+    # Reuse the closure sidecar's containment/link check and native EML parser.
+    # This selects references; EML's later hash/target gates remain independent.
+    mapping_file = _mapping_file(root)
+    if mapping_file is None:
+        return fallback
+    try:
+        mapping = _read_mapping_yaml(mapping_file)
+    except ModuleNotFoundError as error:
+        if error.name != "yaml":
+            raise
+        raise ImportError(
+            "Reading a mapped semantic-review ledger requires optional PyYAML. "
+            "Install metasalmonpy[eml]; packages without a sidecar and injected "
+            "requesters remain usable without that extra."
+        ) from None
+    except (OSError, ValueError) as error:
+        # Ordinary malformed/read failures do not declare an authority. Q62's
+        # native unsupported-tag evidence must still refuse before requests.
+        if isinstance(error, ValueError):
+            import yaml
+            try:
+                source = Path(mapping_file).read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                return fallback
+            tag = _first_unsupported_sidecar_tag(yaml, source)
+            if tag is not None:
+                raise ValueError(
+                    f"EML mapping sidecar {mapping_file} is not valid YAML: "
+                    f"unsupported tag {tag!r}"
+                ) from None
+        return fallback
+    if not isinstance(mapping, dict):
+        return fallback
+    try:
+        selected = _scalar(mapping.get("semantic_review"), "path", required=False)
+    except ValueError:
+        return fallback
+    if selected not in SUPPORTED_REVIEW_PATHS:
+        return fallback
+    # Missing or escaped selected ledgers cannot silently become another ledger.
+    return (Path(_resource_path(root, selected)),)
+
+
 def _selected_iris(root):
     files = {"dataset": "dataset.csv", "tables": "tables.csv",
              "dictionary": "column_dictionary.csv", "codes": "codes.csv"}
@@ -208,9 +259,8 @@ def _selected_iris(root):
         iris.extend(_from_csv(root / relative,
                               scalar_fields=_EXTENSION_SCALAR_FIELDS[relative]))
     iris.extend(_from_csv(root / "metadata/semantic_vocabulary.csv", fields=["iri"]))
-    for relative in ("reviewed_semantic_selections.csv",
-                     "reproducibility/reviewed_semantic_selections.csv"):
-        iris.extend(_from_csv(root / relative, accepted_only=True))
+    for review_path in _review_ledger_paths(root):
+        iris.extend(_from_csv(review_path, accepted_only=True))
 
     manifest_path = root / "metadata/semantic/mapping-sets.json"
     if manifest_path.exists():

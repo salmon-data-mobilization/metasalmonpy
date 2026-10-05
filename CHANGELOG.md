@@ -73,6 +73,11 @@ and moving it is a separate outward act.
   A bound decomposition concept was already checked through its dictionary
   term; its illicit extra prefix request is now removed as well. The legacy
   registry is not reinstated in the current SDP profile.
+  An explicit supported `semantic_review.path` in the reviewed EML sidecar
+  now selects only that ledger, avoiding false failures from unused legacy
+  selections. Absent, unqualified or ordinarily malformed sidecars retain
+  the existing two-ledger fallback; Q62 tag refusal and selected-resource
+  containment remain native gates. No new hash or target validation is added.
 
 * Selected semantic-IRI verification removes credentials embedded in an
   external final URL before returning results or writing the deterministic

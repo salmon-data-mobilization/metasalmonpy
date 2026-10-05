@@ -36,11 +36,15 @@ verifier adds its HTTPX backend through the optional `verify` extra:
 pip install -e ".[verify]"
 ```
 
-`verify_sdp_semantic_iris()` with an injected `requester` remains available with
-core dependencies alone. Using its default requester without the extra raises
-an installation message before requests or report replacement. Development
-transport tests run with `pip install -e ".[test,verify]"`; core tests still
-collect and run without HTTPX, skipping only backend-dependent controls.
+For packages without `metadata/eml-mapping.yml`, `verify_sdp_semantic_iris()`
+with an injected `requester` remains available with core dependencies alone.
+A present sidecar uses the existing native YAML parser, requiring PyYAML from
+`pip install -e ".[eml]"`; its explicit supported `semantic_review.path`
+selects the reviewed ledger. Using the default requester without `[verify]`,
+or reading a sidecar without PyYAML, raises an installation message before
+requests or report replacement. Development transport tests use
+`pip install -e ".[test,verify]"`; mapped-sidecar controls also need `[eml]`.
+Core tests still collect, skipping only controls for missing optional backends.
 
 ## Quickstart
 
