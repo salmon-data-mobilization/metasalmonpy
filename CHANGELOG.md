@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+* **Selected semantic-IRI resolution leaves evidence even on failure.**
+  `verify_sdp_semantic_iris()` mirrors R B-130/PR244: selected exact HTTP IRIs,
+  including validated manifest-bound SSSOM references, are GET checked in
+  UTF-8/C order with at most three attempts for transient failures. The default
+  GET reads final response headers in a worker with a 30-second deadline,
+  including DNS and redirects, closes redirect responses without reading their
+  bodies, and kills and reaps an expired worker. The complete
+  deterministic five-column CSV is written before an aggregate failure;
+  candidate/data URLs and model calls are excluded. HTTP success does not
+  establish RDF term presence or semantic suitability. Offline tests prove
+  retry/report behavior and compare report bytes with R; they assert no live
+  network verification. No release number changes.
+  The supported HTTPX/HTTPcore default backend now waits through HTTP103 Early
+  Hints for final headers. The optional `[verify]` extra supplies HTTPX>=0.28.1;
+  core remains pandas + Requests, including injected verifier requesters. Using
+  the default backend without the extra fails clearly before request/report work.
+  Its public manual
+  redirect flow preserves cookies, origin-bound auth, target-host netrc and
+  proxy/CA environment settings without draining bodies or using a private shim.
+  Paired localhost proof passes on Python3.9.6 and3.13.11; both implementation
+  merges remain outstanding.
+
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
 closed when it set `__version__` to `0.5.0`, and the commit that made that
@@ -38,6 +60,28 @@ and moving it is a separate outward act.
   routes common workflow to the canonical `HUB.md` policy.
 
 ### Fixed
+
+* `verify_sdp_semantic_iris()` preserves legal semicolons in the eleven scalar
+  fields explicitly declared by the canonical metadata schemas (B-130). The
+  dictionary constraint list and SSSOM pipe lists keep their existing
+  separators; unknown extension fields keep their existing representation.
+  The verifier previously could report success after checking a truncated
+  scalar prefix. No identifier, report column or retry policy is changed.
+  The same exactness now covers five scalar slots in the three extension
+  files already collected: observation component relations, decomposition
+  concepts/components, and the retained legacy procedure/protocol registry.
+  A bound decomposition concept was already checked through its dictionary
+  term; its illicit extra prefix request is now removed as well. The legacy
+  registry is not reinstated in the current SDP profile.
+  An explicit supported `semantic_review.path` in the reviewed EML sidecar
+  now selects only that ledger, avoiding false failures from unused legacy
+  selections. Absent, unqualified or ordinarily malformed sidecars retain
+  the existing two-ledger fallback; Q62 tag refusal and selected-resource
+  containment remain native gates. No new hash or target validation is added.
+
+* Selected semantic-IRI verification removes credentials embedded in an
+  external final URL before returning results or writing the deterministic
+  report. Exact selected identifiers and other URL components are preserved.
 
 * **Every semantic review marker consumer uses Q63's ASCII spelling.** B-345,
   paired with R's B-344: optional ASCII spaces/tabs, `REVIEW` in any ASCII

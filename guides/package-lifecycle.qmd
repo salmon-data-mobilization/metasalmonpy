@@ -95,3 +95,41 @@ is ready only after:
 - no `MISSING` or `REVIEW:` values remain;
 - metadata and semantic choices have received human review; and
 - any EDH XML has been rebuilt from the final metadata.
+
+### Retain semantic-IRI dereference evidence
+
+To check the exact HTTP identifiers already selected in the package, run:
+
+```python
+from metasalmonpy import verify_sdp_semantic_iris
+
+results = verify_sdp_semantic_iris("survey-sdp")
+```
+
+This makes live GET requests in a subprocess with a 30-second deadline per
+attempt, including startup, DNS, connection and redirects. It reads the final
+response headers and closes the response without downloading its body; an
+expired worker is killed and reaped. Injected test requesters keep their own
+execution behavior. HTTP408,
+429, 5xx and classified transient transport failures retry at most three times.
+Candidate suggestions, non-HTTP identifiers and arbitrary data URLs are
+excluded. Manifest-bound SSSOM semantic references are checked after their
+manifest and hashes validate. No model provider is called.
+
+The default HTTPX/HTTPcore backend waits through HTTP103 Early Hints for the
+complete final headers. Its public manual redirect flow preserves client cookies,
+origin-bound credentials and target-host netrc credentials without reading
+redirect bodies. Proxy/`NO_PROXY` routing follows the existing Requests
+configuration rules, including CIDR and leading-dot bypass entries; cookies
+survive a switch between proxy and direct connections. Existing
+`REQUESTS_CA_BUNDLE`/`CURL_CA_BUNDLE` aliases and HTTPX's `SSL_CERT_FILE`/`SSL_CERT_DIR`
+configure certificate verification. No private Requests or HTTP connection shim
+is used. The worker deadline also bounds these setup steps.
+
+The complete, deterministically ordered report is written to
+`reproducibility/provenance/semantic-iri-dereference.csv`, including final
+status, URL, redacted error and attempt count. A failed check raises an
+aggregate `ValueError` **after** writing every row, so inspect the report before
+retrying. You can checksum the CSV as publication evidence. HTTP success,
+including a fragment's HTTP200, proves resolution; it does not prove RDF term
+presence, semantic suitability or approval to publish.

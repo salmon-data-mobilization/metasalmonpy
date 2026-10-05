@@ -160,6 +160,7 @@ quartodoc:
       contents:
         - fetch_salmon_ontology
         - validate_semantics
+        - verify_sdp_semantic_iris
         - suggest_facet_schemes
     - title: "Term request workflow"
       desc: "Detect ontology gaps and draft curator-reviewed requests."
