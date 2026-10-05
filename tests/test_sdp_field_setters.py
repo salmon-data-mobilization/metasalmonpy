@@ -1689,3 +1689,97 @@ def test_a_licence_placeholder_never_becomes_a_licenses_entry():
     # The control: a stated licence is written, so the Nones above are the
     # writer's answer and not a probe that can only return None.
     assert written_licenses("CC-BY-4.0")[0]["name"] == "CC-BY-4.0"
+
+
+# Q63 excludes internal LF/FF/VT before the colon. The landed B177/B230
+# all-four sweep must retain the existing strict absolute-IRI owner when the
+# narrower ruled marker predicate does not own a value. Mirror the actual
+# R344 tests-only21778306/fixde2b3636 boundary without a new IRI predicate.
+@pytest.mark.parametrize("file_name,field", [
+    ("codes.csv", "term_iri"),
+    ("codes.csv", "vocabulary_iri"),
+    ("codes.csv", "custom_thing_iri"),
+    ("dataset.csv", "custom_thing_iri"),
+])
+@pytest.mark.parametrize("separator", ["\n", "\f", "\v"], ids=["LF", "FF", "VT"])
+def test_b345_q63_excluded_metadata_marker_has_strict_shape_owner(
+    filled_package, file_name, field, separator
+):
+    from metasalmonpy.metadata import _is_review_iri, read_sdp_csv
+
+    with _no_warnings():
+        validate_salmon_datapackage(filled_package, require_iris=True)
+    csv = filled_package / "metadata" / file_name
+    original = csv.read_bytes()
+    frame = pd.read_csv(csv, dtype=str)
+    if field not in frame.columns:
+        frame[field] = ""
+    value = "REVIEW" + separator + ":https://example.org/code"
+    frame.loc[0, field] = value
+    frame.to_csv(csv, index=False)
+    before = {str(p.relative_to(filled_package)): p.read_bytes()
+              for p in filled_package.rglob("*") if p.is_file()}
+    try:
+        assert not _is_review_iri(value)
+        assert read_sdp_csv(csv).loc[0, field] == value
+        message = f"metadata/{file_name} row 1 field {field} is not an absolute IRI: '{value}'."
+        with _no_warnings(), pytest.raises(ValueError) as refused:
+            validate_salmon_datapackage(filled_package, require_iris=True)
+        assert str(refused.value).count(message) == 1
+        assert "still contains a REVIEW-prefixed IRI" not in str(refused.value)
+        # Completeness remains strict-only. Default validation preserves its
+        # existing acceptance, raw CSV value and read-only output bytes.
+        with _no_warnings():
+            result = validate_salmon_datapackage(filled_package)
+        assert result["issues"].empty
+        assert {str(p.relative_to(filled_package)): p.read_bytes()
+                for p in filled_package.rglob("*") if p.is_file()} == before
+    finally:
+        csv.write_bytes(original)
+
+
+@pytest.mark.parametrize("file_name,field", [
+    ("codes.csv", "term_iri"),
+    ("codes.csv", "vocabulary_iri"),
+    ("codes.csv", "custom_thing_iri"),
+    ("dataset.csv", "custom_thing_iri"),
+])
+@pytest.mark.parametrize("value,is_marker", [
+    ("rEvIeW\t :https://example.org/code", True),
+    ("https://example.org/code", False),
+    ("urn:example:code", False),
+    ("", False),
+], ids=["admitted-marker", "https", "urn", "blank"])
+def test_b345_q63_metadata_shape_owner_keeps_existing_paths(
+    filled_package, file_name, field, value, is_marker
+):
+    from metasalmonpy.metadata import _is_review_iri
+
+    csv = filled_package / "metadata" / file_name
+    original = csv.read_bytes()
+    frame = pd.read_csv(csv, dtype=str)
+    if field not in frame.columns:
+        frame[field] = ""
+    frame.loc[0, field] = value
+    frame.to_csv(csv, index=False)
+    before = {str(p.relative_to(filled_package)): p.read_bytes()
+              for p in filled_package.rglob("*") if p.is_file()}
+    try:
+        assert _is_review_iri(value) is is_marker
+        if is_marker:
+            message = (f"metadata/{file_name} row 1 field {field} still contains "
+                       f"a REVIEW-prefixed IRI ({value}). Remove the REVIEW "
+                       "prefix only after final manual validation.")
+            with _no_warnings(), pytest.raises(ValueError) as refused:
+                validate_salmon_datapackage(filled_package, require_iris=True)
+            assert str(refused.value).count(message) == 1
+            with _no_warnings():
+                result = validate_salmon_datapackage(filled_package)
+            assert list(result["semantic_validation"]["issues"]["message"]).count(message) == 1
+        else:
+            with _no_warnings():
+                validate_salmon_datapackage(filled_package, require_iris=True)
+        assert {str(p.relative_to(filled_package)): p.read_bytes()
+                for p in filled_package.rglob("*") if p.is_file()} == before
+    finally:
+        csv.write_bytes(original)

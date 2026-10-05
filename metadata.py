@@ -16,6 +16,49 @@ from .sdp_schema import sdp_profile_version
 # treats them as whitespace, so neither may this package.
 READR_TRIM_CHARS = " \t\r\n"
 
+# Q-63 (2026-09-25): ASCII case, spaces and tabs only. Cell and decoded XML
+# value consumers use match(), requiring the marker at the value's start.
+_REVIEW_IRI_RE = re.compile(r"[ \t]*[Rr][Ee][Vv][Ii][Ee][Ww][ \t]*:[ \t]*")
+
+
+def _review_iri_text(value) -> str:
+    """Render one marker input without trimming a character from it."""
+    if isinstance(value, pd.Series):
+        value = value.iloc[0] if len(value) else None
+    elif isinstance(value, (list, tuple)):
+        value = value[0] if len(value) else None
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return ""
+    return str(value)
+
+
+def _is_review_iri(value) -> bool:
+    """Recognize the ruled marker on the raw scalar, before other trimming."""
+    return _REVIEW_IRI_RE.match(_review_iri_text(value)) is not None
+
+
+def _strip_review_iri(value) -> str:
+    """Remove one marker and adjacent ASCII spaces/tabs; preserve everything else."""
+    text = _review_iri_text(value)
+    marker = _REVIEW_IRI_RE.match(text)
+    return text[marker.end():] if marker else text
+
+
+def _contains_review_iri(text: str, iri_values=()) -> bool:
+    """Keep the literal XML guard and inspect original IRI-bearing values.
+
+    XML serialization writes a tab in an attribute as a character reference
+    (``&#09;``), so matching only its bytes would miss an admitted marker.
+    Preserve the existing case-sensitive ``REVIEW:`` serialized check: an
+    unanchored case-insensitive scan also matches narrative ``Peer review:``
+    and ``preview:``. The consumer selects its emitted IRI fields: free text
+    beginning ``Review:`` is also ordinary narrative. Inspect selected raw
+    values with the anchored predicate, without reparsing or entity decoding.
+    """
+    if "REVIEW:" in text:
+        return True
+    return any(_is_review_iri(value) for value in iri_values)
+
 # metasalmon's POSIX-class validators use TRE without ``perl = TRUE``, which is
 # Unicode-aware in a UTF-8 locale. Its shared absolute-IRI predicate now also
 # explicitly rejects the same 15 non-ASCII whitespace members under C (B-137,
