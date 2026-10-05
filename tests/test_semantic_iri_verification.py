@@ -732,8 +732,15 @@ def test_httpx_proxy_to_direct_redirect_retains_cookie_and_host_netrc(local_serv
 
 
 @pytest.mark.parametrize("relative,field", [
-    ("metadata/column_dictionary.csv", "property_iri"),
+    ("metadata/column_dictionary.csv", "unit_iri"),
     ("metadata/column_dictionary.csv", "term_iri"),
+    ("metadata/column_dictionary.csv", "property_iri"),
+    ("metadata/column_dictionary.csv", "entity_iri"),
+    ("metadata/column_dictionary.csv", "statistical_modifier_iri"),
+    ("metadata/dataset.csv", "protocol_iri"),
+    ("metadata/tables.csv", "observation_unit_iri"),
+    ("metadata/tables.csv", "protocol_iri"),
+    ("metadata/tables.csv", "method_iri"),
     ("metadata/codes.csv", "term_iri"),
     ("metadata/codes.csv", "vocabulary_iri"),
 ])
