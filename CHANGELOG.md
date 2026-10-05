@@ -50,6 +50,8 @@ and moving it is a separate outward act.
   `Review:`, ordinary identifiers, and `Peer review:`/`preview:` narrative
   remain accepted. Dotless-i, Unicode space and line breaks before the marker
   or colon are excluded; malformed parsed IRIs retain the strict shape check.
+  Newly swept dataset/code IRI fields retain that same strict shape owner,
+  with existing placement exclusions; default validation stays unchanged.
   The existing CSV reader's trim approximation remains a boundary: a quoted
   leading LF in an accepted suffix is preserved on write but trimmed on read.
 

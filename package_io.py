@@ -3613,6 +3613,13 @@ def validate_salmon_datapackage(
             + _collect_absolute_iri_issues(
                 tables, "metadata/tables.csv", excluded_fields=("method_iri", "protocol_iri")
             )
+            # B230 sweeps dataset/codes for markers too. Q63-excluded values
+            # retain the same strict shape owner; protocol already has an
+            # unconditional dataset placement owner, and codes has none.
+            + _collect_absolute_iri_issues(
+                dataset, "metadata/dataset.csv", excluded_fields=("protocol_iri",)
+            )
+            + _collect_absolute_iri_issues(codes, "metadata/codes.csv")
         )
         if final_review_issues:
             total = len(final_review_issues)
@@ -3624,7 +3631,7 @@ def validate_salmon_datapackage(
             lines.extend(preview)
             lines.append(
                 "Resolve placeholder metadata, blank schema-required fields, "
-                "blank table observation-unit IRIs, and any REVIEW-prefixed "
+                "blank table observation-unit IRIs, malformed metadata IRIs, and any REVIEW-prefixed "
                 "IRIs before strict validation."
             )
             if total > len(preview):
