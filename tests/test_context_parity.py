@@ -275,6 +275,25 @@ def test_html_context_skips_an_empty_body_when_optional_head_end_is_omitted(tmp_
     assert list(chunks.columns) == ["source", "chunk_id", "text"]
 
 
+def test_html_context_keeps_the_no_body_fallback_for_a_frameset(tmp_path):
+    # Frameset/frame markup is not an implicit body in the unchanged native
+    # reader. The original merged Python reader also kept this title fallback.
+    page = tmp_path / "frameset.html"
+    page.write_text(
+        "<html><head><title>Hidden title</title></head>"
+        '<frameset><frame src="about:blank"></frameset></html>',
+        encoding="utf-8",
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        chunks = load_context_chunks([page])
+    assert _records(chunks) == [
+        {"source": "frameset.html", "chunk_id": "frameset.html#1", "text": "Hidden title"}
+    ]
+    assert not caught
+
+
 def test_text_decoding_follows_read_text_utf8():
     # UTF-8 first; a byte-order mark is discarded as readLines() discards it.
     assert _decode_context_bytes(b"\xef\xbb\xbfcaf\xc3\xa9") == "café"
