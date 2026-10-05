@@ -305,3 +305,17 @@ object on each row. B-278/B-279 preserve their respective ordinary SDP behavior.
 This is a preexisting difference, not a new design ruling or an assertion of
 universal payload parity; choosing a common normalization remains unresolved.
 No numbered deliberate-difference row is opened or claimed closed here.
+
+
+## Exact selected-IRI maintenance, 2026-10-05 (B-130)
+
+The paired public verifiers previously could report success after truncating a
+legal semicolon in a scalar IRI. Their repair preserves the eleven existing
+schema-declared scalar owners for canonical CSV and descriptor metadata, while
+retaining declared constraint lists, SSSOM pipes and ambiguous extension fields.
+Both preserve their exact public signatures/defaults, five report columns,
+maximum-three retry schedule and report-writing safeguards. No deliberate
+parity row, term choice or release is introduced. The October4 delegation
+supersedes the historical blanket API hold; independent review and current-head
+required CI still gate landing. This same-ID companion does not retire B-130
+until both implementations land.

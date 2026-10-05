@@ -35,6 +35,16 @@ from .text_safety import redact_secrets
 
 _COLUMNS = ("iri", "status", "final_url", "error", "attempts")
 _DEFAULT_REPORT = "reproducibility/provenance/semantic-iri-dereference.csv"
+# Bundled metadata schemas declare these owner-specific fields as scalar IRIs.
+# constraint_iri owns semicolon lists; ambiguous extension fields keep their
+# existing handling. Do not infer a new representation from an _iri suffix.
+_SCALAR_FIELDS = {
+    "dataset": ("protocol_iri",),
+    "tables": ("observation_unit_iri", "protocol_iri", "method_iri"),
+    "dictionary": ("unit_iri", "term_iri", "property_iri", "entity_iri",
+                   "statistical_modifier_iri"),
+    "codes": ("term_iri", "vocabulary_iri"),
+}
 _DELAYS = (0.1, 0.25)
 _REQUEST_TIMEOUT = 30
 # Fixed source and JSON stdin keep the selected IRI out of shell/code syntax.
@@ -142,16 +152,16 @@ def _values(values, separator=";"):
                 yield part
 
 
-def _from_rows(rows, fields=None, separator=";"):
+def _from_rows(rows, fields=None, separator=";", scalar_fields=()):
     if rows is None or rows.empty:
         return []
     if fields is None:
         fields = [name for name in rows.columns if name.endswith("_iri")]
     return [iri for name in fields if name in rows.columns
-            for iri in _values(rows[name], separator)]
+            for iri in _values(rows[name], None if name in scalar_fields else separator)]
 
 
-def _from_csv(path, fields=None, accepted_only=False):
+def _from_csv(path, fields=None, accepted_only=False, scalar_fields=()):
     if not path.exists():
         return []
     rows = _read_metadata_csv(path)
@@ -160,19 +170,23 @@ def _from_csv(path, fields=None, accepted_only=False):
             raise ValueError(f"Reviewed semantic selections need decision and iri in {path}.")
         rows = rows[rows.decision == "accepted"]
         fields = ["iri"]
-    # Scalar IRIs may contain a literal semicolon; only *_iri multi-value slots split.
-    return _from_rows(rows, fields, separator=None if fields == ["iri"] else ";")
+    # Ledger/vocabulary iri is already scalar; canonical owners pass their
+    # explicit schema-backed slots. Unknown fields keep their original behavior.
+    return _from_rows(rows, fields, separator=None if fields == ["iri"] else ";",
+                      scalar_fields=scalar_fields)
 
 
 def _selected_iris(root):
-    paths = [_metadata_path(root, name) for name in
-             ("dataset.csv", "tables.csv", "column_dictionary.csv", "codes.csv")]
-    if all(path.exists() for path in paths[:3]):
-        iris = [iri for path in paths for iri in _from_csv(path)]
+    files = {"dataset": "dataset.csv", "tables": "tables.csv",
+             "dictionary": "column_dictionary.csv", "codes": "codes.csv"}
+    paths = {owner: _metadata_path(root, name) for owner, name in files.items()}
+    if all(paths[owner].exists() for owner in ("dataset", "tables", "dictionary")):
+        iris = [iri for owner, path in paths.items()
+                for iri in _from_csv(path, scalar_fields=_SCALAR_FIELDS[owner])]
     elif (root / "datapackage.json").exists():
         package = read_salmon_datapackage(str(root))
-        iris = [iri for name in ("dataset", "tables", "dictionary", "codes")
-                for iri in _from_rows(package.get(name))]
+        iris = [iri for owner in _SCALAR_FIELDS
+                for iri in _from_rows(package.get(owner), scalar_fields=_SCALAR_FIELDS[owner])]
     else:
         raise ValueError("An SDP needs complete canonical metadata CSVs or datapackage.json "
                          "for semantic IRI verification.")

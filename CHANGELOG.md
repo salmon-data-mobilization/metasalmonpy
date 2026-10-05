@@ -18,8 +18,8 @@
   Hints for final headers. HTTPX>=0.28.1 is a core dependency; its public manual
   redirect flow preserves cookies, origin-bound auth, target-host netrc and
   proxy/CA environment settings without draining bodies or using a private shim.
-  Paired localhost proof passes on Python3.9.6 and3.13.11; critical API review
-  and both merges remain outstanding.
+  Paired localhost proof passes on Python3.9.6 and3.13.11; both implementation
+  merges remain outstanding.
 
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
@@ -57,6 +57,13 @@ and moving it is a separate outward act.
   routes common workflow to the canonical `HUB.md` policy.
 
 ### Fixed
+
+* `verify_sdp_semantic_iris()` preserves legal semicolons in the eleven scalar
+  fields explicitly declared by the canonical metadata schemas (B-130). The
+  dictionary constraint list and SSSOM pipe lists keep their existing
+  separators; unknown extension fields keep their existing representation.
+  The verifier previously could report success after checking a truncated
+  scalar prefix. No identifier, report column or retry policy is changed.
 
 * **Every semantic review marker consumer uses Q63's ASCII spelling.** B-345,
   paired with R's B-344: optional ASCII spaces/tabs, `REVIEW` in any ASCII
