@@ -65,6 +65,13 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **HTML context excerpts now follow metasalmon's body selection.** Hub
+  **B-386** excludes head, script and style text when a body exists, while
+  keeping Python's `html.parser`. A document with no body retains metasalmon's
+  whole-document fallback, so a head-only title can still be context text;
+  script and style never are. The existing decoder, chunking, source labels
+  and remaining library-specific extraction scope stay unchanged.
+
 * `verify_sdp_semantic_iris()` preserves legal semicolons in the eleven scalar
   fields explicitly declared by the canonical metadata schemas (B-130). The
   dictionary constraint list and SSSOM pipe lists keep their existing

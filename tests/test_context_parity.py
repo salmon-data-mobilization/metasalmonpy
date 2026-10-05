@@ -17,8 +17,9 @@ on text-only fixtures:
   (the ``parity`` job of ``.github/workflows/parity.yml``) so a change on the
   R side turns that job red instead of drifting.
 
-Library-specific extraction (PDF, DOCX, spreadsheets, HTML) is deliberately
-outside this pin: PARITY.md row 62.
+Library-specific extraction (PDF, DOCX, spreadsheets and remaining HTML parser
+details) is outside the text-only pin: PARITY.md row 62. The HTML body and
+script/style selection port has separate tests below (hub B-386).
 
 Tie order, because it is the one place the two sides are compared against a
 rule rather than against R's current code: ``.ms_score_context_chunks()``
@@ -161,6 +162,77 @@ def test_unsupported_and_empty_files_are_skipped_with_a_warning(tmp_path):
         assert load_context_chunks([notebook]).empty
     with pytest.warns(UserWarning, match="empty context file"):
         assert load_context_chunks([empty]).empty
+
+
+def test_html_context_uses_body_text_outside_script_style_and_head(tmp_path):
+    # R's xml2 reader produces these three lines from the same document.
+    # Exercise the file-to-chunk path that packet preparation consumes, while
+    # keeping the existing source label and chunk identifier in view.
+    page = tmp_path / "field-guide.html"
+    page.write_text(
+        "<HTML><HEAD><TITLE>hidden title</TITLE>"
+        "<STYLE>.hide{display:none}</STYLE></HEAD>"
+        "<BODY><DIV>Visible start <SPAN>visible middle</SPAN>"
+        "<SCRIPT>window.secret = 1; <STYLE>nested tag</STYLE></SCRIPT>"
+        "<STYLE>.body{display:none}</STYLE> visible end</DIV></BODY></HTML>",
+        encoding="utf-8",
+    )
+
+    chunks = load_context_chunks([page])
+
+    assert _records(chunks) == [
+        {
+            "source": "field-guide.html",
+            "chunk_id": "field-guide.html#1",
+            "text": "Visible start\nvisible middle\nvisible end",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "markup,expected",
+    [
+        (
+            "<p>Fragment one</p><script>hidden fragment</script>"
+            "<p>Fragment two</p>",
+            "Fragment one\nFragment two",
+        ),
+        (
+            "<html><head><title>Fallback title</title>"
+            "<style>hidden style</style></head></html>",
+            "Fallback title",
+        ),
+        (
+            "<html><head><title>Hidden title</title></head>"
+            "<p>Implicit body</p></html>",
+            "Implicit body",
+        ),
+        (
+            "<title>Hidden title</title><p>Visible body</p>",
+            "Visible body",
+        ),
+    ],
+    ids=["fragment", "head-only-fallback", "implicit-body", "implicit-head"],
+)
+def test_html_context_keeps_rs_fragment_and_no_body_fallback(tmp_path, markup, expected):
+    # xml2 synthesizes a body for the fragment and loose paragraph, treating
+    # a preceding loose title as head text. A head-only document has no body,
+    # so R falls back to its whole document.
+    page = tmp_path / "fragment.htm"
+    page.write_text(markup, encoding="utf-8")
+
+    assert load_context_chunks([page])["text"].tolist() == [expected]
+
+
+def test_html_context_skips_an_empty_body_despite_head_text(tmp_path):
+    page = tmp_path / "empty-body.html"
+    page.write_text(
+        "<html><head><title>Hidden title</title></head><body></body></html>",
+        encoding="utf-8",
+    )
+
+    with pytest.warns(UserWarning, match="empty context file"):
+        assert load_context_chunks([page]).empty
 
 
 def test_text_decoding_follows_read_text_utf8():

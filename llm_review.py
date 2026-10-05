@@ -197,12 +197,55 @@ def policy_sources(policy: dict, role: str) -> tuple[str, ...]:
 class _TextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.parts = []
+        self._all_parts = []
+        self._outside_head_parts = []
+        self._body_parts = []
+        self._head_depth = 0
+        self._body_depth = 0
+        self._hidden_depth = 0
+        self._saw_body = False
+
+    @property
+    def parts(self):
+        # xml2 selects the body when it finds one. For a fragment it creates a
+        # body around visible content; for a head-only document it finds none
+        # and R falls back to the document, including its title.
+        if self._saw_body:
+            return self._body_parts
+        if self._outside_head_parts:
+            return self._outside_head_parts
+        return self._all_parts
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style"}:
+            self._hidden_depth += 1
+        elif tag in {"head", "title"}:
+            # xml2 also places a loose title in an implicit head when body
+            # content follows it; head-only input still uses the fallback.
+            self._head_depth += 1
+        elif tag == "body":
+            self._saw_body = True
+            self._body_depth += 1
+            self._head_depth = 0
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"}:
+            self._hidden_depth = max(0, self._hidden_depth - 1)
+        elif tag in {"head", "title"}:
+            self._head_depth = max(0, self._head_depth - 1)
+        elif tag == "body":
+            self._body_depth = max(0, self._body_depth - 1)
 
     def handle_data(self, data):
+        if self._hidden_depth:
+            return
         text = data.strip()
         if text:
-            self.parts.append(text)
+            self._all_parts.append(text)
+            if not self._head_depth:
+                self._outside_head_parts.append(text)
+            if self._body_depth:
+                self._body_parts.append(text)
 
 
 # --- Context documents -------------------------------------------------------
@@ -214,8 +257,8 @@ class _TextExtractor(HTMLParser):
 # same source labels and chunk ids, the same token-overlap scoring and the same
 # tie order. The two packages are about to share one review-packet file
 # (B-326 / B-327), so a context document has to become the same excerpts on
-# both sides. What is deliberately NOT shared is the library-specific
-# extraction for PDF, DOCX, spreadsheets and HTML: PARITY.md row 62.
+# both sides. Format-specific extraction remains library-specific (PARITY.md
+# row 62); B-386 aligns HTML body inclusion without replacing either parser.
 #
 # R facts this code leans on, each measured on 2026-09-25 under R 4.5.2:
 #   * `readLines()` accepts LF, CRLF and a bare CR as a line end, discards a
@@ -320,9 +363,9 @@ def _read_context_file(path: Path) -> Optional[str]:
     """``.ms_context_text_from_file()``: the document's text, or ``None`` when it is skipped.
 
     Text formats go through R's own extraction above. PDF, DOCX, spreadsheet
-    and HTML text is library-specific on each side (PARITY.md row 62) and only
-    the shared steps -- the extension gate, the trim and the empty-file skip --
-    are mirrored for them.
+    and remaining HTML parser details are library-specific (PARITY.md row 62).
+    HTML body selection and script/style exclusion follow R's reader; the
+    extension gate, trim and empty-file skip remain shared for every format.
     """
     extension = _r_file_ext(path.name).lower()
     if extension not in SUPPORTED_CONTEXT_EXTENSIONS:
