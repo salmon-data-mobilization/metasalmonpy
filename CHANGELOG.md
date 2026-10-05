@@ -39,6 +39,12 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **Multiline context uses its first token for phrase anchors** (hub B-385,
+  porting metasalmon B-384). An underscore or hyphen on a later line no longer
+  rejects an otherwise anchored procedure chunk. Identifier-like leading
+  tokens, mismatched phrases and exact identifier anchors keep their existing
+  checks. The shared evidence pin is regenerated from landed R source.
+
 * **Optional writer fields follow the selected schema (hub B-252).** A direct
   `write_salmon_datapackage()` call no longer adds bundled optional fields absent
   from both the caller's dataset, table or codes frame and the selected schema.
