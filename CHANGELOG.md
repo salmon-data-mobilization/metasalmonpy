@@ -49,6 +49,10 @@ and moving it is a separate outward act.
 
 ### Internal
 
+* Record the landed, already ruled R date-text code-row seeder convergence
+  in parity row 64 and its adjacent registration history (hub B-433, factual
+  companion to R B-310/PR232). Runtime and unrelated parity rows are unchanged.
+
 * Document R's explicit Unicode-whitespace supplement in parity row 28 and
   the shared-class comments (hub B-431, companion to R B-137). The effective
   Python memberships and runtime behavior are unchanged.
