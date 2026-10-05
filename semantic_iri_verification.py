@@ -188,7 +188,7 @@ def _from_csv(path, fields=None, accepted_only=False, scalar_fields=()):
 
 def _review_ledger_paths(root):
     """An explicit reviewed sidecar owns one ledger; unqualified inputs retain fallback."""
-    from .eml import SUPPORTED_REVIEW_PATHS, _read_mapping_yaml, _resource_path, _scalar
+    from .eml import SUPPORTED_REVIEW_PATHS, _read_mapping_yaml, _resource_path
     from .semantic_closure import _first_unsupported_sidecar_tag, _mapping_file
 
     fallback = tuple(root / relative for relative in (
@@ -227,11 +227,11 @@ def _review_ledger_paths(root):
         return fallback
     if not isinstance(mapping, dict):
         return fallback
-    try:
-        selected = _scalar(mapping.get("semantic_review"), "path", required=False)
-    except ValueError:
-        return fallback
-    if selected not in SUPPORTED_REVIEW_PATHS:
+    review = mapping.get("semantic_review")
+    selected = review.get("path") if isinstance(review, dict) else None
+    # Native mapping schema requires one literal enum string. The generic
+    # scalar helper also coerces singleton sequences and trims non-enum text.
+    if not isinstance(selected, str) or selected not in SUPPORTED_REVIEW_PATHS:
         return fallback
     # Missing or escaped selected ledgers cannot silently become another ledger.
     return (Path(_resource_path(root, selected)),)
