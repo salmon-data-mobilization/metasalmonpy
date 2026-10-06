@@ -46,8 +46,8 @@ a claim that a catalogue has been fully harvested.
 ## Inspect the receipt before reusing evidence
 
 The directory contains the exact response bytes in `page-0000.json` and
-subsequent numbered pages. `capture.json` is written after a successful
-bounded capture and contains:
+subsequent numbered pages. `capture.json` is installed atomically after a
+successful bounded capture and contains:
 
 | Field | Meaning |
 |---|---|
@@ -73,13 +73,15 @@ data-authority or rights decisions.
 
 ## Preserve failed captures
 
-Transport failure, changed result counts, repeated metadata PIDs, malformed
-paging or an unexpectedly empty page abort the call. Captured raw pages and a
-`failure.json` remain for inspection. The failed directory moves to an
-`.incomplete` sibling when that can be done without replacing another capture;
-if the sibling is occupied, the owned failed directory stays at its original
-path. Neither case reports a successful receipt. Use a new destination for a
-retry and preserve prior bytes.
+Transport failure, a keyboard interrupt, changed result counts, repeated metadata
+PIDs, malformed paging or an unexpectedly empty page abort the call. The function
+attempts to retain a `failure.json` and moves the failed directory to an
+`.incomplete` sibling without replacing another capture. If the sibling is
+occupied, the owned failed directory stays at its original path. If filesystem
+bookkeeping also fails, inspect both reserved directories for retained raw bytes;
+diagnostics are attempted without replacing the original error or interrupt,
+even when warnings are treated as errors. Neither path reports a successful
+receipt. Use a new destination for a retry and preserve prior bytes.
 
 The current adapter does not claim machine-crash durability. A directory with
 no readable `capture.json` must not be treated as a successful capture.

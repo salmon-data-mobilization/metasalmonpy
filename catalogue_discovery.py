@@ -9,6 +9,8 @@ import json
 import math
 import os
 import re
+import tempfile
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
@@ -16,6 +18,29 @@ from urllib.request import ProxyHandler, Request, build_opener
 from .knb_environments import knb_config
 
 _FIELDS = 'id,title,formatId,formatType,authoritativeMN,obsoletes,obsoletedBy,dateUploaded,dateModified,beginDate,endDate,resourceMap'
+
+def _capture_failure_warning(message):
+    # Diagnostics must not replace the capture error, even with warnings-as-errors.
+    try:
+        warnings.warn(message, RuntimeWarning, stacklevel=3)
+    except BaseException:
+        pass
+
+def _write_capture_receipt(path, receipt):
+    # Install the success marker only after its complete contents are written.
+    # The temporary file stays within the exclusively reserved capture directory.
+    descriptor, temporary = tempfile.mkstemp(prefix='.capture-', suffix='.json', dir=path.parent)
+    temporary = Path(temporary)
+    try:
+        os.close(descriptor)
+        temporary.write_text(json.dumps(receipt, indent=2)+'\n')
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            temporary.unlink(missing_ok=True)
+        except BaseException:
+            _capture_failure_warning('Could not remove a temporary receipt; inspect the reserved output directories')
+        raise
 
 def _public_get(url, timeout, max_bytes):
     req=Request(url,headers={'User-Agent':'MetaSalmon-public-discovery/0.1','Accept':'application/json'})
@@ -34,8 +59,9 @@ def capture_catalogue_query(query, out, *, catalogue='knb', max_records=100,
     """Capture public metadata query pages and a checksum-bound provenance receipt.
 
     ``fetch(url, timeout, max_bytes) -> bytes`` is the offline test seam. Output
-    must be new; partial failures preserve an ``.incomplete`` sibling instead of
-    reporting success. Catalogues are live indexes, not transactional snapshots.
+    must be new; failed evidence moves to an ``.incomplete`` sibling when possible,
+    and the original error or keyboard interrupt is re-raised. Catalogues are live
+    indexes, not transactional snapshots.
     Metadata versions and repeated repository encounters are not independent data.
     No source objects are downloaded and no semantic decisions are accepted.
     """
@@ -100,17 +126,29 @@ def capture_catalogue_query(query, out, *, catalogue='knb', max_records=100,
                  'captured_at':stamp,'reported_metadata_matches':total,'captured_metadata_records':len(docs),
                  'complete_for_reported_count':len(docs)==total,'transactional_snapshot':False,
                  'annotation_status':'pending','independent_dataset_count':None,'pages':pages,'records':docs}
-        (staging/'capture.json').write_text(json.dumps(receipt,indent=2)+'\n')
+        _write_capture_receipt(staging/'capture.json', receipt)
         # capture.json is the success marker in the exclusively reserved directory.
         return receipt
-    except Exception:
+    except (Exception, KeyboardInterrupt):
         incomplete=out.with_name(out.name+'.incomplete')
-        (staging/'failure.json').write_text(json.dumps({'status':'incomplete','query':query,'catalogue':catalogue,'pages':pages,'semantic_approval':'pending'})+'\n')
+        # Failure bookkeeping is best effort. Keep the original transport/parser/
+        # filesystem exception and any raw evidence if these operations also fail.
         try:
-            incomplete.mkdir()  # Reserve without replacing a competing failure capture.
-        except FileExistsError:
-            pass  # Keep failed evidence in the original reserved destination.
-        else:
-            for artifact in staging.iterdir():os.rename(artifact,incomplete/artifact.name)
-            staging.rmdir()
+            try:
+                (staging/'failure.json').write_text(json.dumps({'status':'incomplete','query':query,'catalogue':catalogue,'pages':pages,'semantic_approval':'pending'})+'\n')
+            except BaseException:
+                _capture_failure_warning('Could not write the failure receipt; raw evidence remains in the reserved output directories')
+            try:
+                incomplete.mkdir()  # Reserve without replacing a competing failure capture.
+            except FileExistsError:
+                pass  # Keep failed evidence in the original reserved destination.
+            else:
+                for artifact in staging.iterdir():
+                    try:
+                        os.rename(artifact,incomplete/artifact.name)
+                    except BaseException:
+                        _capture_failure_warning('Could not move failed evidence; inspect both reserved output directories')
+                staging.rmdir()
+        except BaseException:
+            _capture_failure_warning('Could not finish failure bookkeeping; inspect both reserved output directories')
         raise
