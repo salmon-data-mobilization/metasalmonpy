@@ -201,6 +201,8 @@ class _TextExtractor(HTMLParser):
         self._outside_head_parts = []
         self._body_parts = []
         self._head_depth = 0
+        self._head_content_depth = 0
+        self._no_body_depth = 0
         self._title_depth = 0
         self._body_depth = 0
         self._hidden_depth = 0
@@ -232,8 +234,21 @@ class _TextExtractor(HTMLParser):
             self._saw_body = True
             self._body_depth += 1
             self._head_depth = 0
+            self._head_content_depth = 0
+        elif (tag in {"noscript", "object", "template"} or "-" in tag) and self._head_depth:
+            # Native head-resident containers, including custom element names,
+            # do not create a body even when their children are body markup.
+            # The same tags outside head follow the implicit-body path below.
+            self._head_content_depth += 1
+        elif tag == "noframes":
+            # xml2 retains noframes in its no-body scope. Keep the existing
+            # Python text extraction, but do not infer a body from its tags.
+            self._no_body_depth += 1
         elif (
             tag not in {"html", "base", "link", "meta", "frameset", "frame"}
+            and not (tag == "param" and self._head_depth)
+            and not self._head_content_depth
+            and not self._no_body_depth
             and not self._title_depth
             and not self._hidden_depth
         ):
@@ -252,10 +267,16 @@ class _TextExtractor(HTMLParser):
             self._hidden_depth = max(0, self._hidden_depth - 1)
         elif tag in {"head", "title"}:
             self._head_depth = max(0, self._head_depth - 1)
+            if tag == "head":
+                self._head_content_depth = 0
             if tag == "title":
                 self._title_depth = max(0, self._title_depth - 1)
         elif tag == "body":
             self._body_depth = max(0, self._body_depth - 1)
+        elif tag in {"noscript", "object", "template"} or "-" in tag:
+            self._head_content_depth = max(0, self._head_content_depth - 1)
+        elif tag == "noframes":
+            self._no_body_depth = max(0, self._no_body_depth - 1)
 
     def handle_data(self, data):
         if self._hidden_depth:
