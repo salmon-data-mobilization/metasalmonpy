@@ -529,3 +529,38 @@ def test_html_context_fourth_review_preserves_existing_visible_noframes_text(tmp
     assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
                                "text": "No frame text"}]
     assert page.read_bytes() == original
+
+
+# B435 fifth actual review: native source-bound head tokens do not all create
+# an implicit body. These exact cases pin the observed scope, not HTML validity.
+@pytest.mark.parametrize(
+    "markup, expected_text",
+    [
+        ('<html><head><title>Fallback</title><article></article></head></html>', 'Fallback'),
+        ('<html><head><title>Fallback</title></head><article></article></html>', None),
+        ('<html><head><title>Fallback</title><input></head></html>', 'Fallback'),
+        ('<html><head><title>Fallback</title></head><input></html>', None),
+        ('<html><head><title>Fallback</title><basefont></head></html>', 'Fallback'),
+        ('<html><head><title>Fallback</title></head><basefont></html>', None),
+        ('<html><head><title>Fallback</title><p></p></head></html>', None),
+        ('<html><head><title>Fallback</title><p></p></html>', None),
+    ],
+    ids=['article-head', 'article-outside-head', 'input-head', 'input-outside-head', 'basefont-head', 'basefont-outside-head', 'p-head', 'p-omitted-head-close'],
+)
+def test_html_context_fifth_review_preserves_head_token_body_scope(tmp_path, markup, expected_text):
+    page = tmp_path / "head-token-context.html"
+    original = markup.encode("utf-8")
+    page.write_bytes(original)
+    if expected_text is None:
+        with pytest.warns(UserWarning, match="empty context file"):
+            pool = load_context_chunks([page])
+        assert pool.empty
+        assert list(pool.columns) == ["source", "chunk_id", "text"]
+    else:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            pool = load_context_chunks([page])
+        assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
+                                   "text": expected_text}]
+        assert not caught
+    assert page.read_bytes() == original
