@@ -8,7 +8,9 @@ Dictionary validation still adds its frozen optional semantic fields, in both
 packages. The paired executable probes are retained in .hub/evidence/.
 """
 from copy import deepcopy
+import csv
 import hashlib
+import io
 import json
 from pathlib import Path
 
@@ -177,20 +179,73 @@ def test_setters_and_apply_do_not_add_fields_to_raw_csvs(selected_schema, tmp_pa
     }
 
 
+def _historical_spec_identity_bytes(relative, raw):
+    """Invert only B-199's two owned spec values for the frozen e81cacd oracle."""
+    current = b"sdp-0.3.2"
+    historical = b"sdp-0.3.0"
+    if relative == "metadata/dataset.csv":
+        rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8"))))
+        assert len(rows) == 1
+        assert rows[0]["spec_version"] == current.decode("ascii")
+    elif relative == "datapackage.json":
+        descriptor = json.loads(raw)
+        assert descriptor["sdp"]["specVersion"] == current.decode("ascii")
+    else:
+        raise AssertionError("Only the two declared spec-version owners may be inverted")
+    # A unique byte token plus its parsed owner prevents an unrelated field or
+    # duplicate version string from being hidden by a blanket replacement.
+    assert raw.count(current) == 1
+    return raw.replace(current, historical, 1)
+
+
+@pytest.mark.parametrize("relative,raw", [
+    ("metadata/dataset.csv", b"spec_version,title\nsdp-0.3.0,sdp-0.3.2\n"),
+    ("datapackage.json", b'{"sdp":{"specVersion":"sdp-0.3.0"},"title":"sdp-0.3.2"}'),
+    ("metadata/dataset.csv", b"spec_version,title\nsdp-0.3.2,sdp-0.3.2\n"),
+    ("datapackage.json", b'{"sdp":{"specVersion":"sdp-0.3.2"},"title":"sdp-0.3.2"}'),
+    ("metadata/dataset.csv", b"spec_version,title\nsdp-0.3.1,ordinary\n"),
+    ("datapackage.json", b'{"sdp":{"specVersion":"sdp-0.3.1"},"title":"ordinary"}'),
+    ("metadata/dataset.csv", b"spec_version,title\nsdp-0.3.2,first\nsdp-0.3.2,second\n"),
+    ("metadata/other.csv", b"spec_version\nsdp-0.3.2\n"),
+])
+def test_historical_spec_identity_inverse_refuses_unowned_or_ambiguous_values(relative, raw):
+    with pytest.raises(AssertionError):
+        _historical_spec_identity_bytes(relative, raw)
+
+
+@pytest.mark.parametrize("relative,raw", [
+    ("metadata/dataset.csv", b"spec_version,title\nsdp-0.3.2,ordinary\n"),
+    ("datapackage.json", b'{"sdp":{"specVersion":"sdp-0.3.2"},"title":"ordinary"}'),
+])
+def test_historical_spec_identity_inverse_keeps_unrelated_byte_changes(relative, raw):
+    historical = raw.replace(b"sdp-0.3.2", b"sdp-0.3.0", 1)
+    assert _historical_spec_identity_bytes(relative, raw) == historical
+    changed = raw.replace(b"ordinary", b"changed!")
+    inverted = _historical_spec_identity_bytes(relative, changed)
+    assert inverted == historical.replace(b"ordinary", b"changed!")
+    assert hashlib.sha256(inverted).hexdigest() != hashlib.sha256(historical).hexdigest()
+
+
 def test_shipped_settings_preserve_baseline_written_bytes(tmp_path):
     # Digests were captured before the fix at e81cacd, using this exact input.
     baseline = json.loads((Path(__file__).parent / "data" /
                            "selected_schema_writer" / "shipped-output-sha256.json").read_text())
     # Keep the e81cacd historical oracle unchanged. Q14/B-127 replaces only
-    # its per-language ownership marker with the ruled shared ten-byte line;
-    # the other six file digests and the complete written path set stay strict.
+    # its ownership marker with the ruled shared ten-byte line. B-199 advances
+    # only the dataset/descriptor spec identity; invert those owned values for
+    # this historical comparison, leaving all other bytes and paths strict.
     assert baseline.pop(".metasalmonpy-package") == (
         "387f000f947f671ae160d03c3dd5669b9eacb81b9c5af5d0a08d86b544db1013"
     )
     baseline[".sdp-package"] = hashlib.sha256(b"sdp-owned\n").hexdigest()
+    assert sdp_schema.sdp_profile_version() == "sdp-0.3.2"
     path = _write(tmp_path / "shipped", _without_optional_fields())
     actual = {
-        p.relative_to(path).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        p.relative_to(path).as_posix(): hashlib.sha256(
+            _historical_spec_identity_bytes(p.relative_to(path).as_posix(), p.read_bytes())
+            if p.relative_to(path).as_posix() in ("metadata/dataset.csv", "datapackage.json")
+            else p.read_bytes()
+        ).hexdigest()
         for p in path.rglob("*") if p.is_file()
     }
     assert actual == baseline

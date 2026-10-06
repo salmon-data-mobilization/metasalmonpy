@@ -274,9 +274,11 @@ above (see *Dependency boundaries*). **The counts are not recorded here**: CI
 reports them on every run, and each pull request states the counts it measured.
 What the skips mean does not change from one pull request to the next, so that
 is recorded. The gap between the legs is the extras-gated EML, KNB and
-context-reader tests, which the core-only leg skips. Two tests skip in both
+context-reader tests, which the core-only leg skips. Three tests skip in both
 legs, locally and on CI: the Qualark fetch test, which runs only when
-`METASALMONPY_RUN_QUALARK_TEST=1` is set, and the comparison of
+`METASALMONPY_RUN_QUALARK_TEST=1` is set; the check that the pinned SDP tag
+serves the vendored bundle byte for byte (B-199), which runs only when
+`METASALMONPY_RUN_SDP_PIN_TEST=1` is set; and the comparison of
 `scripts/check-changelog-window.py` with the hub's copy, which runs only when
 `METASALMON_PATH` names a metasalmon checkout. CI's suite jobs also skip a few
 tests that run elsewhere, so they report a few fewer passes than a local run of

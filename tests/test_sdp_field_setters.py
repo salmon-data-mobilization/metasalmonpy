@@ -103,7 +103,8 @@ def test_required_fields_come_from_the_schemas_constraints_required():
 
     ``constraints.required`` had no parser and no consumer here before the S5
     port, so a field the spec calls required and one it calls optional were
-    indistinguishable.
+    indistinguishable. ``license`` is not in the set: ``sdp-0.3.2`` made it
+    recommended rather than required (hub items B-198 and B-199).
     """
     assert sdp_schema_required_field_names("dataset") == [
         "dataset_id",
@@ -112,7 +113,6 @@ def test_required_fields_come_from_the_schemas_constraints_required():
         "creator",
         "contact_name",
         "contact_email",
-        "license",
     ]
     # An optional field is not in the set.
     assert "contact_org" not in sdp_schema_required_field_names("dataset")
@@ -1523,46 +1523,11 @@ def test_a_setter_patch_produces_the_descriptor_a_rebuild_would(
 # ``license`` recommended rather than required (smn-data-pkg pull request 12;
 # Brett, 2026-09-26: most datasets assign none), so a blank licence states that
 # none was granted. This package reads the requirement from its SDP schema
-# bundle, and the bundle it ships still requires the licence, because the
-# bundle and the pin move only together and only from a release tag (hub items
-# B-198 and B-199). So the tests that need the licence to be optional serve a
-# bundle whose licence field reads the way that pull request writes it.
-#
-# *Retires when:* B-199 re-vendors a bundle in which the licence is optional.
-# The tests can then read the shipped bundle instead of serving one.
-
-
-def _licence_optional_bundle() -> dict:
-    """The bundled schema with ``license`` recommended rather than required.
-
-    No ``constraints.required``, and ``sdp:requirement`` "recommended". It is
-    passed back through the validator, so the new field shape is parsed rather
-    than assumed.
-    """
-    bundled = sdp_schema._load_vendored_sdp_schema()
-    schemas = copy.deepcopy(bundled["metadata_schemas"])
-    for field in schemas["dataset"]["fields"]:
-        if field["name"] == "license":
-            field.pop("constraints", None)
-            field["sdp:requirement"] = "recommended"
-    return sdp_schema._validate_sdp_schema(
-        {
-            "metadata_schemas": schemas,
-            "profile": bundled["profile"],
-            "rules": bundled["rules"],
-        }
-    )
-
-
-def _serve_licence_optional_bundle(monkeypatch) -> None:
-    """Every schema reader in the calling test gets that bundle.
-
-    A non-default source sends them all through the loader, whose remote fetch
-    is served the bundle with the network blocked, as in the selected-schema
-    tests above.
-    """
-    sdp_schema.set_sdp_schema_source("remote")
-    _count_schema_fetches(monkeypatch, _licence_optional_bundle())
+# bundle, and since hub item B-199 the bundle it ships is ``sdp-0.3.2``'s, in
+# which the licence is optional. So these tests read the shipped bundle. Until
+# then they served one whose licence field read the way that pull request
+# writes it, because the bundle and the pin move only together and only from a
+# release tag; that stand-in retired with the re-vendor, as it said it would.
 
 
 def _setter_namespace(package: Path) -> dict:
@@ -1607,16 +1572,10 @@ def test_the_dataset_placeholder_fill_leaves_a_blank_licence_blank():
 
 
 def test_a_package_that_states_no_licence_passes_strict_validation_under_a_bundle_that_makes_it_optional(
-    raw_package, monkeypatch
+    raw_package,
 ):
-    shipped_required = sdp_schema_required_field_names("dataset")
-    _serve_licence_optional_bundle(monkeypatch)
-    # The served bundle differs from the shipped one in the licence and nothing
-    # else. Written so that it still holds once the shipped bundle makes the
-    # licence optional too.
-    assert sdp_schema_required_field_names("dataset") == [
-        name for name in shipped_required if name != "license"
-    ]
+    # The shipped bundle is the one that makes the licence optional.
+    assert "license" not in sdp_schema_required_field_names("dataset")
 
     # Nothing asks for a licence, as a placeholder or as a blank required field.
     assert "license" not in set(review_metadata(str(raw_package)).rows["field"])
@@ -1633,13 +1592,12 @@ def test_a_package_that_states_no_licence_passes_strict_validation_under_a_bundl
 
 
 def test_a_licence_placeholder_from_an_earlier_package_clears_to_no_licence(
-    raw_package, monkeypatch
+    raw_package,
 ):
     # Packages written before this change carry the placeholder. It stays
     # refused under a bundle that makes the licence optional, because it is
     # still a placeholder, and ``license=pandas.NA`` is the call that states no
     # licence instead.
-    _serve_licence_optional_bundle(monkeypatch)
     dataset_csv = raw_package / "metadata" / "dataset.csv"
     frame = pd.read_csv(dataset_csv, dtype=str, keep_default_na=False)
     frame.loc[0, "license"] = (
