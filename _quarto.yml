@@ -29,6 +29,8 @@ website:
         href: getting-started.qmd
       - text: "Guides"
         menu:
+          - text: "Configuration"
+            href: guides/configuration.qmd
           - text: "Package lifecycle"
             href: guides/package-lifecycle.qmd
           - text: "Semantic review"
@@ -90,6 +92,7 @@ quartodoc:
         href: getting-started.qmd
       - section: "Guides"
         contents:
+          - guides/configuration.qmd
           - guides/package-lifecycle.qmd
           - guides/semantic-review.qmd
           - guides/term-requests.qmd
@@ -157,6 +160,7 @@ quartodoc:
       contents:
         - fetch_salmon_ontology
         - validate_semantics
+        - verify_sdp_semantic_iris
         - suggest_facet_schemes
     - title: "Term request workflow"
       desc: "Detect ontology gaps and draft curator-reviewed requests."

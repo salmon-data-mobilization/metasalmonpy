@@ -224,10 +224,8 @@ _BUILTIN_PREFIXES = {
 _REFERENCE_COLUMNS = (
     "record_id",
     "subject_id",
-    "subject_category",
     "predicate_id",
     "object_id",
-    "object_category",
     "mapping_justification",
     "author_id",
     "reviewer_id",
@@ -235,16 +233,26 @@ _REFERENCE_COLUMNS = (
     "license",
     "subject_source",
     "object_source",
-    "predicate_type",
     "mapping_provider",
     "mapping_source",
     "mapping_tool_id",
     "curation_rule",
     "subject_match_field",
     "object_match_field",
-    "similarity_measure",
     "see_also",
     "issue_tracker_item",
+)
+
+# Mirror R B-269's pinned SSSOM 1.1 entity_type_enum. The schema forbids
+# ``rdfs literal`` and ``composed entity expression`` in predicate_type.
+# Categories and similarity_measure have string ranges, so they are not
+# reference columns and need no prefix declaration. Update this set only when
+# this profile adopts a schema whose enum changes.
+# https://github.com/mapping-commons/sssom/blob/667d3c579d92ad2e1a480503625eeef1e6af8e6d/src/sssom_schema/schema/sssom_schema.yaml
+_PREDICATE_TYPES = (
+    "owl class", "owl object property", "owl data property",
+    "owl annotation property", "owl named individual", "skos concept",
+    "rdfs resource", "rdfs class", "rdfs datatype", "rdf property",
 )
 
 _NO_TERM_FOUND = "sssom:NoTermFound"
@@ -367,6 +375,107 @@ def _read_bytes(path: Union[str, Path], label: str = "SSSOM mapping set") -> byt
 
 # --- restricted YAML-subset parsing for the embedded metadata header --------
 
+def _yaml_quoted_nodes(text: str):
+    """Yield quoted-node spans; quotes inside a plain scalar stay plain text.
+
+    This only tracks node boundaries for masking, not YAML values or types.
+    A quote may start a node after a collection delimiter, mapping separator
+    or anchor. An apostrophe in ``a'b`` cannot open a quoted node.
+    """
+    index, flow_depth = 0, 0
+    node_start, after_quote = True, False
+    while index < len(text):
+        char = text[index]
+        if char.isspace():
+            index += 1
+            continue
+        if node_start and char in ('"', "'"):
+            end = index + 1
+            while end < len(text):
+                if char == '"' and text[end] == "\\":
+                    end += 2
+                elif char == "'" and text[end:end + 2] == "''":
+                    end += 2
+                elif text[end] == char:
+                    break
+                else:
+                    end += 1
+            else:
+                return
+            yield index, end + 1
+            index, node_start, after_quote = end + 1, False, True
+            continue
+        separated = index + 1 == len(text) or text[index + 1].isspace()
+        if char in "[{" and node_start:
+            flow_depth += 1
+            node_start = True
+        elif char in "}]" and flow_depth:
+            flow_depth -= 1
+            node_start = False
+        elif char == "," and flow_depth:
+            node_start = True
+        elif char == ":" and (after_quote or separated):
+            node_start = True
+        elif node_start and char in "-?" and separated:
+            pass
+        elif node_start and char == "&":
+            anchor = re.match(r"&[^\s\[\]{},]+", text[index:])
+            if anchor is not None:
+                index += anchor.end()
+                continue
+            node_start = False
+        else:
+            node_start = False
+        index += 1
+        after_quote = False
+
+
+def _strip_yaml_comment(text: str) -> str:
+    """Exclude a separated comment, without treating a quoted hash as one."""
+    quoted = list(_yaml_quoted_nodes(text))
+    for comment in re.finditer(r"\s+#", text):
+        if not any(start <= comment.end() - 1 < end for start, end in quoted):
+            return text[:comment.start()].strip()
+    return text
+
+
+def _scalar_has_yaml_tag(text: str) -> bool:
+    """Detect explicit node tags without loading or resolving YAML values.
+
+    Node properties may put an anchor before a tag (YAML 1.2 section 6.9).
+    Flow values are left as text by this restricted reader, but must not hide
+    tags that a YAML reader would resolve. Quoted exclamations and exclamations
+    inside a plain scalar are text, so only node-property positions count.
+    """
+    anchor = r"&[^\s\[\]{},]+\s+"
+    content = text
+    while True:
+        # A block-sequence item can itself be a compact mapping (key: value)
+        # or an explicit key (? node). Inspect its value without interpreting
+        # ordinary embedded exclamations such as "Good !foo title" as tags.
+        content = re.sub(r"\A(?:[-?]\s+)*(?:" + anchor + r")?", "", content, count=1)
+        if content.startswith("!"):
+            return True
+        if content.startswith(("[", "{")):
+            break
+        if content.startswith(('"', "'")):
+            return False
+        value_start = re.search(r":\s+", content)
+        if value_start is None:
+            return False
+        content = content[value_start.end():]
+    # Mask complete quoted nodes first. Keep a placeholder for quoted mapping
+    # keys, whose colon may directly precede a tagged value in flow syntax.
+    fragments, previous = [], 0
+    for start, end in _yaml_quoted_nodes(content):
+        fragments.extend((content[previous:start], '""'))
+        previous = end
+    masked = "".join((*fragments, content[previous:]))
+    return re.search(
+        r'(?:\A|[\[{,]\s*|:\s+|""\s*:\s*)(?:\?\s+)?(?:' + anchor + r")?!",
+        masked,
+    ) is not None
+
 
 def _parse_scalar(text: str, fail) -> str:
     """Parse one scalar value: JSON/double-quoted, single-quoted, or plain.
@@ -387,9 +496,12 @@ def _parse_scalar(text: str, fail) -> str:
         if len(text) < 2 or not text.endswith("'"):
             fail(f"malformed single-quoted scalar {text!r}")
         return text[1:-1].replace("''", "'")
-    # A plain scalar ends at a whitespace-preceded "#" (a YAML comment);
-    # a "#" glued to text (e.g. an IRI fragment) is part of the value.
-    return re.split(r"\s+#", text, maxsplit=1)[0].strip()
+    # Comments are presentation, not nodes (YAML 1.2 section 6.6). Exclude
+    # them before the refusal guard as well as from the returned plain value.
+    text = _strip_yaml_comment(text)
+    if _scalar_has_yaml_tag(text):
+        fail("explicit YAML tags are not supported in SSSOM metadata")
+    return text
 
 
 def _split_key_line(line: str, fail):
@@ -678,6 +790,18 @@ def _validate_metadata(metadata: Dict[str, object], path: object) -> None:
                 f"SSSOM {field_name} cannot declare a raw literal assignment "
                 "in this SDP profile."
             )
+    if "predicate_type" in metadata:
+        _validate_predicate_type(str(metadata["predicate_type"]))
+
+
+def _validate_predicate_type(value: Optional[str], row: Optional[int] = None) -> None:
+    """Check the same schema range in row slots and propagated metadata."""
+    # Optional table blanks remain blank; a supplied enum spelling is exact.
+    if value is not None and value and value not in _PREDICATE_TYPES:
+        where = "" if row is None else f" in row {row}"
+        raise ValueError(
+            f"SSSOM predicate_type{where} must be an allowed SSSOM entity_type_enum value."
+        )
 
 
 def _column_values(mappings: pd.DataFrame, name: str) -> List[Optional[str]]:
@@ -709,6 +833,10 @@ def _validate_mappings(
                 f"SSSOM {field_name} cannot declare raw literal assignments "
                 "in this SDP profile."
             )
+
+    if "predicate_type" in columns:
+        for row, value in enumerate(columns["predicate_type"], start=1):
+            _validate_predicate_type(value, row)
 
     # Tabs and newlines are structural in embedded TSV. The parser has
     # already split tabs, while this catches other controls before

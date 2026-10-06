@@ -57,6 +57,7 @@ from typing import Optional, Sequence
 
 import pandas as pd
 
+from .dictionary import _DICTIONARY_IRI_FIELDS, _dictionary_iri_components
 from .metadata import (
     align_columns,
     is_review_placeholder,
@@ -235,9 +236,9 @@ def _is_unresolved_iri(value) -> bool:
     provide. A user who leaves part of the semantic queue undecided reaches
     exactly that state.
 
-    WHERE THIS TEST IS APPLIED is a second question and ``_REVIEW_IRI_FILES``
-    answers it, because the gates do not all sweep the same files. Which fields
-    within those files is a third, and the scan reaches only the
+    The scan visits all four metadata files, as strict marker validation does
+    after B230. Which fields within those files is a second question: the
+    dictionary validator retains its fixed six, and the scan reaches only the
     SCHEMA-DECLARED ones; ``test_an_undeclared_iri_column_is_still_missed`` pins
     the gap that leaves.
 
@@ -257,39 +258,19 @@ def _is_unresolved_iri(value) -> bool:
     return _is_review_iri(value)
 
 
-#: The metadata files whose ``*_iri`` markers this scan reports. Three gates
-#: sweep the marker and they do NOT sweep the same files, which is why this list
-#: cannot be derived from any one of them -- measured 2026-09-16, by marking one
-#: field per file and asking each gate. Reading
-#: ``validate_salmon_datapackage(require_iris=True)`` then the EDH XML gate
-#: (``_collect_review_issues()``):
-#:
-#: * ``tables.csv`` -- refuses, refuses
-#: * ``column_dictionary.csv`` -- refuses (via ``validate_dictionary()``), refuses
-#: * ``codes.csv`` -- PASSES, refuses
-#: * ``dataset.csv`` -- passes, passes
-#:
-#: So ``codes.csv`` is here deliberately and is the one entry that is NOT a
-#: ``validate_salmon_datapackage()`` blocker. It is reported because
-#: ``create_sdp()`` tells the user in as many words that every ``REVIEW:`` entry
-#: "must be confirmed or edited", the EDH XML gate refuses one, and
-#: ``read_salmon_datapackage()`` warns about one -- so a scan that stayed silent
-#: would be the only voice in the package saying the marker is fine. The cost is
-#: one extra printed ``set_sdp_code()`` call; the cost of the other choice is a
-#: user publishing an unconfirmed draft IRI. ``dataset.csv`` is excluded because
-#: no gate refuses a marker there at all, so reporting one would be this scan
-#: claiming a block that does not exist.
-#:
-#: The asymmetry in the middle column is a defect in the VALIDATOR, not here, and
-#: it is the same in metasalmon: ``AGENTS.md`` says strict validation fails if any
-#: ``REVIEW:`` marker remains, and for ``codes.csv`` and ``dataset.csv`` it does
-#: not. Out of scope for the port that added this list, reported with it.
-#:
-#: Retires when the three gates sweep the same files. At that point this list is
-#: derivable from any one of them and should be deleted rather than maintained.
-#: ``test_which_files_a_review_marker_actually_blocks`` is what fails if a gate
-#: changes which files it sweeps without this list moving with it.
-_REVIEW_IRI_FILES = ("tables.csv", "column_dictionary.csv", "codes.csv")
+def _review_iri_field_is_swept(file_name: str, field: str) -> bool:
+    """The strict validator owns the field the scan promises to help fill.
+
+    B230 retires the interim file allowlist: all four metadata files are
+    visited. Within those files the scan still needs a schema-declared field
+    so its printed setter is runnable. Dictionary validation additionally
+    retains its fixed six IRI fields, regardless of schema additions; the
+    dataset/table/code collectors take every *_iri column. This matches
+    landed R's .ms_review_iri_field_is_swept rather than widening a validator.
+    """
+    if file_name == "column_dictionary.csv":
+        return field in _DICTIONARY_IRI_FIELDS
+    return field.endswith("_iri")
 
 #: The prompt a printed call carries for one IRI field. ``observation_unit_iri``
 #: reads better as prose than as its own column name; every other field is
@@ -496,16 +477,24 @@ def _gaps_for_file(frame: pd.DataFrame, file_name: str) -> list:
             # refused too, by ``_collect_review_iri_issues()``. Handled HERE
             # rather than in the two branches below so it reaches
             # ``constraint_iri``, ``statistical_modifier_iri`` and a code's
-            # ``term_iri`` as well -- the validator sweeps every ``*_iri`` column
-            # of these files, and the two have to keep agreeing about what
+            # ``term_iri`` as well. The metadata collectors take every *_iri
+            # column; dictionary validation retains its fixed fields. Keep
+            # the scan aligned with the validator that promises to block.
+            # The two have to keep agreeing about what
             # blocks. Scoped to the SCHEMA-DECLARED fields because every row here
             # must print a runnable call and ``_set_sdp_metadata()`` refuses an
             # undeclared field; an undeclared ``*_iri`` column was never in this
             # scan at all and stays the validator's to report.
             if (
-                file_name in _REVIEW_IRI_FILES
-                and str(field).endswith("_iri")
-                and _is_unresolved_iri(value)
+                _review_iri_field_is_swept(file_name, str(field))
+                and any(
+                    _is_unresolved_iri(part)
+                    for part in (
+                        _dictionary_iri_components(str(value), str(field))
+                        if file_name == "column_dictionary.csv" and field == "constraint_iri"
+                        else [value]
+                    )
+                )
             ):
                 add(field, "iri", hint=_iri_hint(field))
                 continue
@@ -631,15 +620,14 @@ def review_metadata(path) -> MetadataReview:
       ``REVIEW REQUIRED:`` placeholders in any metadata field;
     * schema-required fields (``constraints.required``) that are blank -- a
       column the file does not have counts as blank in every row;
-    * any *schema-declared* ``*_iri`` field of ``tables.csv``,
-      ``column_dictionary.csv`` or ``codes.csv`` still carrying an unresolved
+    * any *schema-declared* IRI field swept by strict validation in
+      ``dataset.csv``, ``tables.csv``, ``column_dictionary.csv`` or ``codes.csv``
+      still carrying an unresolved
       ``REVIEW:`` marker. These also appear in :func:`review_semantics`, which
       has their candidates; they are listed here too because this is the scan
       that promises to name everything blocking strict validation, and a package
-      left part-decided is the common case. ``_REVIEW_IRI_FILES`` records which
-      gate refuses a marker in which file -- they differ, and ``codes.csv`` is
-      reported although ``validate_salmon_datapackage()`` does not yet refuse
-      it;
+      left part-decided is the common case. Dictionary fields stay confined
+      to that validator's fixed six; the other metadata files use *_iri;
     * measurement columns missing ``term_iri``, ``property_iri``,
       ``entity_iri`` or ``unit_iri``;
     * ``tables.csv`` rows with a blank ``observation_unit_iri``.

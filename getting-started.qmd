@@ -34,6 +34,9 @@ The optional `context` extra adds Excel and PDF readers for LLM context:
 python -m pip install -e ".[context,test]"
 ```
 
+Optional schema settings, retrieval switches and credential inputs are listed
+in [Configuration](guides/configuration.qmd).
+
 ## Create a package
 
 Use `create_sdp()` for the standard one-call workflow. A single DataFrame uses
@@ -70,7 +73,7 @@ The canonical layout is:
 
 ```text
 coho-catch-sdp/
-|-- .metasalmonpy-package
+|-- .sdp-package
 |-- README-review.txt
 |-- datapackage.json
 |-- data/
