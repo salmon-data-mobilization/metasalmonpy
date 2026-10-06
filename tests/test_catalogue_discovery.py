@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import socket
+import warnings
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import HTTPError
@@ -540,3 +541,79 @@ def test_shared_catalogue_capture_fixture(tmp_path, case):
     assert len(calls) == len(raw_pages)
     for index, raw in enumerate(raw_pages):
         assert (evidence / f"page-{index:04d}.json").read_bytes() == raw
+
+
+@pytest.mark.parametrize("stage", ["failure receipt", "reservation", "move", "rmdir"])
+def test_failure_bookkeeping_preserves_original_under_warnings_as_errors(
+        tmp_path, monkeypatch, stage):
+    raw = page_bytes(2, 0, ["a"])
+    failure = RuntimeError("original capture error under warning escalation")
+    calls = []
+
+    def fetch(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            return raw
+        raise failure
+
+    if stage == "failure receipt":
+        original = Path.write_text
+
+        def faulty(path, *args, **kwargs):
+            if path.name == "failure.json":
+                raise OSError("failure bookkeeping fixture")
+            return original(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "write_text", faulty)
+    elif stage == "reservation":
+        original = Path.mkdir
+
+        def faulty(path, *args, **kwargs):
+            if path.name == "capture.incomplete":
+                raise OSError("failure bookkeeping fixture")
+            return original(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "mkdir", faulty)
+    elif stage == "move":
+        def faulty(*args, **kwargs):
+            raise OSError("failure bookkeeping fixture")
+
+        monkeypatch.setattr(discovery.os, "rename", faulty)
+    else:
+        def faulty(*args, **kwargs):
+            raise OSError("failure bookkeeping fixture")
+
+        monkeypatch.setattr(Path, "rmdir", faulty)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(RuntimeError, match="original capture error") as caught:
+            capture(tmp_path, fetch, page_size=1)
+    assert caught.value is failure
+    directories = (tmp_path / "capture", tmp_path / "capture.incomplete")
+    retained = [p / "page-0000.json" for p in directories
+                if (p / "page-0000.json").exists()]
+    assert len(retained) == 1 and retained[0].read_bytes() == raw
+    assert not any((p / "capture.json").exists() for p in directories)
+
+
+def test_keyboard_interrupt_preserves_raw_failure_and_reraises_same_condition(tmp_path):
+    raw = page_bytes(2, 0, ["a"])
+    interruption = KeyboardInterrupt("fixture user interruption")
+    calls = []
+
+    def fetch(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            return raw
+        raise interruption
+
+    with pytest.raises(KeyboardInterrupt, match="fixture user interruption") as caught:
+        capture(tmp_path, fetch, page_size=1)
+    assert caught.value is interruption
+    incomplete = tmp_path / "capture.incomplete"
+    assert not (tmp_path / "capture").exists()
+    assert (incomplete / "page-0000.json").read_bytes() == raw
+    failure = json.loads((incomplete / "failure.json").read_text())
+    assert failure["status"] == "incomplete" and failure["semantic_approval"] == "pending"
+    assert not (incomplete / "capture.json").exists()
