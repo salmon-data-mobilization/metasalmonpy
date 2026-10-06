@@ -695,8 +695,9 @@
       "markup": "<html><head><title>Fallback</title><plaintext></plaintext></head></html>",
       "input_sha256": "da760a12a85211742ef11ef98c2b7c70717fcbeede429bc71a0d3b3df70c7d11",
       "native_body_count": 0,
-      "expected_text": "Fallback\n</plaintext></head></html>",
-      "provenance": "native R source-bound tag characterization"
+      "expected_text": "Fallback",
+      "provenance": "native no-body selection, with source-bound unchanged c842 public text expectation; plaintext closing-markup text remains library-specific",
+      "native_text": "Fallback\n</plaintext></head></html>"
     },
     {
       "name": "pre",
