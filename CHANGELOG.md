@@ -9,6 +9,8 @@
   interrupt, including when a secondary filesystem error or warning occurs.
   Shared offline R/Python fixtures cover complete, capped, empty, unstable,
   duplicate and malformed catalogue pages without a live request.
+  Timezone-qualified capture timestamps preserve their original fractional
+  precision across supported Python versions, including Python 3.9.
 
 * **Selected semantic-IRI resolution leaves evidence even on failure.**
   `verify_sdp_semantic_iris()` mirrors R B-130/PR244: selected exact HTTP IRIs,

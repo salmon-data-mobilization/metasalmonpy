@@ -83,8 +83,12 @@ def capture_catalogue_query(query, out, *, catalogue='knb', max_records=100,
     # before parsing, matching the R capture contract and preserving the input.
     if not stamp.endswith('Z') and (int(stamp[-5:-3])>23 or int(stamp[-2:])>59):
         raise ValueError('captured_at must be a valid ISO timestamp including a timezone')
+    # Validate calendar/timezone without parsing fractional precision: supported
+    # Python 3.9 only accepts some fraction widths. Preserve the input receipt
+    # timestamp exactly, as the R adapter does after validating its first 19 bytes.
+    validation_stamp = stamp[:19] + ('Z' if stamp.endswith('Z') else stamp[-6:])
     try:
-        parsed_stamp=datetime.fromisoformat(stamp.replace('Z','+00:00'))
+        parsed_stamp=datetime.fromisoformat(validation_stamp.replace('Z','+00:00'))
     except ValueError as error:
         raise ValueError('captured_at must be a valid ISO timestamp including a timezone') from error
     if parsed_stamp.tzinfo is None:
