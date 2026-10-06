@@ -390,3 +390,93 @@ def test_json_integral_numbers_are_protocol_integers(tmp_path,found,start):
 def test_json_counts_must_be_exact_nonnegative_integers(tmp_path,found):
     raw=json.dumps({"response":{"numFound":found,"start":0,"docs":[{"id":"fixture"}]}}).encode()
     with pytest.raises(ValueError,match="Malformed"):capture(tmp_path,lambda *args:raw)
+
+
+def test_partial_receipt_write_never_installs_a_success_marker(tmp_path, monkeypatch):
+    """A filesystem error after some receipt bytes cannot look like success."""
+    raw = page_bytes(1, 0, ["a"])
+    original_write = Path.write_text
+    failure = OSError("fixture partial capture receipt write")
+
+    def interrupted_write(path, text, *args, **kwargs):
+        # Identify the receipt payload, not the implementation's temporary name.
+        if json.loads(text).get("receipt_version") == "0.1":
+            original_write(path, '{"receipt_version":', *args, **kwargs)
+            raise failure
+        return original_write(path, text, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", interrupted_write)
+    with pytest.raises(OSError, match="partial capture receipt write") as caught:
+        capture(tmp_path, lambda *args: raw)
+    assert caught.value is failure
+    out, incomplete = tmp_path / "capture", tmp_path / "capture.incomplete"
+    assert not (out / "capture.json").exists()
+    assert not (incomplete / "capture.json").exists()
+    assert (incomplete / "page-0000.json").read_bytes() == raw
+    receipt = json.loads((incomplete / "failure.json").read_text())
+    assert receipt["status"] == "incomplete"
+    assert receipt["semantic_approval"] == "pending"
+
+
+def test_failure_receipt_write_preserves_original_exception_and_raw_bytes(
+        tmp_path, monkeypatch, recwarn):
+    raw = page_bytes(2, 0, ["a"])
+    original_write = Path.write_text
+    failure = RuntimeError("fixture original catalogue transport failure")
+    calls = []
+
+    def fetch(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            return raw
+        raise failure
+
+    def unwritable_failure(path, text, *args, **kwargs):
+        if json.loads(text).get("status") == "incomplete":
+            raise OSError("fixture failure receipt filesystem error")
+        return original_write(path, text, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", unwritable_failure)
+    with pytest.raises(RuntimeError, match="original catalogue transport failure") as caught:
+        capture(tmp_path, fetch, page_size=1)
+    assert caught.value is failure
+    directories = (tmp_path / "capture", tmp_path / "capture.incomplete")
+    retained = [p / "page-0000.json" for p in directories
+                if (p / "page-0000.json").exists()]
+    assert len(retained) == 1 and retained[0].read_bytes() == raw
+    assert not any((p / "capture.json").exists() for p in directories)
+    assert any("failure receipt" in str(w.message) for w in recwarn)
+
+
+def test_failure_artifact_move_preserves_original_exception_and_residual_bytes(
+        tmp_path, monkeypatch, recwarn):
+    raw = page_bytes(2, 0, ["a"])
+    original_rename = discovery.os.rename
+    failure = RuntimeError("fixture original capture interruption")
+    calls = []
+
+    def fetch(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            return raw
+        raise failure
+
+    def interrupted_move(source, destination, *args, **kwargs):
+        if Path(source).name == "page-0000.json":
+            raise OSError("fixture raw artifact move error")
+        return original_rename(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(discovery.os, "rename", interrupted_move)
+    with pytest.raises(RuntimeError, match="original capture interruption") as caught:
+        capture(tmp_path, fetch, page_size=1)
+    assert caught.value is failure
+    directories = (tmp_path / "capture", tmp_path / "capture.incomplete")
+    retained = [p / "page-0000.json" for p in directories
+                if (p / "page-0000.json").exists()]
+    assert len(retained) == 1 and retained[0].read_bytes() == raw
+    assert not any((p / "capture.json").exists() for p in directories)
+    receipts = [p / "failure.json" for p in directories
+                if (p / "failure.json").exists()]
+    assert len(receipts) == 1
+    assert json.loads(receipts[0].read_text())["semantic_approval"] == "pending"
+    assert any("reserved output directories" in str(w.message) for w in recwarn)
