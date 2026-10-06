@@ -564,3 +564,29 @@ def test_html_context_fifth_review_preserves_head_token_body_scope(tmp_path, mar
                                    "text": expected_text}]
         assert not caught
     assert page.read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads((FIXTURE_DIR / "native-head-body-scope.json").read_text(encoding="utf-8"))["cases"],
+    ids=lambda case: case["name"],
+)
+def test_html_context_fifth_review_matches_observed_native_head_scope(tmp_path, case):
+    # Expected public output comes from real pinned native documents, not the
+    # Python tag set. One plaintext control preserves existing Python behavior.
+    page = tmp_path / "native-head-scope.html"
+    original = case["markup"].encode("utf-8")
+    page.write_bytes(original)
+    if not case["expected_text"]:
+        with pytest.warns(UserWarning, match="empty context file"):
+            pool = load_context_chunks([page])
+        assert pool.empty
+        assert list(pool.columns) == ["source", "chunk_id", "text"]
+    else:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            pool = load_context_chunks([page])
+        assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
+                                   "text": case["expected_text"]}]
+        assert not caught
+    assert page.read_bytes() == original
