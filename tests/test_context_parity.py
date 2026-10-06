@@ -450,10 +450,11 @@ def test_expected_json_is_what_the_installed_metasalmon_computes():
         '<html><head><title>Fallback title</title><template><p></p></template></head></html>',
         '<html><head><title>Fallback title</title><noscript><p></p></noscript></head></html>',
         '<html><head><title>Fallback title</title></head><noframes></noframes></html>',
+        '<html><head><title>Fallback title</title><custom-empty></custom-empty></head></html>',
     ],
     ids=["head-noscript-link", "head-object", "head-object-param", "head-template",
          "frameset-noframes", "head-param", "head-object-child", "head-template-child",
-         "head-noscript-child", "outside-head-noframes"],
+         "head-noscript-child", "outside-head-noframes", "head-custom-empty"],
 )
 def test_html_context_fourth_review_preserves_native_no_body_fallback(tmp_path, markup):
     page = tmp_path / "no-body-context.html"
@@ -478,9 +479,11 @@ def test_html_context_fourth_review_preserves_native_no_body_fallback(tmp_path, 
         '<html><head><title>Hidden title</title><object></object><p></p></html>',
         '<html><head><title>Hidden title</title><template></template><p></p></html>',
         '<html><head><title>Hidden title</title><noscript></noscript><p></p></html>',
+        '<html><head><title>Hidden title</title></head><custom-empty></custom-empty></html>',
     ],
     ids=["outside-object", "outside-template", "outside-noscript", "outside-param",
-         "object-then-implicit-body", "template-then-implicit-body", "noscript-then-implicit-body"],
+         "object-then-implicit-body", "template-then-implicit-body", "noscript-then-implicit-body",
+         "outside-custom-empty"],
 )
 def test_html_context_fourth_review_retains_real_empty_body_selection(tmp_path, markup):
     page = tmp_path / "real-empty-body.html"
