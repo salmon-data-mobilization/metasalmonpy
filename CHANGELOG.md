@@ -106,6 +106,11 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+
+* Installation instructions now use the released `v0.5.0` source archive,
+  rather than `main`, and explain the difference between a release parity claim
+  and unreleased changes. The obsolete claim that no tag packages
+  `metasalmonpy` is removed (hub backlog #110).
 * **Implicit empty HTML bodies no longer expose head titles as context.**
   Hub B-435 records body-element scope even when body or optional head-end
   tags are omitted and the elements contain no visible text. Such files are
