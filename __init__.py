@@ -59,6 +59,7 @@ from .sdp_methods import (
     write_sdp_methods,
 )
 from .semantic_closure import write_sdp_semantic_closure
+from .semantic_iri_verification import verify_sdp_semantic_iris
 from .metadata_write import apply_sdp_semantics
 from .review_console import (
     SemanticReview,
@@ -165,6 +166,7 @@ __all__ = [
     "validate_sdp_observation_structures",
     "validate_sdp_reproducibility_manifest",
     "validate_sdp_sssom",
+    "verify_sdp_semantic_iris",
     "validate_semantics",
     "write_edh_xml_from_sdp",
     "write_eml_from_sdp",

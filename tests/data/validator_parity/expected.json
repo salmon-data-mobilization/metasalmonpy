@@ -281,7 +281,7 @@
     "markup_###_local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. ### catch count was enumerated using a visual survey protocol during the ocean phase.",
     "markup_>_local": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. > catch count was enumerated using a visual survey protocol during the ocean phase.",
     "labels_stand_in_without_a_column_name": "fork length length to the fork. fork length fork length was measured with a board.",
-    "multiline_chunk_phrase_anchor_quirk": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.",
+    "multiline_chunk_phrase_anchor_quirk": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. catch count was enumerated using a visual survey protocol.\nsecond line mentions fork_length.",
     "multiline_chunk_identifier_anchor": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch. catch_count was enumerated using a visual survey protocol.\nsecond line.",
     "nbsp_leading_chunk": "catch count; no procedure supplied. catch count number of fish in the catch. catch_count catch count number of fish in the catch.  catch count was enumerated using a visual survey protocol.",
     "missing_fields_leave_no_double_space": "catch_count catch count count",

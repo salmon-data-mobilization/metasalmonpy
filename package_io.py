@@ -35,6 +35,8 @@ from .metadata import (
     read_sdp_csv,
     scalar_text,
     READR_TRIM_CHARS,
+    _absolute_iri_shape,
+    _is_review_iri,
 )
 from .nuseds import (
     nuseds_enumeration_method_crosswalk,
@@ -65,7 +67,22 @@ from .sdp_schema import (
 # remain for a bundle that omits them, and for callers importing them by name.
 SDP_PROFILE_URL = _SDP_PROFILE_URL
 SDP_RULES_URL = _SDP_RULES_URL
-PACKAGE_SENTINEL = ".metasalmonpy-package"
+
+# The package-ownership sentinel: one file name and one content line, shared by
+# metasalmonpy and metasalmon (hub item B-127, the mirror of metasalmon's
+# B-113; Brett's Q14 ruling, 2026-08-24). Neither names an implementation,
+# because what owns the directory is the SDP tooling rather than one language's
+# copy of it. metasalmon chose both and recorded them in parity row 51, and this
+# package takes them from there, so they are a cross-repository contract that
+# ``tests/test_package_ownership_sentinel.py`` pins. The content line is
+# ``_package_ownership_bytes()``.
+#
+# The per-language ``.metasalmonpy-package`` this replaced is no longer
+# written, managed or recognised. Q14 accepted that break, and a package that
+# still has its SDP metadata is recognised by that. Nothing removes or renames
+# an old sentinel: Q14 rules out either writer removing the other's file, and
+# no migration is owed.
+PACKAGE_SENTINEL = ".sdp-package"
 METADATA_CSV_NAMES = (
     "dataset.csv",
     "tables.csv",
@@ -264,9 +281,13 @@ def _datapackage_json_bytes(datapackage: Dict[str, object]) -> bytes:
 
 
 def _package_ownership_bytes() -> bytes:
-    """Byte-identical to the ``write_text("metasalmonpy-owned\\n")`` call that
-    wrote the sentinel before the write path became transactional."""
-    return "metasalmonpy-owned\n".encode("utf-8")
+    """The content of the shared ``PACKAGE_SENTINEL``: ``sdp-owned`` and one LF.
+
+    Mirrors ``.ms_package_ownership_bytes()``. A fixed ASCII line ending in LF,
+    so it has one byte encoding on every platform and in either language, and
+    the file is the same ten bytes whichever implementation wrote it.
+    """
+    return b"sdp-owned\n"
 
 
 def _text_file_bytes(text: str) -> bytes:
@@ -314,7 +335,7 @@ def _is_review_value(value) -> bool:
     if not _has_value(value):
         return False
     text = str(value).strip()
-    return text.upper().startswith(("REVIEW:", "MISSING ", "MISSING:"))
+    return _is_review_iri(value) or text.upper().startswith(("MISSING ", "MISSING:"))
 
 
 def _metadata_path(target: Path, name: str) -> Path:
@@ -325,6 +346,14 @@ def _metadata_path(target: Path, name: str) -> Path:
 
 
 def _is_owned_package_dir(target: Path) -> bool:
+    """Whether ``overwrite=True`` may replace ``target``.
+
+    The shared ``PACKAGE_SENTINEL`` on its own is enough, so a package
+    metasalmon wrote is recognised by it; without the sentinel the SDP-CSV test
+    below decides. A per-language ``.metasalmonpy-package`` or
+    ``.metasalmon-package`` on its own is not recognised, which is the break
+    Brett's Q14 ruling accepted.
+    """
     if (target / PACKAGE_SENTINEL).exists():
         return True
     canonical = target / "metadata"
@@ -1074,6 +1103,12 @@ def write_salmon_datapackage(
     and the reproducibility manifest. A read → edit → write loop used to delete
     all of them.
 
+    Replacement is only allowed for a directory recognised as a package: one
+    holding the ``.sdp-package`` ownership sentinel, which metasalmon writes
+    too, or its SDP metadata. An older ``.metasalmonpy-package`` sentinel on
+    its own is not recognised, and a rewrite leaves one where it is unless
+    ``prune=True`` empties the directory.
+
     ``prune=True`` restores the previous behaviour, deleting every entry in the
     directory first. It requires ``overwrite=True``.
 
@@ -1119,9 +1154,16 @@ def write_salmon_datapackage(
         raise ValueError("All resources must be pandas DataFrames.")
 
     dict_valid = normalize_dictionary(validate_dictionary(dict_df, require_iris=False))
-    dataset_meta = normalize_dataset_meta(dataset_meta)
-    table_meta = normalize_table_meta(table_meta)
-    codes = normalize_codes(codes)
+    # Writer inputs follow the selected schema, rather than the reader's static
+    # return contract. Adding a bundled optional column here would turn an
+    # absent caller field into a preserved extra at the final alignment (B-252).
+    # Dictionary validation retains its own optional semantic-column contract,
+    # which also supplies constraint_iri in R under a schema that omits it.
+    from .sdp_field_setters import _in_declared_order
+
+    dataset_meta = _in_declared_order(dataset_meta, "dataset.csv")
+    table_meta = _in_declared_order(table_meta, "tables.csv")
+    codes = None if codes is None else _in_declared_order(codes, "codes.csv")
     dataset_meta, table_meta, dict_valid = _fill_review_placeholders(
         dataset_meta,
         table_meta,
@@ -1268,9 +1310,8 @@ def write_salmon_datapackage(
     # Each file in the order of the schema the settings select, as the
     # setters write it and as metasalmon's writers align through
     # `.ms_dataset_meta_cols()` and its siblings, which read the session
-    # schema. Deferred for the reason the blank-required collector gives.
-    from .sdp_field_setters import _in_declared_order
-
+    # schema. The earlier alignment also prevents bundled-only fields from
+    # being synthesized before this final serialization.
     writes[metadata_dir / "dataset.csv"] = _metadata_csv_bytes(
         _in_declared_order(dataset_meta, "dataset.csv")
     )
@@ -1927,7 +1968,7 @@ def _mark_review_iri(value):
     if not _has_value(value):
         return value
     text = str(value)
-    return text if text.startswith("REVIEW:") else f"REVIEW:{text}"
+    return text if _is_review_iri(text) else f"REVIEW:{text}"
 
 
 def _auto_apply_package_suggestions(artifacts: dict, llm_assess: bool) -> None:
@@ -2565,9 +2606,6 @@ def _validate_optional_sdp_semantic_artifacts(path: Union[str, Path]) -> bool:
     return True
 
 
-_REVIEW_IRI_RE = re.compile(r"^\s*REVIEW\s*:", re.IGNORECASE)
-
-
 def _collect_review_iri_issues(frame: object, source_name: str) -> list[str]:
     """Mirror ``.ms_collect_review_iri_issues``: REVIEW-prefixed values left
     in any ``*_iri`` column of one metadata file."""
@@ -2579,13 +2617,37 @@ def _collect_review_iri_issues(frame: object, source_name: str) -> list[str]:
             continue
         for position in range(len(frame)):
             value = frame[field].iloc[position]
-            if pd.isna(value) or not _REVIEW_IRI_RE.match(str(value)):
+            if pd.isna(value) or not _is_review_iri(value):
                 continue
             messages.append(
                 f"{source_name} row {position + 1} field {field} still "
                 f"contains a REVIEW-prefixed IRI ({value}). Remove the REVIEW "
                 "prefix only after final manual validation."
             )
+    return messages
+
+
+def _collect_absolute_iri_issues(
+    frame: object, source_name: str, excluded_fields=()
+) -> list[str]:
+    """Strict metadata shape checks; existing marker/placement owners stay put."""
+    if not isinstance(frame, pd.DataFrame) or len(frame) == 0:
+        return []
+    messages = []
+    for field in frame.columns:
+        if not str(field).endswith("_iri") or field in excluded_fields:
+            continue
+        for position, value in enumerate(frame[field]):
+            if pd.isna(value):
+                continue
+            text = str(value)
+            if not text or _is_review_iri(text):
+                continue
+            if not _absolute_iri_shape(text):
+                messages.append(
+                    f"{source_name} row {position + 1} field {field} is not an "
+                    f"absolute IRI: '{text}'."
+                )
     return messages
 
 
@@ -2617,6 +2679,7 @@ def _collect_review_issues(package: Dict[str, object]) -> list[str]:
         + _collect_review_placeholder_issues(
             codes, "metadata/codes.csv", ("table_id", "column_name", "code_value")
         )
+        + _collect_review_iri_issues(dataset, "metadata/dataset.csv")
         + _collect_review_iri_issues(tables, "metadata/tables.csv")
         + _collect_review_iri_issues(dictionary, "metadata/column_dictionary.csv")
         + _collect_review_iri_issues(codes, "metadata/codes.csv")
@@ -2652,7 +2715,7 @@ def _collect_placement_iri_issues(
                 continue
             text = str(value).strip()
             # ``REVIEW:`` markers have their own dedicated reporting path.
-            if text.upper().startswith("REVIEW:"):
+            if _is_review_iri(value):
                 continue
             if not _is_absolute_iri(value):
                 context = _validation_row_context(meta, position, id_fields)
@@ -3451,7 +3514,9 @@ def validate_salmon_datapackage(
     observation-structure, SSSOM mapping-set and measurement-decomposition
     artifacts validate when present; and then runs :func:`validate_dictionary`
     plus :func:`~metasalmonpy.validation.validate_semantics`. Under
-    ``require_iris=True`` it additionally refuses ``REVIEW:`` markers,
+    ``require_iris=True`` it additionally refuses malformed absolute-IRI
+    shapes in the six dictionary semantic fields and table ``*_iri`` fields,
+    ``REVIEW:`` markers,
     unresolved ``MISSING ...:`` placeholders, blank schema-required metadata
     fields and blank table ``observation_unit_iri`` values (a column a metadata
     file does not have counts as blank in every row); in the default mode those
@@ -3541,8 +3606,13 @@ def validate_salmon_datapackage(
         require_iris=require_iris,
     )
 
-    table_review_issues = _collect_review_iri_issues(
-        tables, source_name="metadata/tables.csv"
+    # The dictionary retains its fixed-field validator. The other three
+    # metadata files share the EDH *_iri marker sweep, as landed R B177 does.
+    # Keep these findings visible as warnings in the default mode as well.
+    metadata_review_issues = (
+        _collect_review_iri_issues(dataset, source_name="metadata/dataset.csv")
+        + _collect_review_iri_issues(tables, source_name="metadata/tables.csv")
+        + _collect_review_iri_issues(codes, source_name="metadata/codes.csv")
     )
     # Unconditional: a method or protocol placement that is not an absolute
     # IRI is malformed in every validation mode, not only under
@@ -3557,7 +3627,7 @@ def validate_salmon_datapackage(
         id_fields=("dataset_id",),
         fields=("protocol_iri",),
     )
-    appended_semantic_issues = table_review_issues + placement_issues
+    appended_semantic_issues = metadata_review_issues + placement_issues
     if appended_semantic_issues:
         issue_frame = pd.DataFrame({"message": appended_semantic_issues})
         existing = semantic_validation.get("issues")
@@ -3569,7 +3639,20 @@ def validate_salmon_datapackage(
         # A malformed placement IRI is worse than an unreviewed one: strict
         # validation must block it, exactly as it blocks a REVIEW: marker.
         final_review_issues = (
-            final_review_issues + table_review_issues + placement_issues
+            final_review_issues + metadata_review_issues + placement_issues
+            # Unconditional table placements already have owners. Excluding
+            # them here prevents duplicate shape reports; the dictionary's
+            # six semantic fields are handled by validate_dictionary above.
+            + _collect_absolute_iri_issues(
+                tables, "metadata/tables.csv", excluded_fields=("method_iri", "protocol_iri")
+            )
+            # B230 sweeps dataset/codes for markers too. Q63-excluded values
+            # retain the same strict shape owner; protocol already has an
+            # unconditional dataset placement owner, and codes has none.
+            + _collect_absolute_iri_issues(
+                dataset, "metadata/dataset.csv", excluded_fields=("protocol_iri",)
+            )
+            + _collect_absolute_iri_issues(codes, "metadata/codes.csv")
         )
         if final_review_issues:
             total = len(final_review_issues)
@@ -3581,7 +3664,7 @@ def validate_salmon_datapackage(
             lines.extend(preview)
             lines.append(
                 "Resolve placeholder metadata, blank schema-required fields, "
-                "blank table observation-unit IRIs, and any REVIEW-prefixed "
+                "blank table observation-unit IRIs, malformed metadata IRIs, and any REVIEW-prefixed "
                 "IRIs before strict validation."
             )
             if total > len(preview):

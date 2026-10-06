@@ -1,0 +1,1147 @@
+{
+  "scope": "Source-bound HTML body/no-body selection at named head tokens and observed neighboring contexts; not universal malformed-HTML or library text equivalence.",
+  "native_R": "4.5.2",
+  "native_xml2": "1.6.0",
+  "native_libxml2": "2.14.4",
+  "native_R_source_blob": "3fa6e32928e3d28b619a5cff7807bebbc0c6252a",
+  "libxml2_source_url": "https://raw.githubusercontent.com/GNOME/libxml2/v2.14.4/HTMLparser.c",
+  "libxml2_source_sha256": "f3801059a8af206e0c4398c9ee0bfcacc67b4fa5175dd7aa1cf3842654c6ca65",
+  "element_index_url": "https://html.spec.whatwg.org/multipage/indices.html",
+  "element_index_sha256": "eef64ba453d76ef4a4148dee369bbb8adf9e0cd1c2c604bd01d789de7ce91b26",
+  "native_observation_history": "132 fresh cases in one characterization, 4 exact observations reused, one targeted listing correction, two article contexts and one loose-title context measured separately; no old native corpus replay.",
+  "cases": [
+    {
+      "name": "a",
+      "markup": "<html><head><title>Fallback</title><a></a></head></html>",
+      "input_sha256": "b7ed10df0eba8c90021562b4bacc72f7c3c65656a918eb65d3c8711c8788819f",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "abbr",
+      "markup": "<html><head><title>Fallback</title><abbr></abbr></head></html>",
+      "input_sha256": "460cb41448ad092c2a843787981a4a90f9635741e6a4e3f81dee51bac405a128",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "acronym",
+      "markup": "<html><head><title>Fallback</title><acronym></acronym></head></html>",
+      "input_sha256": "03eb46a6e7ac8732dd8e95774b5290d0fd3739644a384e2d7c2a0a9e61992a36",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "address",
+      "markup": "<html><head><title>Fallback</title><address></address></head></html>",
+      "input_sha256": "d53c24b26615ab96be5abd54cb0be9b287652c896666bff7149948e8ffa2ecbd",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "applet",
+      "markup": "<html><head><title>Fallback</title><applet></applet></head></html>",
+      "input_sha256": "d3e3174a520a17771f83412496a3eccca7a4367c456fdf585a7e33c3df05afba",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "area",
+      "markup": "<html><head><title>Fallback</title><area></head></html>",
+      "input_sha256": "5eed4894332c83aa0b85091d76a4a16ee738b2d2d4bddb48d3002262d1cd4003",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "aside",
+      "markup": "<html><head><title>Fallback</title><aside></aside></head></html>",
+      "input_sha256": "2099532c8f409276b1d34faf547769251871bfc73993e1f749a4a872c3ff8443",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "audio",
+      "markup": "<html><head><title>Fallback</title><audio></audio></head></html>",
+      "input_sha256": "7137f5c66891858b60fcf966356d4c2903f000ce49baff133e44b820327addd8",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "b",
+      "markup": "<html><head><title>Fallback</title><b></b></head></html>",
+      "input_sha256": "66ebc09a956cdd85997527b42343aa617d8ede3c6ed97dad0b4fcf4d8fa58ae3",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "base",
+      "markup": "<html><head><title>Fallback</title><base></head></html>",
+      "input_sha256": "7b62e5a9e349f215ad71401f4459d814b3510527f83f37f9f0fd2bcaeb69248f",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "bdi",
+      "markup": "<html><head><title>Fallback</title><bdi></bdi></head></html>",
+      "input_sha256": "cee6ebac04e7aa24db79d1698ce3a69d74b37fd09bb693534d68ab3055ee57e5",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "bdo",
+      "markup": "<html><head><title>Fallback</title><bdo></bdo></head></html>",
+      "input_sha256": "cde3b40a81fb6dd240713a9619681709e56eda93a4d9ec4fa98e017ee9c98c1a",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "big",
+      "markup": "<html><head><title>Fallback</title><big></big></head></html>",
+      "input_sha256": "429134b27e9c2888543ab59a2f357da514ec3def42845742ea366965316a8eb4",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "blockquote",
+      "markup": "<html><head><title>Fallback</title><blockquote></blockquote></head></html>",
+      "input_sha256": "945c13d7a4bb532cef1d5676cb30e4eb88552e54e3e345992ebb3210d14a5c44",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "body",
+      "markup": "<html><head><title>Fallback</title><body></body></head></html>",
+      "input_sha256": "9bb99abdd939361b2b577fce8ddc8023eaef7d5a6c69df39eea6fd0540e0e9e1",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "br",
+      "markup": "<html><head><title>Fallback</title><br></head></html>",
+      "input_sha256": "b4040424ffda12823053faa5dacea5c7311a9cfc951d65d0e0d765ed90b6a86d",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "button",
+      "markup": "<html><head><title>Fallback</title><button></button></head></html>",
+      "input_sha256": "e10e2dff736dbae2e7b3c1ba0cc02ed729ca23c18152a598a9a535d0c22b5fd8",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "canvas",
+      "markup": "<html><head><title>Fallback</title><canvas></canvas></head></html>",
+      "input_sha256": "3f329133eb33fc758bf2451260b91122ee106b98a558c7824005df1a5f2e918f",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "caption",
+      "markup": "<html><head><title>Fallback</title><caption></caption></head></html>",
+      "input_sha256": "162083ea2646e72c80b5299dc64a8f2335ce182345635ac558aa859556c6b798",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "center",
+      "markup": "<html><head><title>Fallback</title><center></center></head></html>",
+      "input_sha256": "b1c0747ce519a453a36d28e520d6cefbcb458e1d4ab724c075e60b7c5f49ef4e",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "cite",
+      "markup": "<html><head><title>Fallback</title><cite></cite></head></html>",
+      "input_sha256": "a242ad5857d6d796781a00dd1abede84779d805c251ebb1e78e821d86d6d5ef8",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "code",
+      "markup": "<html><head><title>Fallback</title><code></code></head></html>",
+      "input_sha256": "bc74010d5c1f69bc073f30d272c92742b7b5c7539e3e8458b80834a7dcc959b3",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "col",
+      "markup": "<html><head><title>Fallback</title><col></head></html>",
+      "input_sha256": "ea8848adbecd161cdca460e3307cf22c7beb00d58baaa7409c92853eff9610f6",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "colgroup",
+      "markup": "<html><head><title>Fallback</title><colgroup></colgroup></head></html>",
+      "input_sha256": "b4fce0f8b7e1ba71cbc117cad39f0578e5ccc852401693f90d6ac39eff4f0abc",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "custom-empty",
+      "markup": "<html><head><title>Fallback</title><custom-empty></custom-empty></head></html>",
+      "input_sha256": "71d0fd6184bf0c1b5e25511db25f143083dda87397a4b29dba510a4ea2aa7726",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "data",
+      "markup": "<html><head><title>Fallback</title><data></data></head></html>",
+      "input_sha256": "cd0ec6c6c7c39af505bf8dbb39f76c004be874885bc9371d1f30a1c31cf5c2f8",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "datalist",
+      "markup": "<html><head><title>Fallback</title><datalist></datalist></head></html>",
+      "input_sha256": "db765f7ce6677dded92abbef5c3357192e8a4e210f0919cb009a0a2af4516948",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "dd",
+      "markup": "<html><head><title>Fallback</title><dd></dd></head></html>",
+      "input_sha256": "653d77e132df64fc0d5e70d6a9bdab2596a8f88e6d98f3a9b697d4312f1cf133",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "del",
+      "markup": "<html><head><title>Fallback</title><del></del></head></html>",
+      "input_sha256": "f086e4a426fb7f28a1d97ccd8b8cfd4cc5360b65ae96df8d6f04567b2fa727bf",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "details",
+      "markup": "<html><head><title>Fallback</title><details></details></head></html>",
+      "input_sha256": "43a7b8381c1385a01f214f8ca9aa46e3b491607bd40a59fee31b9286156dcd5a",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "dfn",
+      "markup": "<html><head><title>Fallback</title><dfn></dfn></head></html>",
+      "input_sha256": "8802c2510dec467f92421ee44cde5c7b3a098dc0d1a19bd1258cbd65c22e8755",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "dialog",
+      "markup": "<html><head><title>Fallback</title><dialog></dialog></head></html>",
+      "input_sha256": "c1462c144bc453f081ab6beeab88a123e2a9b7410b2b3ec9ec081a25b7156aff",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "dir",
+      "markup": "<html><head><title>Fallback</title><dir></dir></head></html>",
+      "input_sha256": "9845cb3ce7eb37c4e948b8fa2bd91f0122e09482ef0d7b4c606a6a371ff1ca21",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "div",
+      "markup": "<html><head><title>Fallback</title><div></div></head></html>",
+      "input_sha256": "71df307611496876b44e22a3d1450204f87aaf570daa2572c19ea5bfd716bda7",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "dl",
+      "markup": "<html><head><title>Fallback</title><dl></dl></head></html>",
+      "input_sha256": "ee1e5e092829423bb47bfa44a8da9a47546b238b37e967481a297d4549ec6a6c",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "dt",
+      "markup": "<html><head><title>Fallback</title><dt></dt></head></html>",
+      "input_sha256": "bdb0266f340a92d22dc0f148072d1a44c70e8323b39520cf6926e2207380fbe7",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "em",
+      "markup": "<html><head><title>Fallback</title><em></em></head></html>",
+      "input_sha256": "8832751569cb9f27b13d447fbeb8621c4dc105b51baea415e8922b61b959c795",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "embed",
+      "markup": "<html><head><title>Fallback</title><embed></head></html>",
+      "input_sha256": "61931fa5f92dd43b22802301e137fbd875519a5eafb286fcd1e07684655fb9bf",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "fieldset",
+      "markup": "<html><head><title>Fallback</title><fieldset></fieldset></head></html>",
+      "input_sha256": "56e5dc60fa322bf08f6f86041bee47781ea30f11d705beecc117ade9679904cc",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "figcaption",
+      "markup": "<html><head><title>Fallback</title><figcaption></figcaption></head></html>",
+      "input_sha256": "7f334576aec6770b6fcb7d64c8d71532b533fbd666e214b8692e2b8a3442a5ff",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "figure",
+      "markup": "<html><head><title>Fallback</title><figure></figure></head></html>",
+      "input_sha256": "81934d37b23c5fcf5c17519893501bcd868f2d4a89585c3896543bd129dcf89b",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "font",
+      "markup": "<html><head><title>Fallback</title><font></font></head></html>",
+      "input_sha256": "fca7b0496f88dac0b19c7d1d93184425ca17d4c3f52f3abd0045304e2cac7011",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "footer",
+      "markup": "<html><head><title>Fallback</title><footer></footer></head></html>",
+      "input_sha256": "12fd57a00c160aafc687eb67fa52e07c609561d2232c521fcb2cc6e75fc187e2",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "form",
+      "markup": "<html><head><title>Fallback</title><form></form></head></html>",
+      "input_sha256": "35e7a59e61bee7794f7d8a82f4c31b94388a1d816dd176012d1a4023cd93bd50",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "frame",
+      "markup": "<html><head><title>Fallback</title><frame></head></html>",
+      "input_sha256": "d632f9027e1e87e9ef4528a08684a19f3519a5601b4cdc1db8eda94899c1eab6",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "frameset",
+      "markup": "<html><head><title>Fallback</title><frameset></frameset></head></html>",
+      "input_sha256": "bdde6340bab0614d26c85daf3f30a17946670c1c35763013a524fbfbb6875efc",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "h1",
+      "markup": "<html><head><title>Fallback</title><h1></h1></head></html>",
+      "input_sha256": "d5fd0c7e4fff6797c7f18a9873a7100a30d5e12a641f75b3d9db04178533e608",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "h2",
+      "markup": "<html><head><title>Fallback</title><h2></h2></head></html>",
+      "input_sha256": "3c2afc8d31996e06a062aabc223980f430abe0a48c085e74f3520b25be708d4c",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "h3",
+      "markup": "<html><head><title>Fallback</title><h3></h3></head></html>",
+      "input_sha256": "d30954abf0b07282821f128fc10dc7df692cdab8d1bcb0bf30e881e0b04cb263",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "h4",
+      "markup": "<html><head><title>Fallback</title><h4></h4></head></html>",
+      "input_sha256": "5ff329e49e79e7d2a786183b8b0d99165635b340e9c66fd1ec9b68667a2a5a54",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "h5",
+      "markup": "<html><head><title>Fallback</title><h5></h5></head></html>",
+      "input_sha256": "bcfc5bcb0283154252eed9a3dbd6deb035881d5afd79b914bdfccd3d6d3d8c29",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "h6",
+      "markup": "<html><head><title>Fallback</title><h6></h6></head></html>",
+      "input_sha256": "637fe9b4825b02af71495a3cc40fb1e877899f885d2035a4e2ae3bd0fc7284c5",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "head",
+      "markup": "<html><head><title>Fallback</title><head></head></head></html>",
+      "input_sha256": "8ece8e6f3522daa81fbe6eeabd7f58e25300dd1a64e62a9f929297cd50ba4080",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "header",
+      "markup": "<html><head><title>Fallback</title><header></header></head></html>",
+      "input_sha256": "1540e06f9d41fd0a8c5536b9a87fef622b8df166861ecce875fc30d6e9d2c967",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "hgroup",
+      "markup": "<html><head><title>Fallback</title><hgroup></hgroup></head></html>",
+      "input_sha256": "66d1d0a97e28dad22fe19a9ef7b31f43d655f9e916ff63316b6b3cd873908c10",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "hr",
+      "markup": "<html><head><title>Fallback</title><hr></head></html>",
+      "input_sha256": "12c3155250f5b62f1fd07ae30442ada1e507c8b6bc7e53ff13049d9a434fd196",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "html",
+      "markup": "<html><head><title>Fallback</title><html></html></head></html>",
+      "input_sha256": "3d57bc4d43f46990dcf6125d964d10f3a6d5641a7191c251fad4691d8688c4bb",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "i",
+      "markup": "<html><head><title>Fallback</title><i></i></head></html>",
+      "input_sha256": "4eeb38a5f4cba8f7fe25577b0e39543c0ecc194744311fc65e44630027c3fd97",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "iframe",
+      "markup": "<html><head><title>Fallback</title><iframe></iframe></head></html>",
+      "input_sha256": "41131d56859e0a9b1b4fd97b21e2d80007a4b82e66ffbc1a32ec896dd4b4d1d3",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "img",
+      "markup": "<html><head><title>Fallback</title><img></head></html>",
+      "input_sha256": "ce14f814f95abcc2db522eaf8bbed37fa3ea241436fedb8f5994451209321c27",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "ins",
+      "markup": "<html><head><title>Fallback</title><ins></ins></head></html>",
+      "input_sha256": "d8bc6be51e6a30b0bb8272d12f8ef741bce617019b2bbe8b358bf304690b4341",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "isindex",
+      "markup": "<html><head><title>Fallback</title><isindex></head></html>",
+      "input_sha256": "60256b3dcf56b1611fef43526d714793e32a0c9fbd9f0ab78c547b88416fb101",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "kbd",
+      "markup": "<html><head><title>Fallback</title><kbd></kbd></head></html>",
+      "input_sha256": "3ce2f8da66466925f5ade3694ccef1e69417cfd80d28827d03082d107b4de58d",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "label",
+      "markup": "<html><head><title>Fallback</title><label></label></head></html>",
+      "input_sha256": "e4d07a3179bdbb0464ed5b28fc5467f7d9bbece61095c442bce3c908e0029847",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "legend",
+      "markup": "<html><head><title>Fallback</title><legend></legend></head></html>",
+      "input_sha256": "45eba7d6743aa6141ac8f3ad2f569ac3ec9941715e326d33414c5be1a3407b7a",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "li",
+      "markup": "<html><head><title>Fallback</title><li></li></head></html>",
+      "input_sha256": "23c9403f034a022216286a300829f8b46d2bf5f139df64b4789136ac35954563",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "link",
+      "markup": "<html><head><title>Fallback</title><link></head></html>",
+      "input_sha256": "550b5c3bef8a38e74bba319907468660db627dcc536f187c59a8066f933713f1",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "main",
+      "markup": "<html><head><title>Fallback</title><main></main></head></html>",
+      "input_sha256": "b9db6d248123b8397b92988b875a1bd2a3918d0678375edda302670d1d0e84aa",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "map",
+      "markup": "<html><head><title>Fallback</title><map></map></head></html>",
+      "input_sha256": "bbdb809051b9e5d6e03f1df5cb3093d7ca448ee2dcd147664e5195dbb9012b8b",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "mark",
+      "markup": "<html><head><title>Fallback</title><mark></mark></head></html>",
+      "input_sha256": "f74eea456b6efedccb86ae3d016bb3d81df84855f7c9e8443c96dcbd32135db7",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "math",
+      "markup": "<html><head><title>Fallback</title><math></math></head></html>",
+      "input_sha256": "3568346eb783d2e5eeb6ec47553ab2e6ad4c7b28cd06d8ce04c65939385638bc",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "menu",
+      "markup": "<html><head><title>Fallback</title><menu></menu></head></html>",
+      "input_sha256": "6fd6b76c2aaa22a22b80bd22bc76c9d46cb58e45e0b5cf71901b2a1568853cfa",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "meta",
+      "markup": "<html><head><title>Fallback</title><meta></head></html>",
+      "input_sha256": "d27c37f5ca75a9ddc02ff5fc1b5874c5810f4c8bd1ec3263e9f582e99472679d",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "meter",
+      "markup": "<html><head><title>Fallback</title><meter></meter></head></html>",
+      "input_sha256": "7d228f07d0d5927f3a757a45f31fb5b83cc8ab3f3b59808cdd807498c3b40572",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "nav",
+      "markup": "<html><head><title>Fallback</title><nav></nav></head></html>",
+      "input_sha256": "7e2634daeb8ae63cbef27a5b4c83e7ef3c0a1972e47d6eaf724ac2cfc59972cf",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "noembed",
+      "markup": "<html><head><title>Fallback</title><noembed></noembed></head></html>",
+      "input_sha256": "84ad42c1d8d34dcedd0c4a16eff776eea044cd545624428d96468abb751f677a",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "noframes",
+      "markup": "<html><head><title>Fallback</title><noframes></noframes></head></html>",
+      "input_sha256": "cc4d626bbfeae9fb9c08d3cf3de1bcccf11e84146fedc7d361f95bf6ff0b5868",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "noscript",
+      "markup": "<html><head><title>Fallback</title><noscript></noscript></head></html>",
+      "input_sha256": "dc3a969096a369a70b4205d0eea77ca57e0974f8a087ed4a1a8b833527489b13",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "object",
+      "markup": "<html><head><title>Fallback</title><object></object></head></html>",
+      "input_sha256": "2c7bc0e3c2aaed0b627fbe0f0ffa1fd79b95da738f32fc3db3518b85121bb8c0",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "ol",
+      "markup": "<html><head><title>Fallback</title><ol></ol></head></html>",
+      "input_sha256": "437a25a13356cd8f523f149c064fbcc75ff3d13a357111f286bd5d4dd517009d",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "optgroup",
+      "markup": "<html><head><title>Fallback</title><optgroup></optgroup></head></html>",
+      "input_sha256": "dfa979e4fd7bdc2a13d5049f473681e18a9c6fa9dc3dec35dd09cdd0c924bd23",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "option",
+      "markup": "<html><head><title>Fallback</title><option></option></head></html>",
+      "input_sha256": "90404ef12d537762f59b0f945692743ee0049deb58e783ee7b889ba9b5dd9b12",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "output",
+      "markup": "<html><head><title>Fallback</title><output></output></head></html>",
+      "input_sha256": "38d0264c079f6a69c3b78d16a6a62ac7751d3350f0736c13cbf3fb2eed287659",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "param",
+      "markup": "<html><head><title>Fallback</title><param></head></html>",
+      "input_sha256": "619aa9893c01731acee23e2828c49353a6c7cfd623cfa2632e79b84e01d23121",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "picture",
+      "markup": "<html><head><title>Fallback</title><picture></picture></head></html>",
+      "input_sha256": "4deab2c2cd4eb9cedc727f1db3c9ca5a1e8fe30267c1be4a726e49f3442f8d9a",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "plaintext",
+      "markup": "<html><head><title>Fallback</title><plaintext></plaintext></head></html>",
+      "input_sha256": "da760a12a85211742ef11ef98c2b7c70717fcbeede429bc71a0d3b3df70c7d11",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native no-body selection, with two source-bound unchanged c842 public text outputs; exact expected public text follows the observed local stdlib data profile, preserving plaintext library differences",
+      "native_text": "Fallback\n</plaintext></head></html>",
+      "stdlib_baseline_texts": [
+        "Fallback",
+        "Fallback\n</plaintext></head></html>"
+      ]
+    },
+    {
+      "name": "pre",
+      "markup": "<html><head><title>Fallback</title><pre></pre></head></html>",
+      "input_sha256": "413be4dffbb510efc2ad25eb52de0dc6575f82c69333a0b41696c78ea35896e8",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "progress",
+      "markup": "<html><head><title>Fallback</title><progress></progress></head></html>",
+      "input_sha256": "14e92a2dc9863bfc30c87b94626074cc0f52f52bc684ff5089d745f45019a0b6",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "q",
+      "markup": "<html><head><title>Fallback</title><q></q></head></html>",
+      "input_sha256": "eac32a4699bc4ca6d3ba9f33a7752b9971d14687d686d8764fabc9c6f557930e",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "rp",
+      "markup": "<html><head><title>Fallback</title><rp></rp></head></html>",
+      "input_sha256": "5d9de8ffb6ad0394f237017e4138a71334bcc1b3fd47954a2dcfa52fc5edd936",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "rt",
+      "markup": "<html><head><title>Fallback</title><rt></rt></head></html>",
+      "input_sha256": "165f001bc6278850a23e6cefb162fcd68d078dcdd7c54956f20c6383c6b8bf93",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "ruby",
+      "markup": "<html><head><title>Fallback</title><ruby></ruby></head></html>",
+      "input_sha256": "4984217ddcb4aa0d3600b43b6719d06bf64a7f950238ab9ceedbc992653f6c60",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "s",
+      "markup": "<html><head><title>Fallback</title><s></s></head></html>",
+      "input_sha256": "db47cc51a2b97059fb7da1279f31692343781efeb2f9cccf3e8ab91312bfc111",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "samp",
+      "markup": "<html><head><title>Fallback</title><samp></samp></head></html>",
+      "input_sha256": "87d169e41cd07ec64c0f8471907ad3ded7f756553f1e7067e84ee702fc43ae05",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "script",
+      "markup": "<html><head><title>Fallback</title><script></script></head></html>",
+      "input_sha256": "49d9a9c39f118301c5dc86b3eaf3e071998120ad73cd0f6b5e18c9fefb54fb82",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "search",
+      "markup": "<html><head><title>Fallback</title><search></search></head></html>",
+      "input_sha256": "390a3540f2b5ab43f804f454ee8154e4b30a125e108e31eb11f5b6d461157835",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "section",
+      "markup": "<html><head><title>Fallback</title><section></section></head></html>",
+      "input_sha256": "727691167b6eeaeca1d917601cfa3ee072b1d11ade0d01033191eb4b1cca3212",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "select",
+      "markup": "<html><head><title>Fallback</title><select></select></head></html>",
+      "input_sha256": "bdb1a8115027b8540db80645df4fb63c2d39c1e0d046ab8dac55e39e300b21b0",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "selectedcontent",
+      "markup": "<html><head><title>Fallback</title><selectedcontent></selectedcontent></head></html>",
+      "input_sha256": "71092d28464f0ecfeabbebfec079671320f512c124fb7d9f250e9a3a912110e6",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "slot",
+      "markup": "<html><head><title>Fallback</title><slot></slot></head></html>",
+      "input_sha256": "bec5f03f617de465c9f91fed91d1c01a7624b5429d13848ce4a74a7fe828b7dd",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "small",
+      "markup": "<html><head><title>Fallback</title><small></small></head></html>",
+      "input_sha256": "a47d71a85ba8d921f8b2b107689c87ae0fffb8092ce164e6898646e2af3b9829",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "source",
+      "markup": "<html><head><title>Fallback</title><source></head></html>",
+      "input_sha256": "377d211e79b19e906edbd404a32fc46b60cd961e776edacb0cb0c372bdfe0140",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "span",
+      "markup": "<html><head><title>Fallback</title><span></span></head></html>",
+      "input_sha256": "17a890fbd6126841e097fab752b58a43965775144506f3c54b650e6e68550995",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "strike",
+      "markup": "<html><head><title>Fallback</title><strike></strike></head></html>",
+      "input_sha256": "5eb8ccd8a0f75040eabc5e5626b9ad6249ee9b44e4e2f945496eaf7971faae44",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "strong",
+      "markup": "<html><head><title>Fallback</title><strong></strong></head></html>",
+      "input_sha256": "4a32daee304d9d7b03fcf879d0cf7bc58275c3ed7990ebdc4c714395bf6c3df9",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "style",
+      "markup": "<html><head><title>Fallback</title><style></style></head></html>",
+      "input_sha256": "fc937de21afca7f7e5218f8ef0af238925336bc01245161263f93a44adeef2c1",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "sub",
+      "markup": "<html><head><title>Fallback</title><sub></sub></head></html>",
+      "input_sha256": "6b785a9dd2ebd53dd2d027ae1a2d28a90738efed5d0d56058163ab139057adb4",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "summary",
+      "markup": "<html><head><title>Fallback</title><summary></summary></head></html>",
+      "input_sha256": "f81f789b31fd537ae53a043d02c908473e02812ecf86942025c4c683b3aaba0f",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "sup",
+      "markup": "<html><head><title>Fallback</title><sup></sup></head></html>",
+      "input_sha256": "1c3e5c2b149bc2f6ba89ceda35c88bf8eee045e76e8b7c3373ba1b7598e96b48",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "svg",
+      "markup": "<html><head><title>Fallback</title><svg></svg></head></html>",
+      "input_sha256": "0577be7b78277b22655be4f0f4b6cbc97cbd33719f71f5288484ab2c45ec96a0",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "table",
+      "markup": "<html><head><title>Fallback</title><table></table></head></html>",
+      "input_sha256": "b2086ad5c53eb3c55acd05981bef8cbc06c23d0203591ac41411b54cce77b96f",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "tbody",
+      "markup": "<html><head><title>Fallback</title><tbody></tbody></head></html>",
+      "input_sha256": "5f73038cfc6a160383bc2552b4dca58e4e9343263b6473c6fda55b8ca8b6e418",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "td",
+      "markup": "<html><head><title>Fallback</title><td></td></head></html>",
+      "input_sha256": "6251c7ac704bb65891ea13a3e9c51ebc09931a56cf4d5cd8c31fff0965947105",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "template",
+      "markup": "<html><head><title>Fallback</title><template></template></head></html>",
+      "input_sha256": "e1895a2e400340d4f27763c0fa36566b65a7c09a5564aefb94bf4575f67d9e82",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "textarea",
+      "markup": "<html><head><title>Fallback</title><textarea></textarea></head></html>",
+      "input_sha256": "f165a8c276cac7e665471d5621855e6fc1688227a625374f9d27f9b88191eddb",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "tfoot",
+      "markup": "<html><head><title>Fallback</title><tfoot></tfoot></head></html>",
+      "input_sha256": "8fbaf0f4c3d3c66aa88a219a6931cf049dc558c164e2c72cf8903f5d075c92c0",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "th",
+      "markup": "<html><head><title>Fallback</title><th></th></head></html>",
+      "input_sha256": "54c9c976227cdaaeaa106807af0ccb80e515c865476069cc34b42ead2561063c",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "thead",
+      "markup": "<html><head><title>Fallback</title><thead></thead></head></html>",
+      "input_sha256": "713a63568479a6e29758ee1b7353c7cdacb96cb41e66db311c5ddfb86e63ad61",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "time",
+      "markup": "<html><head><title>Fallback</title><time></time></head></html>",
+      "input_sha256": "39e4287912d89b9b6dfe23299e6f1ff7366114d42b7392fbe95627f0a50ed8fd",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "title",
+      "markup": "<html><head><title>Fallback</title><title></title></head></html>",
+      "input_sha256": "ae500d95c4b839180a45f3c2aacd70109db279c2bd4b7b1ff6b3e29994ec022e",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "tr",
+      "markup": "<html><head><title>Fallback</title><tr></tr></head></html>",
+      "input_sha256": "207e86e52501f983717d70914ce5700df8945cd00d957b6d925454a5b9c21745",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "track",
+      "markup": "<html><head><title>Fallback</title><track></head></html>",
+      "input_sha256": "5e846cb16181b0d5c2f8e4259aec0e07ba5d659eddd2ec715a156cb13e4f58bd",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "tt",
+      "markup": "<html><head><title>Fallback</title><tt></tt></head></html>",
+      "input_sha256": "0f398a57bc0f21474bc275888869a25625121ab0af5f0a42af6e4482c029ca2a",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "u",
+      "markup": "<html><head><title>Fallback</title><u></u></head></html>",
+      "input_sha256": "e79125bb81959e85fb8cfac8865366791b5cd3f725cbccd49efefab3f40bc8f3",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "ul",
+      "markup": "<html><head><title>Fallback</title><ul></ul></head></html>",
+      "input_sha256": "e1f44efcea96ec88ef70939089b2ee6ca8e733813d6062b299625e9540069959",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "unknown",
+      "markup": "<html><head><title>Fallback</title><unknown></unknown></head></html>",
+      "input_sha256": "a96e38af96cf11dce7665cbd8ff2679a71effba08bb6d11b0222b98b9579ab7d",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "var",
+      "markup": "<html><head><title>Fallback</title><var></var></head></html>",
+      "input_sha256": "1deca8451a0a2db39035ec7fd832b6907e88d32c5bffd64ce509a05cc5becb68",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "video",
+      "markup": "<html><head><title>Fallback</title><video></video></head></html>",
+      "input_sha256": "d923f997950de5394f30e2ee737a106d4460b711d2c2f47bd7eaad83e905090a",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "wbr",
+      "markup": "<html><head><title>Fallback</title><wbr></head></html>",
+      "input_sha256": "537de1cb985a9787b9f2b0c836d073b19951ca31b1c200af829951a82350f6a4",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "xmp",
+      "markup": "<html><head><title>Fallback</title><xmp></xmp></head></html>",
+      "input_sha256": "1e44ac79a41f37d3a99bfb290f83ed2c40ce300013c9895bf305451883ca5042",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "input-then-p",
+      "markup": "<html><head><title>Fallback</title><input><p></p></html>",
+      "input_sha256": "c35729f7ee133fcde1c22f12fc3682ee608bd81ef7bb546700eb215d6645d751",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "basefont-then-p",
+      "markup": "<html><head><title>Fallback</title><basefont><p></p></html>",
+      "input_sha256": "95cf58bfb8e6e58f0cd92ec1bf271cfe366574e91ee63a013e9e6f1c02b6f84a",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "article",
+      "markup": "<html><head><title>Fallback</title><article></article></head></html>",
+      "input_sha256": "7df57b5c9734cf28adfe413bac3d89d2bb09b163463a2b977482c91fdac7f05c",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "input",
+      "markup": "<html><head><title>Fallback</title><input></head></html>",
+      "input_sha256": "a9fab7710582dc21a418955b357a21ca3f5ec226e95874aa6270e0561d79c2cc",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "basefont",
+      "markup": "<html><head><title>Fallback</title><basefont></head></html>",
+      "input_sha256": "b110bfe364d15b6f1648575af204a1a8b19efc075b849bdaed8324a40a27cf43",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "p",
+      "markup": "<html><head><title>Fallback</title><p></p></head></html>",
+      "input_sha256": "970973fd9e7c59363df8b4a27da433997b39cd272fe94e5a73d2e2e321cf61b8",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "listing",
+      "markup": "<html><head><title>Fallback</title><listing></listing></head></html>",
+      "input_sha256": "cc30c8d9bbe6b1a2fce242e4ff05da14a33dc0c7e61a471c48131ce7faab0460",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound tag characterization"
+    },
+    {
+      "name": "article-head-p-child",
+      "markup": "<html><head><title>Fallback</title><article><p></p></article></head></html>",
+      "input_sha256": "e1fd98625f1ea250317a0b3c3d6e5a344b163971bc9335ff69b1992d83245124",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound contextual observation"
+    },
+    {
+      "name": "article-head-closed-then-p",
+      "markup": "<html><head><title>Fallback</title><article></article><p></p></html>",
+      "input_sha256": "e8ff5524fea07637cb5b40390910d041d2328142d4e4ebd0ca442dde78aa21f5",
+      "native_body_count": 1,
+      "expected_text": "",
+      "provenance": "native R source-bound contextual observation"
+    },
+    {
+      "name": "loose-title-article",
+      "markup": "<title>Fallback</title><article></article>",
+      "input_sha256": "bff5b13ba16ae5eea18a86551bc5d39c54e729a6548eb292d69eaaf88abd078b",
+      "native_body_count": 0,
+      "expected_text": "Fallback",
+      "provenance": "native R source-bound contextual observation"
+    },
+    {
+      "name": "loose-title-then-plaintext",
+      "markup": "<title>Hidden</title>Visible",
+      "input_sha256": "d8dec4e63cf6577c3360425693d87de649aea36d05a67a10befb1c62de648cd6",
+      "native_body_count": null,
+      "expected_text": "Visible",
+      "provenance": "unchanged published Python plaintext selection; native equivalence not asserted by this control"
+    }
+  ]
+}
