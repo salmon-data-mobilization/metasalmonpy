@@ -67,7 +67,7 @@ The canonical layout is:
 
 ```text
 coho-catch-sdp/
-|-- .metasalmonpy-package
+|-- .sdp-package
 |-- README-review.txt
 |-- datapackage.json
 |-- data/
