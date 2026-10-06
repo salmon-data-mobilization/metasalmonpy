@@ -617,3 +617,29 @@ def test_keyboard_interrupt_preserves_raw_failure_and_reraises_same_condition(tm
     failure = json.loads((incomplete / "failure.json").read_text())
     assert failure["status"] == "incomplete" and failure["semantic_approval"] == "pending"
     assert not (incomplete / "capture.json").exists()
+
+
+@pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 9, 17])
+@pytest.mark.parametrize("offset", ["Z", "+02:30", "-23:59"])
+def test_fractional_capture_timestamp_preserves_input_across_supported_python(
+        tmp_path, width, offset):
+    stamp = "2024-02-29T23:59:59." + ("12345678901234567"[:width]) + offset
+    receipt = discovery.capture_catalogue_query(
+        QUERY, tmp_path / "capture", fetch=lambda *args: page_bytes(0, 0, []),
+        captured_at=stamp)
+    assert receipt["captured_at"] == stamp
+    assert json.loads((tmp_path / "capture/capture.json").read_text())["captured_at"] == stamp
+
+
+@pytest.mark.parametrize("stamp", ["2026-02-29T23:59:59.1Z",
+                                  "2024-02-30T23:59:59.123456789+02:30",
+                                  "2024-02-29T24:00:00.1Z",
+                                  "2024-02-29T23:59:59.123456789+02:60"])
+def test_fractional_timestamp_keeps_calendar_clock_and_offset_refusals(tmp_path, stamp):
+    def forbidden(*args):
+        pytest.fail("invalid timestamp reached transport")
+
+    with pytest.raises(ValueError, match="captured_at"):
+        discovery.capture_catalogue_query(
+            QUERY, tmp_path / "capture", fetch=forbidden, captured_at=stamp)
+    assert list(tmp_path.iterdir()) == []
