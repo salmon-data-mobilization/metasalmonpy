@@ -35,6 +35,8 @@ website:
             href: guides/package-lifecycle.qmd
           - text: "Semantic review"
             href: guides/semantic-review.qmd
+          - text: "Public catalogue discovery"
+            href: guides/catalogue-discovery.qmd
           - text: "Term requests"
             href: guides/term-requests.qmd
           - text: "EDH and validation"
@@ -95,6 +97,7 @@ quartodoc:
           - guides/configuration.qmd
           - guides/package-lifecycle.qmd
           - guides/semantic-review.qmd
+          - guides/catalogue-discovery.qmd
           - guides/term-requests.qmd
           - guides/edh-validation.qmd
           - guides/github-access.qmd

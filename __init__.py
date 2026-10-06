@@ -8,6 +8,7 @@ Frictionless-style Salmon Data Packages.
 
 __version__ = "0.5.0"
 
+from .catalogue_discovery import capture_catalogue_query
 from .dictionary import (
     apply_salmon_dictionary,
     infer_column_role,
@@ -107,6 +108,7 @@ __all__ = [
     "apply_semantic_suggestions",
     "benchmark_term_ranking_fixtures",
     "chat_decomposition",
+    "capture_catalogue_query",
     "check_for_updates",
     "create_salmon_datapackage",
     "create_salmon_datapackage_from_data",
