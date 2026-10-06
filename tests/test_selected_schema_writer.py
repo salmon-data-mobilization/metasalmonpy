@@ -181,6 +181,13 @@ def test_shipped_settings_preserve_baseline_written_bytes(tmp_path):
     # Digests were captured before the fix at e81cacd, using this exact input.
     baseline = json.loads((Path(__file__).parent / "data" /
                            "selected_schema_writer" / "shipped-output-sha256.json").read_text())
+    # Keep the e81cacd historical oracle unchanged. Q14/B-127 replaces only
+    # its per-language ownership marker with the ruled shared ten-byte line;
+    # the other six file digests and the complete written path set stay strict.
+    assert baseline.pop(".metasalmonpy-package") == (
+        "387f000f947f671ae160d03c3dd5669b9eacb81b9c5af5d0a08d86b544db1013"
+    )
+    baseline[".sdp-package"] = hashlib.sha256(b"sdp-owned\n").hexdigest()
     path = _write(tmp_path / "shipped", _without_optional_fields())
     actual = {
         p.relative_to(path).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
