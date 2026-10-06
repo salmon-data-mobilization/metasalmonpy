@@ -574,10 +574,27 @@ def test_html_context_fifth_review_preserves_head_token_body_scope(tmp_path, mar
 def test_html_context_fifth_review_matches_observed_native_head_scope(tmp_path, case):
     # Expected public output comes from real pinned native documents, not the
     # Python tag set. One plaintext control preserves existing Python behavior.
+    expected_text = case["expected_text"]
+    if "stdlib_baseline_texts" in case:
+        # This sole legacy plaintext fixture preserves actual pre-change text
+        # extraction on each observed stdlib parser. Body scope remains pinned
+        # to native no-body; accepting an arbitrary public output would hide
+        # truncation on a platform whose unchanged parser retains closing text.
+        from html.parser import HTMLParser
+
+        assert case["name"] == "plaintext"
+        baseline_parts = []
+        parser = HTMLParser()
+        parser.handle_data = baseline_parts.append
+        parser.feed(case["markup"])
+        parser.close()
+        expected_text = "\n".join(text.strip() for text in baseline_parts if text.strip())
+        assert expected_text in case["stdlib_baseline_texts"]
+        assert expected_text
     page = tmp_path / "native-head-scope.html"
     original = case["markup"].encode("utf-8")
     page.write_bytes(original)
-    if not case["expected_text"]:
+    if not expected_text:
         with pytest.warns(UserWarning, match="empty context file"):
             pool = load_context_chunks([page])
         assert pool.empty
@@ -587,6 +604,6 @@ def test_html_context_fifth_review_matches_observed_native_head_scope(tmp_path, 
             warnings.simplefilter("always")
             pool = load_context_chunks([page])
         assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
-                                   "text": case["expected_text"]}]
+                                   "text": expected_text}]
         assert not caught
     assert page.read_bytes() == original
