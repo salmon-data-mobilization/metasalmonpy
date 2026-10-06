@@ -480,3 +480,63 @@ def test_failure_artifact_move_preserves_original_exception_and_residual_bytes(
     assert len(receipts) == 1
     assert json.loads(receipts[0].read_text())["semantic_approval"] == "pending"
     assert any("reserved output directories" in str(w.message) for w in recwarn)
+
+
+# These raw pages are byte-identical to the R catalogue capture fixtures.
+_SHARED_CAPTURE = json.loads(
+    (Path(__file__).parent / "fixtures/catalogue-capture/shared-v1.json").read_text())
+
+
+@pytest.mark.parametrize("case", _SHARED_CAPTURE["cases"], ids=lambda case: case["name"])
+def test_shared_catalogue_capture_fixture(tmp_path, case):
+    calls = []
+    raw_pages = [page.encode("utf-8") for page in case["pages"]]
+
+    def fetch(url, timeout, max_bytes):
+        params = parse_qs(urlsplit(url).query)
+        assert params["q"] == [_SHARED_CAPTURE["query"]]
+        assert params["fq"] == ["formatType:METADATA"]
+        assert params["sort"] == ["id asc"] and params["wt"] == ["json"]
+        assert timeout == 30 and max_bytes == 2_000_000
+        assert len(calls) < len(raw_pages), "capture requested an unexpected page"
+        raw = raw_pages[len(calls)]
+        calls.append(url)
+        return raw
+
+    out = tmp_path / "capture"
+    kwargs = dict(catalogue=case["catalogue"], max_records=case["max_records"],
+                  page_size=case["page_size"], fetch=fetch,
+                  captured_at=_SHARED_CAPTURE["captured_at"])
+    if case["status"] == "success":
+        receipt = discovery.capture_catalogue_query(_SHARED_CAPTURE["query"], out, **kwargs)
+        assert json.loads((out / "capture.json").read_text()) == receipt
+        assert receipt["captured_metadata_records"] == case["captured"]
+        assert receipt["complete_for_reported_count"] is case["complete"]
+        expected_records = [record for raw in raw_pages
+                            for record in json.loads(raw)["response"]["docs"]]
+        assert receipt["records"] == expected_records
+        assert receipt["reported_metadata_matches"] == int(json.loads(raw_pages[0])["response"]["numFound"])
+        assert receipt["annotation_status"] == "pending"
+        assert receipt["independent_dataset_count"] is None
+        assert receipt["transactional_snapshot"] is False
+        assert not out.with_name(out.name + ".incomplete").exists()
+        for index, raw in enumerate(raw_pages):
+            page = receipt["pages"][index]
+            assert page["sha256"] == hashlib.sha256(raw).hexdigest()
+            assert page["bytes"] == len(raw) and page["url"] == calls[index]
+        evidence = out
+    else:
+        with pytest.raises(ValueError):
+            discovery.capture_catalogue_query(_SHARED_CAPTURE["query"], out, **kwargs)
+        evidence = out.with_name(out.name + ".incomplete")
+        assert not out.exists() and not (evidence / "capture.json").exists()
+        failure = json.loads((evidence / "failure.json").read_text())
+        assert failure["status"] == "incomplete"
+        assert failure["semantic_approval"] == "pending"
+        for page in failure["pages"]:
+            raw = (evidence / page["file"]).read_bytes()
+            assert page["sha256"] == hashlib.sha256(raw).hexdigest()
+            assert page["bytes"] == len(raw)
+    assert len(calls) == len(raw_pages)
+    for index, raw in enumerate(raw_pages):
+        assert (evidence / f"page-{index:04d}.json").read_bytes() == raw
