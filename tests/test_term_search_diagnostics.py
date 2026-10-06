@@ -11,6 +11,7 @@ chunk E differential in the PR) over the same scripted failures.
 
 import io
 import os
+import threading
 import unittest
 import urllib.error
 import warnings
@@ -110,6 +111,55 @@ class SafeJsonFailureSignallingTests(unittest.TestCase):
         self.assertTrue(any("timed out" in message for message in messages))
         self.assertFalse(any("SECRETVALUE" in message for message in messages))
         self.assertTrue(any("apikey=[REDACTED]" in message for message in messages))
+
+    def test_an_empty_body_from_the_curl_fallback_is_signalled(self):
+        # An empty body is no answer. urlopen's JSON parse fails on it, and the
+        # curl fallback read its own empty output as no answer rather than as
+        # a failure, so a source that answered nothing read as answered.
+        # metasalmon's .safe_json() fails to parse it (hub item B-378).
+        response = mock.MagicMock()
+        response.__enter__.return_value = response
+        response.status = 200
+        response.read.return_value = b""
+        with mock.patch.object(
+            ts.urllib.request, "urlopen", return_value=response
+        ), mock.patch.object(ts.shutil, "which", return_value="/usr/bin/curl"), mock.patch.object(
+            ts.subprocess, "check_output", return_value=b""
+        ) as curl:
+            result, failures = self._collect(
+                lambda: ts._safe_json("https://example.org/search")
+            )
+        self.assertEqual(curl.call_count, 1)
+        self.assertIsNone(result)
+        self.assertEqual(len(failures), 1)
+
+    def test_a_failure_on_another_thread_never_reaches_this_threads_sink(self):
+        # The sinks are per thread, as R's handlers are per call stack: a
+        # failure signalled on another thread, whether it installed a sink of
+        # its own or none, never lands in the sink this thread installed (hub
+        # item B-378).
+        mine, theirs = [], []
+
+        def with_a_sink_of_its_own():
+            ts._search_failure_sinks.append(theirs)
+            try:
+                ts._signal_search_failure("https://example.org/theirs", "HTTP 503")
+            finally:
+                ts._search_failure_sinks.pop()
+
+        def with_no_sink():
+            ts._signal_search_failure("https://example.org/unheard", "HTTP 500")
+
+        ts._search_failure_sinks.append(mine)
+        try:
+            for target in (with_a_sink_of_its_own, with_no_sink):
+                thread = threading.Thread(target=target)
+                thread.start()
+                thread.join(10)
+        finally:
+            ts._search_failure_sinks.pop()
+        self.assertEqual(mine, [])
+        self.assertEqual(theirs, ["Vocabulary API request failed: HTTP 503"])
 
     def test_outside_find_terms_a_failure_stays_silent(self):
         # Mirror of R's classed signal with no handler installed: quiet.

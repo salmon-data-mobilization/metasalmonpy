@@ -1,0 +1,5 @@
+iri,status,final_url,error,attempts
+https://example.org/A#redirect,200,https://example.org/A,,1
+https://example.org/a#transport,,,timeout; Authorization=[REDACTED],3
+https://example.org/z#ok,200,https://example.org/z#ok,,1
+https://example.org/é#missing,404,https://example.org/é#missing,,1

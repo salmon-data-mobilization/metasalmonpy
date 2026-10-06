@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -116,12 +117,46 @@ def _empty_terms(role=None) -> pd.DataFrame:
     )
 
 
-# Per-call sinks installed by find_terms() around each source function, so a
-# failed vocabulary lookup can be *recorded* without discarding the rows that
-# did resolve. Mirrors metasalmon's `.ms_signal_search_failure()` +
-# withCallingHandlers pair: R signals a classed condition that is silent when
-# nobody handles it, so outside find_terms() a failure stays quiet here too.
-_search_failure_sinks: List[List[str]] = []
+class _PerThreadSinks(threading.local):
+    """A stack of failure sinks that each thread sees its own copy of.
+
+    An R handler is installed around one call stack and hears only the
+    failures inside it. One stack shared by the process broke that once two
+    calls ran on two threads: one call's ``pop()`` could remove the other's
+    sink, and a failure landed in whichever sink was installed last, anywhere
+    in the process, so a failed ICES request could lose its warning and a
+    ``find_terms()`` source could read as answered (hub item B-378). Each
+    caller pushes and pops on the thread it runs on, so this thread's stack is
+    its call stack's.
+    """
+
+    def __init__(self) -> None:
+        self._sinks: List[List[str]] = []
+
+    def append(self, sink: List[str]) -> None:
+        self._sinks.append(sink)
+
+    def pop(self) -> List[str]:
+        return self._sinks.pop()
+
+    def __getitem__(self, index: int) -> List[str]:
+        return self._sinks[index]
+
+    def __len__(self) -> int:
+        return len(self._sinks)
+
+
+# Per-call sinks, so a failed vocabulary lookup can be *recorded* without
+# discarding the rows that did resolve. find_terms() installs one around each
+# source function, and ices_vocab one around each request it makes. Mirrors
+# metasalmon's `.ms_signal_search_failure()` + withCallingHandlers pair: R
+# signals a classed condition that is silent when nobody handles it, so where
+# no sink is installed a failure stays quiet here too.
+_search_failure_sinks = _PerThreadSinks()
+
+# How every recorded failure begins. What follows it is the detail, which R's
+# condition carries on its own as `detail`, and which ices_vocab names.
+_SEARCH_FAILURE_PREFIX = "Vocabulary API request failed: "
 
 
 def _signal_search_failure(url: str, detail: str) -> None:
@@ -136,9 +171,7 @@ def _signal_search_failure(url: str, detail: str) -> None:
     ontology gaps (metasalmon 0.2.2).
     """
     if _search_failure_sinks:
-        _search_failure_sinks[-1].append(
-            f"Vocabulary API request failed: {detail}"
-        )
+        _search_failure_sinks[-1].append(f"{_SEARCH_FAILURE_PREFIX}{detail}")
 
 
 _TIMEOUT_ERROR_PATTERN = re.compile(
@@ -223,7 +256,10 @@ def _safe_json(url: str, headers: Optional[Dict[str, str]] = None, timeout: int 
             body = subprocess.check_output(cmd, timeout=timeout).decode("utf-8")
             if _debug:
                 print(f"[_safe_json] curl success: {len(body)} bytes", file=sys.stderr)
-            return json.loads(body) if body else None
+            # An empty body is no answer. json.loads() refuses it, so it is
+            # recorded below as the failure it is on the urlopen path above,
+            # and as metasalmon's .safe_json() records it (hub item B-378).
+            return json.loads(body)
         except Exception as _curl_err:
             if _debug:
                 print(f"[_safe_json] curl failed: {type(_curl_err).__name__}: {_curl_err}", file=sys.stderr)
