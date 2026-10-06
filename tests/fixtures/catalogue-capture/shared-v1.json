@@ -1,0 +1,213 @@
+{
+  "fixture_version": "1",
+  "query": "text:Fraser AND title:\"salmon é\"",
+  "captured_at": "2026-10-06T09:00:00+00:00",
+  "cases": [
+    {
+      "name": "knb-empty",
+      "catalogue": "knb",
+      "max_records": 5,
+      "page_size": 2,
+      "pages": [
+        "{\"response\":{\"numFound\":0,\"start\":0,\"docs\":[]}}"
+      ],
+      "status": "success",
+      "captured": 0,
+      "complete": true
+    },
+    {
+      "name": "knb-complete",
+      "catalogue": "knb",
+      "max_records": 5,
+      "page_size": 2,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":0,\"docs\":[{\"id\":\"a:é\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}},{\"id\":\"b\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":3,\"start\":2,\"docs\":[{\"id\":\"c\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "success",
+      "captured": 3,
+      "complete": true
+    },
+    {
+      "name": "knb-capped",
+      "catalogue": "knb",
+      "max_records": 3,
+      "page_size": 2,
+      "pages": [
+        "{\"response\":{\"numFound\":4,\"start\":0,\"docs\":[{\"id\":\"a:é\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}},{\"id\":\"b\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":4,\"start\":2,\"docs\":[{\"id\":\"c\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "success",
+      "captured": 3,
+      "complete": false
+    },
+    {
+      "name": "knb-numeric-equivalence",
+      "catalogue": "knb",
+      "max_records": 1,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":1.0,\"start\":0.0,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "success",
+      "captured": 1,
+      "complete": true
+    },
+    {
+      "name": "knb-changed-count",
+      "catalogue": "knb",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":0,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":4,\"start\":1,\"docs\":[{\"id\":\"b\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "knb-duplicate",
+      "catalogue": "knb",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":0,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":3,\"start\":1,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "knb-empty-before-end",
+      "catalogue": "knb",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":0,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":3,\"start\":1,\"docs\":[]}}"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "knb-wrong-start",
+      "catalogue": "knb",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":1,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "knb-invalid-json",
+      "catalogue": "knb",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "dataone-empty",
+      "catalogue": "dataone",
+      "max_records": 5,
+      "page_size": 2,
+      "pages": [
+        "{\"response\":{\"numFound\":0,\"start\":0,\"docs\":[]}}"
+      ],
+      "status": "success",
+      "captured": 0,
+      "complete": true
+    },
+    {
+      "name": "dataone-complete",
+      "catalogue": "dataone",
+      "max_records": 5,
+      "page_size": 2,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":0,\"docs\":[{\"id\":\"a:é\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}},{\"id\":\"b\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":3,\"start\":2,\"docs\":[{\"id\":\"c\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "success",
+      "captured": 3,
+      "complete": true
+    },
+    {
+      "name": "dataone-capped",
+      "catalogue": "dataone",
+      "max_records": 3,
+      "page_size": 2,
+      "pages": [
+        "{\"response\":{\"numFound\":4,\"start\":0,\"docs\":[{\"id\":\"a:é\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}},{\"id\":\"b\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":4,\"start\":2,\"docs\":[{\"id\":\"c\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "success",
+      "captured": 3,
+      "complete": false
+    },
+    {
+      "name": "dataone-numeric-equivalence",
+      "catalogue": "dataone",
+      "max_records": 1,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":1.0,\"start\":0.0,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "success",
+      "captured": 1,
+      "complete": true
+    },
+    {
+      "name": "dataone-changed-count",
+      "catalogue": "dataone",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":0,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":4,\"start\":1,\"docs\":[{\"id\":\"b\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "dataone-duplicate",
+      "catalogue": "dataone",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":0,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":3,\"start\":1,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "dataone-empty-before-end",
+      "catalogue": "dataone",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":0,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}",
+        "{\"response\":{\"numFound\":3,\"start\":1,\"docs\":[]}}"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "dataone-wrong-start",
+      "catalogue": "dataone",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":{\"numFound\":3,\"start\":1,\"docs\":[{\"id\":\"a\",\"title\":\"Salmon évidence\",\"tags\":[\"native\"],\"extra\":{\"pending\":true,\"value\":null}}]}}"
+      ],
+      "status": "failure"
+    },
+    {
+      "name": "dataone-invalid-json",
+      "catalogue": "dataone",
+      "max_records": 5,
+      "page_size": 1,
+      "pages": [
+        "{\"response\":"
+      ],
+      "status": "failure"
+    }
+  ]
+}

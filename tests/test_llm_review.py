@@ -76,6 +76,30 @@ def _accept_bundle(messages, config):
     return {"bundle_summary": "Coherent measurement bundle.", "slots": slots}
 
 
+@pytest.mark.parametrize("value, marked", [
+    (" review :https://w3id.org/smn/CatchAbundance", True),
+    ("\nREVIEW:https://w3id.org/smn/CatchAbundance", False),
+    ("REV\u0131EW:https://w3id.org/smn/CatchAbundance", False),
+])
+def test_public_review_uses_raw_current_values_in_surviving_bundle_validator(monkeypatch, value, marked):
+    import metasalmonpy.llm_review as adapter
+    data = pd.DataFrame({"count": [1, 2]})
+    dictionary = infer_dictionary(data, dataset_id="demo", table_id="fish")
+    dictionary.loc[0, "column_role"] = "measurement"
+    dictionary.loc[0, "column_description"] = "Catch count by site"
+    dictionary.loc[0, "term_iri"] = value
+    selected = []
+    original = adapter._current_selected_iris
+    def record_selected(*args, **kwargs):
+        result = original(*args, **kwargs)
+        selected.append(result)
+        return result
+    monkeypatch.setattr(adapter, "_current_selected_iris", record_selected)
+    suggest_semantics(data, dictionary, search_fn=_search_stub([]), llm_assess=True, llm_request_fn=_accept_bundle)
+    assert selected
+    assert (selected[0]["variable"] is None) is marked
+
+
 def test_bundle_review_returns_stable_thirty_column_assessments():
     data, dictionary = _measurement_dictionary()
 
