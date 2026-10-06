@@ -235,6 +235,65 @@ def test_html_context_skips_an_empty_body_despite_head_text(tmp_path):
         assert load_context_chunks([page]).empty
 
 
+@pytest.mark.parametrize(
+    "body_markup",
+    ["<p><img></p>", "<p> \n\t </p>", "<br>"],
+    ids=["empty-element", "whitespace-only", "void-element"],
+)
+def test_html_context_skips_an_implicit_empty_body_despite_head_text(tmp_path, body_markup):
+    # B435: native xml2 synthesizes an empty body for each of these documents
+    # despite the omitted body tag. The title must not become evidence merely
+    # because that body has no visible text. A genuinely head-only document
+    # still uses the distinct fallback pinned above; no parser unification is
+    # claimed by this HTML body-scope regression.
+    page = tmp_path / "implicit-empty-body.html"
+    page.write_text(
+        "<html><head><title>Hidden</title></head>"
+        + body_markup
+        + "</html>",
+        encoding="utf-8",
+    )
+
+    with pytest.warns(UserWarning, match="empty context file"):
+        chunks = load_context_chunks([page])
+    assert chunks.empty
+    assert list(chunks.columns) == ["source", "chunk_id", "text"]
+
+
+def test_html_context_skips_an_empty_body_when_optional_head_end_is_omitted(tmp_path):
+    # The body paragraph implicitly closes head in the unchanged native reader.
+    # Even with the optional head end tag omitted, no title becomes evidence.
+    page = tmp_path / "optional-head-close-empty.html"
+    page.write_text(
+        "<html><head><title>Hidden title</title><p></p></html>",
+        encoding="utf-8",
+    )
+
+    with pytest.warns(UserWarning, match="empty context file"):
+        chunks = load_context_chunks([page])
+    assert chunks.empty
+    assert list(chunks.columns) == ["source", "chunk_id", "text"]
+
+
+def test_html_context_keeps_the_no_body_fallback_for_a_frameset(tmp_path):
+    # Frameset/frame markup is not an implicit body in the unchanged native
+    # reader. The original merged Python reader also kept this title fallback.
+    page = tmp_path / "frameset.html"
+    page.write_text(
+        "<html><head><title>Hidden title</title></head>"
+        '<frameset><frame src="about:blank"></frameset></html>',
+        encoding="utf-8",
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        chunks = load_context_chunks([page])
+    assert _records(chunks) == [
+        {"source": "frameset.html", "chunk_id": "frameset.html#1", "text": "Hidden title"}
+    ]
+    assert not caught
+
+
 def test_text_decoding_follows_read_text_utf8():
     # UTF-8 first; a byte-order mark is discarded as readLines() discards it.
     assert _decode_context_bytes(b"\xef\xbb\xbfcaf\xc3\xa9") == "café"
@@ -372,3 +431,179 @@ def test_expected_json_is_what_the_installed_metasalmon_computes():
         encoding="utf-8",
     )
     assert json.loads(completed.stdout) == _expected()
+
+
+# B435 fourth actual review: keep contextual head and no-body fallback.
+# These fixtures were checked against the unchanged native reader before
+# selecting expected behavior. Only the last noframes-text assertion pins
+# existing Python compatibility rather than asserting parser equivalence.
+@pytest.mark.parametrize(
+    "markup",
+    [
+        '<html><head><title>Fallback title</title><noscript><link rel="stylesheet" href="test.css"></noscript></head></html>',
+        '<html><head><title>Fallback title</title><object data="test.svg"></object></head></html>',
+        '<html><head><title>Fallback title</title><object><param name="x" value="y"></object></head></html>',
+        '<html><head><title>Fallback title</title><template></template></head></html>',
+        '<html><head><title>Fallback title</title></head><frameset><frame src="about:blank"><noframes></noframes></frameset></html>',
+        '<html><head><title>Fallback title</title><param name="x" value="y"></head></html>',
+        '<html><head><title>Fallback title</title><object><p></p></object></head></html>',
+        '<html><head><title>Fallback title</title><template><p></p></template></head></html>',
+        '<html><head><title>Fallback title</title><noscript><p></p></noscript></head></html>',
+        '<html><head><title>Fallback title</title></head><noframes></noframes></html>',
+        '<html><head><title>Fallback title</title><custom-empty></custom-empty></head></html>',
+    ],
+    ids=["head-noscript-link", "head-object", "head-object-param", "head-template",
+         "frameset-noframes", "head-param", "head-object-child", "head-template-child",
+         "head-noscript-child", "outside-head-noframes", "head-custom-empty"],
+)
+def test_html_context_fourth_review_preserves_native_no_body_fallback(tmp_path, markup):
+    page = tmp_path / "no-body-context.html"
+    original = markup.encode("utf-8")
+    page.write_bytes(original)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        pool = load_context_chunks([page])
+    assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
+                               "text": "Fallback title"}]
+    assert not caught
+    assert page.read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "markup",
+    [
+        '<html><head><title>Hidden title</title></head><object></object></html>',
+        '<html><head><title>Hidden title</title></head><template></template></html>',
+        '<html><head><title>Hidden title</title></head><noscript></noscript></html>',
+        '<html><head><title>Hidden title</title></head><param name="x" value="y"></html>',
+        '<html><head><title>Hidden title</title><object></object><p></p></html>',
+        '<html><head><title>Hidden title</title><template></template><p></p></html>',
+        '<html><head><title>Hidden title</title><noscript></noscript><p></p></html>',
+        '<html><head><title>Hidden title</title></head><custom-empty></custom-empty></html>',
+    ],
+    ids=["outside-object", "outside-template", "outside-noscript", "outside-param",
+         "object-then-implicit-body", "template-then-implicit-body", "noscript-then-implicit-body",
+         "outside-custom-empty"],
+)
+def test_html_context_fourth_review_retains_real_empty_body_selection(tmp_path, markup):
+    page = tmp_path / "real-empty-body.html"
+    original = markup.encode("utf-8")
+    page.write_bytes(original)
+    with pytest.warns(UserWarning, match="empty context file"):
+        pool = load_context_chunks([page])
+    assert pool.empty
+    assert list(pool.columns) == ["source", "chunk_id", "text"]
+    assert page.read_bytes() == original
+
+
+@pytest.mark.parametrize("tag", ["object", "template", "noscript"])
+@pytest.mark.parametrize("explicit_body", [False, True], ids=["implicit-body", "explicit-body"])
+def test_html_context_fourth_review_retains_visible_body_text(tmp_path, tag, explicit_body):
+    if explicit_body:
+        markup = ('<html><head><title>Hidden title</title></head><body><'
+                  + tag + '>Visible body</' + tag + '></body></html>')
+    else:
+        markup = ('<html><head><title>Hidden title</title><' + tag + '></' + tag
+                  + '><p>Visible body</p></html>')
+    page = tmp_path / "visible-body.html"
+    original = markup.encode("utf-8")
+    page.write_bytes(original)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        pool = load_context_chunks([page])
+    assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
+                               "text": "Visible body"}]
+    assert not caught
+    assert page.read_bytes() == original
+
+
+def test_html_context_fourth_review_preserves_existing_visible_noframes_text(tmp_path):
+    # Native xml2 includes the title and treats some noframes markup as text;
+    # that existing library distinction is not changed by the no-body repair.
+    page = tmp_path / "visible-noframes.html"
+    markup = ('<html><head><title>Fallback title</title></head><frameset>'
+              '<frame src="about:blank"><noframes>No frame text</noframes></frameset></html>')
+    original = markup.encode("utf-8")
+    page.write_bytes(original)
+    pool = load_context_chunks([page])
+    assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
+                               "text": "No frame text"}]
+    assert page.read_bytes() == original
+
+
+# B435 fifth actual review: native source-bound head tokens do not all create
+# an implicit body. These exact cases pin the observed scope, not HTML validity.
+@pytest.mark.parametrize(
+    "markup, expected_text",
+    [
+        ('<html><head><title>Fallback</title><article></article></head></html>', 'Fallback'),
+        ('<html><head><title>Fallback</title></head><article></article></html>', None),
+        ('<html><head><title>Fallback</title><input></head></html>', 'Fallback'),
+        ('<html><head><title>Fallback</title></head><input></html>', None),
+        ('<html><head><title>Fallback</title><basefont></head></html>', 'Fallback'),
+        ('<html><head><title>Fallback</title></head><basefont></html>', None),
+        ('<html><head><title>Fallback</title><p></p></head></html>', None),
+        ('<html><head><title>Fallback</title><p></p></html>', None),
+    ],
+    ids=['article-head', 'article-outside-head', 'input-head', 'input-outside-head', 'basefont-head', 'basefont-outside-head', 'p-head', 'p-omitted-head-close'],
+)
+def test_html_context_fifth_review_preserves_head_token_body_scope(tmp_path, markup, expected_text):
+    page = tmp_path / "head-token-context.html"
+    original = markup.encode("utf-8")
+    page.write_bytes(original)
+    if expected_text is None:
+        with pytest.warns(UserWarning, match="empty context file"):
+            pool = load_context_chunks([page])
+        assert pool.empty
+        assert list(pool.columns) == ["source", "chunk_id", "text"]
+    else:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            pool = load_context_chunks([page])
+        assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
+                                   "text": expected_text}]
+        assert not caught
+    assert page.read_bytes() == original
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads((FIXTURE_DIR / "native-head-body-scope.json").read_text(encoding="utf-8"))["cases"],
+    ids=lambda case: case["name"],
+)
+def test_html_context_fifth_review_matches_observed_native_head_scope(tmp_path, case):
+    # Expected public output comes from real pinned native documents, not the
+    # Python tag set. One plaintext control preserves existing Python behavior.
+    expected_text = case["expected_text"]
+    if "stdlib_baseline_texts" in case:
+        # This sole legacy plaintext fixture preserves actual pre-change text
+        # extraction on each observed stdlib parser. Body scope remains pinned
+        # to native no-body; accepting an arbitrary public output would hide
+        # truncation on a platform whose unchanged parser retains closing text.
+        from html.parser import HTMLParser
+
+        assert case["name"] == "plaintext"
+        baseline_parts = []
+        parser = HTMLParser()
+        parser.handle_data = baseline_parts.append
+        parser.feed(case["markup"])
+        parser.close()
+        expected_text = "\n".join(text.strip() for text in baseline_parts if text.strip())
+        assert expected_text in case["stdlib_baseline_texts"]
+        assert expected_text
+    page = tmp_path / "native-head-scope.html"
+    original = case["markup"].encode("utf-8")
+    page.write_bytes(original)
+    if not expected_text:
+        with pytest.warns(UserWarning, match="empty context file"):
+            pool = load_context_chunks([page])
+        assert pool.empty
+        assert list(pool.columns) == ["source", "chunk_id", "text"]
+    else:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            pool = load_context_chunks([page])
+        assert _records(pool) == [{"source": page.name, "chunk_id": page.name + "#1",
+                                   "text": expected_text}]
+        assert not caught
+    assert page.read_bytes() == original

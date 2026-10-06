@@ -195,46 +195,119 @@ def policy_sources(policy: dict, role: str) -> tuple[str, ...]:
 
 
 class _TextExtractor(HTMLParser):
+    # libxml2 2.14.4's htmlStartClose head entries establish the native body
+    # scope, except frameset (which remains no-body). Real documents pin all
+    # observed current/legacy/unknown tokens in native-head-body-scope.json. This
+    # applies only within head; ordinary outside-head markup still implies body.
+    _HEAD_BODY_START_TAGS = frozenset({
+        'a', 'abbr', 'acronym', 'address', 'b', 'bdo', 'big', 'blockquote', 'body',
+        'br', 'center', 'cite', 'code', 'dd', 'dfn', 'dir', 'div', 'dl', 'dt', 'em',
+        'fieldset', 'font', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i',
+        'iframe', 'img', 'kbd', 'li', 'listing', 'map', 'menu', 'ol', 'p', 'pre',
+        'q', 's', 'samp', 'small', 'span', 'strike', 'strong', 'sub', 'sup', 'table',
+        'tt', 'u', 'ul', 'var', 'xmp',
+    })
+    # Native html40ElementTable Empty flags: these head elements are void, so
+    # their presence must not hold a following body token inside a container.
+    _HEAD_VOID_TAGS = frozenset({
+        'area', 'base', 'basefont', 'col', 'frame', 'input', 'isindex', 'link',
+        'meta', 'param',
+    })
+
     def __init__(self):
         super().__init__()
         self._all_parts = []
         self._outside_head_parts = []
         self._body_parts = []
         self._head_depth = 0
+        self._implicit_head_scope = False
+        self._head_content_depth = 0
+        self._no_body_depth = 0
+        self._title_depth = 0
         self._body_depth = 0
         self._hidden_depth = 0
         self._saw_body = False
+        self._saw_implicit_body = False
 
     @property
     def parts(self):
         # xml2 selects the body when it finds one. For a fragment it creates a
-        # body around visible content; for a head-only document it finds none
-        # and R falls back to the document, including its title.
+        # body around ordinary body markup, including markup with no visible
+        # text; for a head-only document it finds none and R falls back to the
+        # document, including its title.
         if self._saw_body:
             return self._body_parts
-        if self._outside_head_parts:
+        if self._saw_implicit_body or self._outside_head_parts:
             return self._outside_head_parts
         return self._all_parts
 
     def handle_starttag(self, tag, attrs):
+        head_scope = self._head_depth or self._implicit_head_scope
         if tag in {"script", "style"}:
             self._hidden_depth += 1
         elif tag in {"head", "title"}:
             # xml2 also places a loose title in an implicit head when body
             # content follows it; head-only input still uses the fallback.
+            if (tag == "title" and not head_scope and not self._saw_body
+                    and not self._saw_implicit_body and not self._outside_head_parts):
+                # Keep tag inference in the implicit head after the title ends,
+                # without changing the existing text-collection depth/behavior.
+                self._implicit_head_scope = True
             self._head_depth += 1
+            if tag == "title":
+                self._title_depth += 1
         elif tag == "body":
             self._saw_body = True
             self._body_depth += 1
             self._head_depth = 0
+            self._implicit_head_scope = False
+            self._head_content_depth = 0
+        elif tag == "noframes":
+            # xml2 retains noframes in its no-body scope. Keep the existing
+            # Python text extraction, but do not infer a body from its tags.
+            self._no_body_depth += 1
+        elif (head_scope and tag not in self._HEAD_BODY_START_TAGS
+              and tag not in self._HEAD_VOID_TAGS and tag != "html"):
+            # Native non-body head containers keep their children in head,
+            # including unknown names. Closing one lets a following body token
+            # establish body; native void elements above do not open a container.
+            self._head_content_depth += 1
+        elif (
+            tag not in {"html", "base", "link", "meta", "frameset", "frame"}
+            and (not head_scope or tag in self._HEAD_BODY_START_TAGS)
+            and not self._head_content_depth
+            and not self._no_body_depth
+            and not self._title_depth
+            and not self._hidden_depth
+        ):
+            # An omitted body still has a scope when body elements are empty
+            # (for example <p><img></p> or <br>). Do not infer that scope only
+            # from nonempty text, which would incorrectly expose a head title.
+            # Frameset/frame are no-body markup and keep the native fallback.
+            self._saw_implicit_body = True
+            # A body element also ends head when its optional end tag is
+            # omitted. Markup inside an open title retains the existing
+            # title treatment rather than implying this body boundary.
+            self._head_depth = 0
+            self._implicit_head_scope = False
 
     def handle_endtag(self, tag):
         if tag in {"script", "style"}:
             self._hidden_depth = max(0, self._hidden_depth - 1)
         elif tag in {"head", "title"}:
             self._head_depth = max(0, self._head_depth - 1)
+            if tag == "head":
+                self._head_content_depth = 0
+                self._implicit_head_scope = False
+            if tag == "title":
+                self._title_depth = max(0, self._title_depth - 1)
         elif tag == "body":
             self._body_depth = max(0, self._body_depth - 1)
+        elif tag == "noframes":
+            self._no_body_depth = max(0, self._no_body_depth - 1)
+        elif (tag not in self._HEAD_BODY_START_TAGS
+              and tag not in self._HEAD_VOID_TAGS and tag != "html"):
+            self._head_content_depth = max(0, self._head_content_depth - 1)
 
     def handle_data(self, data):
         if self._hidden_depth:
