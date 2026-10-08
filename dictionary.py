@@ -26,6 +26,7 @@ from .metadata import (
     parse_logical,
     values_form_code_list,
 )
+from .semantic_review_deprecation import deprecated_llm_entry_point
 
 VALID_VALUE_TYPES = {"string", "integer", "number", "boolean", "date", "datetime"}
 VALID_COLUMN_ROLES = {"identifier", "attribute", "measurement", "temporal", "categorical"}
@@ -464,6 +465,7 @@ def infer_required_flag(col_name: str, series: pd.Series, column_role) -> Option
     return True
 
 
+@deprecated_llm_entry_point("infer_dictionary")
 def infer_dictionary(
     df: Union[pd.DataFrame, Mapping[str, pd.DataFrame]],
     guess_types: bool = True,
@@ -511,7 +513,9 @@ def infer_dictionary(
         warnings.warn(
             "LLM semantic-review options are ignored when seed_semantics=False.",
             UserWarning,
-            stacklevel=2,
+            # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+            # this entry point, so its caller is one frame further out (hub B-327).
+            stacklevel=3,
         )
 
     llm_options = {

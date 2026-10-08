@@ -128,6 +128,10 @@ jobs:
       # run in every job; each file's last test re-runs the R oracle script
       # beside its fixture against the metasalmon installed above, so a change
       # on the R side turns this job red instead of drifting.
+      # `tests/test_semantic_review_parity.py` (hub B-327) runs only here: it
+      # compares the vendored review-packet contract with the clone above byte
+      # for byte, and hands every conformance case's review session across the
+      # language boundary in both directions.
       - name: Run parity test (R↔Python)
         env:
           R_LIBS: /tmp/metasalmon-lib

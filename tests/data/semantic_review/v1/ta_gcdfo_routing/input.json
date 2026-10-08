@@ -1,0 +1,85 @@
+{
+  "case_id": "ta_gcdfo_routing",
+  "dictionary": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "enumeration",
+      "column_name": "DFO_COUNTER_QA_PROCEDURE",
+      "column_label": "DFO counter QA procedure",
+      "column_description": "DFO Pacific operational procedure for quality assurance of a fixed-site salmon counter.",
+      "column_role": "measurement",
+      "value_type": "number",
+      "unit_label": null,
+      "unit_iri": null,
+      "term_iri": null,
+      "property_iri": null,
+      "entity_iri": null,
+      "constraint_iri": null,
+      "statistical_modifier_iri": null,
+      "method_iri": null,
+      "term_type": null
+    }
+  ],
+  "targets": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "enumeration",
+      "column_name": "DFO_COUNTER_QA_PROCEDURE",
+      "code_value": null,
+      "dictionary_role": "method",
+      "search_role": "method",
+      "target_scope": "column",
+      "target_sdp_file": "column_dictionary.csv",
+      "target_sdp_field": "method_iri",
+      "target_row_key": "theme_a/enumeration/DFO_COUNTER_QA_PROCEDURE",
+      "target_label": "DFO counter QA procedure",
+      "target_description": "DFO Pacific operational QA procedure for a fixed-site salmon counter.",
+      "search_query": "DFO fixed-site salmon counter quality assurance procedure",
+      "target_query_basis": "column_description",
+      "target_query_context": "DFO Pacific operational QA procedure for fixed-site enumeration.",
+      "column_label": "DFO counter QA procedure",
+      "column_description": "DFO Pacific operational procedure for quality assurance of a fixed-site salmon counter.",
+      "code_label": null,
+      "code_description": null
+    }
+  ],
+  "candidates": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "enumeration",
+      "column_name": "DFO_COUNTER_QA_PROCEDURE",
+      "code_value": null,
+      "dictionary_role": "method",
+      "search_role": "method",
+      "target_scope": "column",
+      "target_sdp_file": "column_dictionary.csv",
+      "target_sdp_field": "method_iri",
+      "target_row_key": "theme_a/enumeration/DFO_COUNTER_QA_PROCEDURE",
+      "target_label": "DFO counter QA procedure",
+      "target_description": "DFO Pacific operational QA procedure for a fixed-site salmon counter.",
+      "search_query": "DFO fixed-site salmon counter quality assurance procedure",
+      "target_query_basis": "column_description",
+      "target_query_context": "DFO Pacific operational QA procedure for fixed-site enumeration.",
+      "column_label": "DFO counter QA procedure",
+      "column_description": "DFO Pacific operational procedure for quality assurance of a fixed-site salmon counter.",
+      "code_label": null,
+      "code_description": null,
+      "label": "Fixed station tally",
+      "iri": "https://w3id.org/gcdfo/salmon#FixedStationTally",
+      "source": "gcdfo",
+      "ontology": "DFO Salmon Ontology",
+      "role": "method",
+      "match_type": "label_partial",
+      "definition": "A broad fixed-station enumeration method that does not specify the QA procedure.",
+      "score": 0.53,
+      "term_type": "skos_concept",
+      "definition_status": "curated_paraphrase",
+      "retrieval_query": "DFO fixed-site salmon counter quality assurance procedure",
+      "retrieval_pass": 1
+    }
+  ],
+  "context_text": [
+    "The requested concept is a DFO Pacific operational procedure and therefore belongs in the GCDFO repository when no precise existing candidate is available."
+  ],
+  "top_n": 5
+}

@@ -148,6 +148,15 @@ quartodoc:
         - set_sdp_code
         - semantic_suggestions
         - semantic_llm_assessments
+    - title: "Harness review (packet and ingest)"
+      desc: >-
+        Model judgement runs outside the package: write a review packet, have
+        your harness judge it, and read the assessments back.
+      contents:
+        - write_semantic_review_packet
+        - ingest_semantic_assessments
+        - SemanticReviewError
+        - LLMDeprecationWarning
     - title: "Semantic helpers"
       desc: "Search vocabularies, rank candidates, and review semantic decompositions."
       contents:

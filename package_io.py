@@ -54,6 +54,7 @@ from .resource_types import (
     value_type_mismatch_record,
 )
 from .sdp_methods import _atomic_write_set
+from .semantic_review_deprecation import deprecated_llm_entry_point
 from .sdp_schema import (
     SDP_PROFILE_URL as _SDP_PROFILE_URL,
     SDP_RULES_URL as _SDP_RULES_URL,
@@ -569,26 +570,40 @@ def _warn_pruning_recorded_decisions(target: Path, writes) -> None:
     try:
         rows = read_sdp_csv(suggestions_path)
     except Exception:
+        rows = pd.DataFrame()
+    decisions = []
+    if "decision" in rows.columns:
+        decisions = [
+            value
+            for value in rows["decision"].map(
+                lambda entry: "" if pd.isna(entry) else str(entry).strip()
+            )
+            if value and value != "not_selected"
+        ]
+    # A semantic review session under ``review/`` is a record too (hub item
+    # B-327, mirroring metasalmon's B-326): the packet, the harness's answers
+    # and the ingested assessments. ``prune=True`` would delete it just as
+    # silently.
+    review_record = target / "review" / "semantic-llm-assessments.csv"
+    has_review_record = review_record.is_file()
+    if not decisions and not has_review_record:
         return
-    if "decision" not in rows.columns:
-        return
-    decisions = [
-        value
-        for value in rows["decision"].map(
-            lambda entry: "" if pd.isna(entry) else str(entry).strip()
+    parts = []
+    if decisions:
+        plural = "" if len(decisions) == 1 else "s"
+        parts.append(
+            "prune=True is about to delete semantic_suggestions.csv, which records "
+            f"{len(decisions)} review decision{plural}."
         )
-        if value and value != "not_selected"
-    ]
-    if not decisions:
-        return
-    plural = "" if len(decisions) == 1 else "s"
-    warnings.warn(
-        "prune=True is about to delete semantic_suggestions.csv, which records "
-        f"{len(decisions)} review decision{plural}. Copy it first if you want "
-        "to keep the record of what was accepted and why.",
-        UserWarning,
-        stacklevel=2,
+    if has_review_record:
+        parts.append(
+            "prune=True is about to delete review/, which holds an ingested "
+            "semantic review record."
+        )
+    parts.append(
+        "Copy it first if you want to keep the record of what was accepted and why."
     )
+    warnings.warn(" ".join(parts), UserWarning, stacklevel=2)
 
 
 def _commit_package_write(
@@ -1728,6 +1743,47 @@ def _prefill_legacy_enumeration_method_code_terms(codes, dictionary=None):
     )
 
 
+def _select_semantic_seed_codes(
+    codes: Optional[pd.DataFrame],
+    resource_map: Mapping,
+    scope: str,
+    dataset_id,
+) -> Optional[pd.DataFrame]:
+    """The ``codes.csv`` rows whose values get a semantic target under ``scope``.
+
+    ``"none"`` seeds no code; ``"all"`` seeds every code; ``"factor"`` seeds the
+    codes of the columns that look like a code list
+    (:func:`_is_semantic_code_candidate`). The counterpart of metasalmon's
+    ``.ms_select_semantic_seed_codes()``. Moved out of
+    :func:`infer_salmon_datapackage_artifacts` unchanged for hub item B-327,
+    because the review-packet exporter recovers a package's blank slots by
+    running the discovery ``create_sdp()`` ran, under the same scope.
+    """
+    if scope == "none":
+        return None
+    if scope != "factor" or codes is None:
+        return codes
+    categorical_keys = []
+    for resource_name, resource_df in resource_map.items():
+        for column in resource_df.columns:
+            if _is_semantic_code_candidate(
+                str(column),
+                resource_df[column],
+            ):
+                categorical_keys.append((dataset_id, resource_name, column))
+    if categorical_keys:
+        allowed = pd.MultiIndex.from_tuples(
+            categorical_keys,
+            names=["dataset_id", "table_id", "column_name"],
+        )
+        code_keys = pd.MultiIndex.from_frame(
+            codes[["dataset_id", "table_id", "column_name"]]
+        )
+        return codes.loc[code_keys.isin(allowed)].copy()
+    return codes.iloc[0:0].copy()
+
+
+@deprecated_llm_entry_point("infer_salmon_datapackage_artifacts")
 def infer_salmon_datapackage_artifacts(
     resources,
     dataset_id: str = "dataset-1",
@@ -1822,29 +1878,9 @@ def infer_salmon_datapackage_artifacts(
             print("Seeding semantic suggestions during infer_salmon_datapackage_artifacts().")
         from .semantics import suggest_semantics
 
-        semantic_codes = codes
-        if semantic_code_scope == "none":
-            semantic_codes = None
-        elif semantic_code_scope == "factor" and codes is not None:
-            categorical_keys = []
-            for resource_name, resource_df in resource_map.items():
-                for column in resource_df.columns:
-                    if _is_semantic_code_candidate(
-                        str(column),
-                        resource_df[column],
-                    ):
-                        categorical_keys.append((dataset_id, resource_name, column))
-            if categorical_keys:
-                allowed = pd.MultiIndex.from_tuples(
-                    categorical_keys,
-                    names=["dataset_id", "table_id", "column_name"],
-                )
-                code_keys = pd.MultiIndex.from_frame(
-                    codes[["dataset_id", "table_id", "column_name"]]
-                )
-                semantic_codes = codes.loc[code_keys.isin(allowed)].copy()
-            else:
-                semantic_codes = codes.iloc[0:0].copy()
+        semantic_codes = _select_semantic_seed_codes(
+            codes, resource_map, semantic_code_scope, dataset_id
+        )
 
         dict_df = suggest_semantics(
             resource_map,
@@ -1875,7 +1911,9 @@ def infer_salmon_datapackage_artifacts(
         warnings.warn(
             "LLM review options are ignored when seed_semantics=False.",
             UserWarning,
-            stacklevel=2,
+            # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+            # this entry point, so its caller is one frame further out (hub B-327).
+            stacklevel=3,
         )
 
     return {
@@ -2118,6 +2156,7 @@ def _auto_apply_package_suggestions(artifacts: dict, llm_assess: bool) -> None:
                 ] = suggestion["label"]
 
 
+@deprecated_llm_entry_point("create_sdp")
 def create_sdp(
     resources,
     path: Optional[str] = None,
@@ -2178,7 +2217,9 @@ def create_sdp(
         warnings.warn(
             "LLM context is ignored unless llm_assess=True.",
             UserWarning,
-            stacklevel=2,
+            # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+            # this entry point, so its caller is one frame further out (hub B-327).
+            stacklevel=3,
         )
     if path is None or not str(path).strip():
         safe_id = re.sub(r"[^A-Za-z0-9._-]+", "-", dataset_id).strip("-")
@@ -2300,7 +2341,9 @@ def create_sdp(
                 "contains unresolved review values. Review the package and "
                 "run write_edh_xml_from_sdp() to rebuild it.",
                 UserWarning,
-                stacklevel=2,
+                # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+                # this entry point, so its caller is one frame further out (hub B-327).
+                stacklevel=3,
             )
     return pkg_path
 

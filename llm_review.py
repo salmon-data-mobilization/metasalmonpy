@@ -691,6 +691,27 @@ def load_context_chunks(
     snippet as a pool of chunks, one row each, with metasalmon's source labels
     and chunk ids (``<source>#<n>`` for a file, ``inline_context[<i>]#<n>``
     for the i-th non-empty snippet)."""
+    return collect_context(context_files, context_text, chunk_size, overlap)[0]
+
+
+def collect_context(
+    context_files=None,
+    context_text=None,
+    chunk_size: int = CONTEXT_CHUNK_CHARS,
+    overlap: int = CONTEXT_OVERLAP_CHARS,
+) -> tuple:
+    """The context pool and the inputs it was built from.
+
+    The pool is :func:`load_context_chunks`'s. The inputs are what the review
+    packet records for each context source, in pool order (hub item B-327,
+    mirroring the ``context_inputs`` attribute B-326 gave
+    ``.ms_collect_context_chunks()``): a file's label, ``"file"`` and the
+    SHA-256 of its bytes; an inline snippet's ``inline_context[<i>]``,
+    ``"text"`` and the SHA-256 of its trimmed UTF-8 text. Built here, where
+    the source labels are assigned, so the packet's labels and the excerpts'
+    labels are one rendering. A list rather than a frame so it can never ride
+    on a pool's ``attrs``, which ``pd.concat`` compares.
+    """
     paths = _normalize_context_files(context_files)
     documents = []
     for path in paths:
@@ -715,14 +736,22 @@ def load_context_chunks(
             if value:
                 inline.append(value)
     if not documents and not inline:
-        return pd.DataFrame(columns=["source", "chunk_id", "text"])
+        return pd.DataFrame(columns=["source", "chunk_id", "text"]), []
 
     chunks = []
+    inputs = []
     for document in _unique_context_sources(documents):
         chunks.extend(
             _chunk_context_text(
                 document["text"], document["source"], chunk_size, overlap
             )
+        )
+        inputs.append(
+            {
+                "source": document["source"],
+                "kind": "file",
+                "sha256": hashlib.sha256(Path(document["path"]).read_bytes()).hexdigest(),
+            }
         )
     for index, value in enumerate(inline, start=1):
         snippet_chunks = _chunk_context_text(
@@ -731,7 +760,14 @@ def load_context_chunks(
         for position, chunk in enumerate(snippet_chunks, start=1):
             chunk["chunk_id"] = f"inline_context[{index}]#{position}"
         chunks.extend(snippet_chunks)
-    return pd.DataFrame(chunks, columns=["source", "chunk_id", "text"])
+        inputs.append(
+            {
+                "source": f"inline_context[{index}]",
+                "kind": "text",
+                "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+            }
+        )
+    return pd.DataFrame(chunks, columns=["source", "chunk_id", "text"]), inputs
 
 
 def _relevant_context(

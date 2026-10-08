@@ -1,0 +1,39 @@
+{
+  "fishing gear type|variable": [
+    {
+      "label": "Fishing gear",
+      "iri": "https://w3id.org/smn/FishingGear",
+      "source": "smn",
+      "ontology": "Salmon Ontology",
+      "role": "variable",
+      "match_type": "label_partial",
+      "definition": "The gear used to fish.",
+      "score": 0.92,
+      "term_type": "owl_class"
+    },
+    {
+      "label": "Gear deployment",
+      "iri": "https://w3id.org/smn/GearDeployment",
+      "source": "smn",
+      "ontology": "Salmon Ontology",
+      "role": "variable",
+      "match_type": "label_partial",
+      "definition": "The act of deploying gear.",
+      "score": 0.55,
+      "term_type": "owl_class"
+    }
+  ],
+  "fishing vessel|variable": [
+    {
+      "label": "Vessel",
+      "iri": "https://w3id.org/smn/Vessel",
+      "source": "smn",
+      "ontology": "Salmon Ontology",
+      "role": "variable",
+      "match_type": "label_partial",
+      "definition": "A vessel.",
+      "score": 0.6,
+      "term_type": "owl_class"
+    }
+  ]
+}

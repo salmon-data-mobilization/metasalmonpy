@@ -21,6 +21,7 @@ from .metadata import (
 )
 from .term_search import _search_failed_sources, find_terms
 from .dwc_dp import suggest_dwc_mappings
+from .semantic_review_deprecation import deprecated_llm_entry_point
 
 ROLE_MAP = {
     "term_iri": "variable",
@@ -337,6 +338,32 @@ def _semantic_text_hash(parts) -> str:
     return rolling(131, 216613626, 2147483629) + rolling(137, 16777619, 2147483587)
 
 
+#: ``.ms_semantic_target_cols()``: the frozen 19-column semantic target row, in
+#: order (``AGENTS.md``'s frozen column contracts). The one copy: the review
+#: packet (:mod:`.semantic_review_packet`) reads it from here.
+_SEMANTIC_TARGET_COLUMNS = (
+    "dataset_id",
+    "table_id",
+    "column_name",
+    "code_value",
+    "dictionary_role",
+    "search_role",
+    "target_scope",
+    "target_sdp_file",
+    "target_sdp_field",
+    "target_row_key",
+    "target_label",
+    "target_description",
+    "search_query",
+    "target_query_basis",
+    "target_query_context",
+    "column_label",
+    "column_description",
+    "code_label",
+    "code_description",
+)
+
+
 _FINGERPRINT_COLUMNS = (
     "ontology",
     "label",
@@ -432,7 +459,10 @@ def _retrieve_semantic_target_candidates(
     bonus, so an unscored hinted candidate could outrank a scored one, and
     capped at ``max_per_role`` as given, so a depth of 0 kept nothing. The
     packet exporter re-retrieves each pass-1 target through this function
-    (B-327), so a pass-1 shortlist has to be the one metasalmon builds.
+    (B-327), so a pass-1 shortlist has to be the one metasalmon builds, and
+    B-327 took the last three points of R's rule: the query is trimmed as
+    ``trimws()`` trims it, a role with no sources to search is not searched,
+    and only the 19 target columns are stamped onto a candidate row.
     ``tests/test_semantic_retrieval.py`` pins both passes against what R gives
     on shared inputs.
     """
@@ -445,9 +475,17 @@ def _retrieve_semantic_target_candidates(
     if not search_role:
         return pd.DataFrame()
     query_text = target.get("search_query") if query is None else query
-    if _is_missing(query_text) or not str(query_text).strip():
+    # R trims the query with ``trimws()`` -- space, tab, CR and LF, nothing
+    # else -- and searches with, and records, the trimmed text (hub B-327).
+    query_text = "" if _is_missing(query_text) else str(query_text).strip(" \t\r\n")
+    if not query_text:
         return pd.DataFrame()
     target_sources = policy_sources(source_policy, search_role)
+    if not target_sources:
+        # A role with no sources to search -- an explicit, empty allowlist --
+        # is not searched at all, as in R (hub B-327): the answer would be
+        # filtered to nothing anyway, and a search_fn that must not run, ran.
+        return pd.DataFrame()
     res = search_fn(query_text, role=search_role, sources=target_sources)
     if res is None or res.empty:
         return pd.DataFrame()
@@ -493,8 +531,16 @@ def _retrieve_semantic_target_candidates(
     res = res.head(max(1, int(max_per_role))).copy()
     res["retrieval_query"] = query_text
     res["retrieval_pass"] = retrieval_pass
-    for key, value in target.items():
-        res[key] = value
+    # Only the frozen 19 target columns are stamped onto a candidate row, as R
+    # stamps ``intersect(.ms_semantic_target_cols(), names(target))`` (hub
+    # B-327). A discovered target also carries ``unit_label``, the column's
+    # unit, which is not candidate evidence: stamped here it became a 20th
+    # target column on every measurement candidate, and so an ``extra``
+    # member of the review packet's candidate record that metasalmon's never
+    # carries. Nothing read it from a candidate row.
+    for key in _SEMANTIC_TARGET_COLUMNS:
+        if key in target:
+            res[key] = target[key]
     return res
 
 
@@ -951,117 +997,83 @@ def _copy_search_answer(answer):
     return answer.copy() if isinstance(answer, pd.DataFrame) else answer
 
 
-def suggest_semantics(
-    df,
-    dict_df: pd.DataFrame,
-    sources: Optional[Sequence[str]] = None,
-    include_dwc: bool = False,
-    max_per_role: int = 3,
-    search_fn: Callable = find_terms,
-    codes: Optional[pd.DataFrame] = None,
-    table_meta: Optional[pd.DataFrame] = None,
-    dataset_meta: Optional[pd.DataFrame] = None,
-    llm_assess: bool = False,
-    llm_provider: str = "openai",
-    llm_model: Optional[str] = None,
-    llm_api_key: Optional[str] = None,
-    llm_base_url: Optional[str] = None,
-    llm_reasoning_effort: Optional[str] = None,
-    llm_top_n: int = 5,
-    llm_context_files=None,
-    llm_context_text=None,
-    llm_timeout_seconds: int = 60,
-    llm_request_fn=None,
-) -> pd.DataFrame:
+_COLLISION_GROUP_COLUMNS = (
+    "dataset_id",
+    "table_id",
+    "column_name",
+    "code_value",
+    "target_scope",
+    "target_sdp_file",
+)
+
+
+def _semantic_flag_role_collisions(suggestions_df: pd.DataFrame) -> pd.DataFrame:
+    """Flag a label that surfaces as both a variable and a property candidate.
+
+    For the same target column, so a reviewer sees that the row targets one
+    role's semantics: ``collision_roles`` (the roles the label appears for,
+    ``|``-joined in code-point order), ``role_collision`` and
+    ``role_collision_note``. Moved out of :func:`suggest_semantics` unchanged
+    for hub item B-327, as metasalmon moved its copy into
+    ``.ms_semantic_flag_role_collisions()`` for B-326, so the review-packet
+    exporter marks a re-retrieved shortlist the same way. Any earlier flags
+    are recomputed rather than kept.
     """
-    Suggest semantic annotations for SDP metadata targets.
-
-    Candidate retrieval covers dictionary columns, controlled codes, table
-    observation units, and dataset keywords. Measurement columns are expanded
-    into variable, property, entity, unit, constraint, and
-    statistical_modifier roles; the code-level method role survives for
-    codes.csv term_iri targets.
-
-    Parameters
-    ----------
-    df
-        A DataFrame, a named mapping of DataFrames, or ``None`` when only
-        supplied metadata targets are being reviewed.
-    dict_df
-        SDP column dictionary.
-    sources
-        Retrieval sources. ``None`` uses role-aware defaults; any explicit
-        value is a strict allowlist for initial and retry retrieval.
-    llm_assess
-        Enable opt-in LLM assessment. Context alone never enables a provider
-        request.
-    llm_context_files
-        Local context file paths. Parsed DataFrames or document objects are
-        rejected.
-
-    Returns
-    -------
-    pandas.DataFrame
-        A normalized dictionary carrying ``semantic_suggestions`` in
-        ``DataFrame.attrs`` and, when requested, the stable 30-column
-        ``semantic_llm_assessments`` table. The dictionary also carries a
-        ``semantic_targets`` attribute with the discovered search targets
-        (one row per unfilled semantic field);
-        :func:`~metasalmonpy.term_requests.detect_semantic_term_gaps` reads it
-        to report targets whose retrieval returned zero candidates, which by
-        construction have no suggestion rows at all.
-    """
-    from .llm_review import (
-        assess_semantic_suggestions,
-        make_source_policy,
-        validate_context_files,
+    suggestions_df = suggestions_df.drop(
+        columns=[
+            column
+            for column in ("collision_roles", "role_collision", "role_collision_note")
+            if column in suggestions_df.columns
+        ]
+    ).copy()
+    if suggestions_df.empty:
+        return suggestions_df
+    for column in _COLLISION_GROUP_COLUMNS + ("target_sdp_field", "dictionary_role"):
+        if column not in suggestions_df.columns:
+            suggestions_df[column] = pd.NA
+    suggestions_df["_candidate_label_norm"] = suggestions_df["label"].fillna("").astype(str).str.strip().str.lower()
+    group_cols = [*_COLLISION_GROUP_COLUMNS, "_candidate_label_norm"]
+    suggestions_df["_collision_key"] = suggestions_df[group_cols].apply(
+        lambda row: "\r".join("<NA>" if _is_missing(value) else str(value) for value in row),
+        axis=1,
     )
+    collision_roles = suggestions_df.groupby("_collision_key")["dictionary_role"].agg(
+        lambda values: "|".join(sorted(set(values.dropna().astype(str))))
+    )
+    suggestions_df["collision_roles"] = suggestions_df["_collision_key"].map(collision_roles)
+    suggestions_df["role_collision"] = suggestions_df["collision_roles"].apply(
+        lambda value: {"variable", "property"}.issubset(set(str(value).split("|")))
+    )
+    suggestions_df["role_collision_note"] = pd.NA
+    variable_collision = suggestions_df["role_collision"] & (suggestions_df["dictionary_role"] == "variable")
+    property_collision = suggestions_df["role_collision"] & (suggestions_df["dictionary_role"] == "property")
+    suggestions_df.loc[variable_collision, "role_collision_note"] = (
+        "Label appears for variable and property candidates; this row targets variable semantics for "
+        + suggestions_df.loc[variable_collision, "target_sdp_field"].astype(str)
+        + "."
+    )
+    suggestions_df.loc[property_collision, "role_collision_note"] = (
+        "Label appears for variable and property candidates; this row targets property semantics for "
+        + suggestions_df.loc[property_collision, "target_sdp_field"].astype(str)
+        + "."
+    )
+    return suggestions_df.drop(columns=["_candidate_label_norm", "_collision_key"])
 
-    if llm_context_files is not None:
-        validate_context_files(llm_context_files)
-    if (llm_context_files is not None or llm_context_text is not None) and not llm_assess:
-        warnings.warn(
-            "LLM context is ignored unless llm_assess=True.",
-            UserWarning,
-            stacklevel=2,
-        )
-    source_policy = make_source_policy(sources)
-    if isinstance(df, Mapping):
-        if not df:
-            raise ValueError("df cannot be an empty resource mapping.")
-        if any(not isinstance(value, pd.DataFrame) for value in df.values()):
-            raise TypeError("All df resources must be pandas DataFrames.")
-        resource_lookup = {str(key): value for key, value in df.items()}
-        default_df = next(iter(resource_lookup.values()))
-    elif isinstance(df, pd.DataFrame):
-        resource_lookup = None
-        default_df = df
-    elif df is None:
-        resource_lookup = None
-        default_df = None
-    else:
-        raise TypeError(
-            "df must be a pandas DataFrame, a named mapping of DataFrames, or None."
-        )
 
-    dictionary = normalize_dictionary(pd.DataFrame(dict_df))
-    codes_df = normalize_codes(codes)
-    table_df = normalize_table_meta(table_meta) if table_meta is not None else pd.DataFrame()
-    dataset_df = normalize_dataset_meta(dataset_meta) if dataset_meta is not None else pd.DataFrame()
+def _semantic_discover_targets(dictionary, codes_df, table_df, dataset_df) -> list:
+    """The semantic targets of a dictionary and its metadata, one per unfilled slot.
 
-    if dictionary.empty and (codes_df is None or codes_df.empty) and table_df.empty and dataset_df.empty:
-        dictionary.attrs["semantic_suggestions"] = pd.DataFrame()
-        dictionary.attrs["semantic_targets"] = pd.DataFrame()
-        if llm_assess:
-            from .llm_review import normalize_assessment_rows
-
-            dictionary.attrs["semantic_llm_assessments"] = (
-                normalize_assessment_rows()
-            )
-        if include_dwc:
-            dictionary.attrs["dwc_mappings"] = pd.DataFrame()
-        return dictionary
-
+    Measurement columns in every dictionary role, controlled non-measurement
+    columns' ``term_iri``, code values, tables' observation units and datasets'
+    keywords -- each a dict carrying the target columns (and, for a column,
+    its ``unit_label``). The counterpart of metasalmon's
+    ``.ms_semantic_discover_targets()``. Moved out of :func:`suggest_semantics`
+    unchanged for hub item B-327: the review-packet exporter recovers a
+    package's blank slots by running this discovery again, and calling it
+    rather than :func:`suggest_semantics` keeps the in-package model call off
+    the exporter's call graph, which ``tests/test_semantic_review_packet.py``
+    walks. The frames are the ones :func:`suggest_semantics` normalised.
+    """
     targets = []
 
     for _, row in dictionary.iterrows():
@@ -1296,6 +1308,125 @@ def suggest_semantics(
                 }
             )
 
+    return targets
+
+
+@deprecated_llm_entry_point("suggest_semantics")
+def suggest_semantics(
+    df,
+    dict_df: pd.DataFrame,
+    sources: Optional[Sequence[str]] = None,
+    include_dwc: bool = False,
+    max_per_role: int = 3,
+    search_fn: Callable = find_terms,
+    codes: Optional[pd.DataFrame] = None,
+    table_meta: Optional[pd.DataFrame] = None,
+    dataset_meta: Optional[pd.DataFrame] = None,
+    llm_assess: bool = False,
+    llm_provider: str = "openai",
+    llm_model: Optional[str] = None,
+    llm_api_key: Optional[str] = None,
+    llm_base_url: Optional[str] = None,
+    llm_reasoning_effort: Optional[str] = None,
+    llm_top_n: int = 5,
+    llm_context_files=None,
+    llm_context_text=None,
+    llm_timeout_seconds: int = 60,
+    llm_request_fn=None,
+) -> pd.DataFrame:
+    """
+    Suggest semantic annotations for SDP metadata targets.
+
+    Candidate retrieval covers dictionary columns, controlled codes, table
+    observation units, and dataset keywords. Measurement columns are expanded
+    into variable, property, entity, unit, constraint, and
+    statistical_modifier roles; the code-level method role survives for
+    codes.csv term_iri targets.
+
+    Parameters
+    ----------
+    df
+        A DataFrame, a named mapping of DataFrames, or ``None`` when only
+        supplied metadata targets are being reviewed.
+    dict_df
+        SDP column dictionary.
+    sources
+        Retrieval sources. ``None`` uses role-aware defaults; any explicit
+        value is a strict allowlist for initial and retry retrieval.
+    llm_assess
+        Enable opt-in LLM assessment. Context alone never enables a provider
+        request.
+    llm_context_files
+        Local context file paths. Parsed DataFrames or document objects are
+        rejected.
+
+    Returns
+    -------
+    pandas.DataFrame
+        A normalized dictionary carrying ``semantic_suggestions`` in
+        ``DataFrame.attrs`` and, when requested, the stable 30-column
+        ``semantic_llm_assessments`` table. The dictionary also carries a
+        ``semantic_targets`` attribute with the discovered search targets
+        (one row per unfilled semantic field);
+        :func:`~metasalmonpy.term_requests.detect_semantic_term_gaps` reads it
+        to report targets whose retrieval returned zero candidates, which by
+        construction have no suggestion rows at all.
+    """
+    from .llm_review import (
+        assess_semantic_suggestions,
+        make_source_policy,
+        validate_context_files,
+    )
+
+    if llm_context_files is not None:
+        validate_context_files(llm_context_files)
+    if (llm_context_files is not None or llm_context_text is not None) and not llm_assess:
+        warnings.warn(
+            "LLM context is ignored unless llm_assess=True.",
+            UserWarning,
+            # 3, not 2: the LLM deprecation scope (semantic_review_deprecation) wraps
+            # this entry point, so its caller is one frame further out (hub B-327).
+            stacklevel=3,
+        )
+    source_policy = make_source_policy(sources)
+    if isinstance(df, Mapping):
+        if not df:
+            raise ValueError("df cannot be an empty resource mapping.")
+        if any(not isinstance(value, pd.DataFrame) for value in df.values()):
+            raise TypeError("All df resources must be pandas DataFrames.")
+        resource_lookup = {str(key): value for key, value in df.items()}
+        default_df = next(iter(resource_lookup.values()))
+    elif isinstance(df, pd.DataFrame):
+        resource_lookup = None
+        default_df = df
+    elif df is None:
+        resource_lookup = None
+        default_df = None
+    else:
+        raise TypeError(
+            "df must be a pandas DataFrame, a named mapping of DataFrames, or None."
+        )
+
+    dictionary = normalize_dictionary(pd.DataFrame(dict_df))
+    codes_df = normalize_codes(codes)
+    table_df = normalize_table_meta(table_meta) if table_meta is not None else pd.DataFrame()
+    dataset_df = normalize_dataset_meta(dataset_meta) if dataset_meta is not None else pd.DataFrame()
+
+    if dictionary.empty and (codes_df is None or codes_df.empty) and table_df.empty and dataset_df.empty:
+        dictionary.attrs["semantic_suggestions"] = pd.DataFrame()
+        dictionary.attrs["semantic_targets"] = pd.DataFrame()
+        if llm_assess:
+            from .llm_review import normalize_assessment_rows
+
+            dictionary.attrs["semantic_llm_assessments"] = (
+                normalize_assessment_rows()
+            )
+        if include_dwc:
+            dictionary.attrs["dwc_mappings"] = pd.DataFrame()
+        return dictionary
+
+    targets = _semantic_discover_targets(dictionary, codes_df, table_df, dataset_df)
+
     targets_df = pd.DataFrame(targets)
     suggestion_rows = []
     leading = [
@@ -1361,41 +1492,7 @@ def suggest_semantics(
         )
 
     if not suggestions_df.empty:
-        suggestions_df["_candidate_label_norm"] = suggestions_df["label"].fillna("").astype(str).str.strip().str.lower()
-        group_cols = [
-            "dataset_id",
-            "table_id",
-            "column_name",
-            "code_value",
-            "target_scope",
-            "target_sdp_file",
-            "_candidate_label_norm",
-        ]
-        suggestions_df["_collision_key"] = suggestions_df[group_cols].apply(
-            lambda row: "\r".join("<NA>" if _is_missing(value) else str(value) for value in row),
-            axis=1,
-        )
-        collision_roles = suggestions_df.groupby("_collision_key")["dictionary_role"].agg(
-            lambda values: "|".join(sorted(set(values.dropna().astype(str))))
-        )
-        suggestions_df["collision_roles"] = suggestions_df["_collision_key"].map(collision_roles)
-        suggestions_df["role_collision"] = suggestions_df["collision_roles"].apply(
-            lambda value: {"variable", "property"}.issubset(set(str(value).split("|")))
-        )
-        suggestions_df["role_collision_note"] = pd.NA
-        variable_collision = suggestions_df["role_collision"] & (suggestions_df["dictionary_role"] == "variable")
-        property_collision = suggestions_df["role_collision"] & (suggestions_df["dictionary_role"] == "property")
-        suggestions_df.loc[variable_collision, "role_collision_note"] = (
-            "Label appears for variable and property candidates; this row targets variable semantics for "
-            + suggestions_df.loc[variable_collision, "target_sdp_field"].astype(str)
-            + "."
-        )
-        suggestions_df.loc[property_collision, "role_collision_note"] = (
-            "Label appears for variable and property candidates; this row targets property semantics for "
-            + suggestions_df.loc[property_collision, "target_sdp_field"].astype(str)
-            + "."
-        )
-        suggestions_df = suggestions_df.drop(columns=["_candidate_label_norm", "_collision_key"])
+        suggestions_df = _semantic_flag_role_collisions(suggestions_df)
 
     if llm_assess:
         if targets_df.empty:

@@ -1,0 +1,37 @@
+{
+  "events": [
+    {
+      "type": "assessment",
+      "role": "constraint",
+      "decision": "accept"
+    },
+    {
+      "type": "selection",
+      "role": "constraint",
+      "iri": "https://w3id.org/smn/OceanPhase",
+      "decision": "accept"
+    }
+  ],
+  "final_dictionary_rows": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "trawl",
+      "column_name": "OCEAN_PHASE_CODE",
+      "column_label": "Ocean life-cycle phase",
+      "column_description": "Code identifying the salmon ocean life-cycle or assessment phase represented by the observation.",
+      "column_role": "measurement",
+      "value_type": "number",
+      "unit_label": null,
+      "unit_iri": null,
+      "term_iri": null,
+      "property_iri": null,
+      "entity_iri": null,
+      "constraint_iri": null,
+      "statistical_modifier_iri": null,
+      "method_iri": null,
+      "term_type": null
+    }
+  ],
+  "gap_count": 0,
+  "term_request_count": 0
+}
