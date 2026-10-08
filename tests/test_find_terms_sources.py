@@ -111,3 +111,22 @@ def test_an_explicit_policy_is_normalised_before_any_search_function_sees_it():
     assert policy == {"explicit": True, "sources": ("smn", "gcdfo")}
     assert policy_sources(policy, "unit") == ("smn", "gcdfo")
     assert make_source_policy(None) == {"explicit": False, "sources": None}
+
+
+def test_the_review_packet_records_the_normalised_list():
+    # The packet's source_policy.explicit_allowlist is the list the searches
+    # read, as metasalmon records it since its B-421 (pull request 211); it
+    # used to be the list as given, which PARITY.md row 65 (g) recorded while
+    # metasalmon did the same.
+    from metasalmonpy import semantic_review_packet
+
+    payload = semantic_review_packet.source_policy_payload(
+        semantic_review_packet._source_policy(["SMN", " smn", "Gcdfo", None])
+    )
+    assert payload["mode"] == "explicit"
+    assert payload["explicit_allowlist"] == ["smn", "gcdfo"]
+    assert all(sources == ["smn", "gcdfo"] for sources in payload["effective_sources_by_role"].values())
+    payload = semantic_review_packet.source_policy_payload(semantic_review_packet._source_policy(None))
+    assert payload["mode"] == "role_defaults"
+    assert payload["explicit_allowlist"] == []
+    assert payload["effective_sources_by_role"]["unit"] == list(sources_for_role("unit"))

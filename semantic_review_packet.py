@@ -838,37 +838,33 @@ def _producer(function: str) -> dict:
 def source_policy_payload(source_policy: dict) -> dict:
     """``.ms_semantic_bundle_source_policy_payload()``, as the packet records it.
 
-    ``explicit_allowlist`` is the list the caller gave, as given
-    (``.ms_semantic_source_policy()`` keeps it that way); the searches read
-    the normalised list :func:`~metasalmonpy.llm_review.make_source_policy`
-    builds.
+    ``explicit_allowlist`` is the normalised list the searches read, the one
+    :func:`~metasalmonpy.llm_review.make_source_policy` builds (each name
+    trimmed and lower-cased, a missing or empty name dropped, a repeat dropped
+    after its first appearance), as metasalmon records it since hub B-421. It
+    used to be the list as given, which metasalmon also recorded then.
     """
     from .llm_review import policy_sources
 
     explicit = bool(source_policy.get("explicit"))
-    given = source_policy.get("given")
-    if given is None:
-        given = list(source_policy.get("sources") or ())
+    sources = list(source_policy.get("sources") or ())
     return {
         "mode": "explicit" if explicit else "role_defaults",
-        "explicit_allowlist": list(given) if explicit else [],
+        "explicit_allowlist": list(sources) if explicit else [],
         "effective_sources_by_role": {
-            role: (list(given) if explicit else list(policy_sources(source_policy, role)))
+            role: (list(sources) if explicit else list(policy_sources(source_policy, role)))
             for role in BUNDLE_ROLES
         },
     }
 
 
 def _source_policy(sources) -> dict:
-    """The source policy, keeping the caller's list as given for the packet."""
+    """The source policy: the caller's list read as ``find_terms()`` reads it."""
     from .llm_review import make_source_policy
 
     if sources is None:
         return make_source_policy(None)
-    given = [sources] if isinstance(sources, str) else list(sources)
-    policy = make_source_policy(given)
-    policy["given"] = [str(source) for source in given]
-    return policy
+    return make_source_policy([sources] if isinstance(sources, str) else list(sources))
 
 
 def _pins(source_policy: dict, sources_used, failed_sources, top_n: int, code_scope: str) -> dict:

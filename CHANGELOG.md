@@ -245,6 +245,10 @@ and moving it is a separate outward act.
   always did and metasalmon now does as well (hub B-420, Q70).
   `tests/test_find_terms_sources.py`, the twin of metasalmon's
   `tests/testthat/test-find-terms-sources.R`, failed before the change.
+  A review packet's `source_policy.explicit_allowlist` now records that
+  normalised list too, as metasalmon's has since its half of B-421 (pull
+  request 211); it recorded the list as given, which `PARITY.md` row 65 (g)
+  described while metasalmon did the same, and that clause is amended.
 
 * **`fetch_salmon_ontology()` no longer answers a request for one ontology with
   another's body, or one representation's request with another's.** Hub queue
@@ -274,8 +278,10 @@ and moving it is a separate outward act.
      metasalmon writes. A request carries only the validators of the copy that
      URL returned under that `accept`, a 304 returns that copy, and a 200
      replaces the copy's validators rather than keeping any the new answer did
-     not send. **The returned file name changes accordingly**; copies cached by
-     earlier versions under the old three names are no longer read.
+     not send. A copy that is superseded is marked by `<key>.ttl.invalid`
+     while it is (the B-423 entry below). **The returned file name changes
+     accordingly**; copies cached by earlier versions under the old three
+     names are no longer read.
   3. **A 304 with no cached copy is that url's failure**, and the next url is
      tried. It used to write the 304's empty body as the copy and return it.
   4. **A copy holds exactly the bytes the server sent, and is written
@@ -1443,13 +1449,17 @@ and moving it is a separate outward act.
   converged the two fetchers' remaining differences on 2026-09-26; each was
   shown failing before the change in `tests/test_ontology_fetch.py`.
 
-  1. **`timeout_seconds`** (default 30, metasalmon's default) bounds both the
-     connection and the read, where every request had a fixed 15 s. It is the
-     last parameter, so a call that passes `fallback_urls` by position still
-     works. One difference is left in the libraries rather than the packages:
-     curl, under metasalmon, bounds the whole transfer, while requests bounds
-     each wait for the server's bytes, so a server that keeps sending slowly is
-     cut off there and not here.
+  1. **`timeout_seconds`** (default 30, metasalmon's default) bounds the
+     connection, each wait for the server's bytes and the whole transfer,
+     where every request had a fixed 15 s. It is the last parameter, so a call
+     that passes `fallback_urls` by position still works. The transfer bound
+     is the package's own: requests bounds only each wait for bytes, where
+     curl's transfer timeout, which metasalmon's `httr::timeout()` sets,
+     bounds the whole operation, so a server that kept sending slowly was cut
+     off there and not here (Codex's review of pull request 75). The body is
+     now streamed and read against a deadline `timeout_seconds` after the
+     request began, and running past it is that URL's failure, worded as curl
+     words it.
   2. **The default `cache_dir` is a persistent per-user cache** in the
      locations R's `tools::R_user_dir()` uses for metasalmon's:
      `$XDG_CACHE_HOME/metasalmonpy/ontology` when `XDG_CACHE_HOME` is set, on
@@ -1490,10 +1500,29 @@ and moving it is a separate outward act.
   bare call made one failing request and was answered by its gcdfo fallback. A
   bare call now returns smn where it returned gcdfo; to fetch gcdfo, name it:
   `fetch_salmon_ontology(url="https://w3id.org/gcdfo/salmon")`. The module and
-  function docstrings name smn, and no longer give offline work as a purpose of
-  the cache: when every URL fails the call raises even with a copy cached, which
-  it always did and which metasalmon now does too (Q71 clause 2, its B-422).
-  `tests/test_ontology_fetch.py` pins the default and failed before the change.
+  function docstrings name smn.
+
+  **When every URL fails, the call now warns and returns the copy it holds for
+  a URL it tried under the `accept` it asked for, if that copy is still
+  eligible, and raises when it holds none** (Q71 clause 2 as Brett clarified
+  it on 2026-10-03: "if the cache matches the requested ontology and refresh
+  fails, continue with a warning. Do not use unrelated, mismatching or
+  otherwise known-stale caches"; metasalmon's B-422 is the twin). It used to
+  raise whatever it held. A copy of another ontology, a copy fetched under
+  another `accept`, a copy in the layout before B-336 and a copy known to be
+  stale are never returned, and are left on disk. A copy is known to be stale
+  once a replacement for it has arrived, which marks it superseded in a
+  `<key>.ttl.invalid` file before the replacement is written (the marker goes
+  when the replacement and its validators are complete, so an interrupted
+  replacement cannot revive the old bytes), or once a 304 for it carries an
+  ETag contradicting the one it was sent, which marks it too; a 304 with no
+  ETag, or with a weak form of the tag it was sent, confirms it. A failed
+  refresh alone never makes a copy stale, and neither does its age. A body
+  that breaks part-way is now that URL's failure, as it is under metasalmon,
+  where it fails inside `httr::GET()`, so the next URL is tried; it used to
+  raise out of the call. `tests/test_ontology_fetch.py` pins the default, the
+  warning, the isolation and the staleness rules, each shown failing before
+  the change; their twins are metasalmon's Q71 tests.
 
 * **A candidate row carries only the target's 19 columns, a retrieval query is
   trimmed as R trims it, and a role with no source is not searched.** Hub

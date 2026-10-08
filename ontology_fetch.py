@@ -4,18 +4,22 @@ Fetch the Salmon Domain Ontology with HTTP caching.
 This module downloads an ontology -- by default the Salmon Domain Ontology
 (smn), as metasalmon's ``fetch_salmon_ontology()`` does -- using HTTP content
 negotiation, and caches each response with its ETag/Last-Modified validators so
-that an unchanged ontology is not downloaded again. A call that cannot reach any
-of its URLs raises rather than returning a copy it could not refresh.
+that an unchanged ontology is not downloaded again. A call that cannot refresh
+from any of its URLs warns and returns the copy it holds for one of them, if
+that copy is still eligible, and raises when it holds none.
 """
 
 import hashlib
 import os
 import sys
+import time
+import warnings
 from typing import Dict, List, Mapping, Optional
 
 import requests
 
 from .atomic_io import atomic_write
+from .text_safety import redact_secrets
 
 # The default url and the fallback that belongs to it. Both serve smn, the
 # ontology both packages search first (hub B-423; Q71 clause 1, ruled by Brett
@@ -26,6 +30,11 @@ from .atomic_io import atomic_write
 # answered.
 _DEFAULT_URL = "https://w3id.org/smn/"
 _DEFAULT_FALLBACK_URLS = ("https://w3id.org/smn",)
+
+# The clock the transfer deadline is read on, a module attribute so that a test
+# can move it. How much of a body arrives between two looks at the deadline.
+_monotonic = time.monotonic
+_CHUNK_SIZE = 64 * 1024
 
 
 def fetch_salmon_ontology(
@@ -74,21 +83,43 @@ def fetch_salmon_ontology(
         must not be answered by it. ``[]`` tries none.
     timeout_seconds : float, default=30
         Timeout in seconds for each HTTP request, as metasalmon's
-        ``timeout_seconds``. It bounds both the connection and each wait for
-        the server's bytes.
+        ``timeout_seconds``. It bounds the connection, each wait for the
+        server's bytes, and the whole transfer: a server that keeps sending,
+        slowly, is cut off ``timeout_seconds`` after the request began, as
+        curl cuts it off under metasalmon.
 
     Returns
     -------
     str
         Path to the cached copy that the answering URL returned, holding exactly
-        the bytes that URL sent: nothing is decoded or re-encoded.
+        the bytes that URL sent: nothing is decoded or re-encoded. When every
+        URL fails, the path of the eligible copy a URL this call tried returned
+        under ``accept``, with a warning (below).
+
+    Warns
+    -----
+    UserWarning
+        When every URL fails and a copy this call may use is cached: the
+        warning names the copy and the last failure, and the copy is returned.
+        A copy may be used when a URL this call tried returned it under this
+        call's ``accept``, and it is still eligible. A copy stays eligible until
+        a replacement for it arrives, which marks it superseded in a
+        ``<copy>.invalid`` file before the replacement is written (the marker
+        goes once the replacement and its validators are complete), or a 304
+        for it carries an ETag contradicting the one it was sent. A failed
+        refresh alone never makes a copy ineligible, and neither does its age
+        (Brett, Q71, 2026-10-03: "if the cache matches the requested ontology
+        and refresh fails, continue with a warning. Do not use unrelated,
+        mismatching or otherwise known-stale caches"; metasalmon's B-422).
 
     Raises
     ------
     RuntimeError
-        If every URL fails, naming the URLs and the last failure. This holds
-        even when a copy fetched by an earlier call is cached: a copy that could
-        not be refreshed is not returned, and it is left on disk.
+        If every URL fails and no eligible copy is cached for a URL this call
+        tried under ``accept``, naming the URLs and the last failure. A copy of
+        another ontology, a copy fetched under another ``accept``, a copy in
+        the layout before each URL and representation had its own, and a copy
+        known to be stale are never returned; they are left on disk.
 
     Examples
     --------
@@ -114,6 +145,8 @@ def fetch_salmon_ontology(
 
     urls = [url] + list(fallback_urls)
     last_error = None
+    # The eligible copies of the URLs tried, in the order they were tried.
+    cached_entries = []
 
     for attempt_url in urls:
         entry = _cache_entry(cache_dir, attempt_url, accept)
@@ -123,7 +156,8 @@ def fetch_salmon_ontology(
         # be shared by every URL and representation in ``cache_dir``, so a 304
         # could answer for another URL's or another representation's body.
         headers = {"Accept": accept}
-        if os.path.exists(entry["body"]):
+        if _cache_usable(entry):
+            cached_entries.append(entry)
             etag = _read_validator(entry["etag"])
             if etag:
                 headers["If-None-Match"] = etag
@@ -131,38 +165,104 @@ def fetch_salmon_ontology(
             if last_modified:
                 headers["If-Modified-Since"] = last_modified
 
-        # One timeout for the connection and one for the read, both
-        # ``timeout_seconds``, as metasalmon gives curl its connect timeout and
-        # its transfer timeout. This used to be a fixed 15 s. requests has no
-        # bound on a whole transfer, so its read timeout bounds each wait for
-        # bytes where curl's bounds the transfer: a server that keeps sending
-        # slowly is cut off by metasalmon and not here.
+        # One timeout for the connection and one for each wait for bytes, both
+        # ``timeout_seconds``, as metasalmon gives curl its connect timeout;
+        # and one deadline for the whole transfer, as metasalmon's
+        # ``httr::timeout()`` gives curl its transfer timeout. requests has no
+        # bound on a whole transfer, so the body is streamed and read against
+        # the deadline in ``_read_body()``. The request used to have a fixed
+        # 15 s, and then no transfer bound, so a server that kept sending
+        # slowly was cut off by metasalmon and not here.
+        deadline = _monotonic() + timeout_seconds
         try:
             response = requests.get(
                 attempt_url,
                 headers=headers,
                 timeout=(timeout_seconds, timeout_seconds),
+                stream=True,
             )
         except requests.RequestException as exc:
-            last_error = str(exc)
+            last_error = redact_secrets(str(exc))
             continue
 
-        if response.status_code == 200:
-            return _store(entry, response)
-        # A 304 can only confirm a copy this URL returned. With none cached it
-        # is this URL's failure and the next URL is tried; it used to write the
-        # 304's empty body as the copy and return it.
-        if response.status_code == 304 and os.path.exists(entry["body"]):
-            return entry["body"]
-        last_error = f"HTTP {response.status_code}"
+        with response:
+            if response.status_code == 200:
+                # A body that breaks or runs past the deadline is this URL's
+                # failure, as a transfer that fails inside ``httr::GET()`` is
+                # under metasalmon; it used to raise out of the call.
+                try:
+                    body = _read_body(response, deadline, timeout_seconds)
+                except requests.RequestException as exc:
+                    last_error = redact_secrets(str(exc))
+                    continue
+                return _store(entry, body, response.headers)
+            # A 304 can only confirm a copy this URL returned. With none cached
+            # it is this URL's failure and the next URL is tried; it used to
+            # write the 304's empty body as the copy and return it.
+            if response.status_code == 304 and _cache_usable(entry):
+                received_etag = response.headers.get("ETag")
+                sent_etag = headers.get("If-None-Match")
+                # A contradictory validator does not confirm this copy. Weak and
+                # strong spellings of one opaque tag are the same tag for a GET.
+                if (
+                    received_etag is not None
+                    and sent_etag is not None
+                    and _opaque_tag(received_etag) != _opaque_tag(sent_etag)
+                ):
+                    _invalidate(entry)
+                    last_error = "HTTP 304 with a mismatching ETag"
+                    continue
+                return entry["body"]
+            last_error = f"HTTP {response.status_code}"
 
-    # Every URL failed. A copy cached by an earlier call is not returned
-    # (Q71 clause 2, ruled by Brett on 2026-09-26, and the rule this package
-    # always kept; metasalmon now raises too, as its B-422).
+    # Every URL failed. A failed refresh is not evidence of staleness (Brett,
+    # Q71, 2026-10-03), so the first copy still eligible among the URLs tried
+    # is returned, with a warning; eligibility is read again because a later
+    # attempt can have invalidated the same entry. With none, the call raises,
+    # as it always did and as metasalmon's did between its B-422's two halves.
+    for entry in cached_entries:
+        if _cache_usable(entry):
+            warnings.warn(
+                f"Failed to refresh Salmon ontology; using cached copy at {entry['body']}. "
+                f"Last fetch error: {last_error}",
+                UserWarning,
+                stacklevel=2,
+            )
+            return entry["body"]
     raise RuntimeError(
         f"Failed to fetch ontology from provided URLs: {', '.join(urls)}; "
         f"last error: {last_error}"
     )
+
+
+def _read_body(response: requests.Response, deadline: float, timeout_seconds: float) -> bytes:
+    """The body of a streamed 200, read in chunks under the transfer deadline.
+
+    requests' ``timeout`` bounds the connection and each wait for bytes, and
+    nothing in it bounds a transfer whose bytes keep arriving; curl's transfer
+    timeout, which metasalmon's ``httr::timeout()`` sets, bounds the whole
+    operation. So the body is read ``_CHUNK_SIZE`` bytes at a time, and after
+    each chunk the clock is read against ``deadline``, ``timeout_seconds``
+    after the request began. Running past it raises
+    ``requests.exceptions.Timeout``, worded as curl words its, which the
+    caller treats as that URL's failure. The deadline is seen once a chunk has
+    arrived, so a transfer ends at most one read timeout after it.
+    """
+    chunks = []
+    received = 0
+    for chunk in response.iter_content(chunk_size=_CHUNK_SIZE):
+        chunks.append(chunk)
+        received += len(chunk)
+        if _monotonic() > deadline:
+            raise requests.exceptions.Timeout(
+                f"Operation timed out after {timeout_seconds} seconds with {received} bytes received"
+            )
+    return b"".join(chunks)
+
+
+def _opaque_tag(etag: str) -> str:
+    """An ETag without its weak-validator prefix (RFC 9110, section 8.8.3.2)."""
+    return etag[2:] if etag.startswith("W/") else etag
 
 
 def _default_cache_dir(
@@ -215,7 +315,27 @@ def _cache_entry(cache_dir: str, url: str, accept: str) -> Dict[str, str]:
         "body": os.path.join(cache_dir, f"{key}.ttl"),
         "etag": os.path.join(cache_dir, f"{key}.etag"),
         "last_modified": os.path.join(cache_dir, f"{key}.last_modified"),
+        "invalid": os.path.join(cache_dir, f"{key}.ttl.invalid"),
     }
+
+
+def _cache_usable(entry: Dict[str, str]) -> bool:
+    """Whether ``entry`` holds a copy a call may send validators for or return.
+
+    The marker belongs to exactly one URL/accept entry. Superseded bytes are
+    kept for inspection, but neither they nor their validators are used while
+    the marker stands. The marker goes when a replacement stores the complete
+    body and validator set; age alone never creates one. metasalmon's
+    ``.ms_ontology_cache_usable()`` reads the same files.
+    """
+    return os.path.exists(entry["body"]) and not os.path.exists(entry["invalid"])
+
+
+def _invalidate(entry: Dict[str, str]) -> None:
+    """Marks ``entry``'s copy superseded, as metasalmon's
+    ``.ms_ontology_cache_invalidate()`` does: the same file, the same bytes."""
+    with open(entry["invalid"], "wb") as handle:
+        handle.write(b"superseded\n")
 
 
 def _read_validator(path: str) -> Optional[str]:
@@ -248,19 +368,22 @@ def _store_validator(value: Optional[str], path: str) -> None:
         handle.write(data + b"\n")
 
 
-def _store(entry: Dict[str, str], response: requests.Response) -> str:
-    """Stores a 200 answer as ``entry``'s copy, with the validators that came
-    with it and no others, and returns the copy's path.
+def _store(entry: Dict[str, str], body: bytes, headers: Mapping[str, str]) -> str:
+    """Stores a 200 answer's ``body`` as ``entry``'s copy, with the validators
+    that came in its ``headers`` and no others, and returns the copy's path.
 
-    The copy is the body's bytes exactly as the server sent them
-    (``response.content``), written through ``atomic_io.atomic_write()``: a
-    same-directory temporary and a rename, so an aborted call leaves the
-    previous copy whole, as metasalmon's ``writeBin()`` + ``file.rename()``
-    does. It used to be ``response.text`` written as UTF-8 by opening the copy
-    for writing, which emptied the copy before the new bytes were in hand and
-    decoded a text type sent with no charset as ISO-8859-1.
+    The copy is the body's bytes exactly as the server sent them, written
+    through ``atomic_io.atomic_write()``: a same-directory temporary and a
+    rename, so an aborted call leaves the previous copy's bytes whole, as
+    metasalmon's ``writeBin()`` + ``file.rename()`` does. It used to be
+    ``response.text`` written as UTF-8 by opening the copy for writing, which
+    emptied the copy before the new bytes were in hand and decoded a text type
+    sent with no charset as ISO-8859-1.
     """
-    body = response.content
+    # Receiving a full replacement makes the old body unsuitable. Persist that
+    # fact before writing anything, so an interrupted replacement cannot revive
+    # it on the next offline call (RFC 9111, section 4.3.3).
+    _invalidate(entry)
 
     # The old validators describe the old body, so they go first: a failure
     # part-way through leaves a copy with no validators, which is fetched in
@@ -269,11 +392,17 @@ def _store(entry: Dict[str, str], response: requests.Response) -> str:
     for path in (entry["etag"], entry["last_modified"]):
         if os.path.exists(path):
             os.remove(path)
+    if any(os.path.exists(path) for path in (entry["etag"], entry["last_modified"])):
+        raise RuntimeError("Failed to reset cached ontology validators.")
 
     atomic_write(body, entry["body"])
 
-    _store_validator(response.headers.get("ETag"), entry["etag"])
-    _store_validator(response.headers.get("Last-Modified"), entry["last_modified"])
+    _store_validator(headers.get("ETag"), entry["etag"])
+    _store_validator(headers.get("Last-Modified"), entry["last_modified"])
+    if os.path.exists(entry["invalid"]):
+        os.remove(entry["invalid"])
+    if os.path.exists(entry["invalid"]):
+        raise RuntimeError("Failed to complete cached ontology replacement.")
 
     return entry["body"]
 

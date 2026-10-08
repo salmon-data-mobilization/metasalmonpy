@@ -14,17 +14,24 @@ which is pinned here because metasalmon now keeps it too. metasalmon's
 * hub **B-336** (metasalmon's twin is **B-335**): each cached copy and its
   validators are keyed by the URL that returned them and the accept they were
   fetched under, and both packages name the files the same way.
-* Q71 clause 2 (metasalmon's **B-422**): when every URL fails the call raises,
-  even with a copy cached.
+* Q71 clause 2 (metasalmon's **B-422**; Brett, 2026-10-03: "if the cache
+  matches the requested ontology and refresh fails, continue with a warning. Do
+  not use unrelated, mismatching or otherwise known-stale caches"): when every
+  URL fails, the call warns and returns an eligible copy it holds for a URL it
+  tried, under the accept it asked for, and raises when it holds none. A copy
+  stays eligible until a replacement for it arrives or a 304 for it carries a
+  contradicting ETag; a failed refresh never makes it stale, and nor does age.
 * The follow-ups that converged the two fetchers' remaining differences on
   2026-09-26: ``timeout_seconds`` with metasalmon's default of 30 bounds the
-  connection and the read; a copy holds exactly the bytes the server sent, and
-  is written atomically; and the default ``cache_dir`` is a persistent
-  per-user cache.
+  connection, each read and, since the Codex review of pull request 75, the
+  whole transfer; a copy holds exactly the bytes the server sent, and is
+  written atomically; and the default ``cache_dir`` is a persistent per-user
+  cache.
 """
 
 import inspect
 import os
+import warnings
 from pathlib import Path
 
 import pytest
@@ -52,6 +59,9 @@ def _answer(url, status, body="", etag=None, last_modified=None, content_type="t
     response._content = body if isinstance(body, bytes) else body.encode("utf-8")
     response.headers["Content-Type"] = content_type
     response.encoding = requests.utils.get_encoding_from_headers(response.headers)
+    # The body has been read, as the adapter leaves a response it read in full:
+    # iter_content() then hands out slices of it rather than reading a stream.
+    response._content_consumed = True
     if etag is not None:
         response.headers["ETag"] = etag
     if last_modified is not None:
@@ -286,10 +296,11 @@ def test_the_cache_file_names_are_the_ones_metasalmon_writes(monkeypatch, tmp_pa
     assert key("https://example.org/ontologie/unit\u00e9", "text/turtle") == "6bf05a094db6a6b1"
 
     entry = ontology_fetch._cache_entry("cache", SMN, "text/turtle, application/rdf+xml;q=0.8")
-    assert [os.path.basename(entry[part]) for part in ("body", "etag", "last_modified")] == [
+    assert [os.path.basename(entry[part]) for part in ("body", "etag", "last_modified", "invalid")] == [
         "5891e28fd43e0292.ttl",
         "5891e28fd43e0292.etag",
         "5891e28fd43e0292.last_modified",
+        "5891e28fd43e0292.ttl.invalid",
     ]
 
     value, _, _ = _fetch(
@@ -305,20 +316,76 @@ def test_the_cache_file_names_are_the_ones_metasalmon_writes(monkeypatch, tmp_pa
     ]
 
 
-# --- Q71 clause 2: every URL failing raises -------------------------------------
+# --- Q71 clause 2: a failed refresh, and the copy it may fall back on ------------
+#
+# Brett, Q71, 2026-10-03: "if the cache matches the requested ontology and
+# refresh fails, continue with a warning. Do not use unrelated, mismatching or
+# otherwise known-stale caches." metasalmon's B-422 pins the same rules, and
+# each test here is the twin of one of its. A copy matches when it was fetched
+# from a URL this call tried, under this call's accept. It stays eligible until
+# a replacement for it arrives or a 304 for it carries a contradicting ETag: a
+# failed refresh alone never makes it stale, and neither does its age. The
+# call used to raise whenever every URL failed, whatever it held.
 
 
-def test_every_url_failing_raises_even_when_a_copy_is_cached(monkeypatch, tmp_path):
+def test_a_failed_refresh_warns_and_uses_only_a_matching_copy(monkeypatch, tmp_path):
     cache_dir = str(tmp_path)
     cached, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "SMN BODY", etag='"smn-1"')}, cache_dir=cache_dir)
-    value, _, _ = _fetch(monkeypatch, {SMN: _unreachable, SMN_FALLBACK: _unreachable}, cache_dir=cache_dir)
+    for failure in (_unreachable, lambda sent: _answer(SMN, 503)):
+        with pytest.warns(UserWarning, match="using cached copy") as record:
+            value, _, _ = _fetch(monkeypatch, {SMN: failure}, cache_dir=cache_dir, fallback_urls=[])
+        assert value == cached
+        assert _body(value) == "SMN BODY"
+        assert len(record) == 1
+    # The warning names the copy and the failure, as metasalmon's does.
+    assert str(record[0].message) == (
+        f"Failed to refresh Salmon ontology; using cached copy at {cached}. Last fetch error: HTTP 503"
+    )
+
+    # No eligible matching copy still raises, naming the actual failure.
+    value, _, _ = _fetch(
+        monkeypatch, {SMN: lambda sent: _answer(SMN, 503)}, cache_dir=str(tmp_path / "empty"), fallback_urls=[]
+    )
+    assert isinstance(value, RuntimeError)
+    assert str(value) == "Failed to fetch ontology from provided URLs: https://w3id.org/smn/; last error: HTTP 503"
+
+
+def test_a_matching_copy_may_be_a_fallbacks_and_the_urls_comes_first(monkeypatch, tmp_path):
+    cache_dir = str(tmp_path)
+    fallback, _, _ = _fetch(
+        monkeypatch, {SMN: _unreachable, SMN_FALLBACK: _ok(SMN_FALLBACK, "FALLBACK BODY")}, cache_dir=cache_dir
+    )
+    with pytest.warns(UserWarning, match="using cached copy"):
+        value, urls, _ = _fetch(monkeypatch, {SMN: _unreachable, SMN_FALLBACK: _unreachable}, cache_dir=cache_dir)
+    assert value == fallback
+    assert urls == [SMN, SMN_FALLBACK]
+
+    # With a copy for the url too, the url's is the one returned.
+    primary, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "SMN BODY")}, cache_dir=cache_dir)
+    with pytest.warns(UserWarning, match="using cached copy"):
+        value, _, _ = _fetch(monkeypatch, {SMN: _unreachable, SMN_FALLBACK: _unreachable}, cache_dir=cache_dir)
+    assert value == primary
+    assert _body(value) == "SMN BODY"
+
+
+def test_every_url_failing_raises_when_no_copy_matches(monkeypatch, tmp_path):
+    cache_dir = str(tmp_path)
+    # A copy of another ontology, a copy of the url under another accept and a
+    # copy in the layout before B-336 are none of them this call's.
+    other, _, _ = _fetch(monkeypatch, {GCDFO: _ok(GCDFO, "GCDFO BODY", etag='"g-1"')}, url=GCDFO, cache_dir=cache_dir)
+    xml, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "<rdf/>")}, accept="application/rdf+xml", cache_dir=cache_dir)
+    (tmp_path / "dfo-salmon.ttl").write_text("LEGACY BODY", encoding="utf-8")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        value, _, _ = _fetch(monkeypatch, {SMN: _unreachable, SMN_FALLBACK: _unreachable}, cache_dir=cache_dir)
     assert isinstance(value, RuntimeError)
     assert str(value) == (
         "Failed to fetch ontology from provided URLs: https://w3id.org/smn/, https://w3id.org/smn; "
         "last error: Could not resolve host (stub)"
     )
-    # The copy stays where it was; it is only not returned.
-    assert _body(cached) == "SMN BODY"
+    # The copies stay where they were; they are only not returned.
+    assert _body(other) == "GCDFO BODY"
+    assert _body(xml) == "<rdf/>"
 
     # An HTTP status is named as metasalmon names it.
     value, _, _ = _fetch(
@@ -330,6 +397,98 @@ def test_every_url_failing_raises_even_when_a_copy_is_cached(monkeypatch, tmp_pa
         "Failed to fetch ontology from provided URLs: https://w3id.org/smn/, https://w3id.org/smn; "
         "last error: HTTP 503"
     )
+
+
+def test_a_contradictory_304_makes_its_copy_ineligible_on_later_calls(monkeypatch, tmp_path):
+    cache_dir = str(tmp_path)
+    _fetch(monkeypatch, {SMN: _ok(SMN, "V1", etag='"v1"')}, cache_dir=cache_dir)
+    value, _, sent = _fetch(
+        monkeypatch, {SMN: lambda sent: _answer(SMN, 304, etag='"v2"')}, cache_dir=cache_dir, fallback_urls=[]
+    )
+    assert sent[0]["If-None-Match"] == '"v1"'
+    assert isinstance(value, RuntimeError)
+    assert str(value).endswith("last error: HTTP 304 with a mismatching ETag")
+    # The copy is known stale: no later call sends its validator or returns it.
+    value, _, sent = _fetch(monkeypatch, {SMN: _unreachable}, cache_dir=cache_dir, fallback_urls=[])
+    assert isinstance(value, RuntimeError)
+    assert "If-None-Match" not in sent[0]
+
+    # A fresh successful response repairs the entry.
+    fresh, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "V3", etag='"v3"')}, cache_dir=cache_dir)
+    assert _body(fresh) == "V3"
+    with pytest.warns(UserWarning, match="using cached copy"):
+        again, _, sent = _fetch(monkeypatch, {SMN: _unreachable}, cache_dir=cache_dir, fallback_urls=[])
+    assert again == fresh
+    assert sent[0]["If-None-Match"] == '"v3"'
+
+
+def test_an_uncontradicted_304_confirms_the_copy(monkeypatch, tmp_path):
+    # A 304 with no ETag confirms a copy stored without one, and weak and
+    # strong spellings of one opaque tag are the same tag for a GET
+    # (RFC 9110, section 8.8.3.2).
+    cache_dir = str(tmp_path / "no-etag")
+    cached, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "BODY")}, cache_dir=cache_dir)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        value, _, _ = _fetch(monkeypatch, {SMN: lambda sent: _answer(SMN, 304)}, cache_dir=cache_dir, fallback_urls=[])
+    assert value == cached
+
+    cache_dir = str(tmp_path / "weak")
+    cached, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "BODY", etag='"v1"')}, cache_dir=cache_dir)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        value, _, sent = _fetch(
+            monkeypatch, {SMN: lambda sent: _answer(SMN, 304, etag='W/"v1"')}, cache_dir=cache_dir, fallback_urls=[]
+        )
+    assert sent[0]["If-None-Match"] == '"v1"'
+    assert value == cached
+
+
+def test_a_failed_replacement_cannot_revive_the_superseded_copy(monkeypatch, tmp_path):
+    cache_dir = str(tmp_path)
+    cached, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "V1", etag='"v1"')}, cache_dir=cache_dir)
+
+    def refuse(source, destination):
+        raise OSError("rename refused (stub)")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(os, "replace", refuse)
+        value, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "V2", etag='"v2"')}, cache_dir=cache_dir, fallback_urls=[])
+    assert isinstance(value, OSError)
+    # The atomic write leaves the old bytes for inspection, but a replacement
+    # was received, so they are superseded and are not used again
+    # (RFC 9111, section 4.3.3).
+    assert _body(cached) == "V1"
+    value, _, sent = _fetch(monkeypatch, {SMN: _unreachable}, cache_dir=cache_dir, fallback_urls=[])
+    assert isinstance(value, RuntimeError)
+    assert "If-None-Match" not in sent[0]
+
+
+def test_a_failed_validator_cleanup_keeps_the_replacement_ineligible(monkeypatch, tmp_path):
+    cache_dir = str(tmp_path)
+    _fetch(monkeypatch, {SMN: _ok(SMN, "V1", etag='"v1"')}, cache_dir=cache_dir)
+    real_remove = os.remove
+
+    def keep_validators(path, *args, **kwargs):
+        if str(path).endswith((".etag", ".last_modified")):
+            return None
+        return real_remove(path, *args, **kwargs)
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(os, "remove", keep_validators)
+        value, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "V2")}, cache_dir=cache_dir, fallback_urls=[])
+    assert isinstance(value, RuntimeError)
+    assert str(value) == "Failed to reset cached ontology validators."
+    offline, _, sent = _fetch(monkeypatch, {SMN: _unreachable}, cache_dir=cache_dir, fallback_urls=[])
+    assert isinstance(offline, RuntimeError)
+    assert "If-None-Match" not in sent[0]
+    # Once cleanup works, a fresh body with no validators sends none later.
+    fresh, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "V3")}, cache_dir=cache_dir)
+    assert _body(fresh) == "V3"
+    with pytest.warns(UserWarning, match="using cached copy"):
+        again, _, sent = _fetch(monkeypatch, {SMN: _unreachable}, cache_dir=cache_dir, fallback_urls=[])
+    assert again == fresh
+    assert "If-None-Match" not in sent[0]
 
 
 # --- The 2026-09-26 follow-ups ---------------------------------------------------
@@ -352,6 +511,74 @@ def test_timeout_seconds_bounds_the_connection_and_the_read(monkeypatch, tmp_pat
         timeout_seconds=5,
     )
     assert timeouts == [(5, 5), (5, 5)]
+
+
+class _Clock:
+    """A clock a test moves by hand."""
+
+    now = 0.0
+
+
+class _Trickle:
+    """A body that arrives one byte at a time, ``seconds`` of clock apart, for
+    ever: the server that requests' read timeout never cuts off."""
+
+    def __init__(self, clock, seconds):
+        self.clock = clock
+        self.seconds = seconds
+
+    def read(self, amt=None):
+        self.clock.now += self.seconds
+        return b"x"
+
+    def close(self):
+        pass
+
+
+class _StreamThatBreaks:
+    """A body whose connection drops part-way, as requests reports it."""
+
+    def read(self, amt=None):
+        raise requests.exceptions.ChunkedEncodingError("connection broken while reading the body (stub)")
+
+    def close(self):
+        pass
+
+
+def _streamed(url, raw):
+    """A route whose 200 answer streams its body from ``raw``, a file-like
+    object, as requests reads a body it has not read yet."""
+
+    def route(sent):
+        response = requests.Response()
+        response.status_code = 200
+        response.url = url
+        response.raw = raw
+        return response
+
+    return route
+
+
+def test_timeout_seconds_bounds_the_whole_transfer(monkeypatch, tmp_path):
+    # curl, under metasalmon, bounds the whole transfer (httr::timeout()), and
+    # requests bounds each wait for bytes, so a server that kept sending slowly
+    # was cut off there and not here (Codex's review of pull request 75). The
+    # body is now read under a deadline timeout_seconds after the request
+    # began; running past it is that url's failure, named as curl names it.
+    clock = _Clock()
+    monkeypatch.setattr(ontology_fetch, "_monotonic", lambda: clock.now)
+    cache_dir = str(tmp_path)
+    cached, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "SMN BODY", etag='"smn-1"')}, cache_dir=cache_dir)
+    trickle = _streamed(SMN, _Trickle(clock, seconds=10))
+    with pytest.warns(UserWarning, match="using cached copy"):
+        value, urls, _ = _fetch(monkeypatch, {SMN: trickle, SMN_FALLBACK: _unreachable}, cache_dir=cache_dir)
+    assert value == cached
+    assert urls == [SMN, SMN_FALLBACK]
+    value, _, _ = _fetch(
+        monkeypatch, {SMN: trickle}, cache_dir=str(tmp_path / "empty"), fallback_urls=[], timeout_seconds=25
+    )
+    assert isinstance(value, RuntimeError)
+    assert str(value).endswith("last error: Operation timed out after 25 seconds with 3 bytes received")
 
 
 @pytest.mark.parametrize(
@@ -389,31 +616,25 @@ def test_a_validator_is_stored_as_the_headers_bytes_and_a_newline(monkeypatch, t
     assert Path(entry["last_modified"]).read_bytes() == b"Mon, 01 Jan 2024 00:00:00 GMT\n"
 
 
-class _BodyThatBreaks(requests.Response):
-    """A 200 whose body cannot be read, as when a connection drops mid-body."""
-
-    @property
-    def content(self):
-        raise requests.exceptions.ChunkedEncodingError("connection broken while reading the body (stub)")
-
-
-def test_a_failed_store_leaves_the_previous_copy_whole(monkeypatch, tmp_path):
+def test_a_body_that_breaks_is_that_urls_failure_and_leaves_the_previous_copy_whole(monkeypatch, tmp_path):
     # The copy used to be written by opening it for writing, which empties it
     # before the new bytes are in hand; it now goes through
     # atomic_io.atomic_write(), a same-directory temporary and a rename, as
-    # metasalmon's writeBin() + file.rename() does.
+    # metasalmon's writeBin() + file.rename() does. And a body that broke used
+    # to raise out of the call; it is the url's failure, as under metasalmon,
+    # where the transfer fails inside httr::GET(): the next url is tried, and
+    # then a matching copy is used.
     cache_dir = str(tmp_path)
     cached, _, _ = _fetch(monkeypatch, {SMN: _ok(SMN, "OLD BODY", etag='"old"')}, cache_dir=cache_dir)
-
-    def broken(sent):
-        response = _BodyThatBreaks()
-        response.status_code = 200
-        response.url = SMN
-        return response
-
-    value, _, _ = _fetch(monkeypatch, {SMN: broken}, cache_dir=cache_dir)
-    assert isinstance(value, requests.exceptions.ChunkedEncodingError), value
+    broken = _streamed(SMN, _StreamThatBreaks())
+    with pytest.warns(UserWarning, match="using cached copy"):
+        value, urls, _ = _fetch(monkeypatch, {SMN: broken, SMN_FALLBACK: _unreachable}, cache_dir=cache_dir)
+    assert value == cached
+    assert urls == [SMN, SMN_FALLBACK]
     assert Path(cached).read_bytes() == b"OLD BODY"
+    value, _, _ = _fetch(monkeypatch, {SMN: broken}, cache_dir=str(tmp_path / "empty"), fallback_urls=[])
+    assert isinstance(value, RuntimeError)
+    assert str(value).endswith("last error: connection broken while reading the body (stub)")
 
     # A rename that fails leaves the old copy and no temporary behind.
     def refuse(source, destination):
