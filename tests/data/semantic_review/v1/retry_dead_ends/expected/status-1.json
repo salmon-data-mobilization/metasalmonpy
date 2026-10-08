@@ -1,7 +1,7 @@
 {
   "status": "complete",
   "pass": 1,
-  "packet_id": "37b079f97e2fbf26c83d90a2cf04529868cfde48a73c3f66775955a5d9a3ca92",
+  "packet_id": "413db0ffee0332a9bca3a97991534c14eb62d5da6d99b2a3fbb9985f00e588b5",
   "has_next_packet": false,
   "summary": {
     "decisions": {
@@ -14,9 +14,9 @@
     "errors": 0,
     "downgrades": 0,
     "escalations": 0,
-    "retries": 2,
+    "retries": 1,
     "awaiting_pass_2": 0,
     "kept_pass_1": 0
   },
-  "search_calls": 2
+  "search_calls": 1
 }
