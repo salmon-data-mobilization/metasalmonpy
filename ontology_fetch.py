@@ -94,23 +94,7 @@ def fetch_salmon_ontology(
         Path to the cached copy that the answering URL returned, holding exactly
         the bytes that URL sent: nothing is decoded or re-encoded. When every
         URL fails, the path of the eligible copy a URL this call tried returned
-        under ``accept``, with a warning (below).
-
-    Warns
-    -----
-    UserWarning
-        When every URL fails and a copy this call may use is cached: the
-        warning names the copy and the last failure, and the copy is returned.
-        A copy may be used when a URL this call tried returned it under this
-        call's ``accept``, and it is still eligible. A copy stays eligible until
-        a replacement for it arrives, which marks it superseded in a
-        ``<copy>.invalid`` file before the replacement is written (the marker
-        goes once the replacement and its validators are complete), or a 304
-        for it carries an ETag contradicting the one it was sent. A failed
-        refresh alone never makes a copy ineligible, and neither does its age
-        (Brett, Q71, 2026-10-03: "if the cache matches the requested ontology
-        and refresh fails, continue with a warning. Do not use unrelated,
-        mismatching or otherwise known-stale caches"; metasalmon's B-422).
+        under ``accept``, with a ``UserWarning`` (see Notes).
 
     Raises
     ------
@@ -120,6 +104,21 @@ def fetch_salmon_ontology(
         another ontology, a copy fetched under another ``accept``, a copy in
         the layout before each URL and representation had its own, and a copy
         known to be stale are never returned; they are left on disk.
+
+    Notes
+    -----
+    When every URL fails and a copy this call may use is cached, a
+    ``UserWarning`` names the copy and the last failure, and the copy is
+    returned. A copy may be used when a URL this call tried returned it under
+    this call's ``accept``, and it is still eligible. A copy stays eligible
+    until a replacement for it arrives, which marks it superseded in a
+    ``<copy>.invalid`` file before the replacement is written (the marker goes
+    once the replacement and its validators are complete), or a 304 for it
+    carries an ETag contradicting the one it was sent. A failed refresh alone
+    never makes a copy ineligible, and neither does its age (Brett, Q71,
+    2026-10-03: "if the cache matches the requested ontology and refresh
+    fails, continue with a warning. Do not use unrelated, mismatching or
+    otherwise known-stale caches"; metasalmon's B-422).
 
     Examples
     --------
