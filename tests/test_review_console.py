@@ -21,11 +21,15 @@ from metasalmonpy import (
     accept_suggestion,
     apply_sdp_semantics,
     create_sdp,
+    infer_salmon_datapackage_artifacts,
+    ingest_semantic_assessments,
     reject_suggestion,
     review_semantics,
     semantic_llm_assessments,
     semantic_suggestions,
+    write_semantic_review_packet,
 )
+from metasalmonpy.llm_review import LLM_ASSESSMENT_COLUMNS
 from metasalmonpy.metadata import read_sdp_csv
 from metasalmonpy.package_io import _suggestions_csv_bytes
 from metasalmonpy.review_console import (
@@ -34,7 +38,11 @@ from metasalmonpy.review_console import (
     _is_review_iri,
     _reject_call,
     _strip_review_iri,
+    _text,
 )
+from metasalmonpy.semantic_review_ingest import _slots
+from metasalmonpy.semantic_review_json import read_semantic_review_json
+from metasalmonpy.semantic_review_packet import IDENTITY_COLUMNS
 
 SPAWNER_IRI = "https://w3id.org/smn/SpawnerAbundance"
 WATERCOURSE_IRI = "https://w3id.org/smn/WatercourseDesignation"
@@ -2260,3 +2268,239 @@ def test_prune_is_silent_when_there_is_no_decision_to_lose(seeded_package):
     assert not [
         entry for entry in caught if "review decision" in str(entry.message)
     ]
+
+
+# ---------------------------------------------------------------------------
+# NuSEDS crosswalk prefills in the review queue (hub item B-426, the mirror of
+# metasalmon's B-120)
+# ---------------------------------------------------------------------------
+
+CROSSWALK_FENCE_IRI = "https://w3id.org/gcdfo/salmon#FixedSiteCensusManual"
+CROSSWALK_SLOT = "codes.csv|demo-1/escapement/ENUMERATION_METHODS/Fence|term_iri"
+
+
+def _crosswalk_hits(query, role=None, sources=None):
+    """Two ranked alternatives for every role asked.
+
+    R's twin answers only ``role == "method"``, the role metasalmon gives the
+    codes of a column whose name marks it as a procedure (its
+    ``parent_names_procedure`` test in ``R/semantic-suggestions.R``). This
+    package gives such codes ``entity``, so the stub answers whatever role the
+    target carries and the test reads that role back from the suggestions
+    rather than spelling it.
+    """
+    return pd.DataFrame(
+        {
+            "label": ["Alternative one", "Alternative two"],
+            "iri": ["https://example.org/method/one", "https://example.org/method/two"],
+            "source": ["gcdfo", "gcdfo"],
+            "ontology": ["gcdfo", "gcdfo"],
+            "role": [role, role],
+            "match_type": ["label_exact", "label_exact"],
+            "definition": ["A counting method.", "A counting method."],
+            "score": [4.5, 3.5],
+        }
+    )
+
+
+def _crosswalk_harness_row(target, **values) -> dict:
+    """A harness row for one packet target: the identity copied, the rest as given.
+
+    The same shape ``tests/test_semantic_review_packet.py`` builds; ``tests/``
+    is a plain directory, so the helper is repeated rather than imported.
+    """
+    row = {column: None for column in LLM_ASSESSMENT_COLUMNS}
+    for column in IDENTITY_COLUMNS:
+        row[column] = target.get(column)
+    row["llm_provider"] = "fixture-harness"
+    row["llm_model"] = "semantic-review-v1"
+    for name, value in values.items():
+        row[name] = None if value is None else str(value)
+    return row
+
+
+def _write_crosswalk_harness(rows: list, path: Path, packet_id: str) -> None:
+    frame = pd.DataFrame(rows, columns=list(LLM_ASSESSMENT_COLUMNS))
+    frame.to_csv(path, index=False, na_rep="")
+    Path(f"{path}.packet-id").write_text(packet_id + "\n", encoding="utf-8")
+
+
+def _read_codes(path: Path) -> pd.DataFrame:
+    return pd.read_csv(path / "metadata" / "codes.csv", dtype=str, keep_default_na=False)
+
+
+def _queued_slots(path: Path) -> pd.Series:
+    return review_semantics(str(path)).rows["slot_id"]
+
+
+def test_nuseds_crosswalk_prefills_stay_in_the_review_queue_with_ranked_alternatives(
+    tmp_path, monkeypatch
+):
+    # B-120: the crosswalk used to write a final IRI before discovery, which
+    # then produced no suggestion row. include_filled could not recover a
+    # shortlist that had never been written. Only the Fence row is filled by
+    # this call; Bank Walk carries the caller's explicit IRI and must remain
+    # untouched.
+    from metasalmonpy import semantics as sem
+
+    monkeypatch.setattr(
+        sem,
+        "suggest_semantics",
+        functools.partial(sem.suggest_semantics, search_fn=_crosswalk_hits),
+    )
+    resources = {
+        "escapement": pd.DataFrame(
+            {"ENUMERATION_METHODS": ["Fence", "Bank Walk"], "count": [10, 20]}
+        )
+    }
+    codes = pd.DataFrame(
+        {
+            "dataset_id": ["demo-1", "demo-1"],
+            "table_id": ["escapement", "escapement"],
+            "column_name": ["ENUMERATION_METHODS", "ENUMERATION_METHODS"],
+            "code_value": ["Fence", "Bank Walk"],
+            "code_label": ["Fence", "Bank Walk"],
+            "code_description": [None, None],
+            "term_iri": [None, "https://example.org/caller-choice"],
+        }
+    )
+    path = Path(
+        create_sdp(
+            resources,
+            path=tmp_path / "crosswalk-review",
+            dataset_id="demo-1",
+            seed_codes=codes,
+            semantic_code_scope="all",
+            semantic_max_per_role=2,
+            seed_semantics=True,
+            seed_verbose=False,
+            check_updates=False,
+            overwrite=True,
+        )
+    )
+
+    written = _read_codes(path)
+    assert list(written.loc[written["code_value"] == "Fence", "term_iri"]) == [
+        CROSSWALK_FENCE_IRI
+    ]
+    assert list(written.loc[written["code_value"] == "Bank Walk", "term_iri"]) == [
+        "https://example.org/caller-choice"
+    ]
+
+    suggestions = semantic_suggestions(str(path))
+    code_rows = suggestions[suggestions["target_sdp_file"].map(_text) == "codes.csv"]
+    fence = code_rows[code_rows["code_value"].map(_text) == "Fence"]
+    assert list(fence["iri"]) == [
+        "https://example.org/method/one",
+        "https://example.org/method/two",
+    ]
+    assert set(fence["prefill_origin"]) == {"nuseds_crosswalk"}
+    assert set(fence["prefill_iri"]) == {CROSSWALK_FENCE_IRI}
+    assert not (code_rows["code_value"].map(_text) == "Bank Walk").any()
+    roles = sorted(set(fence["dictionary_role"].map(_text)))
+    assert len(roles) == 1, roles
+    role = roles[0]
+
+    review = review_semantics(str(path)).rows
+    in_slot = review[review["slot_id"] == CROSSWALK_SLOT]
+    assert len(in_slot) == 2
+    assert list(in_slot["current_value"]) == [CROSSWALK_FENCE_IRI, CROSSWALK_FENCE_IRI]
+    assert list(in_slot["rank"]) == [1, 2]
+    assert not (review["code_value"].map(_text) == "Bank Walk").any()
+
+    # The packet uses the same queue. It reports the prefill as current state,
+    # while its candidates come from retrieval rather than from the crosswalk.
+    built = write_semantic_review_packet(
+        str(path),
+        search_fn=_crosswalk_hits,
+        code_scope="all",
+        review_dir=path / "review",
+        top_n=2,
+        quiet=True,
+    )
+    packet = read_semantic_review_json(built["path"])
+    packet_slots = [
+        slot for slot in _slots(packet) if slot["target"]["slot_id"] == CROSSWALK_SLOT
+    ]
+    assert len(packet_slots) == 1
+    assert packet_slots[0]["target"]["current_value"] == CROSSWALK_FENCE_IRI
+    assert [candidate["iri"] for candidate in packet_slots[0]["candidates"]] == list(
+        fence["iri"]
+    )
+
+    # A harness may leave the choice for a person. Importing that assessment
+    # must keep the package-owned prefill provenance when it refreshes
+    # candidates.
+    assessment = _crosswalk_harness_row(
+        packet_slots[0]["target"],
+        llm_decision="review",
+        llm_confidence=0.5,
+        llm_rationale="Needs local review.",
+    )
+    assessment_path = path / "review" / "semantic-assessments-pass-1.csv"
+    _write_crosswalk_harness([assessment], assessment_path, packet["packet_id"])
+    ingest_semantic_assessments(
+        str(path), assessments=assessment_path, search_fn=_crosswalk_hits, quiet=True
+    )
+    refreshed = semantic_suggestions(str(path))
+    refreshed = refreshed[refreshed["target_row_key"].isin(fence["target_row_key"])]
+    assert len(refreshed) == 2
+    assert set(refreshed["prefill_origin"]) == {"nuseds_crosswalk"}
+    assert set(refreshed["prefill_iri"]) == {CROSSWALK_FENCE_IRI}
+    assert (_queued_slots(path) == CROSSWALK_SLOT).sum() == 2
+
+    # A later manual edit is a new final decision, not an outstanding prefill.
+    written.loc[written["code_value"] == "Fence", "term_iri"] = (
+        "https://example.org/manual-choice"
+    )
+    written.to_csv(path / "metadata" / "codes.csv", index=False)
+    assert CROSSWALK_SLOT not in set(_queued_slots(path))
+
+    # Restoring the prefill allows a pasted decision call to close the slot.
+    written.loc[written["code_value"] == "Fence", "term_iri"] = CROSSWALK_FENCE_IRI
+    written.to_csv(path / "metadata" / "codes.csv", index=False)
+    decided = accept_suggestion(
+        review_semantics(str(path)),
+        "ENUMERATION_METHODS",
+        role,
+        code_value="Fence",
+        rank=1,
+    )
+    apply_sdp_semantics(str(path), decided, quiet=True)
+    assert CROSSWALK_SLOT not in set(_queued_slots(path))
+
+
+def test_semantic_code_scope_none_leaves_crosswalk_prefills_out_of_discovery(
+    monkeypatch,
+):
+    from metasalmonpy import semantics as sem
+
+    def nothing(query, role=None, sources=None):
+        return pd.DataFrame()
+
+    monkeypatch.setattr(
+        sem,
+        "suggest_semantics",
+        functools.partial(sem.suggest_semantics, search_fn=nothing),
+    )
+    codes = pd.DataFrame(
+        {
+            "dataset_id": ["demo-1"],
+            "table_id": ["escapement"],
+            "column_name": ["ENUMERATION_METHODS"],
+            "code_value": ["Fence"],
+            "code_label": ["Fence"],
+            "term_iri": [None],
+        }
+    )
+    artifacts = infer_salmon_datapackage_artifacts(
+        {"escapement": pd.DataFrame({"ENUMERATION_METHODS": ["Fence"]})},
+        dataset_id="demo-1",
+        seed_codes=codes,
+        semantic_code_scope="none",
+        seed_semantics=True,
+        seed_verbose=False,
+    )
+    assert list(artifacts["codes"]["term_iri"]) == [CROSSWALK_FENCE_IRI]
+    suggestions = artifacts["semantic_suggestions"]
+    assert suggestions is None or len(suggestions) == 0

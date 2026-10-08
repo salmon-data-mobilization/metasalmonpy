@@ -214,6 +214,37 @@ def _review_is_unfilled(value) -> bool:
     return not text or _is_review_iri(value)
 
 
+#: The ``prefill_origin`` a crosswalk-filled code slot's candidates carry.
+#: Spelled here as well as in ``package_io`` so the queue never imports the
+#: writer; ``tests/test_review_console.py`` holds the two equal.
+CROSSWALK_PREFILL_ORIGIN = "nuseds_crosswalk"
+
+
+def _review_crosswalk_pending(suggestions: pd.DataFrame, current_values) -> list:
+    """Which candidate rows belong to an undecided crosswalk prefill.
+
+    A row counts when its ``prefill_origin`` is the crosswalk's, its
+    ``prefill_iri`` is non-empty and the slot's current value on disk still
+    equals that IRI, cell for cell as R compares them. A suggestions table
+    written before the columns existed has no pending row.
+    """
+    count = len(suggestions)
+    if "prefill_origin" not in suggestions.columns or "prefill_iri" not in suggestions.columns:
+        return [False] * count
+    pending = []
+    for origin, prefill, current in zip(
+        suggestions["prefill_origin"], suggestions["prefill_iri"], current_values
+    ):
+        pending.append(
+            not pd.isna(origin)
+            and str(origin) == CROSSWALK_PREFILL_ORIGIN
+            and not pd.isna(prefill)
+            and not pd.isna(current)
+            and str(current) == str(prefill)
+        )
+    return pending
+
+
 def _review_match_rows(
     frame: Optional[pd.DataFrame], row: Mapping, keys: Optional[Sequence[str]]
 ) -> list:
@@ -548,9 +579,10 @@ def review_semantics(
     """Review semantic suggestions in the console.
 
     Builds a re-runnable review queue from suggestions that already exist. One
-    entry per unfilled semantic slot, each with its ranked shortlist and the
-    exact :func:`accept_suggestion` call that decides it -- printing that call
-    is the feature: paste it into a script and the decision becomes
+    entry per unfilled semantic slot, plus NuSEDS crosswalk-prefilled code slots
+    that still hold their original prefill, each with its ranked shortlist and
+    the exact :func:`accept_suggestion` call that decides it -- printing that
+    call is the feature: paste it into a script and the decision becomes
     reproducible, which the spreadsheet workflow this replaces never was.
 
     **This never contacts a network or an LLM.** It reads the
@@ -567,7 +599,9 @@ def review_semantics(
         :func:`infer_salmon_datapackage_artifacts`.
     include_filled
         When ``True``, also queue slots that already hold a final
-        (non-``REVIEW:``) IRI, and slots that already carry a decision.
+        (non-``REVIEW:``) IRI, and slots that already carry a decision. NuSEDS
+        crosswalk-prefilled code slots with a saved shortlist are shown by
+        default until decided.
     max_candidates
         Maximum candidates shown per slot. ``None`` shows all.
     columns
@@ -823,13 +857,25 @@ def _review_queue(
         unfilled = rows["current_value"].map(
             lambda value: pd.isna(value) or _review_is_unfilled(value)
         )
+        # A NuSEDS code prefill holds a final IRI but still needs review
+        # against the saved alternatives (hub item B-426, the mirror of
+        # metasalmon's B-120). Only producer-stamped provenance, matching the
+        # value still on disk, gets this exception. A caller's final IRI or a
+        # later manual edit is not pulled back into the default queue.
+        crosswalk_pending = pd.Series(
+            _review_crosswalk_pending(suggestions, rows["current_value"]),
+            index=rows.index,
+            dtype=bool,
+        )
         # A recorded decision takes a slot out of the queue even though
         # rejecting leaves the field blank -- "blank" and "undecided" are
         # different states, and only ``include_filled=True`` shows the decided
         # ones again. A hand-picked accept (``source = "user"``) is recorded
         # with a decision, so this is also what drops it.
         decided_slots = set(rows.loc[rows["decision"].notna(), "slot_id"])
-        keep = (unfilled & ~rows["slot_id"].isin(decided_slots)).to_numpy(dtype=bool)
+        keep = (
+            (unfilled | crosswalk_pending) & ~rows["slot_id"].isin(decided_slots)
+        ).to_numpy(dtype=bool)
         source_row = [position for position, kept in enumerate(keep) if kept]
         rows = rows[keep]
 

@@ -1201,7 +1201,23 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
     seen = []
     for slot in dict.fromkeys(existing_slots):
         if slot in replace:
-            pieces.extend(record for record, owner in zip(merged_records, merged_slots) if owner == slot)
+            replacement = [dict(record) for record, owner in zip(merged_records, merged_slots) if owner == slot]
+            # Prefill provenance belongs to the package, not to the harness or
+            # its retrieved shortlist. Keep the slot's original stamp when an
+            # assessment refreshes candidates, so an undecided crosswalk IRI
+            # stays reviewable (hub B-426, the mirror of metasalmon's B-120).
+            original = [record for record, owner in zip(existing_records, existing_slots) if owner == slot]
+            for column in ("prefill_origin", "prefill_iri"):
+                if column not in existing.columns:
+                    continue
+                values = list(dict.fromkeys(
+                    record.get(column) for record in original
+                    if record.get(column) is not None and str(record.get(column)) != ""
+                ))
+                if len(values) == 1:
+                    for record in replacement:
+                        record[column] = values[0]
+            pieces.extend(replacement)
             seen.append(slot)
         else:
             pieces.extend(record for record, owner in zip(existing_records, existing_slots) if owner == slot)
