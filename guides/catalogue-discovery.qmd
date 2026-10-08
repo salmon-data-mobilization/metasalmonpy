@@ -1,0 +1,99 @@
+---
+title: "Capture public catalogue evidence"
+description: "Bounded KNB/DataONE metadata discovery with raw query pages and provenance; review and packaging remain separate."
+---
+
+This development feature captures metadata returned by an existing catalogue.
+It preserves public KNB or DataONE query pages; the authoritative data remains
+in the repository. It does not download data objects, submit a dataset, call a
+model, or accept semantic annotations.
+
+## Start with a bounded KNB query
+
+```python
+from metasalmonpy import capture_catalogue_query
+
+receipt = capture_catalogue_query(
+    "text:Fraser AND text:sockeye",
+    "fraser-knb-capture",
+    catalogue="knb",
+    max_records=100,
+    page_size=50,
+)
+
+print(receipt["captured_metadata_records"])
+print(receipt["complete_for_reported_count"])
+```
+
+The destination must be new. The function reserves it before making an
+unauthenticated HTTPS GET and never replaces existing evidence. Select
+`catalogue="dataone"` to query the DataONE coordinating-node index in a
+separate capture. Both endpoints derive from the package's existing production
+KNB/DataONE environment configuration. Queries always restrict results to
+metadata and request stable ID ordering.
+
+The default transport uses a fresh public HTTP client and does not inherit
+process-wide authenticated/cookie handlers or proxy environment variables.
+If your environment needs custom network routing, supply an explicit
+`fetch(url, timeout, max_bytes)` transport configured for public,
+unauthenticated access. Global browser, network and proxy settings are unchanged.
+
+`max_records` bounds a call to 1–1,000 metadata records; `page_size` bounds
+each request to 1–100 records. `max_bytes` bounds each page, and `timeout`
+bounds each request. These are capture limits, not performance benchmarks or
+a claim that a catalogue has been fully harvested.
+
+## Inspect the receipt before reusing evidence
+
+The directory contains the exact response bytes in `page-0000.json` and
+subsequent numbered pages. `capture.json` is installed atomically after a
+successful bounded capture and contains:
+
+| Field | Meaning |
+|---|---|
+| `receipt_version` | Interim metadata-capture contract, currently `0.1`. |
+| `catalogue`, `endpoint`, `query`, `captured_at` | Instrument and capture time, not historical data availability. |
+| `pages` | Exact request URL, start, returned row count, byte count and SHA-256 for each raw response. |
+| `records` | Native catalogue metadata, retaining identifiers and version/coverage evidence without semantic conversion. |
+| `reported_metadata_matches`, `captured_metadata_records` | Reported index matches and bounded encounters; neither is an independent dataset count. |
+| `complete_for_reported_count` | Whether the captured records reach the count reported during this call. |
+| `transactional_snapshot` | Always false: a live index is not a repository transaction. |
+| `annotation_status`, `independent_dataset_count` | Pending and unknown; discovery provides no review approval. |
+
+A KNB encounter and a DataONE encounter may describe the same repository
+object. Metadata versions, mirrors and derived packages also require lineage
+and overlap review before counting evidence. Equality of a reported result
+count across pages does not prove that the live index was unchanged.
+
+Publicly retrievable metadata does not establish a data object's licence or
+permission to redistribute it. Inspect the authoritative package metadata,
+rights and version/as-of evidence before a separately authorized data fetch.
+The interim receipt does not supply the full S14 DatasetReceipt, H0 record,
+data-authority or rights decisions.
+
+## Preserve failed captures
+
+Transport failure, a keyboard interrupt, changed result counts, repeated metadata
+PIDs, malformed paging or an unexpectedly empty page abort the call. The function
+attempts to retain a `failure.json` and moves the failed directory to an
+`.incomplete` sibling without replacing another capture. If the sibling is
+occupied, the owned failed directory stays at its original path. If filesystem
+bookkeeping also fails, inspect both reserved directories for retained raw bytes;
+diagnostics are attempted without replacing the original error or interrupt,
+even when warnings are treated as errors. Neither path reports a successful
+receipt. Use a new destination for a retry and preserve prior bytes.
+
+The current adapter does not claim machine-crash durability. A directory with
+no readable `capture.json` must not be treated as a successful capture.
+
+## Test or replay without a network
+
+Pass `fetch(url, timeout, max_bytes) -> bytes` to inject a captured response
+and `captured_at="2026-09-30T16:00:00+00:00"` to fix the receipt time. The
+same response bounds, pagination and identifier checks apply. The offline
+suite covers endpoints, caps, zero results, unstable pages, failure preservation
+and destination races without opening a socket.
+
+Once source data has been separately fetched and inspected, use the existing
+`create_sdp()`, semantic review and validation functions. This metadata receipt
+is neither an SDP nor a substitute for those approval contracts.

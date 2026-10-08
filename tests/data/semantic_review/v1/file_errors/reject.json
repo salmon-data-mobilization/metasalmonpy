@@ -1,0 +1,67 @@
+{
+  "case_id": "file_errors",
+  "base_case": "bundle_accept",
+  "variants": [
+    {
+      "name": "header",
+      "expected_code": "header",
+      "note": "A column of the thirty is misnamed.",
+      "expected_packet_id": null,
+      "assessments": "header.csv"
+    },
+    {
+      "name": "unknown_target",
+      "expected_code": "unknown_target",
+      "note": "A row's identity names no packet target.",
+      "expected_packet_id": null,
+      "assessments": "unknown_target.csv"
+    },
+    {
+      "name": "duplicate_target",
+      "expected_code": "duplicate_target",
+      "note": "Two rows share an identity.",
+      "expected_packet_id": null,
+      "assessments": "duplicate_target.csv"
+    },
+    {
+      "name": "packet_integrity",
+      "expected_code": "packet_integrity",
+      "note": "The packet was edited after it was written; its packet_id no longer matches.",
+      "expected_packet_id": null,
+      "packet": "packet_integrity.json"
+    },
+    {
+      "name": "packet_version",
+      "expected_code": "packet_version",
+      "note": "A packet version this ingester does not read.",
+      "expected_packet_id": null,
+      "packet": "packet_version.json"
+    },
+    {
+      "name": "packet_mismatch",
+      "expected_code": "packet_mismatch",
+      "note": "The caller expected a different packet_id.",
+      "expected_packet_id": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "name": "packet_unbound",
+      "expected_code": "packet_unbound",
+      "note": "Neither a sidecar nor a packet_id argument names the packet the assessments were made against.",
+      "expected_packet_id": null,
+      "assessments": "packet_unbound.csv"
+    },
+    {
+      "name": "stale_sidecar",
+      "expected_code": "packet_mismatch",
+      "note": "The sidecar names a packet other than the one being ingested: a stale file after a rebuild.",
+      "expected_packet_id": null,
+      "assessments": "stale_sidecar.csv"
+    },
+    {
+      "name": "no_pass_2",
+      "expected_code": "no_pass_2",
+      "note": "A pass-2 assessment file is given, but nothing asked for a second pass. The test copies the pass-1 file to the pass-2 name and passes the packet_id.",
+      "expected_packet_id": null
+    }
+  ]
+}

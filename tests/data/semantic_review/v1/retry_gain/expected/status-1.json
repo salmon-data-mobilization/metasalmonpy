@@ -1,0 +1,22 @@
+{
+  "status": "awaiting_pass_2",
+  "pass": 1,
+  "packet_id": "310ebf2a3857c19ac5502f7d94b23d46332f06d96b79dc8044fa2eb3ba15cad5",
+  "has_next_packet": true,
+  "summary": {
+    "decisions": {
+      "accept": 0,
+      "review": 0,
+      "retry_search": 1,
+      "request_new_term": 0,
+      "reject_shortlist": 0
+    },
+    "errors": 0,
+    "downgrades": 0,
+    "escalations": 0,
+    "retries": 1,
+    "awaiting_pass_2": 1,
+    "kept_pass_1": 0
+  },
+  "search_calls": 1
+}

@@ -1,0 +1,64 @@
+{
+  "events": [
+    {
+      "type": "assessment",
+      "role": "variable",
+      "decision": "request_new_term"
+    },
+    {
+      "type": "assessment",
+      "role": "property",
+      "decision": "accept"
+    },
+    {
+      "type": "selection",
+      "role": "property",
+      "iri": "https://w3id.org/smn/FishWeight",
+      "decision": "accept"
+    },
+    {
+      "type": "assessment",
+      "role": "constraint",
+      "decision": "review"
+    },
+    {
+      "type": "assessment",
+      "role": "method",
+      "decision": "review"
+    },
+    {
+      "type": "prefill",
+      "role": "property",
+      "iri": "https://w3id.org/smn/FishWeight",
+      "decision": "accept"
+    },
+    {
+      "type": "gap",
+      "role": "variable",
+      "scope": "uncertain",
+      "decision": "request_new_term"
+    }
+  ],
+  "final_dictionary_rows": [
+    {
+      "dataset_id": "theme_a",
+      "table_id": "trawl",
+      "column_name": "CATCH_WEIGHT",
+      "column_label": "Catch weight",
+      "column_description": "Total mass in kilograms of fish retained in the trawl catch.",
+      "column_role": "measurement",
+      "value_type": "number",
+      "unit_label": "kg",
+      "unit_iri": null,
+      "term_iri": null,
+      "property_iri": "REVIEW: https://w3id.org/smn/FishWeight",
+      "entity_iri": null,
+      "constraint_iri": null,
+      "statistical_modifier_iri": null,
+      "method_iri": null,
+      "term_type": null
+    }
+  ],
+  "gap_count": 1,
+  "term_request_count": 1
+}
