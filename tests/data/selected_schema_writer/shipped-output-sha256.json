@@ -1,0 +1,9 @@
+{
+  ".metasalmonpy-package": "387f000f947f671ae160d03c3dd5669b9eacb81b9c5af5d0a08d86b544db1013",
+  "data/observations.csv": "3efe994bfc6efffc93002592ae790f2517025ff6f653ed803d95bc335c2731ca",
+  "datapackage.json": "32cff82cd9601e61a4a43d0290db11cd9c2bfb9d9ce3429bac61d3dc866588e9",
+  "metadata/codes.csv": "cb53187994e028b7e6b4ab1bb5aa5e17c7d6e645ac9c425e2319b59edc7a1c10",
+  "metadata/column_dictionary.csv": "b10d15bafd7cd8ae84cb484099a4a9050d11834930851e3364d9f73a314857aa",
+  "metadata/dataset.csv": "ea5c5e9fa0240b15a05721cc96f0cf2552e9dba7ffff5ccaab868cde987a8428",
+  "metadata/tables.csv": "df02c013be64c33c81e9fd5dd292e539311190a8750a8e6bb075d98194af6813"
+}

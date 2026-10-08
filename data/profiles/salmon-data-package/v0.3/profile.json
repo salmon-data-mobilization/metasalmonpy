@@ -127,7 +127,7 @@
       }
     }
   ],
-  "sdp:version": "sdp-0.3.0",
+  "sdp:version": "sdp-0.3.2",
   "sdp:metadataResources": [
     {
       "name": "sdp_dataset",

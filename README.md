@@ -12,14 +12,18 @@ Python users.
 
 ## Installation
 
-Install from the repository (the `v0.1.6` tag predates the rename and still
-packages the old `salmonpy` name; the next parity release will be the first
-tag installable as `metasalmonpy`):
+Install the released package from its tagged source archive:
 
 ```bash
 python -m pip install \
-  "metasalmonpy @ git+https://github.com/salmon-data-mobilization/metasalmonpy@main"
+  "metasalmonpy @ https://github.com/salmon-data-mobilization/metasalmonpy/archive/refs/tags/v0.5.0.tar.gz"
 ```
+
+The package version is a claim of behavioural parity with metasalmon; see the
+[parity guide](guides/parity.qmd). A checkout of `main` can contain unreleased
+changes even while reporting the released version. The tagged archive pins the
+package source; no wheel release asset or local Git installation is required.
+Lock dependencies separately when reproducing a complete environment.
 
 For development:
 
@@ -28,6 +32,23 @@ python3 -m venv .venv
 . .venv/bin/activate
 pip install -e ".[test]"
 ```
+
+The core package requires pandas and Requests. The default selected semantic-IRI
+verifier adds its HTTPX backend through the optional `verify` extra:
+
+```bash
+pip install -e ".[verify]"
+```
+
+For packages without `metadata/eml-mapping.yml`, `verify_sdp_semantic_iris()`
+with an injected `requester` remains available with core dependencies alone.
+A present sidecar uses the existing native YAML parser, requiring PyYAML from
+`pip install -e ".[eml]"`; its explicit supported `semantic_review.path`
+selects the reviewed ledger. Using the default requester without `[verify]`,
+or reading a sidecar without PyYAML, raises an installation message before
+requests or report replacement. Development transport tests use
+`pip install -e ".[test,verify]"`; mapped-sidecar controls also need `[eml]`.
+Core tests still collect, skipping only controls for missing optional backends.
 
 ## Quickstart
 

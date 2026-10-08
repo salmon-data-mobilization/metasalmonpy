@@ -29,10 +29,14 @@ website:
         href: getting-started.qmd
       - text: "Guides"
         menu:
+          - text: "Configuration"
+            href: guides/configuration.qmd
           - text: "Package lifecycle"
             href: guides/package-lifecycle.qmd
           - text: "Semantic review"
             href: guides/semantic-review.qmd
+          - text: "Public catalogue discovery"
+            href: guides/catalogue-discovery.qmd
           - text: "Term requests"
             href: guides/term-requests.qmd
           - text: "EDH and validation"
@@ -90,8 +94,10 @@ quartodoc:
         href: getting-started.qmd
       - section: "Guides"
         contents:
+          - guides/configuration.qmd
           - guides/package-lifecycle.qmd
           - guides/semantic-review.qmd
+          - guides/catalogue-discovery.qmd
           - guides/term-requests.qmd
           - guides/edh-validation.qmd
           - guides/github-access.qmd
@@ -166,6 +172,7 @@ quartodoc:
       contents:
         - fetch_salmon_ontology
         - validate_semantics
+        - verify_sdp_semantic_iris
         - suggest_facet_schemes
     - title: "Term request workflow"
       desc: "Detect ontology gaps and draft curator-reviewed requests."

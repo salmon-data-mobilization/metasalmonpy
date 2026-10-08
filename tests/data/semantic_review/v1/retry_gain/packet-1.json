@@ -1,6 +1,6 @@
 {
   "packet_version": "semantic-review-packet/1.0",
-  "packet_id": "53f16416e4bbb04a19b9418b46dc1699484430232624e0479f6afba5de37f3cf",
+  "packet_id": "310ebf2a3857c19ac5502f7d94b23d46332f06d96b79dc8044fa2eb3ba15cad5",
   "pass": 1,
   "parent_packet_id": null,
   "producer": {
@@ -10,7 +10,7 @@
   },
   "pins": {
     "sdp_profile": {
-      "version": "sdp-0.3.0",
+      "version": "sdp-0.3.2",
       "source": "vendored"
     },
     "ontologies": {

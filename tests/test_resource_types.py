@@ -25,9 +25,81 @@ import pandas as pd
 import pytest
 
 from metasalmonpy import resource_types as rt
+from metasalmonpy.dictionary import infer_column_role, infer_dictionary, infer_value_type
 
 DATA = Path(__file__).resolve().parent / "data" / "resource_types"
 R_VERDICTS = json.loads((DATA / "r-token-verdicts.json").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    "values,value_type",
+    [
+        ([_dt.date(2001, 11, 6), None, _dt.date(2001, 11, 13)], "date"),
+        ([_dt.datetime(2001, 11, 6), None, _dt.datetime(2001, 11, 13, 10)], "datetime"),
+        ([_dt.date(2001, 11, 6), None, _dt.datetime(2001, 11, 13, 10)], "datetime"),
+        (["2001-11-06", None, "2001/11/13", " \t"], "date"),
+        (["2001-11-06T10:00:00Z", None, "2001-11-13 11:00:00"], "datetime"),
+        (["2001-11-06", None, "2001-11-13T10:00:00Z"], "datetime"),
+    ],
+)
+def test_ordinary_named_dates_are_temporal_in_public_dictionary(values, value_type):
+    # B-349 ports the class/date-guess behavior of R's documented readr path.
+    # Force object dtype so Python datetime objects do not get a free dtype fix.
+    series = pd.Series(values, dtype=object)
+    assert infer_column_role("SURVEY_WAVE", series) == "temporal"
+    assert infer_value_type(series) == value_type
+    dictionary = infer_dictionary(
+        pd.DataFrame({"SURVEY_WAVE": series}), dataset_id="d", table_id="surveys",
+        seed_semantics=False, seed_verbose=False,
+    ).set_index("column_name")
+    assert dictionary.loc["SURVEY_WAVE", "column_role"] == "temporal"
+    assert dictionary.loc["SURVEY_WAVE", "value_type"] == value_type
+
+
+def test_bundled_csv_date_columns_get_date_value_type():
+    # pandas does not parse these date columns; readr's Date guess is shared
+    # with the B-188 code-row seeder rather than depending on the DTT name.
+    frame = pd.read_csv(Path(__file__).resolve().parents[1] / "data/nuseds-fraser-coho-sample.csv")
+    dictionary = infer_dictionary(
+        frame, dataset_id="nuseds", table_id="surveys",
+        seed_semantics=False, seed_verbose=False,
+    ).set_index("column_name")
+    for name in ("START_DTT", "END_DTT"):
+        assert dictionary.loc[name, "column_role"] == "temporal"
+        assert dictionary.loc[name, "value_type"] == "date"
+
+
+@pytest.mark.parametrize(
+    "values,role,value_type",
+    [
+        ([None, pd.NA], "attribute", "string"),
+        (["", " \t", None], "categorical", "string"),
+        (["2001-11-06", "unknown", None], "categorical", "string"),
+        ([_dt.date(2001, 11, 6), "unknown", None], "categorical", "string"),
+        ([_dt.date(2001, 11, 6), 1, None], "attribute", "string"),
+        (["early", "late", None], "categorical", "string"),
+        (["10:00", "11:00", None], "categorical", "string"),
+    ],
+)
+def test_empty_mixed_and_ordinary_codes_do_not_become_dates(values, role, value_type):
+    series = pd.Series(values, dtype=object)
+    assert infer_column_role("SURVEY_WAVE", series) == role
+    assert infer_value_type(series) == value_type
+
+
+@pytest.mark.parametrize("values", [
+    [_dt.date(2001, 11, 6), None],
+    [_dt.datetime(2001, 11, 6), None],
+    ["2001-11-06", None],
+])
+def test_date_role_keeps_r_identifier_and_qualifier_precedence(values):
+    series = pd.Series(values, dtype=object)
+    assert infer_column_role("sample_id", series) == "identifier"
+    assert infer_column_role("stock_ID_quality", series) == "attribute"
+    factor = pd.Series(["2001-11-06", "2001-11-13"], dtype="category")
+    assert infer_column_role("stock_ID_quality", factor) == "categorical"
+    assert infer_column_role("SURVEY_WAVE", factor) == "categorical"
+    assert infer_value_type(factor) == "string"
 
 # Two tokens are outside the double range and are reported as beyond exact
 # numeric precision by BOTH implementations; only the canonical *display* key

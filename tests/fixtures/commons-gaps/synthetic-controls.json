@@ -1,0 +1,55 @@
+{
+  "gaps": [
+    {
+      "blocked_by": [],
+      "card_status": "draft",
+      "concept": "concepts/synthetic-rejected",
+      "conflicts": null,
+      "context": "ecology",
+      "evidence_needed": "Synthetic control: independent source evidence would allow reconsideration.",
+      "mint_target": "smn",
+      "note": "Synthetic contract control; this is not a real commons gap or term proposal.",
+      "proposal": "https://example.invalid/pr/1",
+      "registry": "smn",
+      "rejected_because": "Synthetic control: this draft was declined for unresolved evidence.",
+      "state": "rejected",
+      "status": "no-term",
+      "title": "Synthetic rejected control",
+      "verified": false
+    },
+    {
+      "blocked_by": [],
+      "card_status": "draft",
+      "concept": "concepts/synthetic-new-scheme",
+      "conflicts": null,
+      "context": "ecology",
+      "evidence_needed": null,
+      "mint_target": "new-scheme",
+      "note": "Synthetic contract control; this is not a real commons gap or term proposal.",
+      "proposal": null,
+      "registry": "smn",
+      "rejected_because": null,
+      "state": "open",
+      "status": "no-term",
+      "title": "Synthetic new-scheme control",
+      "verified": false
+    },
+    {
+      "blocked_by": [],
+      "card_status": "deprecated",
+      "concept": "concepts/synthetic-deprecated",
+      "conflicts": null,
+      "context": "ecology",
+      "evidence_needed": null,
+      "mint_target": "smn",
+      "note": "Synthetic contract control; this is not a real commons gap or term proposal.",
+      "proposal": null,
+      "registry": "smn",
+      "rejected_because": null,
+      "state": "open",
+      "status": "no-term",
+      "title": "Synthetic deprecated control",
+      "verified": false
+    }
+  ]
+}
