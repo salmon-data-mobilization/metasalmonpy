@@ -1,0 +1,101 @@
+---
+title: "Configuration"
+description: "Configure schema loading, retrieval and optional credentials in metasalmonpy."
+execute:
+  eval: false
+---
+
+Settings are read at call time. Importing the package does not set environment
+variables or supply credentials. Environment settings do not request a model
+call. Model assessment of semantic suggestions requires `llm_assess=True`
+(and `seed_semantics=True` in `infer_dictionary()`). `chat_decomposition()` has a
+separate opt-in path through `chat_provider=` or `chat_request_fn=`. The S16 plan
+removes these in-package provider paths in 0.7.0; this page describes their
+current controls.
+
+## SDP schema
+
+| Setting | Meaning and precedence |
+| --- | --- |
+| `METASALMONPY_SDP_SCHEMA_SOURCE` | The loader's `auto` default tries the pinned remote bundle then the vendored copy; `remote` requires remote loading; `vendored` stays offline. Review and setter defaults are described below. |
+| `METASALMONPY_SDP_SCHEMA_BASE_URL` | Select a different schema bundle base URL; unset uses the package's current pinned release. |
+| `set_sdp_schema_source()` | Process override ahead of the source environment variable. Pass `None` to restore environment/default resolution. |
+| `set_sdp_schema_base_url()` | Process override ahead of the base-URL environment variable. Pass `None` to restore environment/default resolution. |
+
+```python
+from metasalmonpy.sdp_schema import set_sdp_schema_source
+
+set_sdp_schema_source("vendored")  # Read the bundled schema offline.
+set_sdp_schema_source(None)        # Restore environment/default resolution.
+```
+
+Changing either process override clears the schema cache. Under the shipped
+`auto` source and pinned base URL, package creation tries the remote bundle
+before falling back to the vendored copy. `review_metadata()` and the four
+`set_sdp_*()` setters instead read the vendored copy offline; this is still
+true if `auto` was selected explicitly with the pinned URL. A different source
+or base URL makes review and setters use the selected loader schema, which may
+contact the network. The default schema pin is maintained with the vendored
+bundle when a later spec release is implemented.
+
+## Retrieval
+
+| Environment variable | Meaning |
+| --- | --- |
+| `METASALMONPY_CACHE` | Enable the process-local term-result cache with `1`, `true` or `yes`; unset/empty disables it. |
+| `METASALMONPY_DEBUG_FETCH` | Enable retrieval diagnostics with `1`, `true` or `yes`; unset/empty disables them. |
+| `SALMONPY_CACHE`, `SALMONPY_DEBUG_FETCH` | Deprecated pre-rename fallbacks, consulted only when the corresponding current spelling is unset/empty. Each emits one `DeprecationWarning` per process (which Python may filter by default); both remain supported here. |
+| `BIOPORTAL_APIKEY` | BioPortal credential. The first BioPortal search without a key emits one `RuntimeWarning` per process and returns an empty BioPortal result. |
+
+BioPortal warning bookkeeping is private module state. Session identifier generation
+uses UUIDs without consuming Python's statistical random stream. The R companion's configuration topic is `?metasalmon_configuration`;
+its `metasalmon.*` options and `METASALMON_*` retrieval knobs are R controls.
+
+## GitHub and DataONE
+
+A nonempty `token=` argument takes precedence for GitHub readers. Otherwise,
+token discovery checks `GITHUB_PAT`, then `GH_TOKEN`, then the Git credential
+helper. See [GitHub data access](github-access.qmd) for the existing setup and
+read helpers.
+
+DataONE credentials are process-local, separate for each publication environment:
+
+```python
+from metasalmonpy.knb_publication import (
+    set_dataone_token,
+    set_dataone_test_token,
+)
+```
+
+Supply a short-lived token through the appropriate setter when making an
+explicitly requested deposit. Production and test credentials do not substitute
+for each other, and tokens are never written to a package manifest. Passing
+`None` clears that environment's process-local credential.
+
+## Optional in-package model provider path
+
+Model assessment of semantic suggestions selects a provider with `llm_provider`
+(`openai` by default);
+explicit `llm_model`, `llm_base_url` and `llm_api_key` arguments take precedence.
+`chat_decomposition()` uses the corresponding `chat_provider`, `chat_model`,
+`chat_base_url` and `chat_api_key` arguments. Both paths use the provider-specific
+fallbacks below when a call is explicitly requested. Setting an environment
+variable alone does not opt in.
+
+| Provider | Model fallback | Endpoint fallback | Credential fallback |
+| --- | --- | --- | --- |
+| `openai` | `OPENAI_MODEL` | `OPENAI_BASE_URL` | `OPENAI_API_KEY` |
+| `openrouter` | `OPENROUTER_MODEL` | `OPENROUTER_BASE_URL` | `OPENROUTER_API_KEY` |
+| `openai_compatible` | `OPENAI_COMPATIBLE_MODEL` | `OPENAI_COMPATIBLE_BASE_URL` | `METASALMON_LLM_API_KEY` |
+| `chapi` | `CHAPI_MODEL` | `CHAPI_BASE_URL` | `CHAPI_API_KEY` |
+
+An unset model or endpoint falls back to that provider's package preset where
+one exists. `openai_compatible` has no preset: a network call requires a model,
+endpoint and credential. An injected `llm_request_fn` or `chat_request_fn`
+replaces the network request and does not require an endpoint or credential.
+Semantic review accepts an explicit `llm_reasoning_effort`;
+`chat_decomposition()` does not have a reasoning-effort argument.
+
+Follow the [semantic review guide](semantic-review.qmd) for the explicit review
+flow. The configuration above supplies inputs to existing calls; it never
+applies or approves an ontology term.

@@ -51,7 +51,13 @@ from typing import Iterable, Mapping, Optional, Sequence, Union
 
 import pandas as pd
 
-from .metadata import read_sdp_csv, scalar_text
+from .metadata import (
+    _is_review_iri,
+    _review_iri_text,
+    _strip_review_iri as _strip_raw_review_iri,
+    read_sdp_csv,
+    scalar_text,
+)
 from .semantics import _infer_term_type, _semantic_code_value_is_empty
 
 __all__ = [
@@ -151,19 +157,17 @@ def _strip_review_iri(value) -> str:
     decision names that candidate reads. :func:`accept_suggestion` picks the
     candidate's row with it, :func:`apply_sdp_semantics` takes the candidate's
     ``term_type`` only when the decision row carries the accepted IRI in it,
-    and the decision record matches rows by it (hub item B-222). It trims
-    before it strips, through ``_text()``, so it is what metasalmon's
-    ``.ms_review_decision_iri()`` computes. metasalmon's
-    ``.ms_strip_review_iri()`` removes whitespace only around a marker.
+    and the decision record matches rows by it (hub item B-222). Match the
+    raw value first: trimming an excluded line break would invent a marker,
+    and trimming after stripping would erase a malformed suffix. Ordinary
+    unmarked IRIs keep the existing decision trim, unless it would invent a
+    marker. Mirrors metasalmon's ``.ms_review_decision_iri()``.
     """
-    text = _text(value)
-    if text.upper().startswith("REVIEW:"):
-        return text[len("REVIEW:"):].strip()
-    return text
-
-
-def _is_review_iri(value) -> bool:
-    return _text(value).upper().startswith("REVIEW:")
+    text = _review_iri_text(value)
+    if _is_review_iri(text):
+        return _strip_raw_review_iri(text)
+    trimmed = _text(text)
+    return text if _is_review_iri(trimmed) else trimmed
 
 
 def _review_names_term(recorded) -> bool:
@@ -180,7 +184,7 @@ def _review_names_term(recorded) -> bool:
     the marker is the strip's and the detector's, and this decides none.
     """
     text = _text(recorded)
-    return bool(text) and not _is_review_iri(text)
+    return bool(text) and not _is_review_iri(recorded)
 
 
 def _review_slot_id(frame: pd.DataFrame) -> "pd.Series":
@@ -207,7 +211,7 @@ def _review_is_unfilled(value) -> bool:
     :func:`apply_sdp_semantics` has to overwrite rather than fill.
     """
     text = _text(value)
-    return not text or _is_review_iri(text)
+    return not text or _is_review_iri(value)
 
 
 def _review_match_rows(
@@ -763,10 +767,11 @@ def _review_queue(
         if len(hits) != 1:
             current_values.append(pd.NA)
             continue
-        current_values.append(_text(frame.at[hits[0], target_field]))
+        current_values.append(_review_iri_text(frame.at[hits[0], target_field]))
 
     def column(name):
-        return suggestions[name].map(_text) if name in suggestions else pd.NA
+        renderer = _review_iri_text if name == "iri" else _text
+        return suggestions[name].map(renderer) if name in suggestions else pd.NA
 
     rows = pd.DataFrame(
         {
@@ -1351,7 +1356,7 @@ def accept_suggestion(
     in_slot = rows["slot_id"] == slot
 
     if iri is not None:
-        accepted_iri = _text(iri)
+        accepted_iri = _review_iri_text(iri)
     else:
         hits = list(rows.index[in_slot & (rows["rank"] == int(rank))])
         if len(hits) != 1:
@@ -1364,7 +1369,7 @@ def accept_suggestion(
                 "iri instead."
             )
         target_index = hits[0]
-        accepted_iri = _text(rows.at[target_index, "iri"])
+        accepted_iri = _review_iri_text(rows.at[target_index, "iri"])
 
     accepted_iri = _strip_review_iri(accepted_iri)
 

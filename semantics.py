@@ -12,6 +12,7 @@ except ImportError as exc:  # pragma: no cover - import guard
 import re
 
 from .metadata import (
+    _is_review_iri,
     normalize_codes,
     normalize_dataset_meta,
     normalize_dictionary,
@@ -1082,7 +1083,7 @@ def _semantic_discover_targets(dictionary, codes_df, table_df, dataset_df) -> li
         description = row.get("column_description")
         if (
             isinstance(description, str)
-            and description.upper().startswith(("MISSING ", "REVIEW:"))
+            and (description.upper().startswith("MISSING ") or _is_review_iri(description))
         ):
             description = pd.NA
         query = _clean_query(

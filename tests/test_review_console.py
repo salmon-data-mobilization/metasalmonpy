@@ -78,6 +78,36 @@ def _dictionary_with(suggestions: list) -> pd.DataFrame:
     return dictionary
 
 
+def test_accept_strips_the_ruled_ascii_marker_with_spaces_before_the_colon():
+    dictionary = _dictionary_with([_suggestion_row(iri=" review :\t" + SPAWNER_IRI)])
+    review = review_semantics(dictionary)
+    accepted = accept_suggestion(review, "spawner_count", "variable", rank=1)
+    assert accepted["decision_iri"].iloc[0] == SPAWNER_IRI
+
+
+def test_review_queue_recognizes_a_spaced_ascii_marker_as_unfilled():
+    dictionary = _dictionary_with([_suggestion_row()])
+    dictionary.loc[0, "term_iri"] = " review :\t" + SPAWNER_IRI
+    assert len(review_semantics(dictionary)) == 1
+
+
+def test_review_queue_does_not_create_a_marker_by_trimming_a_current_value():
+    dictionary = _dictionary_with([_suggestion_row()])
+    dictionary.loc[0, "term_iri"] = "\nREVIEW:" + SPAWNER_IRI
+    assert len(review_semantics(dictionary)) == 0
+
+
+@pytest.mark.parametrize("value", ["\nREVIEW:" + SPAWNER_IRI, "REVIEW:\n" + SPAWNER_IRI, "REVIEW:\f" + SPAWNER_IRI])
+def test_accept_and_write_preserve_excluded_whitespace_for_strict_validation(seeded_package, value):
+    review = review_semantics(str(seeded_package), include_filled=True)
+    accepted = accept_suggestion(review, "spawner_count", "variable", iri=value)
+    expected = value if value.startswith("\n") else value[len("REVIEW:"):]
+    assert accepted.rows.loc[accepted.rows["decision"] == "accept", "decision_iri"].iloc[0] == expected
+    apply_sdp_semantics(str(seeded_package), accepted, quiet=True)
+    written = pd.read_csv(seeded_package / "metadata/column_dictionary.csv", dtype=str, keep_default_na=False)
+    assert written.loc[written["column_name"] == "spawner_count", "term_iri"].iloc[0] == expected
+
+
 # ---------------------------------------------------------------------------
 # The accessors
 # ---------------------------------------------------------------------------
@@ -1073,24 +1103,18 @@ def test_accept_takes_an_iri_that_was_never_shortlisted():
 # wrote an ``accepted`` row with an empty ``iri`` into
 # ``semantic_suggestions.csv``.
 #
-# One case per spelling ``_strip_review_iri()`` removes, because the check has
-# to agree with the strip. Which spellings count as the marker is hub question
-# Q-63, so this list is what the strip removes today, not a ruling, and it
-# follows the strip: when Q-63 is ruled, a spelling the ruling drops leaves the
-# list and one it adds joins it. Each case asserts that premise first, so a
-# change to the strip fails here and names the spelling rather than leaving a
-# test that checks nothing.
+# Q-63's ruled predicate supplies these marker-only spellings: ASCII case,
+# spaces and tabs. A form feed after the colon remains the suffix; a dotless
+# i does not spell REVIEW. Neither is an empty marker. Each case checks the
+# predicate and strip so a changed premise fails on its spelling.
 MARKER_ONLY_IRIS = {
     "the bare marker": "REVIEW:",
     "the marker as metasalmon writes it": "REVIEW: ",
     "lower case": "review:",
     "mixed case": "Review:",
     "leading spaces": "  REVIEW:",
-    # ``scalar_text()`` trims spaces, tabs and newlines. A form feed survives
-    # the trim, and only the strip's ``str.strip()`` removes it.
-    "a form feed after the colon": "REVIEW:\f",
-    # The strip compares ``str.upper()``, which folds a dotless i onto I.
-    "a dotless i": "REV\u0131EW:",
+    "spaces before the colon": " REVIEW : ",
+    "tabs around the marker": "\tReViEw\t:\t",
 }
 
 
@@ -1098,6 +1122,7 @@ MARKER_ONLY_IRIS = {
     "marker", list(MARKER_ONLY_IRIS.values()), ids=list(MARKER_ONLY_IRIS)
 )
 def test_accept_refuses_an_iri_that_is_only_the_review_marker(marker):
+    assert _is_review_iri(marker)
     assert _strip_review_iri(marker) == ""
 
     review = review_semantics(_dictionary_with([_suggestion_row()]))
@@ -1186,14 +1211,12 @@ def test_a_recorded_accept_of_a_candidate_that_is_only_the_marker_replays_no_emp
 
 
 # What each of these leaves once ``_strip_review_iri()`` has run is still read
-# as a marker by ``_is_review_iri()``. The spellings are this package's own:
-# metasalmon's twin of "in two cases" puts a space before each colon, which
-# ``_strip_review_iri()`` does not read as the marker today. Which spellings
-# count is Q-63's.
+# as a marker by ``_is_review_iri()``. ASCII spaces before either colon are
+# admitted by Q-63, as in metasalmon's counterpart.
 DOUBLED_MARKER_IRIS = {
     "twice, with nothing after": "REVIEW: REVIEW:",
     "twice, with no space between": "REVIEW:REVIEW:",
-    "twice, in two cases": "review: Review:",
+    "twice, in two cases": "review : Review :",
     "twice, before a term": "REVIEW: REVIEW: https://w3id.org/smn/WaterTemperature",
 }
 

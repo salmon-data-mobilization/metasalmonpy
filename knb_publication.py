@@ -52,6 +52,7 @@ from urllib.parse import quote
 from . import eml as _eml
 from . import knb_environments as _knb_env
 from .atomic_io import atomic_write
+from .metadata import _contains_review_iri
 from .text_safety import redact_secrets
 
 # --- constants ----------------------------------------------------------------------
@@ -920,6 +921,25 @@ def _rdf_attr(node: ET.Element, name: str) -> Optional[str]:
     return None
 
 
+def _ore_iri_values(document: ET.Element):
+    """Yield the profile's RDF URI attributes, before serialization escapes.
+
+    The builder uses literal rdf:* names; an already parsed RDF document
+    uses Clark names in the RDF namespace. Identifier text is xsd:string,
+    modified is a date and atLocation is a local path, so none is an IRI slot.
+    """
+    rdf_namespace = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    iri_attributes = {
+        name
+        for local in ("about", "resource", "datatype")
+        for name in (f"rdf:{local}", f"{{{rdf_namespace}}}{local}")
+    }
+    for element in document.iter():
+        for name, value in element.attrib.items():
+            if name in iri_attributes:
+                yield value
+
+
 def _validate_ore(
     document: ET.Element,
     resource_map_pid: str,
@@ -1040,7 +1060,7 @@ def _validate_ore(
     xml = _xml_bytes(document).decode("utf-8")
     if (
         "file:" in xml
-        or "REVIEW:" in xml
+        or _contains_review_iri(xml, _ore_iri_values(document))
         or quote(resource_map_pid, safe="") not in xml
     ):
         raise ValueError(

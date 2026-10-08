@@ -28,7 +28,7 @@ from typing import Optional
 
 import pandas as pd
 
-from .metadata import read_sdp_csv
+from .metadata import _review_iri_text, read_sdp_csv
 from .review_console import (
     SemanticReview,
     WRITABLE_FILES,
@@ -162,7 +162,7 @@ def apply_sdp_semantics(
 
         accepted = _text(row["decision"]) == "accept"
         frame.at[index, field] = (
-            _strip_review_iri(row["decision_iri"]) if accepted else pd.NA
+            _review_iri_text(row["decision_iri"]) if accepted else pd.NA
         )
 
         # ``term_type`` is the dictionary's declaration of what kind of thing
@@ -177,7 +177,7 @@ def apply_sdp_semantics(
         ):
             if not accepted:
                 frame.at[index, "term_type"] = pd.NA
-            elif _strip_review_iri(row["iri"]) == _text(row["decision_iri"]):
+            elif _strip_review_iri(row["iri"]) == _review_iri_text(row["decision_iri"]):
                 # ``term_type`` describes the candidate, and this decision IS
                 # that candidate. An ``iri=`` that a shortlisted candidate
                 # carries is recorded on that candidate's row
@@ -396,7 +396,7 @@ def _record_decisions(target: Path, decisions: pd.DataFrame) -> Optional[bytes]:
                 row["decision_reason"]
             )
             continue
-        accepted_iri = _text(row["decision_iri"])
+        accepted_iri = _review_iri_text(row["decision_iri"])
         accepted = in_slot & (
             suggestions["iri"].map(_strip_review_iri) == accepted_iri
         )

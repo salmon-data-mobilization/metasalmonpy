@@ -42,7 +42,7 @@ from typing import Dict, List, Mapping, Optional, Sequence, Union
 import pandas as pd
 
 from .atomic_io import apply_default_file_mode
-from .metadata import R_SPACE_CLASS, csv_na_token, read_sdp_csv
+from .metadata import R_SPACE_CLASS, _is_review_iri, csv_na_token, read_sdp_csv
 from .sdp_schema import sdp_metadata_resource_schema
 
 SDP_METHODS_PATH = "metadata/methods.csv"
@@ -82,7 +82,6 @@ _HTTP_SCHEME_RE = re.compile(r"^https?:", re.IGNORECASE)
 _HTTP_AUTHORITY_RE = re.compile(
     rf"^https?://[^/{R_SPACE_CLASS}]+", re.IGNORECASE
 )
-_REVIEW_RE = re.compile(r"^REVIEW:", re.IGNORECASE)
 
 
 class SdpExtensionError(ValueError):
@@ -112,7 +111,7 @@ def _is_absolute_iri(value: object) -> bool:
     if _is_blank(value):
         return False
     text = str(value)
-    if not _ABSOLUTE_IRI_RE.match(text) or _REVIEW_RE.match(text):
+    if not _ABSOLUTE_IRI_RE.match(text) or _is_review_iri(text):
         return False
     if _HTTP_SCHEME_RE.match(text):
         return _HTTP_AUTHORITY_RE.match(text) is not None
@@ -1044,7 +1043,7 @@ def migrate_sdp_methods(path: Union[str, Path], dry_run: bool = False) -> dict:
     registry = _read_legacy_registry(root)
 
     review_marked = [
-        bool(_REVIEW_RE.match(str(value))) for value in bindings["method_iri"]
+        _is_review_iri(value) for value in bindings["method_iri"]
     ]
     dropped_review = bindings.loc[review_marked].reset_index(drop=True)
     # Canonical order: ``dropped_review`` is part of the exported report.

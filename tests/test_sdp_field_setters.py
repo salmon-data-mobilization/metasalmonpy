@@ -103,7 +103,8 @@ def test_required_fields_come_from_the_schemas_constraints_required():
 
     ``constraints.required`` had no parser and no consumer here before the S5
     port, so a field the spec calls required and one it calls optional were
-    indistinguishable.
+    indistinguishable. ``license`` is not in the set: ``sdp-0.3.2`` made it
+    recommended rather than required (hub items B-198 and B-199).
     """
     assert sdp_schema_required_field_names("dataset") == [
         "dataset_id",
@@ -112,7 +113,6 @@ def test_required_fields_come_from_the_schemas_constraints_required():
         "creator",
         "contact_name",
         "contact_email",
-        "license",
     ]
     # An optional field is not in the set.
     assert "contact_org" not in sdp_schema_required_field_names("dataset")
@@ -213,39 +213,26 @@ def test_a_review_marked_iri_is_reported_by_both_reviews(raw_package):
 
 
 def test_which_files_a_review_marker_actually_blocks(filled_package):
-    """``_REVIEW_IRI_FILES`` is a measurement, so it is measured here.
+    """All four metadata files agree across the three public review gates.
 
-    Three gates sweep the ``REVIEW:`` marker and they do not sweep the same
-    files. That is invisible from any one call site, it is what decides which
-    files this scan may report without claiming a block that does not exist, and
-    it is the kind of fact that drifts silently -- so it is asserted rather than
-    described. Each case marks exactly one field on an otherwise clean package
-    and asks both gates.
-
-    ``codes.csv`` is the asymmetric one: the EDH XML gate refuses a marker there
-    and ``validate_salmon_datapackage(require_iris=True)`` does not. The scan
-    reports it anyway, for the reason recorded on ``_REVIEW_IRI_FILES``. If this
-    test starts failing on the ``codes.csv`` row because the validator now
-    refuses it, that is the validator being fixed and the right change here is to
-    delete the exception, not the assertion.
-
-    Retires when the three gates sweep the same files, which is also what retires
-    ``_REVIEW_IRI_FILES``.
+    B230 mirrors B177's already ruled refusal: flip the existing codes and
+    dataset answers, retaining all four cases and their twelve measurements.
+    Each case marks only one field on an otherwise valid package.
     """
     from metasalmonpy.package_io import _collect_review_issues, read_salmon_datapackage
 
     mark = "REVIEW:https://w3id.org/smn/SomethingUndecided"
     # Every expectation is written out rather than read from
-    # ``_REVIEW_IRI_FILES``: a test that compares the scan against the constant
-    # the scan is built from passes for any value of that constant, which is no
+    # a shared file list: comparing the scan against a constant it is built
+    # from passes for any value of that constant, which is no
     # test at all. Columns: file, field, does
     # ``validate_salmon_datapackage(require_iris=True)`` refuse it, does the EDH
     # XML gate refuse it, does ``review_metadata()`` report it.
     cases = [
         ("tables.csv", "observation_unit_iri", True, True, True),
         ("column_dictionary.csv", "property_iri", True, True, True),
-        ("codes.csv", "term_iri", False, True, True),
-        ("dataset.csv", "protocol_iri", False, False, False),
+        ("codes.csv", "term_iri", True, True, True),
+        ("dataset.csv", "protocol_iri", True, True, True),
     ]
 
     for file_name, field, validator_refuses, edh_refuses_it, scan_reports in cases:
@@ -270,7 +257,7 @@ def test_which_files_a_review_marker_actually_blocks(filled_package):
                     f"{file_name}${field}: validate_salmon_datapackage refused="
                     f"{refused}, expected {validator_refuses}"
                 )
-                # The EDH XML gate is the other sweep, and it is wider.
+                # The EDH XML gate sweeps the same four metadata files.
                 edh_refuses = bool(
                     _collect_review_issues(
                         read_salmon_datapackage(str(filled_package))
@@ -290,6 +277,98 @@ def test_which_files_a_review_marker_actually_blocks(filled_package):
                 )
         finally:
             csv.write_bytes(original)
+
+
+@pytest.mark.parametrize("file_name,field", [
+    ("dataset.csv", "protocol_iri"),
+    ("codes.csv", "term_iri"),
+    ("codes.csv", "vocabulary_iri"),
+])
+def test_b230_public_review_paths_keep_one_issue_and_leave_bytes_untouched(
+    filled_package, file_name, field
+):
+    """Default warnings, strict refusal, EDH and the scan name the same cell."""
+    from metasalmonpy.package_io import _collect_review_issues, read_salmon_datapackage
+
+    with _no_warnings():
+        validate_salmon_datapackage(filled_package, require_iris=True)
+    csv = filled_package / "metadata" / file_name
+    frame = pd.read_csv(csv, dtype=str)
+    mark = "REVIEW:https://w3id.org/smn/SomethingUndecided"
+    frame.loc[0, field] = mark
+    frame.to_csv(csv, index=False)
+    before = {str(p.relative_to(filled_package)): p.read_bytes()
+              for p in filled_package.rglob("*") if p.is_file()}
+    message = (f"metadata/{file_name} row 1 field {field} still contains a "
+               f"REVIEW-prefixed IRI ({mark}). Remove the REVIEW "
+               "prefix only after final manual validation.")
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = validate_salmon_datapackage(filled_package)
+    assert set(result) == {"package", "semantic_validation", "issues"}
+    assert result["issues"].empty
+    messages = list(result["semantic_validation"]["issues"]["message"])
+    assert messages == [message]
+    assert any(message in str(w.message) for w in caught)
+    with _no_warnings(), pytest.raises(ValueError) as refused:
+        validate_salmon_datapackage(filled_package, require_iris=True)
+    assert str(refused.value).count(message) == 1
+    with _no_warnings():
+        assert _collect_review_issues(read_salmon_datapackage(filled_package)) == [message]
+    rows = review_metadata(filled_package).rows
+    hit = rows[(rows["file"] == file_name) & (rows["field"] == field)]
+    assert list(hit["reason"]) == ["iri"]
+    assert list(hit["current_value"]) == [mark]
+    assert {str(p.relative_to(filled_package)): p.read_bytes()
+            for p in filled_package.rglob("*") if p.is_file()} == before
+
+
+@pytest.mark.parametrize("table,file_name,expected", [
+    ("dataset", "dataset.csv", True),
+    ("codes", "codes.csv", True),
+    ("column_dictionary", "column_dictionary.csv", False),
+])
+def test_b230_selected_schema_preserves_the_dictionary_field_owner(
+    filled_package, monkeypatch, table, file_name, expected
+):
+    """Non-dictionary *_iri sweeps do not widen the dictionary's fixed six."""
+    selected = _bundle_with_fields((table, "", {
+        "name": "extra_iri", "type": "string", "sdp:requirement": "optional",
+    }))
+    _use_shipped_schema_defaults(monkeypatch)
+    sdp_schema.set_sdp_schema_source("remote")
+    _count_schema_fetches(monkeypatch, selected)
+    try:
+        csv = filled_package / "metadata" / file_name
+        frame = pd.read_csv(csv, dtype=str)
+        frame["extra_iri"] = ""
+        frame.loc[0, "extra_iri"] = "REVIEW:https://example.org/extra"
+        frame.to_csv(csv, index=False)
+        with _no_warnings():
+            if expected:
+                with pytest.raises(ValueError, match="extra_iri.*REVIEW-prefixed"):
+                    validate_salmon_datapackage(filled_package, require_iris=True)
+            else:
+                validate_salmon_datapackage(filled_package, require_iris=True)
+        rows = review_metadata(filled_package).rows
+        assert bool(((rows["file"] == file_name) & (rows["field"] == "extra_iri")).any()) is expected
+    finally:
+        sdp_schema.set_sdp_schema_source(None)
+
+
+def test_b230_dictionary_constraint_components_keep_their_existing_scope(filled_package):
+    """Only dictionary constraint_iri interprets its existing semicolon list."""
+    csv = filled_package / "metadata" / "column_dictionary.csv"
+    frame = pd.read_csv(csv, dtype=str)
+    frame.loc[0, "constraint_iri"] = "https://example.org/first; REVIEW:https://example.org/second"
+    frame.to_csv(csv, index=False)
+    with _no_warnings(), pytest.raises(ValueError, match="REVIEW-prefixed") as refused:
+        validate_salmon_datapackage(filled_package, require_iris=True)
+    assert "constraint_iri" in str(refused.value)
+    rows = review_metadata(filled_package).rows
+    hit = rows[(rows["file"] == "column_dictionary.csv") & (rows["field"] == "constraint_iri")]
+    assert list(hit["reason"]) == ["iri"]
 
 
 @contextlib.contextmanager
@@ -1433,3 +1512,232 @@ def test_a_setter_patch_produces_the_descriptor_a_rebuild_would(
     assert json.loads((patched / "datapackage.json").read_text()) == json.loads(
         (rebuilt_path / "datapackage.json").read_text()
     )
+
+
+# ---------------------------------------------------------------------------
+# The licence is recommended, not required
+# ---------------------------------------------------------------------------
+#
+# The twins of metasalmon's tests of the same names, in
+# tests/testthat/test-sdp-field-setters.R. The SDP specification makes
+# ``license`` recommended rather than required (smn-data-pkg pull request 12;
+# Brett, 2026-09-26: most datasets assign none), so a blank licence states that
+# none was granted. This package reads the requirement from its SDP schema
+# bundle, and since hub item B-199 the bundle it ships is ``sdp-0.3.2``'s, in
+# which the licence is optional. So these tests read the shipped bundle. Until
+# then they served one whose licence field read the way that pull request
+# writes it, because the bundle and the pin move only together and only from a
+# release tag; that stand-in retired with the re-vendor, as it said it would.
+
+
+def _setter_namespace(package: Path) -> dict:
+    return {
+        "pkg": str(package),
+        "set_sdp_dataset": functools.partial(set_sdp_dataset, quiet=True),
+        "set_sdp_table": functools.partial(set_sdp_table, quiet=True),
+        "set_sdp_column": functools.partial(set_sdp_column, quiet=True),
+        "set_sdp_code": functools.partial(set_sdp_code, quiet=True),
+    }
+
+
+def _dataset_licence(package: Path) -> str:
+    frame = pd.read_csv(
+        package / "metadata" / "dataset.csv", dtype=str, keep_default_na=False
+    )
+    return frame["license"].iloc[0]
+
+
+def _descriptor_of(package: Path) -> dict:
+    return json.loads((package / "datapackage.json").read_text(encoding="utf-8"))
+
+
+def test_the_dataset_placeholder_fill_leaves_a_blank_licence_blank():
+    from metasalmonpy.metadata import (
+        fill_review_placeholders_dataset_meta,
+        normalize_dataset_meta,
+    )
+
+    filled = fill_review_placeholders_dataset_meta(
+        normalize_dataset_meta(
+            pd.DataFrame(
+                {"dataset_id": ["demo-1", "demo-2"], "license": [pd.NA, "CC-BY-4.0"]}
+            )
+        )
+    )
+    assert pd.isna(filled["license"].iloc[0])
+    assert filled["license"].iloc[1] == "CC-BY-4.0"
+    # The prompts for the fields the schema requires are unchanged.
+    assert filled["creator"].str.startswith("MISSING METADATA:").all()
+    assert filled["contact_email"].str.startswith("MISSING METADATA:").all()
+
+
+def test_a_package_that_states_no_licence_passes_strict_validation_under_a_bundle_that_makes_it_optional(
+    raw_package,
+):
+    # The shipped bundle is the one that makes the licence optional.
+    assert "license" not in sdp_schema_required_field_names("dataset")
+
+    # Nothing asks for a licence, as a placeholder or as a blank required field.
+    assert "license" not in set(review_metadata(str(raw_package)).rows["field"])
+
+    namespace = _setter_namespace(raw_package)
+    for _ in range(6):
+        if _run_printed_calls(raw_package, namespace) == 0:
+            break
+    assert review_metadata(str(raw_package)).empty
+    validate_salmon_datapackage(str(raw_package), require_iris=True)
+
+    assert _dataset_licence(raw_package) == ""
+    assert "licenses" not in _descriptor_of(raw_package)
+
+
+def test_a_licence_placeholder_from_an_earlier_package_clears_to_no_licence(
+    raw_package,
+):
+    # Packages written before this change carry the placeholder. It stays
+    # refused under a bundle that makes the licence optional, because it is
+    # still a placeholder, and ``license=pandas.NA`` is the call that states no
+    # licence instead.
+    dataset_csv = raw_package / "metadata" / "dataset.csv"
+    frame = pd.read_csv(dataset_csv, dtype=str, keep_default_na=False)
+    frame.loc[0, "license"] = (
+        "MISSING METADATA: add dataset license (for example, CC-BY-4.0)."
+    )
+    frame.to_csv(dataset_csv, index=False)
+    rows = review_metadata(str(raw_package)).rows
+    assert list(rows.loc[rows["field"] == "license", "reason"]) == ["placeholder"]
+
+    set_sdp_dataset(str(raw_package), license=pd.NA, quiet=True)
+    assert _dataset_licence(raw_package) == ""
+    assert "license" not in set(review_metadata(str(raw_package)).rows["field"])
+    assert "licenses" not in _descriptor_of(raw_package)
+
+
+def test_a_licence_placeholder_never_becomes_a_licenses_entry():
+    from metasalmonpy.metadata import normalize_dataset_meta
+    from metasalmonpy.package_io import _descriptor_apply_dataset_meta
+
+    def written_licenses(license_value):
+        # Refused or left out, never written: the descriptor either omits
+        # ``licenses`` or the write stops. Which of the two a marker gets is
+        # not the property.
+        meta = normalize_dataset_meta(
+            pd.DataFrame(
+                {
+                    "dataset_id": ["demo-1"],
+                    "title": ["Demo"],
+                    "description": ["Demo."],
+                    "license": [license_value],
+                }
+            )
+        )
+        try:
+            return _descriptor_apply_dataset_meta({}, meta.iloc[0]).get("licenses")
+        except ValueError:
+            return None
+
+    for placeholder in (
+        "MISSING METADATA: add dataset license (for example, CC-BY-4.0).",
+        "MISSING DESCRIPTION: describe the licence.",
+        "REVIEW REQUIRED: confirm the licence.",
+        "REVIEW:CC-BY-4.0",
+        pd.NA,
+    ):
+        assert written_licenses(placeholder) is None, placeholder
+    # The control: a stated licence is written, so the Nones above are the
+    # writer's answer and not a probe that can only return None.
+    assert written_licenses("CC-BY-4.0")[0]["name"] == "CC-BY-4.0"
+
+
+# Q63 excludes internal LF/FF/VT before the colon. The landed B177/B230
+# all-four sweep must retain the existing strict absolute-IRI owner when the
+# narrower ruled marker predicate does not own a value. Mirror the actual
+# R344 tests-only21778306/fixde2b3636 boundary without a new IRI predicate.
+@pytest.mark.parametrize("file_name,field", [
+    ("codes.csv", "term_iri"),
+    ("codes.csv", "vocabulary_iri"),
+    ("codes.csv", "custom_thing_iri"),
+    ("dataset.csv", "custom_thing_iri"),
+])
+@pytest.mark.parametrize("separator", ["\n", "\f", "\v"], ids=["LF", "FF", "VT"])
+def test_b345_q63_excluded_metadata_marker_has_strict_shape_owner(
+    filled_package, file_name, field, separator
+):
+    from metasalmonpy.metadata import _is_review_iri, read_sdp_csv
+
+    with _no_warnings():
+        validate_salmon_datapackage(filled_package, require_iris=True)
+    csv = filled_package / "metadata" / file_name
+    original = csv.read_bytes()
+    frame = pd.read_csv(csv, dtype=str)
+    if field not in frame.columns:
+        frame[field] = ""
+    value = "REVIEW" + separator + ":https://example.org/code"
+    frame.loc[0, field] = value
+    frame.to_csv(csv, index=False)
+    before = {str(p.relative_to(filled_package)): p.read_bytes()
+              for p in filled_package.rglob("*") if p.is_file()}
+    try:
+        assert not _is_review_iri(value)
+        assert read_sdp_csv(csv).loc[0, field] == value
+        message = f"metadata/{file_name} row 1 field {field} is not an absolute IRI: '{value}'."
+        with _no_warnings(), pytest.raises(ValueError) as refused:
+            validate_salmon_datapackage(filled_package, require_iris=True)
+        assert str(refused.value).count(message) == 1
+        assert "still contains a REVIEW-prefixed IRI" not in str(refused.value)
+        # Completeness remains strict-only. Default validation preserves its
+        # existing acceptance, raw CSV value and read-only output bytes.
+        with _no_warnings():
+            result = validate_salmon_datapackage(filled_package)
+        assert result["issues"].empty
+        assert {str(p.relative_to(filled_package)): p.read_bytes()
+                for p in filled_package.rglob("*") if p.is_file()} == before
+    finally:
+        csv.write_bytes(original)
+
+
+@pytest.mark.parametrize("file_name,field", [
+    ("codes.csv", "term_iri"),
+    ("codes.csv", "vocabulary_iri"),
+    ("codes.csv", "custom_thing_iri"),
+    ("dataset.csv", "custom_thing_iri"),
+])
+@pytest.mark.parametrize("value,is_marker", [
+    ("rEvIeW\t :https://example.org/code", True),
+    ("https://example.org/code", False),
+    ("urn:example:code", False),
+    ("", False),
+], ids=["admitted-marker", "https", "urn", "blank"])
+def test_b345_q63_metadata_shape_owner_keeps_existing_paths(
+    filled_package, file_name, field, value, is_marker
+):
+    from metasalmonpy.metadata import _is_review_iri
+
+    csv = filled_package / "metadata" / file_name
+    original = csv.read_bytes()
+    frame = pd.read_csv(csv, dtype=str)
+    if field not in frame.columns:
+        frame[field] = ""
+    frame.loc[0, field] = value
+    frame.to_csv(csv, index=False)
+    before = {str(p.relative_to(filled_package)): p.read_bytes()
+              for p in filled_package.rglob("*") if p.is_file()}
+    try:
+        assert _is_review_iri(value) is is_marker
+        if is_marker:
+            message = (f"metadata/{file_name} row 1 field {field} still contains "
+                       f"a REVIEW-prefixed IRI ({value}). Remove the REVIEW "
+                       "prefix only after final manual validation.")
+            with _no_warnings(), pytest.raises(ValueError) as refused:
+                validate_salmon_datapackage(filled_package, require_iris=True)
+            assert str(refused.value).count(message) == 1
+            with _no_warnings():
+                result = validate_salmon_datapackage(filled_package)
+            assert list(result["semantic_validation"]["issues"]["message"]).count(message) == 1
+        else:
+            with _no_warnings():
+                validate_salmon_datapackage(filled_package, require_iris=True)
+        assert {str(p.relative_to(filled_package)): p.read_bytes()
+                for p in filled_package.rglob("*") if p.is_file()} == before
+    finally:
+        csv.write_bytes(original)
