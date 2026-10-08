@@ -14,9 +14,10 @@ rather than deriving one and reasoning the other from it. The measurement set
 is IRIs the EML measurement and method paths emit, so it includes
 code-resolved ``sosa:usedProcedure`` IRIs and excludes a table's
 ``observation_unit_iri``. The review-target set is slots a reviewer decided, so
-it includes ``observation_unit_iri`` and excludes a code-resolved procedure,
-which no reviewer ever selected as a slot. In the bundled EML fixture the
-difference is exactly one row: ``smn:Observation`` is a review target and not a
+it includes ``observation_unit_iri`` and excludes a code-resolved procedure.
+The ledger has no slot for that procedure: it is reached through code values
+in the data rather than a field the review-target set reads. In the bundled
+EML fixture the difference is exactly one row: ``smn:Observation`` is a review target and not a
 vocabulary term.
 
 GAP, NOT ABORT -- ruled by Brett 2026-09-12, for both implementations. An IRI
@@ -600,8 +601,9 @@ def _target_context(
 
     The review target that selected it, the dictionary row behind that target,
     and the actual code rows for an IRI in the measurement set only -- a
-    code-resolved ``sosa:usedProcedure``, which no reviewer ever selected as a
-    slot and so has no target row to read.
+    code-resolved ``sosa:usedProcedure``. The ledger has no slot for it: the
+    procedure is reached through code values in the data rather than a field
+    the review-target set reads, so there is no target row to read.
 
     Shared by the gap row and the incomplete-evidence row below, which describe
     the same IRI in the same place and must not disagree about where that is.
