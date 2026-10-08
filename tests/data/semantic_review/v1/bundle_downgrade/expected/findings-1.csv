@@ -1,0 +1,4 @@
+dataset_id,table_id,column_name,code,severity,role,before_decision,after_decision,message
+fixture-1,catch,CATCH_WEIGHT,SEM_PROPERTY_UNIT_DIMENSION_MISMATCH,warning,property,accept,review,"The accepted property is mass-dimensional, while the accepted unit is length-dimensional; both require review as a pair."
+fixture-1,catch,CATCH_WEIGHT,SEM_DIMENSION_MISMATCH,warning,unit,accept,review,"Candidate appears length-dimensional, but the dictionary unit is mass-dimensional."
+fixture-1,catch,CATCH_WEIGHT,SEM_PROPERTY_UNIT_DIMENSION_MISMATCH,warning,unit,accept,review,"The accepted property is mass-dimensional, while the accepted unit is length-dimensional; both require review as a pair."

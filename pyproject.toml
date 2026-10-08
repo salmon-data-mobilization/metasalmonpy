@@ -19,6 +19,7 @@ eml = ["lxml>=5,<7", "PyYAML>=6"]
 # [eml] plus the core requests dependency (already required).
 knb = ["metasalmonpy[eml]"]
 test = ["build>=1.2", "pytest>=7"]
+verify = ["httpx>=0.28.1"]
 
 [project.urls]
 Documentation = "https://salmon-data-mobilization.github.io/metasalmonpy/"
@@ -34,12 +35,19 @@ package-dir = { "metasalmonpy" = ".", "metasalmonpy.data" = "data", "metasalmonp
     "*.csv",
     "*.md",
     "schema/*.json",
-    # The vendored SDP bundle, taken verbatim from the smn-data-pkg
-    # ``sdp-0.3.0`` tag, save the one file sdp_schema.py's docstring names.
-    # Without these three globs the wheel installs but every schema read fails
-    # at runtime, so `tests/test_sdp_schema.py` asserts them.
+    # The vendored SDP bundle, taken byte for byte from the smn-data-pkg tag
+    # that sdp_schema.SDP_SPEC_TAG names, and the manifest recording that tag
+    # and each file's SHA-256. Without the three bundle globs the wheel
+    # installs but every schema read fails at runtime, so
+    # `tests/test_sdp_schema.py` asserts all four entries.
     "schema/*.yaml",
     "schema/frictionless/metadata/*.json",
     "profiles/salmon-data-package/v0.3/*.json",
+    "sdp-bundle-manifest.json",
     "xsd/eml-2.2.0/*",
+    # The review-packet contract shared with metasalmon (hub B-327): the packet
+    # schema and the review instructions every packet embeds, byte-identical
+    # with metasalmon's inst/extdata/semantic-review/.
+    "semantic-review/*.json",
+    "semantic-review/*.txt",
 ]

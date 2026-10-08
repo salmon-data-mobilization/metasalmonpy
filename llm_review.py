@@ -19,6 +19,7 @@ import requests
 
 from .term_search import _normalize_explicit_sources, sources_for_role
 from .text_safety import redact_secrets
+from .metadata import _is_review_iri
 
 
 LLM_ASSESSMENT_COLUMNS = [
@@ -194,14 +195,130 @@ def policy_sources(policy: dict, role: str) -> tuple[str, ...]:
 
 
 class _TextExtractor(HTMLParser):
+    # libxml2 2.14.4's htmlStartClose head entries establish the native body
+    # scope, except frameset (which remains no-body). Real documents pin all
+    # observed current/legacy/unknown tokens in native-head-body-scope.json. This
+    # applies only within head; ordinary outside-head markup still implies body.
+    _HEAD_BODY_START_TAGS = frozenset({
+        'a', 'abbr', 'acronym', 'address', 'b', 'bdo', 'big', 'blockquote', 'body',
+        'br', 'center', 'cite', 'code', 'dd', 'dfn', 'dir', 'div', 'dl', 'dt', 'em',
+        'fieldset', 'font', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr', 'i',
+        'iframe', 'img', 'kbd', 'li', 'listing', 'map', 'menu', 'ol', 'p', 'pre',
+        'q', 's', 'samp', 'small', 'span', 'strike', 'strong', 'sub', 'sup', 'table',
+        'tt', 'u', 'ul', 'var', 'xmp',
+    })
+    # Native html40ElementTable Empty flags: these head elements are void, so
+    # their presence must not hold a following body token inside a container.
+    _HEAD_VOID_TAGS = frozenset({
+        'area', 'base', 'basefont', 'col', 'frame', 'input', 'isindex', 'link',
+        'meta', 'param',
+    })
+
     def __init__(self):
         super().__init__()
-        self.parts = []
+        self._all_parts = []
+        self._outside_head_parts = []
+        self._body_parts = []
+        self._head_depth = 0
+        self._implicit_head_scope = False
+        self._head_content_depth = 0
+        self._no_body_depth = 0
+        self._title_depth = 0
+        self._body_depth = 0
+        self._hidden_depth = 0
+        self._saw_body = False
+        self._saw_implicit_body = False
+
+    @property
+    def parts(self):
+        # xml2 selects the body when it finds one. For a fragment it creates a
+        # body around ordinary body markup, including markup with no visible
+        # text; for a head-only document it finds none and R falls back to the
+        # document, including its title.
+        if self._saw_body:
+            return self._body_parts
+        if self._saw_implicit_body or self._outside_head_parts:
+            return self._outside_head_parts
+        return self._all_parts
+
+    def handle_starttag(self, tag, attrs):
+        head_scope = self._head_depth or self._implicit_head_scope
+        if tag in {"script", "style"}:
+            self._hidden_depth += 1
+        elif tag in {"head", "title"}:
+            # xml2 also places a loose title in an implicit head when body
+            # content follows it; head-only input still uses the fallback.
+            if (tag == "title" and not head_scope and not self._saw_body
+                    and not self._saw_implicit_body and not self._outside_head_parts):
+                # Keep tag inference in the implicit head after the title ends,
+                # without changing the existing text-collection depth/behavior.
+                self._implicit_head_scope = True
+            self._head_depth += 1
+            if tag == "title":
+                self._title_depth += 1
+        elif tag == "body":
+            self._saw_body = True
+            self._body_depth += 1
+            self._head_depth = 0
+            self._implicit_head_scope = False
+            self._head_content_depth = 0
+        elif tag == "noframes":
+            # xml2 retains noframes in its no-body scope. Keep the existing
+            # Python text extraction, but do not infer a body from its tags.
+            self._no_body_depth += 1
+        elif (head_scope and tag not in self._HEAD_BODY_START_TAGS
+              and tag not in self._HEAD_VOID_TAGS and tag != "html"):
+            # Native non-body head containers keep their children in head,
+            # including unknown names. Closing one lets a following body token
+            # establish body; native void elements above do not open a container.
+            self._head_content_depth += 1
+        elif (
+            tag not in {"html", "base", "link", "meta", "frameset", "frame"}
+            and (not head_scope or tag in self._HEAD_BODY_START_TAGS)
+            and not self._head_content_depth
+            and not self._no_body_depth
+            and not self._title_depth
+            and not self._hidden_depth
+        ):
+            # An omitted body still has a scope when body elements are empty
+            # (for example <p><img></p> or <br>). Do not infer that scope only
+            # from nonempty text, which would incorrectly expose a head title.
+            # Frameset/frame are no-body markup and keep the native fallback.
+            self._saw_implicit_body = True
+            # A body element also ends head when its optional end tag is
+            # omitted. Markup inside an open title retains the existing
+            # title treatment rather than implying this body boundary.
+            self._head_depth = 0
+            self._implicit_head_scope = False
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"}:
+            self._hidden_depth = max(0, self._hidden_depth - 1)
+        elif tag in {"head", "title"}:
+            self._head_depth = max(0, self._head_depth - 1)
+            if tag == "head":
+                self._head_content_depth = 0
+                self._implicit_head_scope = False
+            if tag == "title":
+                self._title_depth = max(0, self._title_depth - 1)
+        elif tag == "body":
+            self._body_depth = max(0, self._body_depth - 1)
+        elif tag == "noframes":
+            self._no_body_depth = max(0, self._no_body_depth - 1)
+        elif (tag not in self._HEAD_BODY_START_TAGS
+              and tag not in self._HEAD_VOID_TAGS and tag != "html"):
+            self._head_content_depth = max(0, self._head_content_depth - 1)
 
     def handle_data(self, data):
+        if self._hidden_depth:
+            return
         text = data.strip()
         if text:
-            self.parts.append(text)
+            self._all_parts.append(text)
+            if not self._head_depth:
+                self._outside_head_parts.append(text)
+            if self._body_depth:
+                self._body_parts.append(text)
 
 
 # --- Context documents -------------------------------------------------------
@@ -213,8 +330,8 @@ class _TextExtractor(HTMLParser):
 # same source labels and chunk ids, the same token-overlap scoring and the same
 # tie order. The two packages are about to share one review-packet file
 # (B-326 / B-327), so a context document has to become the same excerpts on
-# both sides. What is deliberately NOT shared is the library-specific
-# extraction for PDF, DOCX, spreadsheets and HTML: PARITY.md row 62.
+# both sides. Format-specific extraction remains library-specific (PARITY.md
+# row 62); B-386 aligns HTML body inclusion without replacing either parser.
 #
 # R facts this code leans on, each measured on 2026-09-25 under R 4.5.2:
 #   * `readLines()` accepts LF, CRLF and a bare CR as a line end, discards a
@@ -319,9 +436,9 @@ def _read_context_file(path: Path) -> Optional[str]:
     """``.ms_context_text_from_file()``: the document's text, or ``None`` when it is skipped.
 
     Text formats go through R's own extraction above. PDF, DOCX, spreadsheet
-    and HTML text is library-specific on each side (PARITY.md row 62) and only
-    the shared steps -- the extension gate, the trim and the empty-file skip --
-    are mirrored for them.
+    and remaining HTML parser details are library-specific (PARITY.md row 62).
+    HTML body selection and script/style exclusion follow R's reader; the
+    extension gate, trim and empty-file skip remain shared for every format.
     """
     extension = _r_file_ext(path.name).lower()
     if extension not in SUPPORTED_CONTEXT_EXTENSIONS:
@@ -574,6 +691,27 @@ def load_context_chunks(
     snippet as a pool of chunks, one row each, with metasalmon's source labels
     and chunk ids (``<source>#<n>`` for a file, ``inline_context[<i>]#<n>``
     for the i-th non-empty snippet)."""
+    return collect_context(context_files, context_text, chunk_size, overlap)[0]
+
+
+def collect_context(
+    context_files=None,
+    context_text=None,
+    chunk_size: int = CONTEXT_CHUNK_CHARS,
+    overlap: int = CONTEXT_OVERLAP_CHARS,
+) -> tuple:
+    """The context pool and the inputs it was built from.
+
+    The pool is :func:`load_context_chunks`'s. The inputs are what the review
+    packet records for each context source, in pool order (hub item B-327,
+    mirroring the ``context_inputs`` attribute B-326 gave
+    ``.ms_collect_context_chunks()``): a file's label, ``"file"`` and the
+    SHA-256 of its bytes; an inline snippet's ``inline_context[<i>]``,
+    ``"text"`` and the SHA-256 of its trimmed UTF-8 text. Built here, where
+    the source labels are assigned, so the packet's labels and the excerpts'
+    labels are one rendering. A list rather than a frame so it can never ride
+    on a pool's ``attrs``, which ``pd.concat`` compares.
+    """
     paths = _normalize_context_files(context_files)
     documents = []
     for path in paths:
@@ -598,14 +736,22 @@ def load_context_chunks(
             if value:
                 inline.append(value)
     if not documents and not inline:
-        return pd.DataFrame(columns=["source", "chunk_id", "text"])
+        return pd.DataFrame(columns=["source", "chunk_id", "text"]), []
 
     chunks = []
+    inputs = []
     for document in _unique_context_sources(documents):
         chunks.extend(
             _chunk_context_text(
                 document["text"], document["source"], chunk_size, overlap
             )
+        )
+        inputs.append(
+            {
+                "source": document["source"],
+                "kind": "file",
+                "sha256": hashlib.sha256(Path(document["path"]).read_bytes()).hexdigest(),
+            }
         )
     for index, value in enumerate(inline, start=1):
         snippet_chunks = _chunk_context_text(
@@ -614,7 +760,14 @@ def load_context_chunks(
         for position, chunk in enumerate(snippet_chunks, start=1):
             chunk["chunk_id"] = f"inline_context[{index}]#{position}"
         chunks.extend(snippet_chunks)
-    return pd.DataFrame(chunks, columns=["source", "chunk_id", "text"])
+        inputs.append(
+            {
+                "source": f"inline_context[{index}]",
+                "kind": "text",
+                "sha256": hashlib.sha256(value.encode("utf-8")).hexdigest(),
+            }
+        )
+    return pd.DataFrame(chunks, columns=["source", "chunk_id", "text"]), inputs
 
 
 def _relevant_context(
@@ -1988,10 +2141,9 @@ def _chunk_has_anchor(text, anchor: str) -> bool:
     phrase anchor must start the chunk once leading markup (ASCII punctuation
     and digits) is stripped, and the chunk's leading token may not carry ``_``
     or ``-``, so ``CATCH_COUNT_ESTIMATE ...`` does not vouch for
-    ``catch_count``. Both regexes are R's, quirks included: the leading-token
-    pattern spans to the end of the string, so on a multi-line chunk it does
-    not match, the whole chunk stands in as the leading token, and any ``_`` or
-    ``-`` in it fails the phrase anchor.
+    ``catch_count``. The leading-token substitution consumes later lines so
+    only the captured first token is checked for ``_`` or ``-``, matching R's
+    B-384 correction. Punctuation on a later line cannot defeat a phrase anchor.
     """
     raw_text = "" if _missing(text) else str(text)
     lowered = raw_text.lower()
@@ -2006,7 +2158,8 @@ def _chunk_has_anchor(text, anchor: str) -> bool:
         r"^\s*(?:[!-/:-@\[-`{-~0-9]+\s*)+", "", raw_text, flags=re.ASCII
     )
     leading_token = re.sub(
-        r"^\s*([a-zA-Z0-9][a-zA-Z0-9_-]*).*$", r"\1", unmarked, flags=re.ASCII
+        r"^\s*([a-zA-Z0-9][a-zA-Z0-9_-]*).*$", r"\1", unmarked,
+        flags=re.ASCII | re.DOTALL,
     )
     if re.search(r"[_-]", leading_token):
         return False
@@ -2370,8 +2523,9 @@ def _current_selected_iris(rows, dictionary_row: dict) -> dict:
     the dictionary already carries pairs with a newly accepted constraint."""
     selected = {role: None for role in BUNDLE_SLOT_FIELDS}
     for role, field in BUNDLE_SLOT_FIELDS.items():
-        value = _validator_scalar(dictionary_row.get(field), "")
-        if value and not re.match(r"REVIEW:", value, flags=re.IGNORECASE):
+        raw_value = dictionary_row.get(field)
+        value = _validator_scalar(raw_value, "")
+        if value and not _is_review_iri(raw_value):
             selected[role] = value
     for row in rows:
         iri = _validator_scalar(row.get("llm_selected_iri"), "")

@@ -51,7 +51,13 @@ from typing import Iterable, Mapping, Optional, Sequence, Union
 
 import pandas as pd
 
-from .metadata import read_sdp_csv, scalar_text
+from .metadata import (
+    _is_review_iri,
+    _review_iri_text,
+    _strip_review_iri as _strip_raw_review_iri,
+    read_sdp_csv,
+    scalar_text,
+)
 from .semantics import _infer_term_type, _semantic_code_value_is_empty
 
 __all__ = [
@@ -151,19 +157,17 @@ def _strip_review_iri(value) -> str:
     decision names that candidate reads. :func:`accept_suggestion` picks the
     candidate's row with it, :func:`apply_sdp_semantics` takes the candidate's
     ``term_type`` only when the decision row carries the accepted IRI in it,
-    and the decision record matches rows by it (hub item B-222). It trims
-    before it strips, through ``_text()``, so it is what metasalmon's
-    ``.ms_review_decision_iri()`` computes. metasalmon's
-    ``.ms_strip_review_iri()`` removes whitespace only around a marker.
+    and the decision record matches rows by it (hub item B-222). Match the
+    raw value first: trimming an excluded line break would invent a marker,
+    and trimming after stripping would erase a malformed suffix. Ordinary
+    unmarked IRIs keep the existing decision trim, unless it would invent a
+    marker. Mirrors metasalmon's ``.ms_review_decision_iri()``.
     """
-    text = _text(value)
-    if text.upper().startswith("REVIEW:"):
-        return text[len("REVIEW:"):].strip()
-    return text
-
-
-def _is_review_iri(value) -> bool:
-    return _text(value).upper().startswith("REVIEW:")
+    text = _review_iri_text(value)
+    if _is_review_iri(text):
+        return _strip_raw_review_iri(text)
+    trimmed = _text(text)
+    return text if _is_review_iri(trimmed) else trimmed
 
 
 def _review_names_term(recorded) -> bool:
@@ -180,7 +184,7 @@ def _review_names_term(recorded) -> bool:
     the marker is the strip's and the detector's, and this decides none.
     """
     text = _text(recorded)
-    return bool(text) and not _is_review_iri(text)
+    return bool(text) and not _is_review_iri(recorded)
 
 
 def _review_slot_id(frame: pd.DataFrame) -> "pd.Series":
@@ -207,7 +211,7 @@ def _review_is_unfilled(value) -> bool:
     :func:`apply_sdp_semantics` has to overwrite rather than fill.
     """
     text = _text(value)
-    return not text or _is_review_iri(text)
+    return not text or _is_review_iri(value)
 
 
 def _review_match_rows(
@@ -301,18 +305,35 @@ def semantic_suggestions(x) -> Optional[pd.DataFrame]:
 
 
 def semantic_llm_assessments(x) -> Optional[pd.DataFrame]:
-    """Target-level LLM assessments attached to a dictionary.
+    """Target-level semantic assessments attached to a dictionary or a package.
 
     The companion accessor to :func:`semantic_suggestions`, for the
     ``semantic_llm_assessments`` attribute that
-    ``suggest_semantics(llm_assess=True)`` attaches. Reading LLM review is
-    never itself an LLM call: this only reports assessments that already exist.
+    :func:`~metasalmonpy.ingest_semantic_assessments` (and the deprecated
+    ``suggest_semantics(llm_assess=True)``) attaches. Reading assessments is
+    never itself a model call: this only reports assessments that already
+    exist.
 
-    A package path always returns ``None`` -- assessments are not written into
-    the package, so a package on disk cannot carry them.
+    For a package path, the record
+    :func:`~metasalmonpy.ingest_semantic_assessments` persisted in
+    ``review/semantic-llm-assessments.csv``, typed as the 30-column assessment
+    row and carrying the validator findings in
+    ``attrs["semantic_validator_findings"]``, or ``None`` when no record has
+    been ingested. The in-package model call never writes one. A ``review/``
+    directory or record that is a symbolic link is refused rather than
+    followed.
     """
     found = _semantic_attribute_from(x, "semantic_llm_assessments")
-    if found["kind"] == "path" or found["value"] is None:
+    if found["kind"] == "path":
+        from .semantic_review_ingest import read_findings, read_record
+
+        review_dir = found["path"] / "review"
+        record = read_record(review_dir)
+        if record is None:
+            return None
+        record.attrs["semantic_validator_findings"] = read_findings(review_dir)
+        return record
+    if found["value"] is None:
         return None
     return pd.DataFrame(found["value"])
 
@@ -559,6 +580,35 @@ def review_semantics(
     -------
     SemanticReview
     """
+    queue = _review_queue(x, include_filled=include_filled, columns=columns)
+    rows = queue["review"]
+    if max_candidates is not None:
+        rows = rows[rows["rank"] <= int(max_candidates)]
+
+    return SemanticReview(rows.reset_index(drop=True), queue["review_path"])
+
+
+def _review_queue(
+    x,
+    include_filled: bool = False,
+    columns: Optional[Iterable[str]] = None,
+) -> dict:
+    """The review queue: which slots still need a decision, with every
+    candidate row that would be shown for them.
+
+    The one rule both :func:`review_semantics` and
+    :func:`~metasalmonpy.write_semantic_review_packet` apply (hub item B-327,
+    mirroring metasalmon's ``.ms_review_queue()`` from B-326), so the packet a
+    harness judges holds exactly the slots the console would show and never a
+    fresh discovery -- re-running discovery would drop every slot
+    ``create_sdp()`` pre-filled with a ``REVIEW:`` marker, because discovery
+    treats a marked slot as filled.
+
+    Returns a mapping: ``review`` (one row per candidate, before
+    ``max_candidates``), ``suggestions`` (the suggestion rows the review was
+    built from; ``suggestions.iloc[source_row[i]]`` is the row behind
+    ``review.iloc[i]``), ``source_row`` and ``review_path``.
+    """
     suggestions = semantic_suggestions(x)
     if suggestions is None or suggestions.empty:
         raise ValueError(
@@ -716,10 +766,11 @@ def review_semantics(
         if len(hits) != 1:
             current_values.append(pd.NA)
             continue
-        current_values.append(_text(frame.at[hits[0], target_field]))
+        current_values.append(_review_iri_text(frame.at[hits[0], target_field]))
 
     def column(name):
-        return suggestions[name].map(_text) if name in suggestions else pd.NA
+        renderer = _review_iri_text if name == "iri" else _text
+        return suggestions[name].map(renderer) if name in suggestions else pd.NA
 
     rows = pd.DataFrame(
         {
@@ -764,6 +815,7 @@ def review_semantics(
     rows = rows.astype({"rank": "int64"})
     rows = _review_seed_recorded_decisions(rows, suggestions)
 
+    source_row = list(range(len(rows)))
     if not include_filled:
         # A slot with an unknown current value (no frame to read, or an
         # ambiguous row match) is kept: dropping it would hide work, and the
@@ -774,14 +826,19 @@ def review_semantics(
         # A recorded decision takes a slot out of the queue even though
         # rejecting leaves the field blank -- "blank" and "undecided" are
         # different states, and only ``include_filled=True`` shows the decided
-        # ones again.
+        # ones again. A hand-picked accept (``source = "user"``) is recorded
+        # with a decision, so this is also what drops it.
         decided_slots = set(rows.loc[rows["decision"].notna(), "slot_id"])
-        rows = rows[unfilled & ~rows["slot_id"].isin(decided_slots)]
+        keep = (unfilled & ~rows["slot_id"].isin(decided_slots)).to_numpy(dtype=bool)
+        source_row = [position for position, kept in enumerate(keep) if kept]
+        rows = rows[keep]
 
-    if max_candidates is not None:
-        rows = rows[rows["rank"] <= int(max_candidates)]
-
-    return SemanticReview(rows.reset_index(drop=True), review_path)
+    return {
+        "review": rows,
+        "suggestions": suggestions,
+        "source_row": source_row,
+        "review_path": review_path,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1298,7 +1355,7 @@ def accept_suggestion(
     in_slot = rows["slot_id"] == slot
 
     if iri is not None:
-        accepted_iri = _text(iri)
+        accepted_iri = _review_iri_text(iri)
     else:
         hits = list(rows.index[in_slot & (rows["rank"] == int(rank))])
         if len(hits) != 1:
@@ -1311,7 +1368,7 @@ def accept_suggestion(
                 "iri instead."
             )
         target_index = hits[0]
-        accepted_iri = _text(rows.at[target_index, "iri"])
+        accepted_iri = _review_iri_text(rows.at[target_index, "iri"])
 
     accepted_iri = _strip_review_iri(accepted_iri)
 

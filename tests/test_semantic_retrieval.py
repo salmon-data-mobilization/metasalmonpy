@@ -14,7 +14,12 @@ could show the move changed nothing. It was re-captured under B-382, when pass
 1 took R's rule: the first three configurations came out byte-identical,
 because none of them holds a shortlist on which the two rules disagree, so two
 were added that do (``rule-shapes-top3`` and ``rule-shapes-top0``, built from
-``_rule_candidates()``), and on ``main`` before B-382 those two fail. To
+``_rule_candidates()``), and on ``main`` before B-382 those two fail. It was
+re-captured once more under B-327, when the retriever took R's rule for which
+target columns a candidate row is stamped with -- the frozen 19, where it had
+copied every key of the target, so a measurement target's ``unit_label`` rode
+onto each of its candidates and into the review packet's candidate record: the
+only difference is that the suggestions lost that column. To
 regenerate the pin deliberately (a ruled change to retrieval, not a drift),
 write ``run_pinned_cases()``'s result to that file through the package-binding
 route ``tests/conftest.py`` documents, and say in the commit which behaviour

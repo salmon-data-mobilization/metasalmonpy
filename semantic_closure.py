@@ -165,8 +165,11 @@ _INCOMPLETE_COLUMNS: Tuple[str, ...] = (
     "dataset_id",
     "table_id",
     "column_name",
+    "code_value",
     "target_scope",
+    "target_sdp_file",
     "target_sdp_field",
+    "target_row_key",
     "dictionary_role",
     "iri",
     "missing_fields",
@@ -590,12 +593,13 @@ def _placement_scope(iri: str) -> str:
 
 
 def _target_context(
-    iri: str, targets: pd.DataFrame, dictionary: pd.DataFrame
-) -> Dict[str, str]:
-    """Where an IRI sits in the package.
+    iri: str, targets: pd.DataFrame, dictionary: pd.DataFrame,
+    codes: Optional[pd.DataFrame],
+) -> List[Dict[str, object]]:
+    """The reviewed target or every carrying code address for an IRI.
 
     The review target that selected it, the dictionary row behind that target,
-    and the defaults for an IRI that is in the measurement set only -- a
+    and the actual code rows for an IRI in the measurement set only -- a
     code-resolved ``sosa:usedProcedure``, which no reviewer ever selected as a
     slot and so has no target row to read.
 
@@ -605,19 +609,49 @@ def _target_context(
     rows = targets[targets["iri"] == iri]
     target = rows.iloc[0] if len(rows) > 0 else None
     if target is None:
-        scope, field, role = "code", "method_iri", "method"
-        dataset_id = ""
-        if "dataset_id" in dictionary.columns and len(dictionary) > 0:
-            dataset_id = _closure_text(dictionary["dataset_id"].iloc[0])
-        table_id = ""
-        column_name = ""
-    else:
-        scope = _closure_text(target["target_scope"], "column")
-        field = _closure_text(target["target_sdp_field"], "term_iri")
-        role = _closure_text(target["dictionary_role"], "variable")
-        dataset_id = _closure_text(target["dataset_id"])
-        table_id = _closure_text(target["table_id"])
-        column_name = _closure_text(target["column_name"])
+        # One procedure IRI can occupy several codes.csv rows. Keep each
+        # address; neither a made-up method_iri field nor the first code is an
+        # adequate address for the term-request pipeline.
+        keys = ("dataset_id", "table_id", "column_name", "code_value")
+        required = set(keys) | {"term_iri"}
+        if not isinstance(codes, pd.DataFrame) or not required.issubset(codes.columns):
+            raise ValueError(
+                "A measurement IRI without a review target needs canonical codes.csv columns."
+            )
+        carrying = codes[codes["term_iri"].map(_closure_text) == iri]
+        if carrying.empty:
+            raise ValueError(f"No codes.csv term_iri row carries measurement IRI {iri!r}.")
+
+        parent_keys = keys[:3]
+        parents = {}
+        if set(parent_keys).issubset(dictionary.columns):
+            for parent in dictionary.to_dict("records"):
+                key = tuple(_closure_text(parent[name]) for name in parent_keys)
+                parents.setdefault(key, parent)
+        contexts = []
+        for code in carrying.to_dict("records"):
+            # Render once. The emitted strings are also the sort and join keys.
+            address = {name: _closure_text(code[name]) for name in keys}
+            parent = parents.get(tuple(address[name] for name in parent_keys), {})
+            label = _closure_text(parent.get("column_label"))
+            description = _closure_text(parent.get("column_description"))
+            contexts.append({
+                **address,
+                "scope": "code", "sdp_file": "codes.csv",
+                "field": "term_iri", "role": "method",
+                "target_row_key": "/".join(address[name] for name in keys),
+                "label": label, "description": description,
+                "target_label": _closure_text(code.get("code_label")) or address["code_value"],
+                "target_description": _closure_text(code.get("code_description")) or description,
+            })
+        return sorted(contexts, key=lambda context: tuple(context[name] for name in keys))
+
+    scope = _closure_text(target["target_scope"], "column")
+    field = _closure_text(target["target_sdp_field"], "term_iri")
+    role = _closure_text(target["dictionary_role"], "variable")
+    dataset_id = _closure_text(target["dataset_id"])
+    table_id = _closure_text(target["table_id"])
+    column_name = _closure_text(target["column_name"])
 
     label = ""
     description = ""
@@ -635,22 +669,28 @@ def _target_context(
                 label = _closure_text(hit["column_label"].iloc[0])
             if "column_description" in hit.columns:
                 description = _closure_text(hit["column_description"].iloc[0])
-    return {
+    return [{
         "scope": scope,
+        "sdp_file": {"column": "column_dictionary.csv", "table": "tables.csv"}.get(
+            scope, "codes.csv"
+        ),
         "field": field,
         "role": role,
         "dataset_id": dataset_id,
         "table_id": table_id,
         "column_name": column_name,
+        "code_value": None,
+        "target_row_key": column_name or table_id,
         "label": label,
         "description": description,
-    }
+        "target_label": label,
+        "target_description": description,
+    }]
 
 
 def _gap_row(
     iri: str,
-    targets: pd.DataFrame,
-    dictionary: pd.DataFrame,
+    context: Dict[str, object],
     query: str,
     sources: Sequence[str],
 ) -> Dict[str, object]:
@@ -667,23 +707,18 @@ def _gap_row(
     row. A gap row asserts that a term is absent from the searched vocabularies,
     which is a claim the term-request pipeline acts on.
     """
-    context = _target_context(iri, targets, dictionary)
     scope = context["scope"]
-    target_file = {
-        "column": "column_dictionary.csv",
-        "table": "tables.csv",
-    }.get(scope, "codes.csv")
     row = {name: None for name in _GAP_COLUMNS}
     row.update(
         {
             "dataset_id": context["dataset_id"],
             "table_id": context["table_id"],
             "column_name": context["column_name"],
-            "code_value": None,
+            "code_value": context["code_value"],
             "target_scope": scope,
-            "target_sdp_file": target_file,
+            "target_sdp_file": context["sdp_file"],
             "target_sdp_field": context["field"],
-            "target_row_key": context["column_name"] or context["table_id"],
+            "target_row_key": context["target_row_key"],
             "dictionary_role": context["role"],
             "search_query": query,
             "column_label": context["label"],
@@ -700,7 +735,9 @@ def _gap_row(
             "placement_confidence": None,
             "placement_rationale": (
                 "The package asserts this IRI in "
+                + context["sdp_file"] + " "
                 + context["field"]
+                + " at row " + context["target_row_key"]
                 + " and searching "
                 + "/".join(sources)
                 + " for it returned nothing, so either the term is absent from "
@@ -708,8 +745,8 @@ def _gap_row(
                 "or supply a row through the `evidence` argument of "
                 "write_sdp_semantic_closure()."
             ),
-            "target_label": context["label"],
-            "target_description": context["description"],
+            "target_label": context["target_label"],
+            "target_description": context["target_description"],
             "gap_detection_basis": "no_candidates",
             "unresolved_iri": iri,
         }
@@ -723,8 +760,7 @@ def _empty_gaps() -> pd.DataFrame:
 
 def _incomplete_row(
     iri: str,
-    targets: pd.DataFrame,
-    dictionary: pd.DataFrame,
+    context: Dict[str, object],
     missing_fields: Sequence[str],
     values: Dict[str, str],
     resolved: Dict[str, object],
@@ -745,13 +781,15 @@ def _incomplete_row(
     still correct and still worth having, which is the same reasoning as the
     ruled gap-not-abort shape.
     """
-    context = _target_context(iri, targets, dictionary)
     return {
         "dataset_id": context["dataset_id"],
         "table_id": context["table_id"],
         "column_name": context["column_name"],
+        "code_value": context["code_value"],
         "target_scope": context["scope"],
+        "target_sdp_file": context["sdp_file"],
         "target_sdp_field": context["field"],
+        "target_row_key": context["target_row_key"],
         "dictionary_role": context["role"],
         "iri": iri,
         "missing_fields": ";".join(sorted(set(missing_fields))),
@@ -848,6 +886,47 @@ def _mapping_file(path: Union[str, Path]) -> Optional[str]:
     return _resolve_write_path(path, _MAPPING_RELATIVE_PATH)
 
 
+def _first_unsupported_sidecar_tag(yaml, source: str) -> Optional[str]:
+    """Find an explicit tag SafeLoader cannot construct, without constructing it.
+
+    ``safe_load`` may report a later document boundary before constructing an
+    earlier tagged node. Parser events retain that node's resolved tag across
+    documents. A syntax error before a tag retains the legacy malformed-file
+    fallback; quoted exclamation text has no event tag. An undefined handle
+    fails natively before its node event, so that specific ParserError is
+    unsupported-tag evidence too.
+    """
+    node_events = (
+        yaml.events.ScalarEvent,
+        yaml.events.SequenceStartEvent,
+        yaml.events.MappingStartEvent,
+    )
+    constructors = yaml.SafeLoader.yaml_constructors
+    multi_constructors = yaml.SafeLoader.yaml_multi_constructors
+    try:
+        for event in yaml.parse(source, Loader=yaml.SafeLoader):
+            if not isinstance(event, node_events):
+                continue
+            tag = event.tag
+            if tag is None or tag == "!" or tag in constructors:
+                continue
+            if any(tag.startswith(prefix) for prefix in multi_constructors):
+                continue
+            return tag
+    except yaml.parser.ParserError as error:
+        # An undefined handle is a native node-resolution failure, not the
+        # ordinary malformed-file fallback. Use only the parser's diagnostic;
+        # no scan of source text chooses which exclamations are real tags.
+        if error.context == "while parsing a node" and isinstance(error.problem, str):
+            if error.problem.startswith("found undefined tag handle "):
+                return error.problem
+    except yaml.YAMLError:
+        # Parsing malformed input can stop before a tagged node. The caller
+        # keeps its existing default-path fallback in that case.
+        pass
+    return None
+
+
 def _mapping_paths(mapping_file: Optional[str]) -> Dict[str, str]:
     """The closure paths the reviewed EML sidecar declares.
 
@@ -861,7 +940,22 @@ def _mapping_paths(mapping_file: Optional[str]) -> Dict[str, str]:
     yaml = _require_yaml()
     try:
         with open(mapping_file, encoding="utf-8") as handle:
-            mapping = yaml.safe_load(handle)
+            source = handle.read()
+        mapping = yaml.safe_load(source)
+    except yaml.YAMLError:
+        # SafeLoader can raise ComposerError for a later document before it
+        # constructs an earlier unknown tag. Inspect parser node events so that
+        # such a tag still refuses the sidecar before any closure write.
+        # Known tags and malformed input without unknown tags keep the former
+        # default-path fallback. Retires when both EML readers can share a
+        # parser with the same malformed-sidecar behavior.
+        tag = _first_unsupported_sidecar_tag(yaml, source)
+        if tag is not None:
+            raise ValueError(
+                f"EML mapping sidecar {mapping_file} is not valid YAML: "
+                f"unsupported tag {tag!r}"
+            ) from None
+        return defaults
     except Exception:
         return defaults
     # A mapping, not merely "parsed": a sidecar that parses to a YAML SCALAR
@@ -1229,26 +1323,26 @@ def write_sdp_semantic_closure(
                     }
                 )
                 continue
+            contexts = _target_context(iri, review_targets, dictionary, pkg.get("codes"))
             if resolved["values"] is not None:
                 # 2. The term was FOUND and its evidence is short of a required
                 #    field. Not a gap: the IRI exists and asking for it to be
                 #    minted would be wrong. Named field, named slot, separate
                 #    table.
-                incomplete_rows.append(
-                    _incomplete_row(
-                        iri, review_targets, dictionary, missing, values, resolved
-                    )
+                incomplete_rows.extend(
+                    _incomplete_row(iri, context, missing, values, resolved)
+                    for context in contexts
                 )
                 continue
             # 3. Every searched source answered and none of them has the term.
-            gap_rows.append(
+            gap_rows.extend(
                 _gap_row(
                     iri,
-                    review_targets,
-                    dictionary,
+                    context,
                     _closure_text(resolved["query"]),
                     source_list,
                 )
+                for context in contexts
             )
             continue
 
@@ -1404,6 +1498,9 @@ def write_sdp_semantic_closure(
             row["dataset_id"],
             row["table_id"],
             row["column_name"],
+            # R's radix order keeps missing non-code values last. These are
+            # already rendered strings (or None), so sort the emitted value.
+            (row["code_value"] is None, row["code_value"] or ""),
             row["target_sdp_field"],
             row["unresolved_iri"],
         )
@@ -1411,11 +1508,12 @@ def write_sdp_semantic_closure(
     gaps = _frame(gap_rows, _GAP_COLUMNS) if gap_rows else _empty_gaps()
     if len(gaps) > 0:
         warnings.warn(
-            f"{len(gaps)} canonical measurement IRI(s) could not be resolved "
+            f"{len(set(gaps['unresolved_iri']))} canonical measurement IRI(s) could not be resolved "
             f"from {', '.join(repr(source) for source in source_list)} and are "
-            "absent from the reviewed vocabulary: "
+            f"absent from the reviewed vocabulary ({len(gaps)} package address(es)): "
             + ", ".join(
-                f"{row['target_sdp_field']} = {row['unresolved_iri']}"
+                f"{row['target_sdp_file']} {row['target_sdp_field']} "
+                f"at row {row['target_row_key']} = {row['unresolved_iri']}"
                 for row in gap_rows
             )
             + ". Each is a row of the returned `gaps` table; pass it to "
@@ -1425,7 +1523,9 @@ def write_sdp_semantic_closure(
             stacklevel=2,
         )
 
-    incomplete_rows.sort(key=lambda row: (row["iri"], row["target_sdp_field"]))
+    incomplete_rows.sort(key=lambda row: (
+        row["iri"], row["target_sdp_field"], row["target_row_key"]
+    ))
     incomplete = (
         _frame(incomplete_rows, _INCOMPLETE_COLUMNS)
         if incomplete_rows
@@ -1433,11 +1533,12 @@ def write_sdp_semantic_closure(
     )
     if len(incomplete) > 0:
         warnings.warn(
-            f"{len(incomplete)} canonical measurement IRI(s) resolved to a term "
+            f"{len(set(incomplete['iri']))} canonical measurement IRI(s) resolved to a term "
             "whose evidence is short of a required field, so the row was not "
-            "written: "
+            f"written ({len(incomplete)} package address(es)): "
             + ", ".join(
-                f"{row['iri']} is missing {row['missing_fields']}"
+                f"{row['iri']} in {row['target_sdp_file']} {row['target_sdp_field']} "
+                f"at row {row['target_row_key']} is missing {row['missing_fields']}"
                 for row in incomplete_rows
             )
             # Said explicitly because the two warnings otherwise read alike, and

@@ -8,6 +8,7 @@ Frictionless-style Salmon Data Packages.
 
 __version__ = "0.5.0"
 
+from .catalogue_discovery import capture_catalogue_query
 from .dictionary import (
     apply_salmon_dictionary,
     infer_column_role,
@@ -58,6 +59,7 @@ from .sdp_methods import (
     write_sdp_methods,
 )
 from .semantic_closure import write_sdp_semantic_closure
+from .semantic_iri_verification import verify_sdp_semantic_iris
 from .metadata_write import apply_sdp_semantics
 from .review_console import (
     SemanticReview,
@@ -94,11 +96,16 @@ from .nuseds import (
 from .term_requests import detect_semantic_term_gaps, render_ontology_term_request, submit_term_request_issues
 from .version_check import check_for_updates
 from .chat_decomposition import chat_decomposition
+from .semantic_review_deprecation import LLMDeprecationWarning
+from .semantic_review_ingest import SemanticReviewError, ingest_semantic_assessments
+from .semantic_review_packet import write_semantic_review_packet
 
 __all__ = [
     "__version__",
+    "LLMDeprecationWarning",
     "MetadataReview",
     "SemanticReview",
+    "SemanticReviewError",
     "SssomMappingSet",
     "accept_suggestion",
     "apply_salmon_dictionary",
@@ -106,6 +113,7 @@ __all__ = [
     "apply_semantic_suggestions",
     "benchmark_term_ranking_fixtures",
     "chat_decomposition",
+    "capture_catalogue_query",
     "check_for_updates",
     "create_salmon_datapackage",
     "create_salmon_datapackage_from_data",
@@ -127,6 +135,7 @@ __all__ = [
     "infer_dictionary",
     "infer_salmon_datapackage_artifacts",
     "infer_value_type",
+    "ingest_semantic_assessments",
     "migrate_sdp_methods",
     "ms_setup_github",
     "nuseds_enumeration_method_crosswalk",
@@ -163,6 +172,7 @@ __all__ = [
     "validate_sdp_observation_structures",
     "validate_sdp_reproducibility_manifest",
     "validate_sdp_sssom",
+    "verify_sdp_semantic_iris",
     "validate_semantics",
     "write_edh_xml_from_sdp",
     "write_eml_from_sdp",
@@ -173,4 +183,5 @@ __all__ = [
     "write_sdp_reproducibility_manifest",
     "write_sdp_semantic_closure",
     "write_sdp_sssom",
+    "write_semantic_review_packet",
 ]

@@ -475,12 +475,12 @@ def test_a_date_is_not_an_instant_and_keeps_its_own_spelling():
 # ``_written_instants()`` above reads that file as text whatever the value's
 # type, so it serves here too.
 #
-# WHAT THESE DELIBERATELY DO NOT PIN: a typed instant. Its three copies agree
-# today (``2024-01-01T00:00:00Z`` in both files and in the ``calendarDate``,
-# measured 2026-09-25), but EML 2.2.0's ``calendarDate`` is
-# ``xs:gYear | xs:date``, so ``write_eml_from_sdp()`` refuses that document at
-# its schema check. An EML that carries an instant has to differ from the CSV
-# there, so a byte-agreement pin would make that fix look like a regression.
+# B-355 mirrors B-354's ruled instant split: EML 2.2.0's ``calendarDate`` is
+# ``xs:gYear | xs:date`` and its adjacent ``time`` is ``xs:time``. Rejoining
+# those two fields with T must recover the exact persisted instant, including
+# its Z; plain years and dates keep a single calendarDate. Neither field is
+# parsed or re-rendered. Off-profile text must not be truncated into a date
+# that the schema would accept.
 #
 # *Retires when:* the EML stops being built from the package on disk. A builder
 # that takes a typed frame is a writer, and has to render through the CSV's
@@ -554,6 +554,61 @@ def test_eml_calendar_date_is_the_dataset_csv_spelling_of_a_typed_date():
     assert calendar == [csv["start"], csv["end"]]
     assert calendar == [descriptor["start"], descriptor["end"]]
     assert calendar == ["0999-01-01", "2024-12-31"]
+
+
+@pytest.mark.skipif(
+    not _eml_extra_available(), reason="requires the metasalmonpy[eml] extra"
+)
+@pytest.mark.parametrize(
+    "start,end",
+    [
+        ("2024-01-01T00:00:00Z", "2024-12-31T23:59:59Z"),
+        ("2024-01-01", "2024-12-31T23:59:59Z"),
+        ("2024-01-01T00:00:00Z", "2024-12-31"),
+        ("2024", "2024-12-31"),
+    ],
+)
+def test_eml_temporal_endpoints_losslessly_split_persisted_profile_instants(start, end):
+    """The public writer's XSD check accepts instants and mixed endpoints."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        target = _eml_package_with_temporal(tmpdir, start, end)
+        result = write_eml_from_sdp(str(target))
+        document = ET.parse(result["path"]).getroot()
+        _, csv = _written_instants(target)
+
+    assert result["validation"] is True
+    for endpoint, name in (("beginDate", "start"), ("endDate", "end")):
+        node = document.find(f".//rangeOfDates/{endpoint}")
+        children = [(child.tag, child.text) for child in node]
+        wire = csv[name]
+        if "T" in wire:
+            date, time = wire.split("T")
+            assert children == [("calendarDate", date), ("time", time)]
+            assert children[0][1] + "T" + children[1][1] == wire
+        else:
+            assert children == [("calendarDate", wire)]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2024-01-01T",
+        "2024-01-01TT00:00:00Z",
+        "2024-01-01T00:00:00.1Z",
+        "2024-01-01T00:00:00+00:00",
+        "2024-01-01T00:00:00Z\n",
+    ],
+)
+def test_eml_temporal_split_leaves_off_profile_text_for_validation(value):
+    """No dependency extras are needed to prove malformed text is intact."""
+    coverage = ET.Element("dataset")
+    eml._add_coverage(
+        coverage,
+        pd.DataFrame({"temporal_start": [value], "temporal_end": ["2024"]}),
+        {},
+    )
+    begin = coverage.find(".//rangeOfDates/beginDate")
+    assert [(child.tag, child.text) for child in begin] == [("calendarDate", value)]
 
 
 def test_eml_calendar_date_keeps_the_dataset_csv_spelling_of_short_year_text():

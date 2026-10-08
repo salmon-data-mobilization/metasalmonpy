@@ -12,7 +12,8 @@ jobs:
   #   * `KnbCoreDependencyTests` and the core-deps property behind PARITY.md
   #     row 30 only mean something in a run that genuinely lacks the extras.
   #   * The extras-gated tests (EML, KNB, context readers) only mean something
-  #     in a run that has them. Before this matrix existed there was one job
+  #     in a run that has them. The [verify] backend controls also need HTTPX.
+  #     Before this matrix existed there was one job
   #     installing `.[test]` -- `build` plus `pytest`, and neither extra -- so
   #     CI was core-deps-shaped by accident and 94 tests never ran here at all
   #     (hub backlog #92).
@@ -37,17 +38,18 @@ jobs:
             # Modules that must be ABSENT. `[test]` is `build` plus `pytest`,
             # so this leg is core-deps-shaped -- but only incidentally, and an
             # incidental property is the one that quietly stops holding.
-            absent: "yaml lxml openpyxl pypdf xlrd"
+            absent: "yaml lxml openpyxl pypdf xlrd httpx"
             present: ""
+          # Preserve the existing check name; this leg also executes [verify].
           - label: with [eml] and [context] extras
-            extras: "test,eml,context"
+            extras: "test,eml,context,verify"
             absent: ""
             # Modules that must be PRESENT. Without this check a typo in the
             # extras list would turn this leg into a second core-deps run: the
             # extras-gated tests would go back to skipping, and the check would
             # still be green -- backlog #92 recurring with a job named after
             # the coverage it had stopped providing.
-            present: "yaml lxml openpyxl pypdf xlrd"
+            present: "yaml lxml openpyxl pypdf xlrd httpx"
     env:
       OPENAI_API_KEY: ""
       OPENROUTER_API_KEY: ""
@@ -126,6 +128,10 @@ jobs:
       # run in every job; each file's last test re-runs the R oracle script
       # beside its fixture against the metasalmon installed above, so a change
       # on the R side turns this job red instead of drifting.
+      # `tests/test_semantic_review_parity.py` (hub B-327) runs only here: it
+      # compares the vendored review-packet contract with the clone above byte
+      # for byte, and hands every conformance case's review session across the
+      # language boundary in both directions.
       - name: Run parity test (R↔Python)
         env:
           R_LIBS: /tmp/metasalmon-lib

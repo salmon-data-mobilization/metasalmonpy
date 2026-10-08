@@ -16,9 +16,54 @@ from .sdp_schema import sdp_profile_version
 # treats them as whitespace, so neither may this package.
 READR_TRIM_CHARS = " \t\r\n"
 
-# metasalmon calls ``grepl()`` WITHOUT ``perl = TRUE`` in every validator that
-# uses a POSIX character class, so those classes are resolved by TRE, which is
-# Unicode-aware in a UTF-8 locale. The exact membership below was enumerated by
+# Q-63 (2026-09-25): ASCII case, spaces and tabs only. Cell and decoded XML
+# value consumers use match(), requiring the marker at the value's start.
+_REVIEW_IRI_RE = re.compile(r"[ \t]*[Rr][Ee][Vv][Ii][Ee][Ww][ \t]*:[ \t]*")
+
+
+def _review_iri_text(value) -> str:
+    """Render one marker input without trimming a character from it."""
+    if isinstance(value, pd.Series):
+        value = value.iloc[0] if len(value) else None
+    elif isinstance(value, (list, tuple)):
+        value = value[0] if len(value) else None
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return ""
+    return str(value)
+
+
+def _is_review_iri(value) -> bool:
+    """Recognize the ruled marker on the raw scalar, before other trimming."""
+    return _REVIEW_IRI_RE.match(_review_iri_text(value)) is not None
+
+
+def _strip_review_iri(value) -> str:
+    """Remove one marker and adjacent ASCII spaces/tabs; preserve everything else."""
+    text = _review_iri_text(value)
+    marker = _REVIEW_IRI_RE.match(text)
+    return text[marker.end():] if marker else text
+
+
+def _contains_review_iri(text: str, iri_values=()) -> bool:
+    """Keep the literal XML guard and inspect original IRI-bearing values.
+
+    XML serialization writes a tab in an attribute as a character reference
+    (``&#09;``), so matching only its bytes would miss an admitted marker.
+    Preserve the existing case-sensitive ``REVIEW:`` serialized check: an
+    unanchored case-insensitive scan also matches narrative ``Peer review:``
+    and ``preview:``. The consumer selects its emitted IRI fields: free text
+    beginning ``Review:`` is also ordinary narrative. Inspect selected raw
+    values with the anchored predicate, without reparsing or entity decoding.
+    """
+    if "REVIEW:" in text:
+        return True
+    return any(_is_review_iri(value) for value in iri_values)
+
+# metasalmon's POSIX-class validators use TRE without ``perl = TRUE``, which is
+# Unicode-aware in a UTF-8 locale. Its shared absolute-IRI predicate now also
+# explicitly rejects the same 15 non-ASCII whitespace members under C (B-137,
+# metasalmon PR 230), retaining TRE's ASCII/POSIX component. The exact classes
+# below were enumerated by
 # running ``grepl()`` over every codepoint up to U+2FFFF under metasalmon
 # v0.1.7's R 4.5.2. Approximating either class with Python's ``\s``/``\S`` is
 # wrong in BOTH directions and must never be done:
@@ -34,10 +79,10 @@ READR_TRIM_CHARS = " \t\r\n"
 # verified by the same enumeration — so an ASCII class is correct there and
 # these constants must NOT be applied to it.
 #
-# Retirement condition: these constants stay for as long as metasalmon resolves
-# POSIX classes through TRE. They are only removable if metasalmon itself
-# switches those validators to ``perl = TRUE`` (or to explicit ranges), at which
-# point the replacement must be re-enumerated against that release, not guessed.
+# Retirement condition: keep these constants while their effective membership
+# matches the corresponding R validators, including explicit supplements. A
+# change of engine or spelling alone does not retire them. If R changes that
+# membership, re-enumerate the replacement against that release, not by guessing.
 #
 # R ``[[:space:]]`` -- note the deliberate gaps: U+2007, U+00A0, U+0085 and
 # U+202F are NOT whitespace to TRE.
@@ -45,6 +90,21 @@ R_SPACE_CLASS = (
     "\t-\r\x20\u1680\u2000-\u2006\u2008-\u200a"
     "\u2028\u2029\u205f\u3000"
 )
+
+_ABSOLUTE_IRI_SHAPE_RE = re.compile(
+    rf"[A-Za-z][A-Za-z0-9+.\-]*:[^{R_SPACE_CLASS}]+"
+)
+
+
+def _absolute_iri_shape(value: str) -> bool:
+    """R's ``.ms_absolute_iri_shape``; callers own blanks and REVIEW markers.
+
+    This is only scheme/colon/non-whitespace shape, not resolution, scheme
+    selection or HTTP authority validation. Use TRE's enumerated whitespace
+    rather than Python's broader ``\\s``. Fullmatch also rejects a final LF,
+    which Python's ``$`` anchor can otherwise leave outside the match.
+    """
+    return _ABSOLUTE_IRI_SHAPE_RE.fullmatch(value) is not None
 
 # R ``[[:cntrl:]]`` -- C0 and C1 controls plus the Unicode line/paragraph
 # separators.
@@ -436,9 +496,15 @@ def fill_review_placeholders_dataset_meta(dataset_meta: pd.DataFrame) -> pd.Data
 
     Prose and coverage were converged on current metasalmon by differential
     run (S10 chunk D), retiring PARITY.md row 48: R fills ``creator``,
-    ``contact_name``, ``contact_email`` and ``license`` with ``MISSING
-    METADATA:`` guidance, titleizes a blank ``title`` from ``dataset_id``, and
-    writes dataset-specific ``MISSING DESCRIPTION:`` prose.
+    ``contact_name`` and ``contact_email`` with ``MISSING METADATA:``
+    guidance, titleizes a blank ``title`` from ``dataset_id``, and writes
+    dataset-specific ``MISSING DESCRIPTION:`` prose.
+
+    A blank ``license`` gets no placeholder, in either implementation. The SDP
+    specification makes it recommended rather than required (smn-data-pkg pull
+    request 12; Brett, 2026-09-26: most datasets assign none), and only the
+    rights holder can grant one, so a blank licence is itself the statement
+    that none was granted. Every prompt here fills a field the schema requires.
     """
     out = dataset_meta.copy()
 
@@ -462,7 +528,6 @@ def fill_review_placeholders_dataset_meta(dataset_meta: pd.DataFrame) -> pd.Data
         ("creator", "MISSING METADATA: add creator, team, or originating program."),
         ("contact_name", "MISSING METADATA: add primary contact name or team."),
         ("contact_email", "MISSING METADATA: add primary contact email."),
-        ("license", "MISSING METADATA: add dataset license (for example, CC-BY-4.0)."),
     ):
         if column in out.columns:
             blank = _blank_mask(out[column])
@@ -589,8 +654,14 @@ def infer_table_metadata_from_resources(resources: Mapping[str, pd.DataFrame], d
                 "primary_key": id_cols[0] if id_cols else pd.NA,
             }
         )
+    # The inferred frame does not explicitly carry method_iri or other optional
+    # fields the minimal rows lack. Add only what the selected schema declares,
+    # as R's inference does; preserving existing extras remains the writer's
+    # separate responsibility (B-252). Deferred to avoid the module import cycle.
+    from .sdp_field_setters import _in_declared_order
+
     return fill_review_placeholders_table_meta(
-        normalize_table_meta(pd.DataFrame(rows))
+        _in_declared_order(pd.DataFrame(rows), "tables.csv")
     )
 
 
@@ -676,8 +747,8 @@ def _readr_reads_as_date_time(text: str) -> bool:
         return True
 
 
-def _text_reads_as_dates(texts) -> bool:
-    """Whether ``readr::read_csv()`` would read this text as a ``Date`` or ``POSIXct`` column.
+def _readr_date_type(texts) -> Optional[str]:
+    """The ``date`` / ``datetime`` kind of readr's column guess, or ``None``.
 
     readr, R's documented reader, guesses one type for each column, and R's
     seeder never selects a ``Date`` or ``POSIXct`` column. ``pandas.read_csv``
@@ -691,15 +762,25 @@ def _text_reads_as_dates(texts) -> bool:
     vroom 1.7.1, and pinned token by token in
     ``tests/test_codes_target_categorical.py``.
 
-    A time of day, which readr reads as ``hms``, is not covered.
+    The role and value-type inferrers share this guess with the seeder
+    (B-349). Date shape wins before the datetime parser, as it did in B-188;
+    this matters because that parser also accepts bare ISO dates. A time of
+    day, which readr reads as ``hms``, is not covered.
     """
     present = [str(text).strip(READR_TRIM_CHARS) for text in texts]
     present = [text for text in present if text]
     if not present:
-        return False
-    return all(_DATE_RE.match(text) for text in present) or all(
-        _readr_reads_as_date_time(text) for text in present
-    )
+        return None
+    if all(_DATE_RE.match(text) for text in present):
+        return "date"
+    if all(_readr_reads_as_date_time(text) for text in present):
+        return "datetime"
+    return None
+
+
+def _text_reads_as_dates(texts) -> bool:
+    """Whether readr guesses a date kind; keep B-188's boolean seeder hook."""
+    return _readr_date_type(texts) is not None
 
 
 def code_list_values(series, code_limit: int = CODE_LIST_LIMIT) -> list:

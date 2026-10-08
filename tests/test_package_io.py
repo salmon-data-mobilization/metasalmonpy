@@ -143,14 +143,15 @@ class EraInferenceTests(unittest.TestCase):
     def test_blank_spec_version_follows_the_profile_rules(self):
         # v0.1.7 replaced the frozen "sdp-0.1.0" literal with the vendored
         # profile version; metasalmon main's .ms_sdp_profile_version()
-        # returns "sdp-0.3.0", from the same bundle both mirrors now vendor.
+        # returns "sdp-0.3.2" since hub item B-198, from the same bundle both
+        # mirrors vendor since B-199.
         from metasalmonpy.metadata import (
             SDP_PROFILE_VERSION,
             infer_dataset_metadata_from_resources,
         )
         from metasalmonpy.package_io import _fill_review_placeholders
 
-        self.assertEqual(SDP_PROFILE_VERSION, "sdp-0.3.0")
+        self.assertEqual(SDP_PROFILE_VERSION, "sdp-0.3.2")
         inferred = infer_dataset_metadata_from_resources(
             {"t": pd.DataFrame({"count": [1, 2]})}
         )

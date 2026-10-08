@@ -1,0 +1,2 @@
+dataset_id,table_id,column_name,code,severity,role,before_decision,after_decision,message
+theme_a,trawl,CATCH_COUNT,SEM_METHOD_EVIDENCE_REQUIRED,warning,method,accept,review,"The accepted method candidate lacks explicit field, protocol, gear, instrument, or estimation-procedure evidence."
