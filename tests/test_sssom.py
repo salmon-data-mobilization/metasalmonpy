@@ -9,13 +9,21 @@ metasalmon's R implementation (``R/sssom.R``, the spec) directly:
 - ``r-sdp/``          an SDP written by R's ``write_sdp_sssom`` over all three
 - ``checksums.json``  sha256 of every fixture, computed in R
 
+The ``canonical/`` and ``r-sdp/`` fixtures and their checksums were regenerated
+under hub B-351 from metasalmon ``main`` with B-350 (canonical SSSOM/TSV),
+so they pin the canonical form; ``src/`` is unchanged and still holds the
+earlier form, which the reader keeps accepting.
+
 THE parity contract: the Python canonical-bytes builder must reproduce R's
 bytes exactly — same mapping set, same sha256. The failure-mode tests mirror
 metasalmon's ``tests/testthat/test-sssom.R``.
 """
 
+import datetime
 import hashlib
 import json
+import re
+import tempfile
 import unittest
 import warnings
 from pathlib import Path
@@ -199,15 +207,15 @@ def test_unsorted_input_normalizes_to_sorted_canonical_output():
     mapping_set = read_sssom_mapping_set(DATA / "src" / "multi-sort.sssom.tsv")
     text = sssom._canonical_bytes(mapping_set).decode("utf-8")
     lines = text.split("\n")
-    curie_lines = [line for line in lines if line.startswith("#   ")]
-    assert [line.split(":")[0].strip("# ") for line in curie_lines] == [
-        "SDO",
-        "gcdfo",
-        "psc",
-        "semapv",
-        "skos",
-        "sssom",
+    # Canonical SSSOM/TSV (B-351): two-space YAML indentation, and the
+    # built-in prefixes the source declares (semapv, skos, sssom) are left out.
+    # The `#  - ` lines are see_also's block sequence, not prefixes.
+    curie_lines = [
+        line
+        for line in lines
+        if line.startswith("#  ") and not line.startswith("#  - ")
     ]
+    assert [line[3:].split(":")[0] for line in curie_lines] == ["SDO", "gcdfo", "psc"]
     header = next(line for line in lines if line.startswith("subject_id"))
     # Scrambled source columns come back in the canonical column order.
     assert header.split("\t") == [
@@ -1177,11 +1185,12 @@ def test_validate_salmon_datapackage_never_evaluates_a_tag_in_sssom_metadata(
 
     sentinel = tmp_path / "evaluated"
     value = tagged.format(sentinel=json.dumps(sentinel.as_posix()))
-    # The writer renders scalars double-quoted; the patch replaces that line.
-    benign = '# mapping_set_title: "Approved mappings"\n'
+    # The canonical writer renders this scalar plain, with no space after `#`
+    # (B-351); the patch replaces that line.
+    benign = "#mapping_set_title: Approved mappings\n"
     text = installed.read_bytes().decode("utf-8")
     assert benign in text
-    text = text.replace(benign, f"# mapping_set_title: {value}\n")
+    text = text.replace(benign, f"#mapping_set_title: {value}\n")
     write_raw(installed, text)
 
     def rehash(manifest):
@@ -1439,3 +1448,305 @@ def test_schema_typed_optional_fields_round_trip_in_a_package(tmp_path):
     written = read_sssom_mapping_set(root / "metadata/semantic/optional.sssom.tsv")
     for field, value in _SCHEMA_OPTIONAL_VALUES.items():
         assert written.mappings[field].tolist() == [value]
+
+
+# --- canonical SSSOM/TSV (hub B-351, the mirror half of metasalmon B-350) ----
+#
+# One test per rule of the specification's "Canonical SSSOM/TSV format" section
+# that applies to what write_sdp_sssom() writes (src/docs/spec-formats-tsv.md
+# in mapping-commons/sssom at 667d3c579d92ad2e1a480503625eeef1e6af8e6d).
+# Condensation and the extension-slot rules are not applied; sssom.py says why.
+# Twins of the twelve tests metasalmon's tests/testthat/test-sssom.R carries
+# under the same heading, on the same inputs.
+
+
+def sssom_written_text(tmp_path, text=None):
+    """Mirror of the R test helper ``sssom_test_written_text``.
+
+    Writes ``text`` (``sssom_text()`` when ``None``) as ``set.sssom.tsv``,
+    packages it with ``write_sdp_sssom()`` into a fresh SDP, and returns the
+    SDP root, the written mapping set's path and its text decoded from the
+    bytes on disk. Each call gets its own directory, as each R call gets its
+    own ``local_tempdir()``.
+    """
+    root = Path(tempfile.mkdtemp(dir=tmp_path))
+    source = write_raw(root / "set.sssom.tsv", sssom_text() if text is None else text)
+    sdp = root / "sdp"
+    sdp.mkdir()
+    write_sdp_sssom(sdp, mapping_sets=source)
+    written = sorted((sdp / "metadata" / "semantic").glob("*.sssom.tsv"))
+    assert len(written) == 1
+    return sdp, written[0], written[0].read_bytes().decode("utf-8")
+
+
+def sssom_metadata_lines(text):
+    return [line for line in text.split("\n") if line.startswith("#")]
+
+
+def test_canonical_sssom_tsv_round_trips_the_canonical_example_byte_for_byte(tmp_path):
+    assert sssom_written_text(tmp_path, sssom_canonical_text())[2] == sssom_canonical_text()
+    # And the legacy form of the same set is rewritten into exactly those bytes.
+    assert sssom_written_text(tmp_path)[2] == sssom_canonical_text()
+    # R asserts the same under LC_COLLATE=C; nothing on this path reads the
+    # locale (``sorted()`` on ``str`` and no ``locale.strxfrm``), so there is
+    # no second configuration to run here.
+
+
+def test_canonical_sssom_tsv_puts_no_space_between_hash_and_the_yaml(tmp_path):
+    lines = sssom_metadata_lines(sssom_written_text(tmp_path)[2])
+    assert lines
+    # A top-level slot starts right after `#`; only YAML's own two-space
+    # indentation of a nested line may follow it.
+    assert not any(re.match(r"# [^ ]", line) for line in lines)
+    assert all(re.match(r"#([^ ]|  [^ ])", line) for line in lines)
+
+
+def test_canonical_sssom_tsv_writes_curie_map_in_its_mapping_set_slot_position(tmp_path):
+    lines = sssom_metadata_lines(sssom_written_text(tmp_path)[2])
+    keys = [line.split(":")[0] for line in lines if not line.startswith("#  ")]
+    assert keys == [
+        "#sssom_version",
+        "#curie_map",
+        "#mapping_set_id",
+        "#mapping_set_version",
+        "#license",
+        "#subject_source",
+        "#subject_source_version",
+        "#object_source",
+        "#object_source_version",
+    ]
+
+
+def test_canonical_sssom_tsv_keeps_no_builtin_and_no_unused_prefix_in_curie_map(tmp_path):
+    text = sssom_text(
+        extra_prefixes=(
+            "#   unused: https://example.org/unused/",
+            "#   owl: http://www.w3.org/2002/07/owl#",
+        )
+    )
+    sdp, _, written = sssom_written_text(tmp_path, text)
+    lines = sssom_metadata_lines(written)
+    prefixes = [
+        re.match(r"#  ([^:]+):", line).group(1)
+        for line in lines
+        if line.startswith("#  ")
+    ]
+    assert prefixes == ["gcdfo", "psc"]
+    assert validate_sdp_sssom(sdp) is True
+
+
+def test_canonical_sssom_tsv_leaves_out_curie_map_when_a_set_uses_only_builtin_prefixes(
+    tmp_path,
+):
+    text = sssom_text(
+        rows=[
+            "\t".join(
+                (
+                    "owl:Thing",
+                    "Thing",
+                    "skos:exactMatch",
+                    "rdfs:Resource",
+                    "Resource",
+                    "semapv:ManualMappingCuration",
+                )
+            )
+        ]
+    )
+    sdp, path, written = sssom_written_text(tmp_path, text)
+    assert not any(
+        line.startswith("#curie_map") for line in sssom_metadata_lines(written)
+    )
+    reread = read_sssom_mapping_set(path)
+    assert reread.metadata["curie_map"] == {}
+    assert validate_sdp_sssom(sdp) is True
+
+
+def test_canonical_sssom_tsv_writes_scalars_plain_when_yaml_would_read_them_back_unchanged(
+    tmp_path,
+):
+    text = sssom_text(
+        extra_metadata=(
+            '# mapping_set_title: "Gear: census methods"',
+            '# mapping_set_description: "yes"',
+            '# comment: "Plain text, no indicators"',
+        )
+    )
+    _, path, written = sssom_written_text(tmp_path, text)
+    lines = sssom_metadata_lines(written)
+    assert '#sssom_version: "1.1"' in lines
+    assert "#mapping_set_version: 2026-07-31" in lines
+    assert "#object_source_version: 0.0.8" in lines
+    assert '#mapping_set_title: "Gear: census methods"' in lines
+    assert '#mapping_set_description: "yes"' in lines
+    assert "#comment: Plain text, no indicators" in lines
+    reread = read_sssom_mapping_set(path)
+    assert reread.metadata["mapping_set_title"] == "Gear: census methods"
+    assert reread.metadata["mapping_set_description"] == "yes"
+
+
+# The values R's twin reads back through the yaml package: every YAML 1.1 and
+# 1.2 implicit type the writer must quote, the indicator characters, a comment
+# marker, a mapping separator, non-ASCII text and a control character.
+_PLAIN_ROUND_TRIP_VALUES = (
+    "2026-07-31", "0.0.8", "v0.2.0", "1.1", "1", "-1", "+1", "1_000", "1,2",
+    "0x1F", "0o17", "017", "0b101", "1:20", ".inf", "-.5", "1e3", "1.0e+3",
+    "yes", "No", "on", "OFF", "y", "~", "null", "<<", "=", "true",
+    "https://w3id.org/gcdfo/salmon#", "a #b", "a: b", "a:", "-x", "?x",
+    "[x]", "x, y", "caf\u00e9", "tab\there",
+)
+
+
+def test_every_value_the_canonical_writer_writes_plain_reads_back_as_the_same_string():
+    def fail(reason):
+        raise AssertionError(reason)
+
+    try:
+        import yaml
+    except ImportError:  # the core-dependency leg has no PyYAML
+        yaml = None
+    for value in _PLAIN_ROUND_TRIP_VALUES:
+        rendered = sssom._yaml_scalar(value)
+        # This package's own reader, which types nothing.
+        assert sssom._parse_scalar(rendered, fail) == value, value
+        if yaml is None:
+            continue
+        # A YAML 1.1 reader, as R's twin asks of the yaml package. PyYAML types
+        # one value the canonical form deliberately writes plain: a date.
+        # sssom.R keeps it plain because it is the form the SSSOM examples
+        # write, and neither package's reader types it, so this pins what
+        # PyYAML does with it rather than letting the case pass unnoticed.
+        reread = yaml.safe_load(f"k: {rendered}")["k"]
+        if value == "2026-07-31":
+            assert reread == datetime.date(2026, 7, 31)
+        else:
+            assert reread == value, value
+    assert sssom._yaml_scalar("0.0.8") == "0.0.8"
+    assert sssom._yaml_scalar("1.1") == '"1.1"'
+
+
+def test_canonical_sssom_tsv_writes_a_multivalued_metadata_slot_as_a_block_sequence(
+    tmp_path,
+):
+    text = sssom_text(
+        extra_metadata=(
+            "# creator_id:",
+            "#   - psc:PSC-CV-000001",
+            "# see_also: https://example.org/one",
+        )
+    )
+    _, path, written = sssom_written_text(tmp_path, text)
+    lines = written.split("\n")
+    at = lines.index("#creator_id:")
+    assert lines[at + 1] == "#  - psc:PSC-CV-000001"
+    at = lines.index("#see_also:")
+    assert lines[at + 1] == "#  - https://example.org/one"
+    reread = read_sssom_mapping_set(path)
+    assert reread.metadata["creator_id"] == "psc:PSC-CV-000001"
+    assert reread.metadata["see_also"] == "https://example.org/one"
+
+
+def test_canonical_sssom_tsv_quotes_a_mapping_cell_only_when_it_must(tmp_path):
+    row = "\t".join(
+        (
+            "psc:PSC-CV-000001",
+            'Net "gill"',
+            "skos:exactMatch",
+            "gcdfo:FixedSiteCensusManual",
+            "Fixed Site Census (Manual)",
+            "semapv:ManualMappingCuration",
+        )
+    )
+    _, path, written = sssom_written_text(tmp_path, sssom_text(rows=[row]))
+    data_line = written.split("\n")[-2]
+    assert data_line.split("\t")[1] == '"Net ""gill"""'
+    # Every other cell is written bare.
+    assert data_line.split("\t")[0] == "psc:PSC-CV-000001"
+    reread = read_sssom_mapping_set(path)
+    assert reread.mappings["subject_label"].tolist() == ['Net "gill"']
+    # A legacy cell with a bare inner quote still reads byte for byte.
+    assert sssom._unquote_cell('Net "gill"') == 'Net "gill"'
+    assert sssom._unquote_cell('"a"b"') == '"a"b"'
+
+
+def test_canonical_sssom_tsv_rounds_a_double_slot_to_at_most_three_decimals(tmp_path):
+    assert [
+        sssom._canonical_double(value)
+        for value in (
+            "0.95000", "1.0", "0.0005", "0.0004", "0.9995", "0.12345", "1", "high", None,
+        )
+    ] == ["0.95", "1", "0.001", "0", "1", "0.123", "1", "high", None]
+    header = "\t".join(
+        (
+            "subject_id",
+            "subject_label",
+            "predicate_id",
+            "object_id",
+            "object_label",
+            "mapping_justification",
+        )
+    )
+    row = "\t".join(
+        (
+            "psc:PSC-CV-000001",
+            "Net",
+            "skos:exactMatch",
+            "gcdfo:FixedSiteCensusManual",
+            "Fixed Site Census (Manual)",
+            "semapv:ManualMappingCuration",
+            "0.95000",
+        )
+    )
+    text = sssom_text(rows=[row]).replace(header, header + "\tconfidence", 1)
+    _, _, written = sssom_written_text(tmp_path, text)
+    assert written.split("\n")[-2].endswith("\t0.95")
+
+
+def test_canonical_sssom_tsv_sorts_mappings_with_a_missing_value_first(tmp_path):
+    path = write_raw(
+        tmp_path / "set.sssom.tsv",
+        sssom_text(
+            rows=[
+                "\t".join(
+                    (
+                        "psc:PSC-CV-000001",
+                        "Net",
+                        "skos:exactMatch",
+                        "gcdfo:FixedSiteCensusManual",
+                        "Fixed Site Census (Manual)",
+                        "semapv:ManualMappingCuration",
+                    )
+                ),
+                "\t".join(
+                    (
+                        "psc:PSC-CV-000001",
+                        "",
+                        "skos:exactMatch",
+                        "gcdfo:FixedSiteCensusAutomated",
+                        "Fixed Site Census (Automated)",
+                        "semapv:ManualMappingCuration",
+                    )
+                ),
+            ]
+        ),
+    )
+    mapping_set = read_sssom_mapping_set(path)
+    labels = mapping_set.mappings["subject_label"]
+    mapping_set.mappings.loc[labels == "", "subject_label"] = None
+    lines = sssom._canonical_bytes(mapping_set).decode("utf-8").split("\n")
+    data = [line for line in lines if line and not line.startswith("#")][1:]
+    assert [line.split("\t")[1] for line in data] == ["", "Net"]
+
+
+def test_validate_sdp_sssom_still_accepts_a_package_in_the_pre_canonical_byte_form(
+    tmp_path,
+):
+    sdp, path, _ = sssom_written_text(tmp_path)
+    legacy = sssom_text().encode("utf-8")
+    path.write_bytes(legacy)
+    manifest_path = sdp / "metadata" / "semantic" / "mapping-sets.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["mapping_sets"][0]["sha256"] = hashlib.sha256(legacy).hexdigest()
+    manifest_path.write_bytes(
+        (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    )
+    assert validate_sdp_sssom(sdp) is True

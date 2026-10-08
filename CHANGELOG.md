@@ -1369,6 +1369,39 @@ and moving it is a separate outward act.
 
 ### Changed
 
+* **`write_sdp_sssom()` writes canonical SSSOM/TSV, so every mapping set's
+  bytes change, and with them every `mapping-sets.json` sha256** (hub queue
+  item **B-351**, the mirror half of metasalmon's **B-350**, which landed in
+  metasalmon pull request 273; ruled by Brett 2026-09-25 for the next minor
+  version, both packages together). The metadata block now has no space after
+  `#`, writes a scalar plain unless a YAML reader would read it back as
+  something other than the same string (so `sssom_version: "1.1"` stays
+  quoted), puts `curie_map` second as the MappingSet slot table does, writes a
+  multivalued slot as a block sequence, and leaves built-in and unused prefixes
+  out of `curie_map`, leaving the slot out entirely when nothing is left. In
+  the table, a cell is quoted only when it contains a double quote,
+  `confidence`, `reviewer_agreement` and `similarity_score` are rounded to at
+  most three decimals, and a missing value sorts before a present one. Slots
+  are not condensed, because condensation is the inverse of propagation, which
+  this profile does not do. `read_sssom_mapping_set()` reads every file it
+  writes: it now accepts a set with no `curie_map` and strips RFC 4180 quoting
+  from a well-formed quoted cell, while a cell an earlier version wrote with a
+  bare `"` inside it still reads byte for byte, and `validate_sdp_sssom()`
+  still accepts a package in the earlier form.
+
+  The two packages write byte-identical mapping sets again. The R-written
+  fixtures under `tests/data/sssom/` (`canonical/`, `r-sdp/` and
+  `checksums.json`) were regenerated from metasalmon `main` with B-350, and
+  the byte-parity tests in `tests/test_sssom.py` failed against them on the
+  writer as it stood (8 of 167) before the port and pass after it, with the
+  twins of B-350's twelve tests (11 of which failed before the port; the one
+  that passed checks that the earlier form is still accepted). Beyond the
+  fixtures, 45 further inputs, covering every rule above and every value R's
+  plain-scalar test reads back, gave the same sha256 from both writers.
+  `PARITY.md` row 11 records the window B-350 opened and its closing, and row
+  59, the spelling of a typed in-memory cell, records that the rounding now
+  reaches it. The version number does not move here.
+
 * **A candidate row carries only the target's 19 columns, a retrieval query is
   trimmed as R trims it, and a role with no source is not searched.** Hub
   queue item **B-327**: the last three points on which
