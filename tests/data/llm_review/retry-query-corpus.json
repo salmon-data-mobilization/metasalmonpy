@@ -77,25 +77,25 @@
       "id": "curie-lowercase-s",
       "retry": "smn:species",
       "original": "species",
-      "exercises": "R's bracket expression [^\\s] excludes the letter s, so a local part containing s is not identifier-like"
+      "exercises": "a local part holding the letter s is identifier-like; before B-380, R's bracket expression [^\\s] excluded s"
     },
     {
       "id": "curie-uppercase-s",
       "retry": "abc:S",
       "original": "x",
-      "exercises": "an uppercase S after the colon is allowed"
+      "exercises": "an uppercase S after the colon is identifier-like, before B-380 and after it"
     },
     {
-      "id": "curie-space-allowed",
+      "id": "curie-space-in-local-part",
       "retry": "abc:d e",
       "original": "x",
-      "exercises": "R's bracket expression [^\\s] does not exclude a space"
+      "exercises": "a space in the local part ends the CURIE, so the query is lexical; before B-380, R's [^\\s] allowed a space"
     },
     {
       "id": "curie-backslash",
       "retry": "abc:\\",
       "original": "x",
-      "exercises": "R's bracket expression [^\\s] excludes a backslash"
+      "exercises": "a backslash is an ordinary character in the local part; before B-380, R's [^\\s] excluded it"
     },
     {
       "id": "curie-digit-first",
@@ -119,13 +119,43 @@
       "id": "curie-note-prose",
       "retry": "Note: fish",
       "original": "x",
-      "exercises": "prose with a colon; the local part contains s, so not identifier-like"
+      "exercises": "prose with a colon: the space after the colon ends the CURIE, so it is lexical"
     },
     {
       "id": "curie-non-ascii-prefix",
       "retry": "É:x",
       "original": "x",
       "exercises": "the prefix class is ASCII letters only"
+    },
+    {
+      "id": "curie-lone-s",
+      "retry": "abc:s",
+      "original": "x",
+      "exercises": "one of B-380's cases: a lone s after the colon is identifier-like"
+    },
+    {
+      "id": "curie-mesh-size",
+      "retry": "smn:MeshSize",
+      "original": "mesh size",
+      "exercises": "the retry_dead_ends conformance case's query is identifier-like, as that case's README says"
+    },
+    {
+      "id": "curie-tab-in-local-part",
+      "retry": "abc:d\te",
+      "original": "x",
+      "exercises": "a tab collapses to a space, which ends the CURIE"
+    },
+    {
+      "id": "curie-nbsp-in-local-part",
+      "retry": "abc:a b",
+      "original": "x",
+      "exercises": "a no-break space is not whitespace to R, so it stays in the CURIE; Python's \\S would refuse it"
+    },
+    {
+      "id": "curie-em-space-in-local-part",
+      "retry": "abc:a b",
+      "original": "x",
+      "exercises": "an em space is whitespace to R: it collapses to a space, which ends the CURIE"
     },
     {
       "id": "http-iri",

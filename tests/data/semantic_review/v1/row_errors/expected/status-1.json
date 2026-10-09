@@ -1,7 +1,7 @@
 {
   "status": "complete",
   "pass": 1,
-  "packet_id": "22f9577857952c324cf03c8c9b58c5b534a7e6d7df2950b694ae304b17721314",
+  "packet_id": "acbaf8ac8b7b4c8b687a675a7605b3bbdeec7556fe5221e7d24063a995686fb5",
   "has_next_packet": false,
   "summary": {
     "decisions": {
@@ -12,7 +12,7 @@
       "reject_shortlist": 0
     },
     "errors": 8,
-    "downgrades": 5,
+    "downgrades": 4,
     "escalations": 0,
     "retries": 0,
     "awaiting_pass_2": 0,

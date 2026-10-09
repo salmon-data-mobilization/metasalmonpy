@@ -67,8 +67,9 @@ else.
 | `bundle_accept` | A measurement bundle, every slot accepted, no findings. |
 | `bundle_downgrade` | A unit accept the validators refuse (`SEM_DIMENSION_MISMATCH`, `SEM_PROPERTY_UNIT_DIMENSION_MISMATCH`): downgraded to review, findings recorded. |
 | `target_units` | Target units: a categorical column, a code value, a table's observation unit, a slot with no candidates. |
+| `code_roles` | A code value of a measurement column: its constraint, entity and method targets share the code's one `term_iri` slot, and each is its own target unit, keyed `target:<slot_id>\|<dictionary_role>`, with its own shortlist and answer (a rejection escalated, a review, an accept). Hub item B-424: the three used to share one key, and the build aborted. |
 | `retry_gain` | A `retry_search` whose query gains candidates: `awaiting_pass_2`, a pass-2 packet, then an accept at pass 2. |
-| `retry_dead_ends` | A duplicate query (`duplicate_original_query`), an identifier-like query (`identifier_like_query`), and a usable query that gains nothing. |
+| `retry_dead_ends` | Three retries that go nowhere: `GEAR  Type` is the original query once case and whitespace are folded (`duplicate_original_query`), `smn:MeshSize` is a CURIE and is not issued (`identifier_like_query`; before hub item B-380 the classifier's bracket class excluded the letter s, so this query was searched), and `fishing vessel` is searched and gains nothing. One search call. |
 | `reject_escalates` | `reject_shortlist` escalates at once to `request_new_term`, including with a stray index; no second pass. |
 | `row_errors` | One target per row-level rule of execplan section 3.3, plus a planted secret in `llm_error` and in a rationale, a package-owned column written by the harness, and the `propose_new_term` alias. |
 | `file_errors` | `header`, `unknown_target`, `duplicate_target`, `packet_integrity`, `packet_version`, `packet_mismatch` (argument), `packet_unbound`, `stale_sidecar` (`packet_mismatch`), `no_pass_2`. |
