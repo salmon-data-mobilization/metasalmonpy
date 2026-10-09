@@ -1,8 +1,8 @@
 {
   "packet_version": "semantic-review-packet/1.0",
-  "packet_id": "73f43623b0fd2ea6f5700f02bf7c2dd814f78b0cb196d4cb4180b85df38a45e2",
+  "packet_id": "01d2ede7af7ee816cebc7715155f0b421bef29faab153814f359733f7a82c27e",
   "pass": 2,
-  "parent_packet_id": "310ebf2a3857c19ac5502f7d94b23d46332f06d96b79dc8044fa2eb3ba15cad5",
+  "parent_packet_id": "37da6b146927bed60fafb856c50fe5395de5b32c11068763b922028f0962c796",
   "producer": {
     "implementation": "metasalmon",
     "version": "0.5.0",
@@ -254,7 +254,7 @@
   "units": [
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/GEAR_TYPE|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/GEAR_TYPE|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",

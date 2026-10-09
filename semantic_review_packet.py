@@ -424,6 +424,49 @@ def _slot_id(row: Mapping) -> str:
     )
 
 
+_ADDRESS_COLUMNS = ("target_sdp_file", "target_row_key", "target_sdp_field")
+
+
+def _target_address(row: Mapping) -> str:
+    """``.ms_semantic_review_target_address()``: a target's slot and its role.
+
+    A code value of a measurement column gets a constraint, an entity and a
+    method target, and all three write into the code's one ``codes.csv``
+    ``term_iri``, so the slot alone does not name a target (hub item B-425,
+    the mirror of metasalmon's B-424): three target units shared one key, which
+    aborted an in-memory build, and a package path kept only the first role's
+    shortlist. The slot and the role do name it. The slot is read from its three
+    address fields whenever a row carries them, and from a precomputed
+    ``slot_id`` only when it does not (the review queue's rows); a missing role
+    renders ``NA``, as R's ``paste()`` renders it. The target unit key is this
+    address, so the packet's bytes read this one rendering.
+    """
+    if not all(column in row for column in _ADDRESS_COLUMNS) and "slot_id" in row:
+        slot = _r_character(row.get("slot_id"))
+        slot = "NA" if slot is None else slot
+    else:
+        slot = _slot_id(row)
+    role = _r_character(row.get("dictionary_role"))
+    return slot + "|" + ("NA" if role is None else role)
+
+
+def _decided_slots(records: list) -> set:
+    """``.ms_semantic_review_decided_slots()``: the slots carrying a recorded decision.
+
+    Read the way the review console reads one
+    (:func:`~metasalmonpy.review_console._recorded_decision`): the console takes
+    such a slot out of the queue, so no target of it is recovered either,
+    whichever role recorded the decision.
+    """
+    from .review_console import _recorded_decision
+
+    return {
+        _slot_id(record)
+        for record in records
+        if "decision" in record and _recorded_decision(record.get("decision")) is not None
+    }
+
+
 def _records(frame: Optional[pd.DataFrame]) -> list:
     """One dict per row, keys in column order."""
     if frame is None or len(frame) == 0:
@@ -807,7 +850,9 @@ def assemble_units(targets: list, candidates: list, dictionary: Optional[pd.Data
             dictionary_rows = _bundle_dictionary_rows(target, dictionary)
         else:
             dictionary_rows = []
-        unit_key = "target:" + (_text_scalar(target.get("slot_id")) or target_keys[position])
+        # The slot and the role: a code value of a measurement column has three
+        # targets in one slot, each its own unit (hub item B-425).
+        unit_key = "target:" + _target_address(target)
         units.append(
             {
                 "unit_kind": "target",
@@ -1028,8 +1073,10 @@ def _blank_slots(path: Path, frames: Mapping, suggestions: Optional[pd.DataFrame
     again over the package's own frames -- ``semantics._semantic_discover_targets()``,
     the discovery :func:`~metasalmonpy.suggest_semantics` runs, called directly
     so the in-package model call stays off this function's call graph -- and
-    restricted to the writable IRI slots that are blank (not ``REVIEW:``-
-    marked), have no suggestion row and no recorded decision. The one thing
+    restricted to the targets of writable IRI slots that are blank (not
+    ``REVIEW:``-marked) and carry no recorded decision, and that have no
+    suggestion row of their own: a slot another role of which has rows can
+    still hold a role that found nothing (hub item B-425). The one thing
     that cannot be recovered is the code scope the caller chose at creation:
     the packet records the scope used here, and a code-level slot outside it is
     reported as not covered rather than silently dropped.
@@ -1059,9 +1106,17 @@ def _blank_slots(path: Path, frames: Mapping, suggestions: Optional[pd.DataFrame
             dataset_id = _trim_string(frame["dataset_id"].iloc[0])
             if dataset_id is not None:
                 break
+    # Known and decided are asked of the target, not the slot. A code value of a
+    # measurement column has three targets in one slot, and a role that found
+    # nothing at creation has no row even when another role of the slot does;
+    # asked of the slot, that role was never recovered (hub item B-425). A slot
+    # with a recorded decision is decided for every role.
     known = set()
+    decided = set()
     if suggestions is not None and len(suggestions):
-        known = {_slot_id(record) for record in _records(suggestions)}
+        suggestion_records = _records(suggestions)
+        known = {_target_address(record) for record in suggestion_records}
+        decided = _decided_slots(suggestion_records)
 
     def discover(scope: str) -> list:
         scoped_codes = None
@@ -1079,7 +1134,8 @@ def _blank_slots(path: Path, frames: Mapping, suggestions: Optional[pd.DataFrame
             writable = _r_character(target.get("target_sdp_file")) in WRITABLE_FILES
             iri_field = (_r_character(target.get("target_sdp_field")) or "").endswith("_iri")
             blank = current is not None and not current.strip(" \t\r\n")
-            if writable and iri_field and blank and target["slot_id"] not in known:
+            no_row = _target_address(target) not in known and target["slot_id"] not in decided
+            if writable and iri_field and blank and no_row:
                 kept.append(target)
         return kept
 
@@ -1128,10 +1184,16 @@ def _package_targets(path: Path, frames: Mapping, top_n: int, source_policy: dic
     if len(review):
         rows = _records(queue["suggestions"].iloc[list(queue["source_row"])])
         seen = set()
-        for record, (slot_id, current) in zip(rows, zip(review["slot_id"], review["current_value"])):
-            if slot_id in seen:
+        # One target per slot and role, never one per slot: the console lists a
+        # code's constraint, entity and method candidates in one slot, and each
+        # role is its own target with its own shortlist (hub item B-425).
+        for record, (slot_id, role, current) in zip(
+            rows, zip(review["slot_id"], review["role"], review["current_value"])
+        ):
+            address = _target_address({"slot_id": slot_id, "dictionary_role": role})
+            if address in seen:
                 continue
-            seen.add(slot_id)
+            seen.add(address)
             # The CSV reader keeps an empty field as "", where metasalmon's
             # reads it as NA (PARITY.md row 21); a target is built from the
             # suggestion row as R builds it, an empty field missing.
@@ -1148,8 +1210,8 @@ def _package_targets(path: Path, frames: Mapping, top_n: int, source_policy: dic
             for target in targets:
                 target["search_role"] = target.get("dictionary_role")
     blank = _blank_slots(path, frames, queue["suggestions"], code_scope)
-    known = {target["slot_id"] for target in targets}
-    targets.extend(target for target in blank["targets"] if target["slot_id"] not in known)
+    known = {_target_address(target) for target in targets}
+    targets.extend(target for target in blank["targets"] if _target_address(target) not in known)
     if not targets:
         return {"targets": targets, "candidates": [], "failed_sources": [], "not_covered": blank["not_covered"]}
 

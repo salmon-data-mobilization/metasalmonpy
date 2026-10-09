@@ -307,6 +307,98 @@ and moving it is a separate outward act.
   list with no name left is still refused. `tests/test_semantic_closure.py`
   failed before the change.
 
+* **Defects in the review-packet contract are fixed before it ships.** Hub
+  queue item **B-425**, the metasalmonpy half of **B-424**. B-327 found each
+  while porting the contract and reproduced metasalmon's behaviour on purpose,
+  so that the shared conformance fixtures would agree; Brett ruled on
+  2026-09-26 that they be fixed now, in both packages. The vendored fixtures
+  under `tests/data/semantic_review/v1/` are metasalmon's regenerated copies,
+  byte for byte, and each fix is pinned by a test in
+  `tests/test_semantic_review_packet.py` that failed before it.
+
+  1. **The `propose_new_term` alias no longer counts as a downgrade.** The
+     ingest summary counts a downgrade when the recorded decision differs from
+     the one the harness wrote, and it compared the recorded decision with the
+     harness's text lowercased but with the alias unread, so a harness that
+     wrote `propose_new_term` was recorded as `request_new_term`, correctly,
+     and counted as downgraded. That was metasalmon's count, mirrored: R
+     exempted the alias with a named subset that never compared equal. Row
+     validation and the count now read the decision through one helper
+     (`semantic_review_ingest._read_decision()`), and the `row_errors` case
+     records four downgrades where it recorded five.
+  2. **Every role of a code value of a measurement column reaches the packet
+     as its own target.** Discovery gives such a code a constraint, an entity
+     and a method target, and all three write into the code's one `codes.csv`
+     `term_iri`, so they share one slot id. A target unit was keyed by its slot
+     alone, so the three collided: an in-memory `write_semantic_review_packet()`
+     raised *"units must have unique keys"*, and a package path kept only the
+     first role's shortlist, because it took one queued target per slot. A
+     target unit's key is now its slot and its role,
+     `target:<slot_id>|<dictionary_role>` (`semantic_review_packet._target_address()`,
+     metasalmon's `.ms_semantic_review_target_address()`), so every packet
+     holding a target unit has new bytes and a new `packet_id`; bundle keys are
+     unchanged, and `packet_version` stays `semantic-review-packet/1.0`
+     because the contract has not been released and nothing reads a target
+     key back. On a package path the queue now gives one target per slot and
+     role, and blank-slot recovery asks whether each target, not each slot, has
+     a suggestion row, so a role that found nothing at creation is recovered
+     even when another role of its slot has rows; a slot with a recorded
+     decision still recovers nothing. The ingester's rewrite of
+     `semantic_suggestions.csv` replaces rows target by target, so finalizing
+     one role no longer drops another role's rows, whether that role is still
+     awaiting its second pass or was accepted a pass earlier. The vendored
+     schema's `unit_key` description says what a target key holds, and the new
+     shared case `code_roles` pins the in-memory build.
+  3. **`prune=True` warns before it deletes a review record in a package with
+     no shortlist file.** `package_io._warn_pruning_recorded_decisions()`
+     returned early when there was no `semantic_suggestions.csv`, before it
+     asked whether `review/` held an ingested record, as metasalmon's did. A
+     packet that holds only blank slots with no candidates leaves exactly that
+     package: ingesting `review` or `request_new_term` answers for it writes
+     `review/semantic-llm-assessments.csv` and no shortlist file, so a later
+     rewrite with `prune=True` deleted the whole record without a word (raised
+     in the Codex review of pull request #72). The record is now looked for
+     first, whatever the shortlist file's state.
+  4. **Two assessment records concatenate** (this package only). A record from
+     `ingest_semantic_assessments()` or `semantic_llm_assessments(path)`
+     carried its validator findings as a DataFrame in
+     `attrs["semantic_validator_findings"]`, and `pd.concat()` compares its
+     inputs' `attrs` whenever every input has some: a DataFrame has no truth
+     value, so concatenating two records, from two sessions or two packages,
+     raised `ValueError` -- the hazard B-370 removed from the retriever. The
+     findings now ride there column by column, as
+     `DataFrame.to_dict("list")` renders them
+     (`semantic_review_ingest.findings_attr()`), so records concatenate, and
+     keep the findings when theirs are equal; `pd.DataFrame()` of the attribute
+     is the findings frame, with its nine columns even when there are none, and
+     the ingest result's `findings` member is the frame itself. metasalmon
+     attaches the findings tibble as an attribute, where nothing compares it,
+     and `PARITY.md` row 65 records the difference. The deprecated
+     `suggest_semantics(llm_assess=True)` still attaches a frame, and goes with
+     it in 0.7.0.
+
+* **A retry query written as a CURIE is recognised as an identifier whatever
+  letters it holds.** Hub queue item **B-381**, the mirror of metasalmon's
+  **B-380**. B-362 ported metasalmon's retry-query classifier with the quirk
+  in its identifier pattern reproduced on purpose: R ended the CURIE in
+  `[^\\s]+`, which its default regular-expression engine reads as "neither a
+  backslash nor the letter s", so `smn:species` and `smn:MeshSize` were
+  lexical queries and `abc:d e` was an identifier, in both packages. metasalmon
+  now ends it in `[^[:space:]]+`, and the port follows in the same shape: the
+  local part negates R's whitespace class as `llm_review.py` already writes it
+  out for the normalizer, not Python's `\S`, which would also refuse the
+  no-break spaces, NEL and U+001C-U+001F that R keeps in a CURIE. Both callers
+  change: the assessment ingester records such a query as
+  `identifier_like_query` and does not issue it (the `retry_dead_ends` case now
+  makes one search call where it made two), and the deprecated in-package
+  retry asks the model for a plain-language replacement query, as it always
+  has for an identifier-like one, instead of searching the CURIE.
+  `tests/data/llm_review/r-retry-query-verdicts.json` is regenerated by running
+  R at metasalmon `0af9ddd`, the B-380 commit, over a corpus that gains five
+  cases (among them `abc:s`, B-380's own case, and a no-break space inside a
+  CURIE, which pins the class against `\S`); the three cases that pinned the
+  quirk flip, and nothing else in the file moves.
+
 * Installation instructions now use the released `v0.5.0` source archive,
   rather than `main`, and explain the difference between a release parity claim
   and unreleased changes. The obsolete claim that no tag packages
