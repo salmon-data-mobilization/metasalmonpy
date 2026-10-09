@@ -561,31 +561,35 @@ def _warn_pruning_recorded_decisions(target: Path, writes) -> None:
     and after the point where anything could be recovered. It is not an error (a
     caller may genuinely want a clean rebuild), but it must never be invisible.
 
-    Retires when the write path preserves ``semantic_suggestions.csv`` across a
-    prune, at which point there is nothing left to warn about.
+    Retires when the write path preserves ``semantic_suggestions.csv`` and a
+    ``review/`` record across a prune, at which point there is nothing left to
+    warn about.
     """
-    suggestions_path = target / "semantic_suggestions.csv"
-    if not suggestions_path.is_file() or suggestions_path in writes:
-        return
-    try:
-        rows = read_sdp_csv(suggestions_path)
-    except Exception:
-        rows = pd.DataFrame()
-    decisions = []
-    if "decision" in rows.columns:
-        decisions = [
-            value
-            for value in rows["decision"].map(
-                lambda entry: "" if pd.isna(entry) else str(entry).strip()
-            )
-            if value and value != "not_selected"
-        ]
     # A semantic review session under ``review/`` is a record too (hub item
     # B-327, mirroring metasalmon's B-326): the packet, the harness's answers
     # and the ingested assessments. ``prune=True`` would delete it just as
-    # silently.
+    # silently. It is asked first and on its own, because it does not depend
+    # on the shortlist file: a packet that held only blank slots with no
+    # candidates leaves a record and no ``semantic_suggestions.csv``, and the
+    # return for a missing shortlist used to come first, so a prune deleted
+    # that record without a word (hub item B-425, the mirror of B-424).
     review_record = target / "review" / "semantic-llm-assessments.csv"
     has_review_record = review_record.is_file()
+    suggestions_path = target / "semantic_suggestions.csv"
+    decisions = []
+    if suggestions_path.is_file() and suggestions_path not in writes:
+        try:
+            rows = read_sdp_csv(suggestions_path)
+        except Exception:
+            rows = pd.DataFrame()
+        if "decision" in rows.columns:
+            decisions = [
+                value
+                for value in rows["decision"].map(
+                    lambda entry: "" if pd.isna(entry) else str(entry).strip()
+                )
+                if value and value != "not_selected"
+            ]
     if not decisions and not has_review_record:
         return
     parts = []

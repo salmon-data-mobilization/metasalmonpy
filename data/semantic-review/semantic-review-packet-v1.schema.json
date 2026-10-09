@@ -153,7 +153,7 @@
       "additionalProperties": false,
       "properties": {
         "unit_kind": { "enum": ["bundle", "target"] },
-        "unit_key": { "type": "string", "description": "bundle:<dataset_id>/<table_id>/<column_name> or target:<slot_id>." },
+        "unit_key": { "type": "string", "description": "bundle:<dataset_id>/<table_id>/<column_name> or target:<slot_id>|<dictionary_role>. A target key names the role because one slot can hold several targets: a code value of a measurement column has a constraint, an entity and a method target for its one term_iri." },
         "dictionary": {
           "type": "object",
           "description": "The dictionary row's context, every key present, null when the row does not carry it or when the target is not a column.",
