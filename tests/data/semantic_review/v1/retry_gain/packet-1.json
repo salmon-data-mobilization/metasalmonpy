@@ -1,6 +1,6 @@
 {
   "packet_version": "semantic-review-packet/1.0",
-  "packet_id": "310ebf2a3857c19ac5502f7d94b23d46332f06d96b79dc8044fa2eb3ba15cad5",
+  "packet_id": "37da6b146927bed60fafb856c50fe5395de5b32c11068763b922028f0962c796",
   "pass": 1,
   "parent_packet_id": null,
   "producer": {
@@ -254,7 +254,7 @@
   "units": [
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/GEAR_TYPE|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/GEAR_TYPE|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",

@@ -16,9 +16,12 @@
 # Then record the commit and R version in the fixture's "provenance" member and
 # in the test module's docstring.
 #
-# Regenerate whenever metasalmon changes one of the three functions; the
-# "curie-lowercase-s", "curie-space-allowed" and "curie-backslash" cases exist
-# to flip the day metasalmon rewrites its bracket expression.
+# Regenerate whenever metasalmon changes one of the three functions. The
+# "curie-*" cases pin the identifier check hub item B-380 fixed, when
+# metasalmon rewrote its bracket expression from [^\\s] (which TRE reads as
+# "neither a backslash nor s") to [^[:space:]]; "curie-nbsp-in-local-part" is
+# why the port negates R's whitespace class rather than using Python's \S.
+# Set METASALMON_COMMIT to the commit the fixture describes.
 suppressPackageStartupMessages(library(jsonlite))
 src <- Sys.getenv("METASALMON_SRC", unset = NA_character_)
 if (!is.na(src) && nzchar(src)) {
