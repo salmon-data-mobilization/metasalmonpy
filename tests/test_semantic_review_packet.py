@@ -673,17 +673,18 @@ def test_an_iri_the_packet_did_not_offer_is_never_applied(tmp_path):
     assert not any(str(text).startswith("NA ") for text in record["llm_rationale"].dropna())
 
 
-def test_an_identifier_like_retry_query_is_not_issued_and_says_why(tmp_path):
-    # retry_dead_ends' README row promises an identifier-like query, but its
-    # "smn:MeshSize" is not one to R: TRE reads `[^\s]` as "neither a backslash
-    # nor s", and "MeshSize" has an s, so the fixture retries it as a lexical
-    # query and records no reason (as this package does, llm_review.py's
-    # _IDENTIFIER_CURIE). This pins decision 12 with a query both read as an
-    # identifier.
+@pytest.mark.parametrize("query", ["smn:MeshSize", "https://w3id.org/smn/MeshSize"])
+def test_an_identifier_like_retry_query_is_not_issued_and_says_why(query, tmp_path):
+    # Decision 12 of the S16 execplan. retry_dead_ends' own query is the CURIE
+    # smn:MeshSize, which its README calls identifier-like; until hub items
+    # B-380 and B-381 it was not one to either package, because R's class
+    # [^\s] excluded the letter s and this package reproduced that. A URL is
+    # identifier-like before and after.
     case = _build_case("retry_dead_ends", tmp_path)
     harness = pd.read_csv(case["case_dir"] / "harness-1.csv", dtype=str, keep_default_na=False)
     harness = harness.replace("", None)
-    harness.loc[harness["column_name"] == "MESH_SIZE", "llm_retry_query"] = "https://w3id.org/smn/MeshSize"
+    assert harness.loc[harness["column_name"] == "MESH_SIZE", "llm_retry_query"].tolist() == ["smn:MeshSize"]
+    harness.loc[harness["column_name"] == "MESH_SIZE", "llm_retry_query"] = query
     calls: list = []
     result = ingest_semantic_assessments(
         case["dict"], assessments=harness, packet_id=case["built"]["packet_id"], review_dir=case["review_dir"],
@@ -712,14 +713,9 @@ def test_error_downgraded_escalated_and_success_rows_carry_identical_names_and_t
     for frame in (result["assessments"], second["assessments"]):
         assert list(frame.columns) == list(LLM_ASSESSMENT_COLUMNS)
     assert dict(result["assessments"].dtypes) == dict(second["assessments"].dtypes)
-    # Copies without attrs: each record carries its findings frame there, and
-    # pd.concat() compares its inputs' attrs (hub B-370).
-    frames = []
-    for frame in (result["assessments"], second["assessments"]):
-        frame = frame.copy()
-        frame.attrs = {}
-        frames.append(frame)
-    rows = pd.concat(frames, ignore_index=True)
+    # The two records concatenate as they are: the findings ride on attrs as
+    # lists, which pd.concat() can compare (hub B-425; a frame there raised).
+    rows = pd.concat([result["assessments"], second["assessments"]], ignore_index=True)
     assert rows["llm_error"].notna().any()
     assert ((rows["llm_decision"] == "request_new_term") & rows["llm_escalated_from"].notna()).any()
     assert (rows["llm_decision"] == "accept").any()
@@ -801,7 +797,8 @@ def test_semantic_llm_assessments_path_reads_the_persisted_record_with_its_findi
     result = ingest_semantic_assessments(str(path), assessments=harness, packet_id=built["packet_id"], search_fn=_no_search, quiet=True)
     record = semantic_llm_assessments(str(path))
     assert _frame_text(record) == _frame_text(result["assessments"])
-    assert list(record.attrs["semantic_validator_findings"].columns) == list(FINDINGS_COLUMNS)
+    assert list(record.attrs["semantic_validator_findings"]) == list(FINDINGS_COLUMNS)
+    assert list(pd.DataFrame(record.attrs["semantic_validator_findings"]).columns) == list(FINDINGS_COLUMNS)
     # The suggestions were rewritten with the assessment columns, and the
     # review console reads them.
     assert "llm_decision" in semantic_suggestions(str(path)).columns
@@ -1703,3 +1700,276 @@ def test_a_package_path_reads_an_empty_suggestion_field_as_missing(tmp_path, mon
     assert targets and all(target["search_role"] == target["dictionary_role"] for target in targets)
     assert all(target["code_value"] is None for target in targets)
     assert None not in roles
+
+
+# -----------------------------------------------------------------------------
+# Follow-ups found while porting the contract (hub item B-425 here, B-424 in
+# metasalmon, B-381 / B-380 for the retry-query classifier). Each test failed
+# before the change it pins.
+# -----------------------------------------------------------------------------
+
+
+def test_the_propose_new_term_alias_is_the_decision_it_names_not_a_downgrade(tmp_path):
+    case = _build_case("target_units", tmp_path)
+    slots = _slots(_read_json(case["built"]["path"]))
+    rows = []
+    for position, slot in enumerate(slots):
+        if position == 0:
+            # The alias in mixed case: read as request_new_term, the harness's own decision.
+            rows.append(
+                _harness_row(slot["target"], llm_decision="Propose_New_Term", llm_confidence=0.6,
+                             llm_rationale="The ontology lacks it.", llm_new_term_label="A new term")
+            )
+        elif position == 1:
+            # A real downgrade, still counted: an accept that selects nothing becomes review.
+            rows.append(_harness_row(slot["target"], llm_decision="accept", llm_confidence=0.8, llm_rationale="No index."))
+        else:
+            rows.append(_harness_row(slot["target"], llm_decision="review", llm_confidence=0.4, llm_rationale="Later."))
+    result = ingest_semantic_assessments(
+        case["dict"], assessments=_harness_frame(rows), packet_id=case["built"]["packet_id"],
+        review_dir=case["review_dir"], search_fn=_no_search, quiet=True,
+    )
+    assert result["summary"]["decisions"]["request_new_term"] == 1
+    assert result["summary"]["errors"] == 0
+    assert result["summary"]["downgrades"] == 1
+
+
+def test_a_code_value_of_a_measurement_column_gets_one_target_unit_per_role_in_memory(tmp_path):
+    # The code_roles case: constraint, entity and method targets that share the
+    # code's one term_iri slot. They used to share one unit key, and the build
+    # raised "units must have unique keys".
+    case = _build_case("code_roles", tmp_path)
+    packet = _read_json(case["built"]["path"])
+    slot_id = "codes.csv|fixture-1/catch/CATCH_COUNT/EST|term_iri"
+    keys = [unit["unit_key"] for unit in packet["units"]]
+    assert keys == [f"target:{slot_id}|{role}" for role in ("constraint", "entity", "method")]
+    slots = _slots(packet)
+    assert [slot["role"] for slot in slots] == ["constraint", "entity", "method"]
+    assert all(slot["target"]["slot_id"] == slot_id for slot in slots)
+    # Each role keeps its own shortlist.
+    iris = [[candidate["iri"] for candidate in slot["candidates"]] for slot in slots]
+    assert iris[2] == [
+        "https://example.org/code-roles/method/visual-estimation",
+        "https://example.org/code-roles/method/expansion",
+    ]
+    assert len({iri for shortlist in iris for iri in shortlist}) == 6
+
+
+def _code_roles_package(path: Path, suggestion_roles=("constraint", "entity"), decision=None) -> Path:
+    """A package whose one column is a coded measurement, as the R twin builds it.
+
+    ``count_flag`` is written as a categorical column, so ``codes.csv`` holds its
+    code ``EST``, and the dictionary is then edited to call the column a
+    measurement, so discovery gives that code a constraint, an entity and a
+    method target in one slot. ``suggestion_roles`` are the roles
+    ``semantic_suggestions.csv`` holds rows for.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        create_sdp(
+            {"catch": pd.DataFrame({"count_flag": pd.Categorical(["EST", "EST", "EST"])})}, path=path,
+            dataset_id="demo-1", table_id="catch", seed_semantics=False, seed_verbose=False,
+            check_updates=False, overwrite=True,
+        )
+    dictionary_path = path / "metadata" / "column_dictionary.csv"
+    dictionary = pd.read_csv(dictionary_path, dtype=str, keep_default_na=False)
+    dictionary.loc[dictionary["column_name"] == "count_flag", "column_role"] = "measurement"
+    dictionary.to_csv(dictionary_path, index=False)
+    rows = []
+    for role in suggestion_roles:
+        for number in (1, 2):
+            rows.append(
+                {
+                    "dataset_id": "demo-1", "table_id": "catch", "column_name": "count_flag", "code_value": "EST",
+                    "dictionary_role": role, "search_role": role, "target_scope": "code",
+                    "target_sdp_file": "codes.csv", "target_sdp_field": "term_iri",
+                    "target_row_key": "demo-1/catch/count_flag/EST", "target_label": "EST",
+                    "search_query": "estimated count", "code_label": "EST",
+                    "label": f"Seeded {role} {number}", "iri": f"https://example.org/seeded/{role}/{number}",
+                    "source": "smn", "ontology": "smn", "role": role, "match_type": "label_exact",
+                    "definition": "A seeded term.", "score": 4.5 if number == 1 else 3.5, "decision": decision,
+                }
+            )
+    pd.DataFrame(rows).to_csv(path / "semantic_suggestions.csv", index=False, na_rep="")
+    return path
+
+
+def _code_role_hits(query, role=None, sources=None, **kwargs):
+    """Answers every retrieval but the method role's, so the code's method target
+    has no candidates and reaches the packet only through recovery."""
+    if role == "method":
+        return pd.DataFrame()
+    if role == "constraint" and query == "estimation flag":
+        return pd.DataFrame(
+            {
+                "label": ["Estimation flag"], "iri": ["https://example.org/code-roles/constraint/flag"],
+                "source": ["smn"], "ontology": ["smn"], "role": [role], "match_type": ["label_exact"],
+                "definition": ["A flag saying a value was estimated."], "score": [4.9],
+            }
+        )
+    return pd.DataFrame(
+        {
+            "label": [f"{role} term {i}" for i in (1, 2)],
+            "iri": [f"https://example.org/code-roles/{role}/{i}" for i in (1, 2)],
+            "source": "smn", "ontology": "smn", "role": role, "match_type": "label_exact",
+            "definition": f"A {role} term.", "score": [4.5, 3.5],
+        }
+    )
+
+
+def _code_slots(packet: dict) -> list:
+    return [slot for slot in _slots(packet) if slot["target"]["target_sdp_file"] == "codes.csv"]
+
+
+def test_a_package_path_gives_every_role_of_a_shared_code_slot_its_own_target(tmp_path):
+    path = _code_roles_package(tmp_path / "code-roles")
+    built = write_semantic_review_packet(str(path), search_fn=_code_role_hits, code_scope="all", quiet=True)
+    slots = _code_slots(_read_json(built["path"]))
+    # The queue shows the constraint and entity rows in one slot; each role is
+    # its own target, re-retrieved with its own shortlist, and the method role,
+    # which has no row, is recovered by discovery. Before: one target, the
+    # first role's.
+    assert sorted(slot["role"] for slot in slots) == ["constraint", "entity", "method"]
+    assert {slot["target"]["slot_id"] for slot in slots} == {"codes.csv|demo-1/catch/count_flag/EST|term_iri"}
+    assert len({slot["unit_key"] for slot in slots}) == 3
+    by_role = {slot["role"]: slot for slot in slots}
+    assert [row["iri"] for row in by_role["constraint"]["candidates"]] == [f"https://example.org/code-roles/constraint/{i}" for i in (1, 2)]
+    assert [row["iri"] for row in by_role["entity"]["candidates"]] == [f"https://example.org/code-roles/entity/{i}" for i in (1, 2)]
+    assert by_role["method"]["candidates"] == []
+
+
+def test_a_slot_with_a_recorded_decision_recovers_no_role(tmp_path):
+    path = _code_roles_package(tmp_path / "code-roles-decided", suggestion_roles=("constraint",), decision="rejected")
+    built = write_semantic_review_packet(str(path), search_fn=_code_role_hits, code_scope="all", quiet=True)
+    assert _code_slots(_read_json(built["path"])) == []
+
+
+def test_finalizing_one_role_of_a_shared_slot_keeps_the_other_roles_rows(tmp_path):
+    path = _code_roles_package(tmp_path / "code-roles-split")
+    built = write_semantic_review_packet(str(path), search_fn=_code_role_hits, code_scope="all", quiet=True)
+    rows = []
+    for slot in _slots(_read_json(built["path"])):
+        target = slot["target"]
+        if target["target_sdp_file"] != "codes.csv":
+            rows.append(_harness_row(target, llm_decision="review", llm_confidence=0.2, llm_rationale="Later."))
+        elif slot["role"] == "constraint":
+            rows.append(_harness_row(target, llm_decision="retry_search", llm_confidence=0.3,
+                                     llm_rationale="Search for the flag.", llm_retry_query="estimation flag"))
+        elif slot["role"] == "entity":
+            rows.append(_harness_row(target, llm_decision="accept", llm_confidence=0.9, llm_selected_candidate_index=1,
+                                     llm_selected_iri=slot["candidates"][0]["iri"], llm_rationale="The first."))
+        else:
+            rows.append(_harness_row(target, llm_decision="request_new_term", llm_confidence=0.6,
+                                     llm_rationale="Nothing was offered.", llm_new_term_label="Estimation method"))
+    first = ingest_semantic_assessments(
+        str(path), assessments=_harness_frame(rows), packet_id=built["packet_id"], search_fn=_code_role_hits, quiet=True
+    )
+    assert first["status"] == "awaiting_pass_2"
+    # At pass 1 the entity's merged rows are written and the constraint's rows,
+    # which await their second pass, are left as they were.
+    after_1 = semantic_suggestions(str(path))
+    after_1 = after_1[after_1["target_sdp_file"] == "codes.csv"]
+    assert set(after_1.loc[after_1["dictionary_role"] == "constraint", "iri"]) == {
+        f"https://example.org/seeded/constraint/{i}" for i in (1, 2)
+    }
+    assert (after_1.loc[after_1["dictionary_role"] == "entity", "llm_selected"].astype(str) == "TRUE").any()
+
+    pass_2 = _read_json(first["next_packet"])
+    constraint = [slot for slot in _slots(pass_2) if slot["reassess"]][0]
+    assert constraint["role"] == "constraint"
+    flag = [row["iri"] for row in constraint["candidates"]].index("https://example.org/code-roles/constraint/flag") + 1
+    second = ingest_semantic_assessments(
+        str(path),
+        assessments=_harness_frame([
+            _harness_row(constraint["target"], llm_decision="accept", llm_confidence=0.9,
+                         llm_selected_candidate_index=flag, llm_selected_iri="https://example.org/code-roles/constraint/flag",
+                         llm_rationale="The flag.")
+        ]),
+        packet_id=pass_2["packet_id"], search_fn=_no_search, quiet=True,
+    )
+    assert second["status"] == "complete"
+    # Both accepted roles' rows survive the pass-2 rewrite; slot by slot, the
+    # constraint's rewrite dropped the entity's accepted rows.
+    after_2 = semantic_suggestions(str(path))
+    after_2 = after_2[after_2["target_sdp_file"] == "codes.csv"]
+    selected = after_2[after_2["llm_selected"].astype(str) == "TRUE"]
+    assert set(selected["dictionary_role"]) == {"constraint", "entity"}
+    assert "https://example.org/code-roles/constraint/flag" in set(selected["iri"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        review = review_semantics(str(path)).rows
+    assert set(review.loc[review["target_file"] == "codes.csv", "role"]) == {"constraint", "entity"}
+
+
+def test_prune_warns_about_a_review_record_even_when_the_package_has_no_shortlist_file(tmp_path, monkeypatch):
+    # A packet holding only blank slots with no candidates: ingesting review and
+    # request_new_term answers writes the record and no semantic_suggestions.csv,
+    # and the prune warning used to return early for a missing shortlist file
+    # before it asked about review/, so the rewrite deleted the record silently.
+    frames = {"catch": pd.DataFrame({"catch_weight": [12.5, 8.1, 20.4]})}
+    path = _package(tmp_path / "prune-no-shortlist", frames, _nothing, monkeypatch, "catch")
+    built = write_semantic_review_packet(str(path), search_fn=_nothing, quiet=True)
+    rows = []
+    for position, slot in enumerate(_slots(_read_json(built["path"]))):
+        if position == 0:
+            rows.append(_harness_row(slot["target"], llm_decision="request_new_term", llm_confidence=0.6,
+                                     llm_rationale="Nothing was offered.", llm_new_term_label="Catch weight"))
+        else:
+            rows.append(_harness_row(slot["target"], llm_decision="review", llm_confidence=0.3, llm_rationale="Later."))
+    ingest_semantic_assessments(
+        str(path), assessments=_harness_frame(rows), packet_id=built["packet_id"], search_fn=_no_search, quiet=True
+    )
+    assert (path / "review" / "semantic-llm-assessments.csv").is_file()
+    assert not (path / "semantic_suggestions.csv").exists()
+    package = read_salmon_datapackage(str(path))
+    with pytest.warns(UserWarning, match="review/, which holds an ingested semantic review record"):
+        write_salmon_datapackage(
+            resources=package["resources"], dataset_meta=package["dataset"], table_meta=package["tables"],
+            dict_df=package["dictionary"], codes=package["codes"], path=path, overwrite=True, prune=True,
+        )
+    # The warning does not stop the prune.
+    assert not (path / "review").exists()
+
+
+def test_two_records_concatenate_and_keep_their_findings_only_when_they_agree(tmp_path, monkeypatch):
+    # Each record carried its findings DataFrame in attrs, and pd.concat()
+    # compares its inputs' attrs whenever every input has some: a DataFrame has
+    # no truth value (and two of different lengths cannot be compared at all),
+    # so no two records concatenated -- the hazard hub B-370 removed from the
+    # retriever. The findings now ride column by column (B-425).
+    downgraded = [_build_case("bundle_downgrade", tmp_path / name) for name in ("a", "b")]
+    results = [
+        ingest_semantic_assessments(
+            case["dict"], assessments=str(case["case_dir"] / "harness-1.csv"), review_dir=case["review_dir"],
+            search_fn=_no_search, quiet=True,
+        )
+        for case in downgraded
+    ]
+    accepted = _build_case("bundle_accept", tmp_path / "c")
+    clean = ingest_semantic_assessments(
+        accepted["dict"], assessments=str(accepted["case_dir"] / "harness-1.csv"), review_dir=accepted["review_dir"],
+        search_fn=_no_search, quiet=True,
+    )
+    first = results[0]["assessments"]
+    assert len(results[0]["findings"]) > 0 and len(clean["findings"]) == 0
+    # The attribute is the findings frame, column by column.
+    assert _frame_text(pd.DataFrame(first.attrs["semantic_validator_findings"])) == _frame_text(results[0]["findings"])
+    assert list(pd.DataFrame(clean["assessments"].attrs["semantic_validator_findings"]).columns) == list(FINDINGS_COLUMNS)
+    # Equal findings concatenate and are kept; different ones concatenate and
+    # are dropped, as pandas drops any attrs its inputs disagree on.
+    both = pd.concat([first, results[1]["assessments"]], ignore_index=True)
+    assert len(both) == 2 * len(first)
+    assert both.attrs["semantic_validator_findings"] == first.attrs["semantic_validator_findings"]
+    mixed = pd.concat([first, clean["assessments"]], ignore_index=True)
+    assert "semantic_validator_findings" not in mixed.attrs
+    # So do the records two packages hold.
+    records = []
+    for name in ("one", "two"):
+        path = _spawners_package(tmp_path, monkeypatch, name)
+        built = write_semantic_review_packet(str(path), search_fn=_hits, quiet=True)
+        ingest_semantic_assessments(
+            str(path), assessments=_answer_every_slot(built["path"]), packet_id=built["packet_id"],
+            search_fn=_no_search, quiet=True,
+        )
+        records.append(semantic_llm_assessments(str(path)))
+    assert len(pd.concat(records, ignore_index=True)) == sum(len(record) for record in records)

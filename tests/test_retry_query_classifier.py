@@ -8,14 +8,17 @@ and ``.ms_llm_classify_retry_query()`` (``R/llm-semantic-helpers.R``).
 Every verdict in ``tests/data/llm_review/r-retry-query-verdicts.json`` comes
 from **running** R, not from reading it: ``r-retry-query-verdicts.R`` drove the
 three functions over ``retry-query-corpus.json`` under R 4.5.2 in a UTF-8
-locale, with metasalmon loaded from a read-only export of ``main`` at
-``98cb9e6`` (2026-09-25). Two of R's verdicts are surprising and are pinned on
-purpose, because the record needs one answer in both packages:
+locale, with metasalmon loaded from the hub item B-424 worktree at ``0af9ddd``
+(2026-09-26), the commit that fixed R's identifier pattern (hub B-380). Until
+then it ended in ``[^\\s]+`` under TRE, whose bracket expressions have no
+escapes, so it read "neither a backslash nor the letter s": ``abc:d e`` was
+identifier-like and ``smn:species`` was not, and B-362 reproduced that here on
+purpose. The pattern is now ``[^[:space:]]+``, and B-381 retired the
+reproduction. The ``curie-*`` cases pin the new verdicts, and
+``curie-nbsp-in-local-part`` pins that the port negates R's whitespace class
+rather than using Python's ``\\S``. One of R's verdicts is still surprising and
+is pinned on purpose, because the record needs one answer in both packages:
 
-* R's identifier pattern ends in ``[^\\s]+`` under TRE, whose bracket
-  expressions have no escapes, so it reads "neither a backslash nor the letter
-  s". ``abc:d e`` is therefore identifier-like and ``smn:species`` is not.
-  The port reproduces that, and says what retires it, in ``llm_review.py``.
 * ``trimws()`` strips only space, tab, CR and LF, so a lone vertical tab
   survives the emptiness check and collapses to an *empty usable* query.
 
@@ -76,7 +79,7 @@ def test_normalizer_and_identifier_check_give_metasalmons_verdict(case):
 
 def test_fixture_provenance_is_recorded():
     provenance = R_VERDICTS["provenance"]
-    assert provenance["metasalmon_commit"] == "98cb9e6"
+    assert provenance["metasalmon_commit"] == "0af9ddd"
     assert provenance["r_version"].startswith("R version 4.5.2")
 
 

@@ -1585,11 +1585,13 @@ _R_TRIMWS_CHARS = " \t\r\n"
 # a UTF-8 locale (metasalmon main @ 98cb9e6): the ASCII whitespace plus the
 # Unicode spaces ``iswspace()`` accepts. Python's ``\s`` is wider -- it also
 # swallows U+001C-U+001F, NEL (U+0085) and the no-break spaces U+00A0, U+2007
-# and U+202F -- so the class is written out rather than borrowed.
-_R_WHITESPACE_RUN = re.compile(
-    "[\\t\\n\\x0b\\x0c\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a"
-    "\\u2028\\u2029\\u205f\\u3000]+"
+# and U+202F -- so the class is written out rather than borrowed. It is R's
+# ``[[:space:]]``, and the identifier check below negates the same class.
+_R_WHITESPACE_CLASS = (
+    "\\t\\n\\x0b\\x0c\\r \\u1680\\u2000-\\u2006\\u2008-\\u200a"
+    "\\u2028\\u2029\\u205f\\u3000"
 )
+_R_WHITESPACE_RUN = re.compile("[" + _R_WHITESPACE_CLASS + "]+")
 
 # R's ``tolower()`` folds non-ASCII letters by locale, so the same pair of
 # queries can be a duplicate in one locale and not in another. The ruled
@@ -1600,17 +1602,21 @@ _ASCII_LOWER = str.maketrans(
 )
 
 _IDENTIFIER_SCHEME_PREFIX = re.compile(r"(?:https?://|urn:|doi:)", re.IGNORECASE)
-# R's second alternative is ``^[A-Za-z][A-Za-z0-9._+-]*:[^\\s]+$``, compiled
-# by TRE, whose bracket expressions have no escapes: ``[^\s]`` there means
-# "neither a backslash nor the letter s", not "non-whitespace". So after the
-# colon R wants one or more characters other than ``\`` and ``s``; a space is
-# allowed and ``smn:species`` is not identifier-like. Measured, not read
-# (``abc:d e`` is TRUE, ``abc:s`` is FALSE, ``abc:S`` is TRUE), and reproduced
-# here on purpose, because the review record needs one verdict in both
-# packages. *Retires when* metasalmon rewrites that class as ``[^[:space:]]``
-# or compiles it with ``perl = TRUE``: this class then becomes ``\S`` in the
-# same stream, and the R-computed fixture flips with it.
-_IDENTIFIER_CURIE = re.compile(r"[A-Za-z][A-Za-z0-9._+-]*:[^\\s]+")
+# R's second alternative is ``^[A-Za-z][A-Za-z0-9._+-]*:[^[:space:]]+$``: a
+# CURIE is identifier-like whatever letters it holds, and whitespace ends it
+# (metasalmon hub item B-380). The local part here negates R's
+# ``[[:space:]]`` as written out above, not Python's ``\S``: the query is
+# normalized first, so the only R whitespace left in it is a single space,
+# and ``\S`` would also refuse the no-break spaces, NEL and U+001C-U+001F,
+# which R keeps in a CURIE. Until B-380 R's class was ``[^\s]``, which TRE
+# reads as "neither a backslash nor the letter s", and this package reproduced
+# that on purpose under B-362 so the review record had one verdict in both
+# packages; B-381 retired the reproduction with R's fix, and
+# ``tests/data/llm_review/r-retry-query-verdicts.json`` was regenerated
+# against it.
+_IDENTIFIER_CURIE = re.compile(
+    "[A-Za-z][A-Za-z0-9._+-]*:[^" + _R_WHITESPACE_CLASS + "]+"
+)
 
 
 def _first_scalar(value):

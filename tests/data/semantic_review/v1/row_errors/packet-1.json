@@ -1,6 +1,6 @@
 {
   "packet_version": "semantic-review-packet/1.0",
-  "packet_id": "22f9577857952c324cf03c8c9b58c5b534a7e6d7df2950b694ae304b17721314",
+  "packet_id": "acbaf8ac8b7b4c8b687a675a7605b3bbdeec7556fe5221e7d24063a995686fb5",
   "pass": 1,
   "parent_packet_id": null,
   "producer": {
@@ -254,7 +254,7 @@
   "units": [
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_01|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_01|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -364,7 +364,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_02|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_02|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -474,7 +474,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_03|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_03|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -584,7 +584,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_04|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_04|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -694,7 +694,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_05|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_05|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -804,7 +804,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_06|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_06|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -914,7 +914,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_07|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_07|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -1024,7 +1024,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_08|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_08|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -1134,7 +1134,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_09|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_09|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -1244,7 +1244,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_10|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_10|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -1354,7 +1354,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_11|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_11|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -1464,7 +1464,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_12|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_12|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -1574,7 +1574,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_13|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_13|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -1684,7 +1684,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_14|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_14|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
@@ -1794,7 +1794,7 @@
     },
     {
       "unit_kind": "target",
-      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_15|term_iri",
+      "unit_key": "target:column_dictionary.csv|fixture-1/catch/FIELD_15|term_iri|variable",
       "dictionary": {
         "dataset_id": "fixture-1",
         "table_id": "catch",
