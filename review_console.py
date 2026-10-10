@@ -592,7 +592,7 @@ def review_semantics(
     suggestions carry a model's assessment -- ingested from your own harness by
     :func:`~metasalmonpy.ingest_semantic_assessments`, or made by the deprecated
     ``llm_assess=True`` -- this shows it, an accept under the candidate it chose
-    and any other decision once for the slot; it never generates one.
+    and any other decision once per slot and role; it never generates one.
 
     Parameters
     ----------
@@ -638,12 +638,15 @@ def _review_place_llm_verdicts(queue: dict):
     every candidate in the slot, and the person confirming it could not tell
     which one it meant. So an accept stays on the selected candidate's row and
     is cleared from the others. Any other decision judges the whole shortlist,
-    stays on every row, and is printed once for the slot. Suggestions with no
+    stays on every row, and is printed once for its target. Suggestions with no
     ``llm_selected`` column, and an accept none of whose candidates is
-    selected, are left as they came.
+    selected, are left as they came. A verdict belongs to a target, a slot and
+    role, not to the slot: a measurement column's code carries its constraint,
+    entity and method targets in one ``codes.csv`` slot, each judged on its own.
 
     Returns the rows and, aligned with them, which row is an accepted
-    candidate: the one row per slot that stays shown past ``max_candidates``.
+    candidate: the one row per target that stays shown past
+    ``max_candidates``.
     """
     from .semantic_review_packet import _flag
 
@@ -659,8 +662,9 @@ def _review_place_llm_verdicts(queue: dict):
         index=rows.index,
     )
     accepted = rows["llm_decision"].map(_text).eq("accept")
+    target = rows["slot_id"].map(_text) + "|" + rows["role"].map(_text)
     chosen = accepted & selected
-    clear = accepted & ~selected & rows["slot_id"].isin(set(rows.loc[chosen, "slot_id"]))
+    clear = accepted & ~selected & target.isin(set(target[chosen]))
     if clear.any():
         rows.loc[clear, ["llm_decision", "llm_rationale"]] = ""
         rows.loc[clear, "llm_confidence"] = float("nan")
@@ -1210,15 +1214,27 @@ def _render_review_lines(review: SemanticReview, object_name: str) -> list:
                     "   DECIDED: reject (clears the field)"
                     + (f" — {reason}" if reason else "")
                 )
-        # A model's decision other than accept judges the whole shortlist, so
-        # it is printed once, here, rather than under every candidate; an
-        # accept is printed under the one candidate it chose.
+        # A model's decision other than accept judges its target's whole
+        # shortlist, so it is printed once, here, rather than under every
+        # candidate; an accept is printed under the one candidate it chose. A
+        # slot can hold several targets, one per role (a measurement column's
+        # code has constraint, entity and method), each with its own verdict,
+        # so each is printed and, when the slot has more than one role, names
+        # its role.
+        row_roles = list(slot_rows["role"].map(_text))
         verdicts = slot_rows[slot_rows["llm_decision"].map(_text) != ""]
-        slot_verdict = not verdicts.empty and not (
-            verdicts["llm_decision"].map(_text).eq("accept").any()
-        )
-        if slot_verdict:
-            lines.extend(_review_llm_lines(verdicts.iloc[0], "   llm:     "))
+        verdict_roles = verdicts["role"].map(_text)
+        verdict_decisions = verdicts["llm_decision"].map(_text)
+        shortlist_roles = [
+            role
+            for role in dict.fromkeys(verdict_roles)
+            if not verdict_decisions[verdict_roles == role].eq("accept").any()
+        ]
+        several_roles = len(set(row_roles)) > 1
+        for role in shortlist_roles:
+            verdict = verdicts[verdict_roles == role].iloc[0]
+            lead = "   llm:     " + (f"{role}: " if several_roles else "")
+            lines.extend(_review_llm_lines(verdict, lead))
         lines.append("")
 
         for position in range(len(slot_rows)):
@@ -1241,7 +1257,9 @@ def _render_review_lines(review: SemanticReview, object_name: str) -> list:
                     candidate["iri"], candidate["source"], candidate["ontology"]
                 )
             )
-            if not slot_verdict and _text(candidate["llm_decision"]):
+            if row_roles[position] not in shortlist_roles and _text(
+                candidate["llm_decision"]
+            ):
                 lines.extend(_review_llm_lines(candidate, "       llm: "))
             # A call is printed only where it runs. A candidate whose IRI names
             # no term is here only to carry a recorded reject, or because the

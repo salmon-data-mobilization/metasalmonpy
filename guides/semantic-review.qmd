@@ -64,7 +64,7 @@ review
 `suggest_semantics()` / `create_sdp()` already produced. Where those suggestions
 carry a model's assessment, ingested from [your own harness](#have-your-own-harness-judge-the-shortlists),
 it shows it: an accept under the candidate it chose, any other decision once
-for the slot. It never generates one.
+per slot and role. It never generates one.
 
 `review_semantics()` accepts a written package path, a dictionary carrying the
 attribute, or the mapping `infer_salmon_datapackage_artifacts()` returns.

@@ -2756,6 +2756,72 @@ def test_suggestions_with_no_selection_flag_keep_the_verdict_on_every_candidate(
     assert list(review.rows["llm_decision"]) == ["accept", "accept"]
 
 
+def _code_verdict_dictionary(verdicts, selected=(False, False, False)):
+    """One code of a measurement column, its three targets in one slot.
+
+    Codex review of metasalmon pull request 275: a harness judges each target
+    on its own, and the console printed the slot's first verdict alone, so a
+    ``review`` for the constraint hid a ``request_new_term`` for the entity.
+    metasalmon's twins are the tests of the same names in
+    tests/testthat/test-review-console.R.
+    """
+    rows = [
+        _suggestion_row(
+            code_value="-9",
+            dictionary_role=role,
+            target_scope="code",
+            target_sdp_file="codes.csv",
+            target_sdp_field="term_iri",
+            target_row_key="demo-1/spawners/spawner_count/-9",
+            label=f"{role} term",
+            iri=f"https://example.org/{role}/-9",
+            llm_decision=decision,
+            llm_confidence=0.5,
+            llm_rationale=f"Why {role} got {decision} .",
+            llm_selected=chosen,
+        )
+        for role, decision, chosen in zip(("constraint", "entity", "method"), verdicts, selected)
+    ]
+    return _dictionary_with(rows)
+
+
+def test_each_target_in_a_shared_code_slot_shows_its_own_verdict():
+    lines = review_semantics(
+        _code_verdict_dictionary(("review", "request_new_term", "retry_search"))
+    ).render_lines("review")
+    assert [line for line in lines if "llm:" in line] == [
+        "   llm:     constraint: review (confidence 0.5)",
+        "   llm:     entity: request_new_term (confidence 0.5)",
+        "   llm:     method: retry_search (confidence 0.5)",
+    ]
+    assert lines.index("   llm:     method: retry_search (confidence 0.5)") < _line_of(lines, 1)
+    for role in ("constraint", "entity", "method"):
+        assert sum(f"Why {role} got" in line for line in lines) == 1, role
+
+
+def test_an_accept_in_a_shared_code_slot_leaves_its_siblings_verdicts_shown_once():
+    lines = review_semantics(
+        _code_verdict_dictionary(("review", "accept", "request_new_term"), selected=(False, True, False))
+    ).render_lines("review")
+    assert [line for line in lines if "llm:" in line] == [
+        "   llm:     constraint: review (confidence 0.5)",
+        "   llm:     method: request_new_term (confidence 0.5)",
+        "       llm: accept (confidence 0.5)",
+    ]
+    entity = next(i for i, line in enumerate(lines) if line.startswith("  ") and "entity term" in line)
+    assert lines.index("       llm: accept (confidence 0.5)") > entity
+
+
+def test_an_accept_is_placed_per_target_not_per_slot():
+    # Two targets in one slot both accepted, one with its candidate flagged and
+    # one with none: the second is left as it came, not cleared because its
+    # sibling's choice is known.
+    review = review_semantics(
+        _code_verdict_dictionary(("accept", "accept", "review"), selected=(True, False, False))
+    )
+    assert list(review.rows["llm_decision"]) == ["accept", "accept", "review"]
+
+
 def test_after_ingest_the_console_shows_a_harness_accept_under_its_candidate(tmp_path, monkeypatch):
     # A package path reads the selection flag back from
     # semantic_suggestions.csv as the text TRUE or FALSE.

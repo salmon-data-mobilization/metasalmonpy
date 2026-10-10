@@ -235,14 +235,16 @@ and moving it is a separate outward act.
 ### Fixed
 
 * **`review_semantics()` shows a model's accept under the candidate it chose,
-  and any other decision once for the slot.** An assessment is one row per
+  and any other decision once per slot and role.** An assessment is one row per
   target, and merging it into the suggestions copies its decision, confidence
   and rationale onto every candidate, with only `llm_selected` saying which
   candidate an accept chose. The console printed `llm: accept` under every
   candidate in the slot, so whoever confirmed a harness's accept of candidate 2
   could not tell which candidate it meant. The accept now stays on the chosen
   candidate, which stays in view past `max_candidates`, and any other decision
-  prints once, under `current:`, because it judges the whole shortlist.
+  prints once, under `current:`, because it judges the whole shortlist. A
+  measurement column's code holds its constraint, entity and method targets in
+  one slot, and each target's verdict prints on its own line, naming its role.
   Suggestions without an `llm_selected` column print as before. And when a
   packet's retrieval finds nothing for a slot, the slot's earlier rows, which
   an import keeps since #110, now carry the assessment just imported rather
