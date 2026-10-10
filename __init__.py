@@ -6,7 +6,7 @@ infer dictionaries, validate metadata, search ontology terms, and build/read
 Frictionless-style Salmon Data Packages.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 from .catalogue_discovery import capture_catalogue_query
 from .dictionary import (

@@ -5,8 +5,8 @@ description: "Understand the shared metasalmon contract and Python-native differ
 
 ## Compatibility target
 
-metasalmonpy 0.5.0 aligns its core user-facing behavior with metasalmon
-0.5.0. The R package remains the normative Salmon Data Package and ontology
+metasalmonpy 0.6.0 aligns its core user-facing behavior with metasalmon
+0.6.0. The R package remains the normative Salmon Data Package and ontology
 contract. Parity means equivalent workflows and safety behavior, not
 line-for-line implementations.
 

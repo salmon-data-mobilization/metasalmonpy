@@ -28,17 +28,19 @@ violation like a failing test.
    matches the metasalmon version whose functionality it actually delivers.
    When a metasalmon release ships, mirror the work and bump this package to
    the same number.
-3. **Current honest state:** this package is at **0.5.0** and metasalmon is at
-   **0.5.0** (tagged `v0.5.0`, released 2026-08-25), so **no catch-up window is
-   open.** The `0.4.0 → 0.5.0` window (roadmap stream S5) closed 2026-09-16, by
+3. **Current honest state:** this package is at **0.6.0** and metasalmon is at
+   **0.6.0**, measured 2026-10-15, so **no catch-up window is open.** 0.6.0
+   (S16 step 1) was ruled a joint release, so both numbers moved together and
+   no window opened; the `v0.6.0` tags are Brett's, here through the Release
+   workflow on the bump merge. The `0.4.0 → 0.5.0` window (roadmap stream S5) closed 2026-09-16, by
    hub queue **B-153**; the earlier `0.2.2 → 0.4.0` one (S10 plus the S3
    KNB-environment feature 0.4.0 added after every S10 chunk was written) closed
    2026-08-24. This package's version stays at the last delivered milestone
    until the next one lands — do **not** bump the number ahead of the
    functionality (Brett's decision, 2026-08-13: bump on parity, not on calendar).
-   The tree reads 0.5.0, and measured 2026-09-24 the newest tag here is
-   `v0.5.0`: annotated, on the bump merge `67fb486`, made that day by the
-   Release workflow together with its GitHub Release.
+   For 0.5.0 the tree read 0.5.0 from 2026-09-16, and measured 2026-09-24 the
+   newest tag here was `v0.5.0`: annotated, on the bump merge `67fb486`, made
+   that day by the Release workflow together with its GitHub Release.
 
    **That window was closed in two halves, and recording both is the point,
    because the second half is the one that gets skipped.** The behavioural half
