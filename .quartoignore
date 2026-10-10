@@ -1,7 +1,3 @@
-# Exclude entire data/ontology folder
-/data/ontology/
-data/ontology/
-
 # Exclude entire docs folder
 /docs/
 docs/

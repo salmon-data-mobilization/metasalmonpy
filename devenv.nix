@@ -28,7 +28,6 @@ in {
       requirements = ''
         pandas
         rdflib
-        pre-commit
       '';
     };
   };
@@ -79,9 +78,6 @@ in {
     echo "For project-specific / long-tail R packages, use {renv}:"
     echo "  - In R: renv::init()      # once per project"
     echo "  - Then: renv::restore()   # on new machines"
-    echo ""
-    echo "To set up pre-commit hooks:"
-    echo "  pre-commit install"
     echo ""
     echo "To preview the Quarto site:"
     echo "  quarto preview"
