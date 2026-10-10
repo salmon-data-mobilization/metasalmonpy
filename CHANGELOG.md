@@ -234,6 +234,22 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **The deprecated in-package model call reads a candidate index as metasalmon
+  does.** Hub **B-361** fixed two ways metasalmon's assessment validator
+  mangled a model's answer and recorded no metasalmonpy half for them, but
+  `llm_review._validate_item()` carried both; the 0.6.0 parity audit found
+  them. A decision other than `accept` now has its index cleared before the
+  range check, so a `reject_shortlist` carrying a stray out-of-range index
+  stays a rejection and escalates to `request_new_term`, where it became
+  `review` and surfaced no ontology gap. An index that is not a whole number is
+  refused rather than truncated: `1.9` selected candidate 1, and now the
+  target is recorded as an error row. `2`, `"2"` and `2.0` still select
+  candidate 2, and an index that is not a number at all reads as no selection,
+  as it does in metasalmon, where it failed the assessment before.
+  `tests/test_llm_assessment_validation.py`, the twin of metasalmon's tests for
+  these two points, failed before the change. The path leaves in 0.7.0; this
+  is a port of ruled behaviour, without a new parity-register difference.
+
 * **NuSEDS crosswalk-filled code terms now appear in `review_semantics()` with
   ranked alternatives when semantic seeding retrieves candidates** (hub queue
   item **B-426**, the mirror of metasalmon's **B-120**). The crosswalk wrote a

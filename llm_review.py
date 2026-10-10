@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import html
 import json
+import math
 import os
 import random
 import re
@@ -1221,18 +1222,36 @@ def _validate_item(item, candidates: pd.DataFrame, role: str) -> dict:
                 f"Unknown selected_candidate_id for role {role}: {selected_id}"
             )
         selected_index = matching[0]
+    # The index is read as a number and made an integer only once it has
+    # passed the whole-number and range checks below: int() truncates, which
+    # let 1.9 select candidate 1 (hub B-361, defect 3, as metasalmon's
+    # .ms_validate_llm_assessment() reads it). A value that is not a number at
+    # all reads as missing, meaning no candidate was selected.
+    number = None
     if selected_index is not None and not _missing(selected_index):
         try:
-            selected_index = int(selected_index)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("selected_candidate_index must be an integer.") from exc
-        if selected_index < 1 or selected_index > len(candidates):
-            decision = "review"
-            selected_index = None
-    else:
-        selected_index = None
-    if decision == "accept" and selected_index is None:
+            number = float(selected_index)
+        except (TypeError, ValueError):
+            number = None
+        if number is not None and math.isnan(number):
+            number = None
+    if decision == "accept" and number is None:
         decision = "review"
+    if decision != "accept":
+        # These decisions never select a candidate, so the index is cleared
+        # before it is range-checked: a reject_shortlist carrying a stray
+        # out-of-range index used to become review here and lose its
+        # escalation (hub B-361, defect 2).
+        selected_index = None
+    elif math.isfinite(number) and number != math.trunc(number):
+        raise ValueError(
+            f"selected_candidate_index must be a whole number, not {number!r}."
+        )
+    elif number < 1 or number > len(candidates):
+        decision = "review"
+        selected_index = None
+    else:
+        selected_index = int(number)
 
     confidence = item.get("confidence")
     try:
