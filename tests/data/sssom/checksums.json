@@ -5,14 +5,14 @@
     "gaps.sssom.tsv": "6e4f0263f56c13d20cebde99402e41cb91f34b276f98aa0a7aa44c2113788370"
   },
   "canonical": {
-    "psc-to-gcdfo.sssom.tsv": "ea76e0336dd563ae5203321d012013b13ff3e26adce63da5be370faef122bdde",
-    "multi-sort.sssom.tsv": "31f361c211757b5c343d954f3509e532d9a281b8fb2af71514ce1599593d0246",
-    "gaps.sssom.tsv": "d9e4f2c8d88b813199d6d5b85c30507a41244706ea5c42af9bc3e7d6081b3312"
+    "psc-to-gcdfo.sssom.tsv": "107fe1b18b1b9e044ab5996cea1ad51a5f97b8698b579cffcfe7443f2340a2a6",
+    "multi-sort.sssom.tsv": "499775c73522974c0bf81b693851e637064989baf274fd104fa3e3e0e6b43349",
+    "gaps.sssom.tsv": "8428d3c13ff2063885a07f402cc368aa888efe28f0c64a6c2fb56f93c85c7da4"
   },
   "r_sdp_semantic": {
-    "gaps.sssom.tsv": "d9e4f2c8d88b813199d6d5b85c30507a41244706ea5c42af9bc3e7d6081b3312",
-    "mapping-sets.json": "002dc3a5259948182d2e49f67379049ef31cc36f4b9edd14d493b5d35b46f942",
-    "multi-sort.sssom.tsv": "31f361c211757b5c343d954f3509e532d9a281b8fb2af71514ce1599593d0246",
-    "psc-to-gcdfo.sssom.tsv": "ea76e0336dd563ae5203321d012013b13ff3e26adce63da5be370faef122bdde"
+    "gaps.sssom.tsv": "8428d3c13ff2063885a07f402cc368aa888efe28f0c64a6c2fb56f93c85c7da4",
+    "mapping-sets.json": "6288f880ae61defb11ede02a6ad3c85881307b504d6041f5856e4b417d6bb45d",
+    "multi-sort.sssom.tsv": "499775c73522974c0bf81b693851e637064989baf274fd104fa3e3e0e6b43349",
+    "psc-to-gcdfo.sssom.tsv": "107fe1b18b1b9e044ab5996cea1ad51a5f97b8698b579cffcfe7443f2340a2a6"
   }
 }

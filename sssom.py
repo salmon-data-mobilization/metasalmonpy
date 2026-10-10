@@ -7,12 +7,13 @@ profile: approved mapping sets go in; no mappings are inferred from semantic
 suggestions, dictionary literals, or component columns.
 
 Byte-parity contract: ``_canonical_bytes`` must produce output byte-identical
-to metasalmon's ``.ms_sssom_canonical_bytes`` for the same mapping set —
-deterministic UTF-8, LF-only, trailing-LF TSV with radix-sorted (C-collation)
-curie-map header lines and mapping rows. Python's default ``sorted()`` on
-``str`` compares Unicode code points, which matches R's radix (C locale,
-UTF-8 byte) order for all of Unicode, so no locale machinery is needed and
-``locale.strxfrm`` stays banned.
+to metasalmon's ``.ms_sssom_canonical_bytes`` for the same mapping set: the
+canonical SSSOM/TSV format (hub B-350 there, B-351 here), as deterministic
+UTF-8, LF-only, trailing-LF bytes with radix-sorted (C-collation) curie-map
+lines and mapping rows. Python's default ``sorted()`` on ``str`` compares
+Unicode code points, which matches R's radix (C locale, UTF-8 byte) order for
+all of Unicode, so no locale machinery is needed and ``locale.strxfrm`` stays
+banned.
 
 The embedded metadata header is parsed with a restricted YAML-subset parser
 (scalars, one-level block mappings, block sequences) rather than a full YAML
@@ -49,11 +50,18 @@ _REQUIRED_METADATA = (
     "subject_source_version",
     "object_source",
     "object_source_version",
-    "curie_map",
 )
 
+# The order of the MappingSet class's slots in the SSSOM schema, which is the
+# order of the "Slots" table the canonical SSSOM/TSV format writes them in, so
+# ``curie_map`` is second. Source: ``classes: mapping set: slots:`` in
+# https://github.com/mapping-commons/sssom/blob/667d3c579d92ad2e1a480503625eeef1e6af8e6d/src/sssom_schema/schema/sssom_schema.yaml
+# (``mappings`` and ``extension_definitions`` are left out: the first is the
+# TSV table, and this profile supports no extension slots). Mirrors
+# ``.ms_sssom_metadata_order``; hub B-351, the mirror half of B-350.
 _METADATA_ORDER = (
     "sssom_version",
+    "curie_map",
     "mapping_set_id",
     "mapping_set_version",
     "mapping_set_source",
@@ -88,8 +96,31 @@ _METADATA_ORDER = (
     "issue_tracker",
     "other",
     "comment",
-    "curie_map",
 )
+
+# The MappingSet slots the same schema marks ``multivalued``. In memory each
+# holds one string with its values joined by ``|``, the encoding the reader
+# gives a YAML sequence; the canonical writer turns it back into a block
+# sequence. Mirrors ``.ms_sssom_multivalued_metadata``.
+_MULTIVALUED_METADATA = (
+    "mapping_set_source",
+    "creator_id",
+    "creator_label",
+    "cardinality_scope",
+    "subject_match_field",
+    "object_match_field",
+    "subject_preprocessing",
+    "object_preprocessing",
+    "curation_rule",
+    "curation_rule_text",
+    "see_also",
+)
+
+# The Mapping slots whose schema range is ``double``. The canonical format
+# writes a floating point value "with up to three digits as needed after the
+# decimal point, rounding the last digit to the nearest neighbour (rounding up
+# if both neighbours are equidistant)". Mirrors ``.ms_sssom_double_columns``.
+_DOUBLE_COLUMNS = ("confidence", "reviewer_agreement", "similarity_score")
 
 # These are the mapping slots in the SSSOM 1.1 model. Rejecting unknown table
 # columns is intentional: an extension field called, for example,
@@ -287,8 +318,9 @@ class SssomMappingSet:
 
     Mirrors metasalmon's ``metasalmon_sssom_mapping_set`` list: ``metadata``
     is a dict whose ``curie_map`` value is a prefix→URI dict sorted by
-    prefix; ``mappings`` is a string-valued DataFrame; ``path`` is the
-    normalized source path, or ``None`` for in-memory sets.
+    prefix, empty for a file that declares none; ``mappings`` is a
+    string-valued DataFrame; ``path`` is the normalized source path, or
+    ``None`` for in-memory sets.
     """
 
     metadata: Dict[str, object]
@@ -505,14 +537,21 @@ def _parse_scalar(text: str, fail) -> str:
 
 
 def _split_key_line(line: str, fail):
-    """Split ``key: value`` (or ``key:``) or return None if not that shape."""
+    """Split ``key: value`` (or ``key:``) or return None if not that shape.
+
+    A quoted key is decoded as a quoted scalar is. The canonical writer quotes
+    a prefix YAML would read as a boolean or a null (``"on"``, ``"null"``), as
+    R's writer does, and R's yaml reader decodes the quotes.
+    """
     match = re.match(r"([^\s:]+):(.*)\Z", line)
     if match is None:
         return None
-    rest = match.group(2)
+    key, rest = match.group(1), match.group(2)
     if rest and not rest.startswith((" ", "\t")):
         fail(f"missing space after ':' in {line!r}")
-    return match.group(1), rest.strip()
+    if key.startswith(('"', "'")):
+        key = _parse_scalar(key, fail)
+    return key, rest.strip()
 
 
 def _parse_yaml_subset(lines: Sequence[str], path: object) -> Dict[str, object]:
@@ -619,6 +658,14 @@ def _parse_metadata(comment_lines: Sequence[str], path: object) -> Dict[str, obj
             value = "|".join(str(item) for item in value)
         metadata[name] = _scalar_metadata(value, name)
 
+    # A canonical writer leaves out every built-in and every unused prefix, so
+    # a set that uses only built-in prefixes is written with no curie_map at
+    # all. The slot is optional in the SSSOM model; an absent one is an empty
+    # map. (A ``curie_map:`` key with nothing under it is the same absence:
+    # the subset parser gives it ``None``, as R's yaml gives it NULL.)
+    if metadata.get("curie_map") is None:
+        metadata["curie_map"] = {}
+        return metadata
     curie_map = metadata["curie_map"]
     if not isinstance(curie_map, dict) or not curie_map:
         raise ValueError("SSSOM metadata curie_map must not be empty.")
@@ -643,6 +690,29 @@ def _parse_metadata(comment_lines: Sequence[str], path: object) -> Dict[str, obj
 
 
 # --- TSV table parsing -------------------------------------------------------
+
+
+def _unquote_cell(value: Optional[str]) -> Optional[str]:
+    """Mirror ``.ms_sssom_unquote_cell``: strip well-formed RFC 4180 quoting.
+
+    The SSSOM/TSV Quoting section: "SSSOM/TSV parsers MUST strip any enclosing
+    double quotes and escaping double quotes". A cell is decoded only when it
+    is a well-formed quoted value, opening and closing with ``"`` and with
+    every inner ``"`` doubled. Anything else is kept byte for byte, so a cell
+    an earlier writer of this package emitted with a bare ``"`` inside it
+    reads as it always did. Quoted tabs and line breaks are not supported: the
+    table is split on them first, and validation refuses them in a cell.
+    """
+    if (
+        value is None
+        or len(value) < 2
+        or not (value.startswith('"') and value.endswith('"'))
+    ):
+        return value
+    inner = value[1:-1]
+    if '"' in inner.replace('""', ""):
+        return value
+    return inner.replace('""', '"')
 
 
 def _parse_table(
@@ -689,6 +759,7 @@ def _parse_table(
             f"Every row in the SSSOM mapping table at {path} must contain "
             f"{len(header) - 1} tab delimiters."
         )
+    rows = [[_unquote_cell(cell) for cell in row] for row in rows]
     return pd.DataFrame(rows, columns=header, dtype=object)
 
 
@@ -1018,7 +1089,11 @@ def read_sssom_mapping_set(
     ``curie_map`` that does declare a built-in prefix must give it the
     expansion the specification fixes for it (for example
     ``http://www.w3.org/2004/02/skos/core#`` for ``skos``); any other
-    expansion is refused.
+    expansion is refused. A file with no ``curie_map`` at all, which is how
+    the canonical writer writes a set that uses only built-in prefixes, reads
+    with an empty map. A table cell enclosed in double quotes with every inner
+    quote doubled, the RFC 4180 form the canonical writer uses for a cell that
+    contains a double quote, is decoded; any other cell is read byte for byte.
 
     Parameters
     ----------
@@ -1125,6 +1200,98 @@ def _input_sets(mapping_sets: object) -> List[SssomMappingSet]:
 
 
 # --- canonical serialization --------------------------------------------------
+#
+# Canonical SSSOM/TSV (hub B-351, the mirror half of metasalmon's B-350). The
+# specification's "Canonical SSSOM/TSV format" section says writers SHOULD
+# write it; Brett ruled on 2026-09-25 that both packages do, together, at a
+# minor version. The rules applied, in the section's order
+# (src/docs/spec-formats-tsv.md in mapping-commons/sssom at
+# 667d3c579d92ad2e1a480503625eeef1e6af8e6d):
+#
+# * no space between ``#`` and the metadata YAML;
+# * slots in the order of the MappingSet "Slots" table (``_METADATA_ORDER``);
+# * a scalar in "plain style whenever possible, otherwise in double-quoted
+#   style" (``_yaml_scalar``);
+# * a multivalued slot as a block sequence (``_MULTIVALUED_METADATA``);
+# * no built-in prefix and no unused prefix in ``curie_map``, and no
+#   ``curie_map`` at all when nothing is left;
+# * a mapping cell quoted only when it must be, RFC 4180 style
+#   (``_quote_cell``);
+# * a ``double`` slot rounded to at most three decimals
+#   (``_canonical_double``);
+# * mappings sorted on all their slots in slot order, with a missing value
+#   as the empty string it is written as, so it sorts first.
+#
+# Not applied: condensation of a mapping slot into the set, because it is the
+# inverse of propagation, which this profile does not do; and the
+# extension-slot rules, because this profile supports no extension slots.
+# ``sssom.R`` says the same.
+
+# The YAML 1.1 and 1.2 implicit types, as regular expressions over one plain
+# scalar, so a value a YAML reader would type is quoted and reads back as the
+# same string. The metadata block is YAML 1.2, but metasalmon reads it with the
+# ``yaml`` package, a YAML 1.1 reader, and a user may read it with PyYAML,
+# another, so a value is quoted if EITHER version's implicit types would read
+# it as something other than a string. The patterns are spelled out, not
+# delegated to a parser, so that the two halves match byte for byte: YAML 1.2
+# core schema null, bool, int and float; YAML 1.1 null, bool, int (binary,
+# octal, decimal with ``_`` and ``,``, hex, sexagesimal), float (PyYAML's
+# reading, so ``0.0.8`` stays a string and ``1.1`` does not) and merge key. A
+# YAML 1.1 timestamp such as ``2026-07-31`` stays plain: neither the ``yaml``
+# package nor YAML 1.2 types it, and it is the form the SSSOM examples write.
+# R's ``.ms_sssom_yaml_nonstring_patterns``, with its ``$`` as ``\Z`` because
+# Python's ``$`` also matches before a final newline and TRE's does not.
+_YAML_NONSTRING_PATTERNS = tuple(
+    re.compile(pattern)
+    for pattern in (
+        r"^(~|null|Null|NULL)\Z",
+        r"^(y|Y|yes|Yes|YES|n|N|no|No|NO|true|True|TRUE|false|False|FALSE|on|On|ON|off|Off|OFF)\Z",
+        r"^[-+]?[0-9]+\Z",
+        r"^0o[0-7]+\Z",
+        r"^0x[0-9a-fA-F]+\Z",
+        r"^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?\Z",
+        r"^[-+]?\.(inf|Inf|INF)\Z",
+        r"^\.(nan|NaN|NAN)\Z",
+        r"^[-+]?0b[01_]+\Z",
+        r"^[-+]?[0-9][0-9_,]*\Z",
+        r"^[-+]?0x[0-9a-fA-F_]+\Z",
+        r"^[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?\Z",
+        r"^[-+]?([0-9][0-9_]*)?\.[0-9_]*([eE][-+][0-9]+)?\Z",
+        r"^<<\Z",
+    )
+)
+_YAML_EDGE_SPACE_RE = re.compile(r"^[ \t]|[ \t]\Z")
+_YAML_INDICATOR_RE = re.compile(r"^[][{}#&*!|>'\"%@`=?:,-]")
+# Only characters YAML may carry unescaped in a plain scalar: no control
+# characters (tab included), no DEL, no C1 controls, no byte-order mark and no
+# Unicode line or paragraph separator. R's class starts at U+0001 because an R
+# string cannot hold NUL; a Python string can, and it is quoted here too.
+_YAML_UNSAFE_CHAR_RE = re.compile("[\u0000-\u001f\u007f-\u009f\ufeff\u2028\u2029]")
+_DECIMAL_RE = re.compile(r"[0-9]+(\.[0-9]+)?\Z")
+_USED_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9._-]*(?=:)")
+
+
+def _yaml_plain_ok(value: str) -> bool:
+    """Mirror ``.ms_sssom_yaml_plain_ok``.
+
+    Whether ``value`` can be written as a YAML plain scalar in block context
+    with no change to what a reader gets back. Deliberately conservative
+    about syntax: a value starting with any YAML indicator character is
+    quoted, although YAML would allow some of them (``-x``) plain.
+    """
+    if not value:
+        return False
+    # Leading or trailing whitespace would be trimmed; a first character that
+    # is a YAML indicator would start another construct.
+    if _YAML_EDGE_SPACE_RE.search(value) or _YAML_INDICATOR_RE.match(value):
+        return False
+    # ``: `` starts a mapping value, `` #`` a comment, and a trailing ``:`` a
+    # key.
+    if ": " in value or " #" in value or value.endswith(":"):
+        return False
+    if _YAML_UNSAFE_CHAR_RE.search(value):
+        return False
+    return not any(pattern.match(value) for pattern in _YAML_NONSTRING_PATTERNS)
 
 
 def _json_scalar(value: object) -> str:
@@ -1132,54 +1299,165 @@ def _json_scalar(value: object) -> str:
     return json.dumps(str(value), ensure_ascii=False)
 
 
+def _yaml_scalar(value: object) -> str:
+    """Mirror ``.ms_sssom_yaml_scalar``.
+
+    One scalar in "plain style whenever possible, otherwise in double-quoted
+    style". The double-quoted form is the JSON string, which is valid YAML.
+    """
+    value = str(value)
+    return value if _yaml_plain_ok(value) else _json_scalar(value)
+
+
+def _used_prefixes(mapping_set: SssomMappingSet) -> set:
+    """Mirror ``.ms_sssom_used_prefixes``.
+
+    The prefixes a set uses: those that begin some value, metadata or cell,
+    once each multivalued value is split on ``|``.
+    """
+    values: List[Optional[str]] = []
+    for name, value in mapping_set.metadata.items():
+        if name == "curie_map":
+            continue
+        if isinstance(value, dict):
+            values.extend(str(item) for item in value.values())
+        elif isinstance(value, (list, tuple)):
+            values.extend(str(item) for item in value)
+        else:
+            values.append(_cell(value))
+    for name in mapping_set.mappings.columns:
+        values.extend(_column_values(mapping_set.mappings, name))
+    used = set()
+    for value in values:
+        if value is None or not value:
+            continue
+        for piece in _split_multivalued(value):
+            match = _USED_PREFIX_RE.match(piece)
+            if match is not None:
+                used.add(match.group(0))
+    return used
+
+
+def _canonical_double(value: Optional[str]) -> Optional[str]:
+    """Mirror ``.ms_sssom_canonical_double``.
+
+    "with up to three digits as needed after the decimal point, rounding the
+    last digit to the nearest neighbour (rounding up if both neighbours are
+    equidistant)". Done on the decimal digits rather than on a float, so
+    ``0.0005`` rounds up as written and not by its binary value. A cell that
+    is not a plain decimal number is left as it is: this profile does not
+    type these columns.
+    """
+    if value is None or _DECIMAL_RE.match(value) is None:
+        return value
+    whole, _, fraction = value.partition(".")
+    if len(fraction) > 3:
+        round_up = fraction[3] >= "5"
+        fraction = fraction[:3]
+        if round_up:
+            digits = [int(digit) for digit in whole + fraction]
+            position = len(digits) - 1
+            while True:
+                if position < 0:
+                    digits.insert(0, 1)
+                    break
+                if digits[position] < 9:
+                    digits[position] += 1
+                    break
+                digits[position] = 0
+                position -= 1
+            joined = "".join(str(digit) for digit in digits)
+            whole, fraction = joined[:-3], joined[-3:]
+    fraction = fraction.rstrip("0")
+    whole = re.sub(r"^0+(?=[0-9])", "", whole)
+    return f"{whole}.{fraction}" if fraction else whole
+
+
+def _quote_cell(value: str) -> str:
+    """Mirror ``.ms_sssom_quote_cell``.
+
+    RFC 4180 quoting as the SSSOM/TSV Quoting section adapts it: quote only a
+    value that must be quoted. Tabs and line breaks never reach here, because
+    validation refuses them in a cell, so the one trigger is a double quote.
+    """
+    if '"' in value:
+        return '"' + value.replace('"', '""') + '"'
+    return value
+
+
 def _canonical_bytes(mapping_set: SssomMappingSet) -> bytes:
     """Mirror ``.ms_sssom_canonical_bytes`` byte for byte.
 
-    Deterministic UTF-8, LF-only, trailing-LF TSV: metadata comments in the
-    fixed field order with JSON-encoded scalars, curie-map lines sorted by
-    prefix, canonical column order, and rows sorted as tuples of column
-    values (missing values sort last within each column, then serialize as
-    empty fields). ``sorted()`` on ``str`` matches R's radix (C-locale)
-    order because UTF-8 byte order equals code-point order.
+    Canonical SSSOM/TSV as deterministic UTF-8, LF-only, trailing-LF bytes:
+    metadata comments in MappingSet slot order with no space after ``#`` and
+    scalars plain unless a YAML reader would type them, ``curie_map`` holding
+    only the used, non-built-in prefixes sorted by name (and left out when
+    empty), a multivalued slot as a block sequence, canonical column order,
+    ``double`` slots rounded to three decimals, cells quoted only when they
+    contain a double quote, and rows sorted as tuples of their written
+    values (a missing value is the empty string, so it sorts first).
+    ``sorted()`` on ``str`` matches R's radix (C-locale) order because UTF-8
+    byte order equals code-point order.
+
+    ONE rendering, read by BOTH the sort key and the emitted bytes: ``cells``
+    is built once and indexed by the sort key and the row writer, so row
+    order and row content cannot disagree about a cell (the shape of R's
+    backlog #93 item 3). The sort key is the value as written before quoting.
     """
     metadata = mapping_set.metadata
-    curie_map = metadata["curie_map"]
+    # No built-in prefix and no unused prefix, sorted by name.
+    curie_map = metadata.get("curie_map") or {}
+    used = _used_prefixes(mapping_set)
+    kept = sorted(
+        prefix
+        for prefix in curie_map
+        if prefix not in _BUILTIN_PREFIXES and prefix in used
+    )
 
     metadata_lines: List[str] = []
     for field_name in _METADATA_ORDER:
+        if field_name == "curie_map":
+            if not kept:
+                continue
+            metadata_lines.append("#curie_map:")
+            for prefix in kept:
+                metadata_lines.append(
+                    f"#  {_yaml_scalar(prefix)}: {_yaml_scalar(curie_map[prefix])}"
+                )
+            continue
         if field_name not in metadata:
             continue
-        if field_name == "curie_map":
-            metadata_lines.append("# curie_map:")
-            for prefix in sorted(curie_map):
-                metadata_lines.append(
-                    f"#   {prefix}: {_json_scalar(curie_map[prefix])}"
-                )
-        else:
-            metadata_lines.append(
-                f"# {field_name}: {_json_scalar(metadata[field_name])}"
+        value = metadata[field_name]
+        if field_name in _MULTIVALUED_METADATA:
+            metadata_lines.append(f"#{field_name}:")
+            metadata_lines.extend(
+                f"#  - {_yaml_scalar(item)}"
+                for item in _split_multivalued(str(value))
             )
+        else:
+            metadata_lines.append(f"#{field_name}: {_yaml_scalar(value)}")
 
     columns = [
         name for name in _COLUMN_ORDER if name in mapping_set.mappings.columns
     ]
     cells = {name: _column_values(mapping_set.mappings, name) for name in columns}
+    for name in columns:
+        if name in _DOUBLE_COLUMNS:
+            cells[name] = [_canonical_double(value) for value in cells[name]]
+    cells = {
+        name: ["" if value is None else value for value in values]
+        for name, values in cells.items()
+    }
     row_count = len(mapping_set.mappings)
     order = sorted(
         range(row_count),
-        key=lambda row: tuple(
-            (1, "") if cells[name][row] is None else (0, cells[name][row])
-            for name in columns
-        ),
+        key=lambda row: tuple(cells[name][row] for name in columns),
     )
 
     table_lines = ["\t".join(columns)]
     for row in order:
         table_lines.append(
-            "\t".join(
-                "" if cells[name][row] is None else cells[name][row]
-                for name in columns
-            )
+            "\t".join(_quote_cell(cells[name][row]) for name in columns)
         )
     return ("\n".join(metadata_lines + table_lines) + "\n").encode("utf-8")
 
@@ -1269,10 +1547,11 @@ def write_sdp_sssom(
     Writes explicitly supplied SSSOM 1.1 mapping sets under
     ``metadata/semantic/`` and records their paths, hashes, row counts,
     source versions, licenses, and writer provenance in
-    ``metadata/semantic/mapping-sets.json``. Bytes and manifest ordering are
-    deterministic. This function does not turn semantic suggestions or
-    variable decompositions into mappings; ``mapping_sets=None`` is therefore
-    a no-op.
+    ``metadata/semantic/mapping-sets.json``. Each mapping set is written in
+    the canonical SSSOM/TSV format, byte for byte as metasalmon writes it, so
+    bytes and manifest ordering are deterministic. This function does not
+    turn semantic suggestions or variable decompositions into mappings;
+    ``mapping_sets=None`` is therefore a no-op.
 
     Parameters
     ----------
