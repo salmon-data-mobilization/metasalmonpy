@@ -1475,10 +1475,12 @@ and moving it is a separate outward act.
   most three decimals, and a missing value sorts before a present one. Slots
   are not condensed, because condensation is the inverse of propagation, which
   this profile does not do. `read_sssom_mapping_set()` reads every file it
-  writes: it now accepts a set with no `curie_map` and strips RFC 4180 quoting
-  from a well-formed quoted cell, while a cell an earlier version wrote with a
-  bare `"` inside it still reads byte for byte, and `validate_sdp_sssom()`
-  still accepts a package in the earlier form.
+  writes: it now accepts a set with no `curie_map`, decodes a quoted key (the
+  writer quotes a prefix YAML would read as a boolean or a null, such as
+  `on`, as R's does) and strips RFC 4180 quoting from a well-formed quoted
+  cell, while a cell an earlier version wrote with a bare `"` inside it still
+  reads byte for byte, and `validate_sdp_sssom()` still accepts a package in
+  the earlier form.
 
   The two packages write byte-identical mapping sets again. The R-written
   fixtures under `tests/data/sssom/` (`canonical/`, `r-sdp/` and

@@ -537,14 +537,21 @@ def _parse_scalar(text: str, fail) -> str:
 
 
 def _split_key_line(line: str, fail):
-    """Split ``key: value`` (or ``key:``) or return None if not that shape."""
+    """Split ``key: value`` (or ``key:``) or return None if not that shape.
+
+    A quoted key is decoded as a quoted scalar is. The canonical writer quotes
+    a prefix YAML would read as a boolean or a null (``"on"``, ``"null"``), as
+    R's writer does, and R's yaml reader decodes the quotes.
+    """
     match = re.match(r"([^\s:]+):(.*)\Z", line)
     if match is None:
         return None
-    rest = match.group(2)
+    key, rest = match.group(1), match.group(2)
     if rest and not rest.startswith((" ", "\t")):
         fail(f"missing space after ':' in {line!r}")
-    return match.group(1), rest.strip()
+    if key.startswith(('"', "'")):
+        key = _parse_scalar(key, fail)
+    return key, rest.strip()
 
 
 def _parse_yaml_subset(lines: Sequence[str], path: object) -> Dict[str, object]:

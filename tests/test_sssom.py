@@ -1535,6 +1535,43 @@ def test_canonical_sssom_tsv_keeps_no_builtin_and_no_unused_prefix_in_curie_map(
     assert validate_sdp_sssom(sdp) is True
 
 
+def test_canonical_sssom_tsv_reads_back_a_prefix_yaml_would_type(tmp_path):
+    # A prefix YAML would read as a boolean or a null is written as a quoted
+    # key, as R writes it, and R's yaml reader decodes the quotes. This
+    # package's reader has to decode them too, or a set it wrote is one it
+    # refuses to read.
+    prefixes = ("null", "on", "yes")
+    rows = [
+        "\t".join(
+            (
+                f"{prefix}:X1",
+                "Net",
+                "skos:exactMatch",
+                "gcdfo:FixedSiteCensusManual",
+                "Fixed Site Census (Manual)",
+                "semapv:ManualMappingCuration",
+            )
+        )
+        for prefix in prefixes
+    ]
+    text = sssom_text(
+        rows=rows,
+        extra_prefixes=tuple(
+            f"#   {prefix}: https://example.org/{prefix}/" for prefix in prefixes
+        ),
+    )
+    sdp, path, written = sssom_written_text(tmp_path, text)
+    lines = sssom_metadata_lines(written)
+    for prefix in prefixes:
+        assert f'#  "{prefix}": https://example.org/{prefix}/' in lines
+    reread = read_sssom_mapping_set(path)
+    assert reread.metadata["curie_map"] == {
+        "gcdfo": "https://w3id.org/gcdfo/salmon#",
+        **{prefix: f"https://example.org/{prefix}/" for prefix in prefixes},
+    }
+    assert validate_sdp_sssom(sdp) is True
+
+
 def test_canonical_sssom_tsv_leaves_out_curie_map_when_a_set_uses_only_builtin_prefixes(
     tmp_path,
 ):
