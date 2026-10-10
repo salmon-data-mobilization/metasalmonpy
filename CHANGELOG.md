@@ -234,6 +234,42 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **`review_semantics()` shows a model's accept under the candidate it chose,
+  and any other decision once per slot and role.** An assessment is one row per
+  target, and merging it into the suggestions copies its decision, confidence
+  and rationale onto every candidate, with only `llm_selected` saying which
+  candidate an accept chose. The console printed `llm: accept` under every
+  candidate in the slot, so whoever confirmed a harness's accept of candidate 2
+  could not tell which candidate it meant. The accept now stays on the chosen
+  candidate, which stays in view past `max_candidates`, and any other decision
+  prints once, under `current:`, because it judges the whole shortlist. A
+  measurement column's code holds its constraint, entity and method targets in
+  one slot, and each target's verdict prints on its own line, naming its role.
+  `max_candidates` now caps each of those targets rather than the slot, where
+  five candidates for the first target hid every row of the others, and their
+  verdicts with them; ranks stay the slot's, as `accept_suggestion()` reads
+  them. Suggestions without an `llm_selected` column print as before. And when a
+  packet's retrieval finds nothing for a slot, the slot's earlier rows, which
+  an import keeps since #110, now carry the assessment just imported rather
+  than an earlier one, which could have been an accept. Each is pinned in
+  `tests/test_review_console.py` by a test that failed before the change, and
+  metasalmon makes the same changes in its pull request 275. The semantic
+  review guide gains a section on having your own harness judge the shortlists
+  (`write_semantic_review_packet()`, the answer CSV and its sidecar,
+  `ingest_semantic_assessments()`), and describes the in-package model call as
+  deprecated.
+
+* **`apply_semantic_suggestions(strategy="llm")` applies the candidate the
+  harness chose when the selection flag is text.** A package's
+  `semantic_suggestions.csv`, and the suggestions an ingest of a package path
+  returns, hold `llm_selected` as the text `TRUE` or `FALSE`, and
+  `astype(bool)` read `"FALSE"`, a non-empty string, as true. So every
+  candidate of an accepted target was selected and the first one applied,
+  whichever one the harness chose. The flag is now read as the review console
+  reads it. Pinned in `tests/test_semantic_review_packet.py` by a test that
+  failed before the change; metasalmon, which refused the text with an error,
+  makes the same fix in its pull request 275.
+
 * **The deprecated in-package model call reads a candidate index as metasalmon
   does.** Hub **B-361** fixed two ways metasalmon's assessment validator
   mangled a model's answer and recorded no metasalmonpy half for them, but

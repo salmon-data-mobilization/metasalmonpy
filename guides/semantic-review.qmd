@@ -62,14 +62,16 @@ review
 **This never contacts a network or an LLM.** It reads the
 `semantic_suggestions` attribute, or `semantic_suggestions.csv`, that
 `suggest_semantics()` / `create_sdp()` already produced. Where those suggestions
-carry LLM review — only possible if they were generated with `llm_assess=True` —
-it surfaces it; it never generates it.
+carry a model's assessment, ingested from [your own harness](#have-your-own-harness-judge-the-shortlists),
+it shows it: an accept under the candidate it chose, any other decision once
+per slot and role. It never generates one.
 
 `review_semantics()` accepts a written package path, a dictionary carrying the
 attribute, or the mapping `infer_salmon_datapackage_artifacts()` returns.
 `include_filled=True` also queues slots that already hold a final IRI or already
-carry a decision, `max_candidates=` bounds the shortlist per slot (`None` shows
-all), and `columns=` restricts the queue — a name matching no column is an error
+carry a decision, `max_candidates=` bounds the shortlist of each target, which
+is one slot or, for a code value, one of its roles (`None` shows all), and
+`columns=` restricts the queue — a name matching no column is an error
 naming the columns that do exist, because filtering first and reporting an empty
 queue told a user who mistyped a column name that their package was finished.
 
@@ -236,9 +238,115 @@ from metasalmonpy import validate_salmon_datapackage
 validate_salmon_datapackage(package_path, require_iris=True)
 ```
 
-For an interactive, resumable whole-variable review, use
-`chat_decomposition()`. It persists structured state and never submits a term
-request automatically.
+`chat_decomposition()`, the interactive whole-variable dialogue, is deprecated
+with the rest of the in-package model call: it raises `LLMDeprecationWarning`
+and is removed in 0.7.0.
+
+## Have your own harness judge the shortlists
+
+Model judgement runs outside metasalmonpy. The package writes a review packet,
+your own harness reads it and writes its answers to a CSV, and the package reads
+them back. **Neither step calls a model**; the only network either one reaches
+is vocabulary search, through `search_fn`. metasalmon writes the same packet,
+byte for byte apart from its `producer` member, so one harness serves both
+packages.
+
+```python
+from metasalmonpy import write_semantic_review_packet
+
+packet = write_semantic_review_packet(package_path, context_files=["methods-note.md"])
+packet["path"]       # <package>/review/semantic-review-packet.json
+packet["packet_id"]  # the SHA-256 the ingester checks
+```
+
+The packet holds exactly the slots `review_semantics()` would queue, each with
+its shortlist retrieved again (`top_n=5` by default) and the evidence the
+package's own validators read: label, IRI, source, native type, role hints,
+definition and scores. It also holds the measurement bundles with their current
+slots, scored excerpts from your context files, the review instructions, and
+the 30-column answer schema, which names an owner for every column. It is
+written under `review/`, which no publication path reads.
+
+The harness answers every slot with one of five decisions: `accept` (giving the
+candidate's index and echoing its IRI), `review`, `retry_search` (with a short
+query), `reject_shortlist` or `request_new_term`. It writes them, with a CSV
+library, to `review/semantic-assessments-pass-1.csv`, and writes the packet's
+`packet_id` to the one-line sidecar `semantic-assessments-pass-1.csv.packet-id`
+beside it. The packet's `instructions` member is the full brief. The shape of a
+harness, with the judgement left to yours:
+
+```python
+import csv
+import json
+from pathlib import Path
+
+review = json.loads(Path(packet["path"]).read_text(encoding="utf-8"))
+columns = [column["name"] for column in review["output"]["columns"]]
+answer = Path(package_path) / review["output"]["file"]
+
+with open(answer, "w", newline="", encoding="utf-8") as handle:
+    writer = csv.DictWriter(handle, fieldnames=columns)
+    writer.writeheader()
+    for unit in review["units"]:
+        for slot in unit["slots"]:
+            row = dict.fromkeys(columns, "")
+            row.update({name: value or "" for name, value in slot["identity"].items()})
+            row.update(llm_provider="my-harness", llm_model="my-model")
+            # judge() is yours. It returns llm_decision and llm_confidence, and
+            # for an accept llm_selected_candidate_index and llm_selected_iri.
+            row.update(judge(unit, slot))
+            writer.writerow(row)
+Path(f"{answer}.packet-id").write_text(review["packet_id"] + "\n", encoding="utf-8")
+```
+
+Then read the answers back:
+
+```python
+from metasalmonpy import ingest_semantic_assessments, semantic_llm_assessments
+
+result = ingest_semantic_assessments(package_path)
+result["status"]   # "complete", or "awaiting_pass_2"
+assessments = semantic_llm_assessments(package_path)
+```
+
+The ingester checks the file against the packet it names, then each row. An IRI
+the packet did not offer is recorded as an error and never applied, a candidate
+index that is not a whole number is refused, and a final `reject_shortlist` is
+escalated to `request_new_term`, so the ontology gap is filed rather than lost.
+The record is kept in `review/semantic-llm-assessments.csv`. A `retry_search`
+whose search finds new candidates writes a second packet,
+`review/semantic-review-packet-pass-2.json`: answer it in
+`semantic-assessments-pass-2.csv` the same way and call
+`ingest_semantic_assessments()` again. Nothing from that slot is merged until
+then, and there is no third pass.
+
+**Nothing the harness writes reaches the metadata.** The ingester never touches
+the metadata CSVs; you confirm each answer in the review queue, where the
+harness's verdict now sits under the candidate it chose:
+
+```
+── spawners · spawner_count · variable ───────────────────────────────────────
+   field:   column_dictionary.csv · term_iri
+   current: REVIEW:https://w3id.org/smn/SpawnerAbundance
+
+   [1] Spawner Abundance   smn   score 4.9
+       The number of mature salmon returning to spawn in a stream.
+       https://w3id.org/smn/SpawnerAbundance
+       llm: accept (confidence 0.9)
+            Matches the column's definition.
+       review = accept_suggestion(review, "spawner_count", "variable", rank=1)
+```
+
+A decision other than `accept` is printed once, under `current:`, because it
+judges the whole shortlist. Accept or reject as before, then
+`apply_sdp_semantics(package_path, review)`.
+
+For a dictionary you have not written yet, pass it in place of the path, with a
+`review_dir` for the session's files:
+`write_semantic_review_packet(dictionary, review_dir="review")`, then
+`ingest_semantic_assessments(dictionary, review_dir="review")`. Its
+`result["dictionary"]` carries the assessments, so `review_semantics()` and
+`apply_semantic_suggestions(..., strategy="llm")` read them from there.
 
 ## Deterministic suggestions
 
@@ -280,15 +388,19 @@ supported way to read what a stage attached, so review tooling never reaches
 into `df.attrs` itself. Both accept a dictionary, an artifact mapping, or a
 written package path, and both return `None` rather than an empty frame when
 nothing is attached — they replace a raw `attrs` lookup and must answer an
-`is None` test the same way it did. A package path always returns `None` from
-`semantic_llm_assessments()`: assessments are not written into the package, so a
-package on disk cannot carry them.
+`is None` test the same way it did. For a package path,
+`semantic_llm_assessments()` returns the record `ingest_semantic_assessments()`
+kept in `review/semantic-llm-assessments.csv`, and `None` before any has been
+ingested: the in-package call's assessments are not written into the package.
 
-## LLM review is opt-in
+## The in-package model call is deprecated
 
-Context does not enable an LLM call. You must set `llm_assess=True` explicitly.
-Context file inputs must be local paths, not parsed pandas, XML, or document
-objects.
+`llm_assess=True`, the eleven `llm_*` arguments and `chat_decomposition()` raise
+`LLMDeprecationWarning`, a `FutureWarning`, once per call, and are removed in
+0.7.0. Use [your own harness](#have-your-own-harness-judge-the-shortlists)
+instead. Until then the call still works, and is still strictly opt-in: context
+does not enable it, and you must set `llm_assess=True` explicitly. Context file
+inputs must be local paths, not parsed pandas, XML, or document objects.
 
 ```python
 reviewed = suggest_semantics(
@@ -413,10 +525,10 @@ and the `set_sdp_*()` setters write straight into the package, so with them ther
 is nothing to save or reload either.
 
 `README-review.txt` in the package folder carries the same checklist, and
-`metadata/column_dictionary.csv` is a reasonable `llm_context_files` input when
-you want the LLM review step to reason from the package itself rather than a
-separate methods note — pass the path string, not a DataFrame read from it, and
-set `llm_assess=True`; context alone does not enable a provider call.
+`metadata/column_dictionary.csv` is a reasonable `context_files` input to
+`write_semantic_review_packet()` when you want your harness to reason from the
+package itself rather than a separate methods note. Pass the path string, not a
+DataFrame read from it.
 
 ## Assemble the reviewed closure
 

@@ -1200,14 +1200,18 @@ def _join_key(record: Mapping) -> tuple:
     return tuple(_r_character(record.get(column)) for column in IDENTITY_COLUMNS)
 
 
-def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Optional[dict]:
+def _rewrite_suggestions(
+    path: Path, merged: pd.DataFrame, targets: list, assessments: Optional[pd.DataFrame] = None
+) -> Optional[dict]:
     """``.ms_semantic_review_rewrite_suggestions()``: the undecided slots' rows replaced.
 
     For the targets whose slots are still undecided, their rows in
     ``semantic_suggestions.csv`` are replaced by the packet's shortlist carrying
     the merged assessment columns. A slot with a recorded decision keeps its
     rows, as does a hand-picked row; a target the packet does not hold is
-    untouched, and so is one whose packet shortlist came back empty. Rows are
+    untouched. A target whose packet shortlist came back empty keeps its rows,
+    which take the assessment just made (``assessments``, aligned with
+    ``targets``). Rows are
     replaced target by target, never slot by slot: a code value of a
     measurement column has three targets in one slot, and a pass that
     finalizes one of them must not drop the rows of another, whether it is
@@ -1239,9 +1243,13 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
     }
     merged_records = _records(merged_text)
     merged_targets = [_target_address(record) for record in merged_records]
+    target_addresses = [_target_address(target) for target in targets]
     replace = list(
-        dict.fromkeys(_target_address(target) for target in targets if target.get("slot_id") not in decided)
+        dict.fromkeys(
+            address for address, target in zip(target_addresses, targets) if target.get("slot_id") not in decided
+        )
     )
+    verdicts = _records(_character_frame(assessments)) if assessments is not None and len(assessments) else []
     pieces = []
     seen = []
     for address in dict.fromkeys(existing_targets):
@@ -1267,6 +1275,9 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
                         record[column] = values[0]
             pieces.extend(replacement)
             seen.append(address)
+        elif address in replace and verdicts:
+            kept = [record for record, owner in zip(existing_records, existing_targets) if owner == address]
+            pieces.extend(_restamp_assessment(kept, verdicts[target_addresses.index(address)]))
         else:
             pieces.extend(record for record, owner in zip(existing_records, existing_targets) if owner == address)
     for address in replace:
@@ -1277,6 +1288,29 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
     ]
     out = pd.DataFrame([{column: record.get(column) for column in columns} for record in pieces], columns=columns, dtype="object")
     return {"path": suggestions_path, "rows": out, "bytes": _csv_bytes(out)}
+
+
+def _restamp_assessment(rows: list, verdict: dict) -> list:
+    """``.ms_semantic_review_restamp_assessment()``: kept rows take the current verdict.
+
+    The rows an empty shortlist left in place carry the assessment just made
+    instead of whichever one they last carried: ``review_semantics()`` reads
+    the verdict from these rows, so a superseded verdict, a stale accept above
+    all, would otherwise outlive the harness's current one. The packet offered
+    nothing to select, so no row is selected and none holds a shortlist rank.
+    """
+    from .llm_review import LLM_ASSESSMENT_COLUMNS
+
+    stamped = []
+    for record in rows:
+        record = dict(record)
+        for column in LLM_ASSESSMENT_COLUMNS:
+            if column not in IDENTITY_COLUMNS:
+                record[column] = verdict.get(column)
+        record["llm_candidate_rank"] = None
+        record["llm_selected"] = "FALSE"
+        stamped.append(record)
+    return stamped
 
 
 # -----------------------------------------------------------------------------
@@ -1643,7 +1677,7 @@ def ingest_semantic_assessments(
         next_packet = str(pass_2_path)
     suggestions_out = None
     if review_input["kind"] == "package" and final_targets:
-        rewrite = _rewrite_suggestions(review_input["path"], merged, final_targets)
+        rewrite = _rewrite_suggestions(review_input["path"], merged, final_targets, final_rows.iloc[merge_slots])
         if rewrite is not None:
             writes[rewrite["path"]] = rewrite["bytes"]
             suggestions_out = rewrite["rows"]

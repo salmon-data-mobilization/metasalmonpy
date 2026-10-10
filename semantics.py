@@ -1722,10 +1722,12 @@ def apply_semantic_suggestions(
         )
         suggestions_df = suggestions_df[decisions.isin(["accepted", "accept"])]
     if strategy == "llm":
-        suggestions_df = suggestions_df[
-            suggestions_df["llm_selected"].fillna(False).astype(bool)
-            & (suggestions_df["llm_decision"] == "accept")
-        ]
+        from .semantic_review_packet import _flag
+
+        # A package's semantic_suggestions.csv holds the flag as the text TRUE
+        # or FALSE, and astype(bool) read "FALSE", a non-empty string, as true.
+        selected = suggestions_df["llm_selected"].map(lambda value: _flag(value) is True).astype(bool)
+        suggestions_df = suggestions_df[selected & (suggestions_df["llm_decision"] == "accept")]
         if min_llm_confidence is not None:
             suggestions_df = suggestions_df[
                 pd.to_numeric(
