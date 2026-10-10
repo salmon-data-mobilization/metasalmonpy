@@ -14,9 +14,10 @@ rather than deriving one and reasoning the other from it. The measurement set
 is IRIs the EML measurement and method paths emit, so it includes
 code-resolved ``sosa:usedProcedure`` IRIs and excludes a table's
 ``observation_unit_iri``. The review-target set is slots a reviewer decided, so
-it includes ``observation_unit_iri`` and excludes a code-resolved procedure,
-which no reviewer ever selected as a slot. In the bundled EML fixture the
-difference is exactly one row: ``smn:Observation`` is a review target and not a
+it includes ``observation_unit_iri`` and excludes a code-resolved procedure.
+The ledger has no slot for that procedure: it is reached through code values
+in the data rather than a field the review-target set reads. In the bundled
+EML fixture the difference is exactly one row: ``smn:Observation`` is a review target and not a
 vocabulary term.
 
 GAP, NOT ABORT -- ruled by Brett 2026-09-12, for both implementations. An IRI
@@ -85,7 +86,7 @@ from .sdp_methods import (
     _extension_root,
 )
 from .term_requests import GAP_COLUMNS, _namespace_scope
-from .term_search import _search_failed_sources, find_terms
+from .term_search import _normalize_explicit_sources, _search_failed_sources, find_terms
 from .text_safety import redact_secrets
 
 # The vocabulary evidence fields, in the order the digest hashes them. The order
@@ -600,8 +601,9 @@ def _target_context(
 
     The review target that selected it, the dictionary row behind that target,
     and the actual code rows for an IRI in the measurement set only -- a
-    code-resolved ``sosa:usedProcedure``, which no reviewer ever selected as a
-    slot and so has no target row to read.
+    code-resolved ``sosa:usedProcedure``. The ledger has no slot for it: the
+    procedure is reached through code values in the data rather than a field
+    the review-target set reads, so there is no target row to read.
 
     Shared by the gap row and the incomplete-evidence row below, which describe
     the same IRI in the same place and must not disagree about where that is.
@@ -1164,7 +1166,10 @@ def write_sdp_semantic_closure(
         hook; the signature is ``fn(query, role=..., sources=...)``.
     sources:
         Vocabulary sources to search. Defaults to ``("smn", "gcdfo")``, the two
-        this package resolves deterministically.
+        this package resolves deterministically. Names are read as
+        :func:`find_terms` reads them: each trimmed and lower-cased, with
+        missing, empty and repeated names dropped. A list with no name left is
+        an error.
     quiet:
         Suppress the progress and summary messages. Warnings about gaps and
         placeholder rationales are not suppressed.
@@ -1218,11 +1223,12 @@ def write_sdp_semantic_closure(
         raise ValueError(f"Directory {path} does not exist.")
     if not callable(search_fn):
         raise ValueError("search_fn must be a function.")
-    source_list: List[str] = []
-    for source in (sources,) if isinstance(sources, str) else sources:
-        text = _as_character(source).strip()
-        if text and text not in source_list:
-            source_list.append(text)
+    # One reading of a source list for the whole package: the rule find_terms()
+    # and make_source_policy() apply (hub B-421), and the one metasalmon's
+    # closure takes from `.ms_normalize_explicit_sources()`. This used to be
+    # strip() and first-wins de-duplication with no lower-casing, so " SMN" and
+    # "smn" were two sources here.
+    source_list: List[str] = list(_normalize_explicit_sources(sources))
     if not source_list:
         raise ValueError("sources must name at least one vocabulary source.")
     evidence = _normalize_evidence(evidence)

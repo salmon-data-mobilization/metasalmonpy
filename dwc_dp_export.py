@@ -82,7 +82,8 @@ def dwc_dp_build_descriptor(
     output_path
         Optional JSON output path.
     validate
-        Run Frictionless validation when the optional dependency is installed.
+        Run Frictionless validation when the optional ``metasalmonpy[dwc]``
+        dependency is installed.
 
     Returns
     -------

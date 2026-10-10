@@ -1842,3 +1842,34 @@ def test_a_yaml_only_sidecar_is_not_a_sidecar_for_anything(tmp_path):
     from metasalmonpy import eml as _eml
 
     assert str(_eml._default_mapping_path(path)).endswith("eml-mapping.yml")
+
+
+def test_the_closure_reads_its_source_list_the_way_find_terms_does(tmp_path):
+    # Twin of metasalmon's test of the same name (hub B-421). The closure used
+    # to apply its own rule -- strip() and first-wins de-duplication, with no
+    # lower-casing -- so " SMN" and "smn" were two sources here. It now reads
+    # the list with the rule find_terms() and make_source_policy() apply. The
+    # sidecar goes, as in test_a_package_with_no_sidecar_needs_no_extra, so this
+    # runs in both dependency configurations.
+    path = _sdp(tmp_path)
+    os.unlink(Path(path) / "metadata" / "eml-mapping.yml")
+    seen = []
+    stub = _search_stub()
+
+    def spy(query, role=None, sources=None):
+        seen.append(list(sources))
+        return stub(query, role=role, sources=sources)
+
+    write_sdp_semantic_closure(
+        path,
+        evidence=_reviewed_evidence(),
+        search_fn=spy,
+        sources=[" SMN", "smn", "\u00a0Gcdfo", None],
+        quiet=True,
+    )
+    assert seen
+    assert all(sources == ["smn", "gcdfo"] for sources in seen), seen
+
+    # A list that normalises to nothing is refused before anything is read.
+    with pytest.raises(ValueError, match="must name at least one vocabulary source"):
+        write_sdp_semantic_closure(path, search_fn=spy, sources=[" ", None, "\u3000"], quiet=True)

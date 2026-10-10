@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Add bounded, read-only `capture_catalogue_query()` for public KNB/DataONE metadata. Captures preserve raw pages, hashes and provenance, never overwrite evidence, and leave annotations pending. The mirrored R interface is proposed in the companion MetaSalmon PR. No publication, model calls or version bump.
+* Add bounded, read-only `capture_catalogue_query()` for public KNB/DataONE metadata. Captures preserve raw pages, hashes and provenance, never overwrite evidence, and leave annotations pending. The mirrored R interface is on metasalmon `main` as `capture_catalogue_query()` in `R/catalogue-discovery.R` (metasalmon pull request 227, hub item B-427) [corrected 2026-10-08: this said it was still proposed in a companion pull request]. No publication, model calls or version bump.
 
   The success receipt is installed atomically. Failure bookkeeping retains raw
   evidence on a best effort basis and re-raises the original error or keyboard
@@ -31,8 +31,11 @@
   Its public manual
   redirect flow preserves cookies, origin-bound auth, target-host netrc and
   proxy/CA environment settings without draining bodies or using a private shim.
-  Paired localhost proof passes on Python3.9.6 and3.13.11; both implementation
-  merges remain outstanding.
+  Paired localhost proof passes on Python 3.9.6 and 3.13.11. [corrected
+  2026-10-08: this said both implementation merges remained outstanding; the R
+  half is on metasalmon `main` as `verify_sdp_semantic_iris()` in
+  `R/semantic-iri-verification.R` (metasalmon pull request 244, hub item
+  B-130), and this half is on `main` here.]
 
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
@@ -257,6 +260,93 @@ and moving it is a separate outward act.
   port, with no candidate row for the filled code, and RED again with the
   queue's exception or the ingester's preservation taken away on its own; the
   third was RED before the empty-shortlist rule, with the slot's rows gone.
+
+* **Direct opt-in semantic review now keeps enough candidates for the LLM's
+  requested shortlist.** Hub **B-302** ports metasalmon's **B-57**: with
+  `llm_assess=True`, the first retrieval pass keeps
+  `max(max_per_role, llm_top_n)` candidates per role. A request shows at most
+  `llm_top_n`, even when `max_per_role` retains more; without LLM assessment,
+  retrieval still keeps `max_per_role`. Injected-search tests pin all three
+  cases without calling a provider. The new `metasalmonpy[dwc]` optional
+  extra declares Frictionless for `dwc_dp_build_descriptor(validate=True)`;
+  handling its validation report remains the separate B-300 decision. This
+  closes an R-first port, without a new parity-register difference.
+
+* **A missing entry in a source list names no source.** Hub queue item
+  **B-421**, which converges metasalmon on this package's reading of a source
+  list: each name trimmed with `str.strip()` and lower-cased, an empty name
+  dropped and a repeat dropped after its first appearance, in the caller's
+  order. One case had no R counterpart to converge on: `None`, NaN and `pd.NA`
+  went through `str()` and became the names `"none"`, `"nan"` and `"<na>"`,
+  searched as nothing and reported in `find_terms()`'s diagnostics as searches
+  that found nothing. metasalmon drops its `NA`, so `find_terms()` and
+  `make_source_policy()` now drop a missing entry too, and the two packages read
+  a source list identically. `find_terms()`'s docstring now states the whole
+  rule, and that `sources=None` searches `sources_for_role(role)`, which it
+  always did and metasalmon now does as well (hub B-420, Q70).
+  `tests/test_find_terms_sources.py`, the twin of metasalmon's
+  `tests/testthat/test-find-terms-sources.R`, failed before the change.
+  A review packet's `source_policy.explicit_allowlist` now records that
+  normalised list too, as metasalmon's has since its half of B-421 (pull
+  request 211); it recorded the list as given, which `PARITY.md` row 65 (g)
+  described while metasalmon did the same, and that clause is amended.
+
+* **`fetch_salmon_ontology()` no longer answers a request for one ontology with
+  another's body, or one representation's request with another's.** Hub queue
+  items **B-334** and **B-336**, the halves of metasalmon's **B-333** and
+  **B-335**. Both packages carried each defect in the same shape, so these are
+  ports rather than register rows, and the two now apply one rule and one cache
+  layout. Each was demonstrated failing before the change
+  (`tests/test_ontology_fetch.py`, whose twin is metasalmon's
+  `tests/testthat/test-ontology-fetch.R`).
+
+  1. **The default fallback is tried for the default url only.** With
+     `fallback_urls=None` a call now tries `https://w3id.org/smn` when `url` is
+     the default and nothing otherwise. The fallback used to be tried after any
+     url, so a call for smn whose url failed returned gcdfo's body, the old
+     default fallback's, with no warning. A list you pass is tried as before,
+     and `[]` still names none.
+  2. **Each URL and representation has its own cached copy and validators.**
+     Every body used to be written to `dfo-salmon.ttl` in `cache_dir`, beside
+     one `etag.txt` and one `last_modified.txt`, so fetching smn and then gcdfo
+     into one directory left gcdfo at the path the smn call had returned, the
+     gcdfo request carried smn's ETag, a Turtle and an RDF/XML fetch of one url
+     did the same, and a fallback's ETag sent to the url on the next call could
+     bring back the fallback's body as the url's on a 304. A copy is now
+     `<key>.ttl`, where `<key>` is the first 16 hexadecimal digits of the
+     SHA-256 of the url as requested, a newline and `accept`, and its
+     validators are `<key>.etag` and `<key>.last_modified`, which is the layout
+     metasalmon writes. A request carries only the validators of the copy that
+     URL returned under that `accept`, a 304 returns that copy, and a 200
+     replaces the copy's validators rather than keeping any the new answer did
+     not send. A copy that is superseded is marked by `<key>.ttl.invalid`
+     while it is (the B-423 entry below). **The returned file name changes
+     accordingly**; copies cached by earlier versions under the old three
+     names are no longer read.
+  3. **A 304 with no cached copy is that url's failure**, and the next url is
+     tried. It used to write the 304's empty body as the copy and return it.
+  4. **A copy holds exactly the bytes the server sent, and is written
+     atomically.** It used to be `response.text` written as UTF-8 by opening
+     the copy for writing, so a text type sent with no charset was decoded as
+     ISO-8859-1 and re-encoded (a UTF-8 e-acute became the four bytes of its
+     misreading), and a write that failed part-way left the copy empty. The
+     copy is now `response.content`, written through `atomic_io.atomic_write()`
+     -- a same-directory temporary and a rename -- as metasalmon writes it with
+     `writeBin()` and `file.rename()`, and metasalmon has stopped adding the
+     final newline it used to, so both packages store the same bytes. A
+     validator file is the header's bytes and a newline, written in binary, as
+     metasalmon writes it, where it used to have no newline.
+
+* **`write_sdp_semantic_closure()` reads its `sources` the way `find_terms()`
+  does.** Hub queue item **B-421**, extended to the closure writer in both
+  packages. It had its own rule, `strip()` and first-wins de-duplication with
+  no lower-casing, so `" SMN"` and `"smn"` were two sources here, and
+  metasalmon's closure had a different rule again. It now reads the list with
+  `_normalize_explicit_sources()`, the rule `find_terms()` and
+  `make_source_policy()` apply, and metasalmon's closure uses its twin, so the
+  three readers in each package, and the two packages, read a list one way. A
+  list with no name left is still refused. `tests/test_semantic_closure.py`
+  failed before the change.
 
 * **Defects in the review-packet contract are fixed before it ships.** Hub
   queue item **B-425**, the metasalmonpy half of **B-424**. B-327 found each
@@ -1486,6 +1576,86 @@ and moving it is a separate outward act.
   This closes R-shipped-first lag and opens no `PARITY.md` row.
 
 ### Changed
+
+* **`fetch_salmon_ontology()` takes `timeout_seconds`, 30 by default, and caches
+  in a persistent per-user directory, as metasalmon does.** The follow-ups that
+  converged the two fetchers' remaining differences on 2026-09-26; each was
+  shown failing before the change in `tests/test_ontology_fetch.py`.
+
+  1. **`timeout_seconds`** (default 30, metasalmon's default) bounds the
+     connection, each wait for the server's bytes and the whole transfer,
+     where every request had a fixed 15 s. It is the last parameter, so a call
+     that passes `fallback_urls` by position still works. The transfer bound
+     is the package's own: requests bounds only each wait for bytes, where
+     curl's transfer timeout, which metasalmon's `httr::timeout()` sets,
+     bounds the whole operation, so a server that kept sending slowly was cut
+     off there and not here (Codex's review of pull request 75). The body is
+     now streamed and read against a deadline `timeout_seconds` after the
+     request began, and running past it is that URL's failure, worded as curl
+     words it.
+  2. **The default `cache_dir` is a persistent per-user cache** in the
+     locations R's `tools::R_user_dir()` uses for metasalmon's:
+     `$XDG_CACHE_HOME/metasalmonpy/ontology` when `XDG_CACHE_HOME` is set, on
+     every platform as in R, and otherwise
+     `~/Library/Caches/metasalmonpy/ontology` on macOS,
+     `%LOCALAPPDATA%\metasalmonpy\ontology` on Windows and
+     `~/.cache/metasalmonpy/ontology` elsewhere, found with the standard library
+     alone. It was `metasalmonpy-ontology-cache` under the system temporary
+     directory, where a copy an ETag could have let a later session reuse did
+     not survive a reboot. Copies there are no longer read, and you can delete
+     the directory.
+
+* **The repository no longer declares a `data/ontology` checkout that no clone
+  can produce.** Hub queue item **B-337**. `.gitmodules` declared one
+  submodule, `data/ontology`, whose url `../dfo-salmon-ontology` resolves
+  against this repository's remote to
+  `salmon-data-mobilization/dfo-salmon-ontology`, which does not exist; there
+  was never a gitlink, so git never read it. Three more tracked files assumed
+  the checkout, and all four came over from a website project in the initial
+  commit. Removed: `.gitmodules`; `.pre-commit-config.yaml`, whose only hook ran
+  `scripts/validate-term-tables.R` for files under
+  `data/ontology/release/artifacts/term-tables/` and so could never run; that
+  script; and the two `.quartoignore` lines for the path. Removing the hook
+  removes a check, although not one that ever ran. `devenv.nix` also stops
+  installing pre-commit and telling you to run `pre-commit install`, because
+  with no configuration file pre-commit refuses every commit. Nothing in the
+  package reads the path. `tests/test_repository_config.py` failed before the
+  change: every submodule `.gitmodules` declares must have a gitlink, and no
+  tracked configuration or code may name the path.
+
+* **`fetch_salmon_ontology()` fetches the Salmon Domain Ontology (smn) by
+  default, as metasalmon does.** Hub queue item **B-423**; Q71 clause 1, ruled
+  by Brett on 2026-09-26: smn should be the default starting point, so this
+  package moves. The default `url` is now `https://w3id.org/smn/` and its
+  fallback `https://w3id.org/smn`. The old default, a gcdfo Turtle file at
+  `dfo-pacific-science.github.io/dfo-salmon-ontology/ontology/dfo-salmon.ttl`,
+  answered 404 when measured on 2026-09-25 and again on 2026-09-26, so every
+  bare call made one failing request and was answered by its gcdfo fallback. A
+  bare call now returns smn where it returned gcdfo; to fetch gcdfo, name it:
+  `fetch_salmon_ontology(url="https://w3id.org/gcdfo/salmon")`. The module and
+  function docstrings name smn.
+
+  **When every URL fails, the call now warns and returns the copy it holds for
+  a URL it tried under the `accept` it asked for, if that copy is still
+  eligible, and raises when it holds none** (Q71 clause 2 as Brett clarified
+  it on 2026-10-03: "if the cache matches the requested ontology and refresh
+  fails, continue with a warning. Do not use unrelated, mismatching or
+  otherwise known-stale caches"; metasalmon's B-422 is the twin). It used to
+  raise whatever it held. A copy of another ontology, a copy fetched under
+  another `accept`, a copy in the layout before B-336 and a copy known to be
+  stale are never returned, and are left on disk. A copy is known to be stale
+  once a replacement for it has arrived, which marks it superseded in a
+  `<key>.ttl.invalid` file before the replacement is written (the marker goes
+  when the replacement and its validators are complete, so an interrupted
+  replacement cannot revive the old bytes), or once a 304 for it carries an
+  ETag contradicting the one it was sent, which marks it too; a 304 with no
+  ETag, or with a weak form of the tag it was sent, confirms it. A failed
+  refresh alone never makes a copy stale, and neither does its age. A body
+  that breaks part-way is now that URL's failure, as it is under metasalmon,
+  where it fails inside `httr::GET()`, so the next URL is tried; it used to
+  raise out of the call. `tests/test_ontology_fetch.py` pins the default, the
+  warning, the isolation and the staleness rules, each shown failing before
+  the change; their twins are metasalmon's Q71 tests.
 
 * **A candidate row carries only the target's 19 columns, a retrieval query is
   trimmed as R trims it, and a role with no source is not searched.** Hub
