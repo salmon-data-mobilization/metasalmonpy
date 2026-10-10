@@ -2470,6 +2470,90 @@ def test_nuseds_crosswalk_prefills_stay_in_the_review_queue_with_ranked_alternat
     assert CROSSWALK_SLOT not in set(_queued_slots(path))
 
 
+def test_a_crosswalk_prefill_keeps_its_rows_when_the_packets_retrieval_finds_nothing(
+    tmp_path, monkeypatch
+):
+    # Codex review of this package's pull request 110. A target whose packet
+    # shortlist came back empty lost every row when its assessment was
+    # ingested, and a crosswalk-filled slot, whose IRI is not blank, then left
+    # the review queue for good: neither review_semantics() nor a later
+    # packet's blank-slot discovery could find it again. metasalmon's twin is
+    # the test of the same name in tests/testthat/test-review-console.R.
+    from metasalmonpy import semantics as sem
+
+    monkeypatch.setattr(
+        sem,
+        "suggest_semantics",
+        functools.partial(sem.suggest_semantics, search_fn=_crosswalk_hits),
+    )
+
+    def nothing(query, role=None, sources=None):
+        return _crosswalk_hits(query, role=role, sources=sources).iloc[0:0]
+
+    resources = {"escapement": pd.DataFrame({"ENUMERATION_METHODS": ["Fence"], "count": [10]})}
+    codes = pd.DataFrame(
+        {
+            "dataset_id": ["demo-1"],
+            "table_id": ["escapement"],
+            "column_name": ["ENUMERATION_METHODS"],
+            "code_value": ["Fence"],
+            "code_label": ["Fence"],
+            "code_description": [None],
+            "term_iri": [None],
+        }
+    )
+    path = Path(
+        create_sdp(
+            resources,
+            path=tmp_path / "crosswalk-empty-shortlist",
+            dataset_id="demo-1",
+            seed_codes=codes,
+            semantic_code_scope="all",
+            semantic_max_per_role=2,
+            seed_semantics=True,
+            seed_verbose=False,
+            check_updates=False,
+            overwrite=True,
+        )
+    )
+    before = semantic_suggestions(str(path))
+    before = before[before["code_value"].map(_text) == "Fence"]
+    assert len(before) == 2
+
+    built = write_semantic_review_packet(
+        str(path),
+        search_fn=nothing,
+        code_scope="all",
+        review_dir=path / "review",
+        top_n=2,
+        quiet=True,
+    )
+    packet = read_semantic_review_json(built["path"])
+    packet_slots = [
+        slot for slot in _slots(packet) if slot["target"]["slot_id"] == CROSSWALK_SLOT
+    ]
+    assert len(packet_slots) == 1
+    assert packet_slots[0]["candidates"] == []
+
+    assessment = _crosswalk_harness_row(
+        packet_slots[0]["target"],
+        llm_decision="review",
+        llm_confidence=0.5,
+        llm_rationale="Needs local review.",
+    )
+    assessment_path = path / "review" / "semantic-assessments-pass-1.csv"
+    _write_crosswalk_harness([assessment], assessment_path, packet["packet_id"])
+    ingest_semantic_assessments(
+        str(path), assessments=assessment_path, search_fn=nothing, quiet=True
+    )
+
+    after = semantic_suggestions(str(path))
+    after = after[after["code_value"].map(_text) == "Fence"]
+    assert list(after["iri"]) == list(before["iri"])
+    assert set(after["prefill_origin"]) == {"nuseds_crosswalk"}
+    assert (_queued_slots(path) == CROSSWALK_SLOT).sum() == 2
+
+
 def test_semantic_code_scope_none_leaves_crosswalk_prefills_out_of_discovery(
     monkeypatch,
 ):

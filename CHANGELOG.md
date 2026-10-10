@@ -245,14 +245,18 @@ and moving it is a separate outward act.
   no decision is recorded; `write_semantic_review_packet()` reports the prefill
   as the slot's current value, with candidates from retrieval; and
   `ingest_semantic_assessments()` keeps the provenance when it refreshes the
-  shortlist. The prefill remains in `codes.csv` until a reviewer changes it; an
+  shortlist, and leaves a slot's earlier rows in place when the packet's
+  retrieval found nothing for it, so the slot does not vanish from the queue
+  with its IRI still filled (metasalmon pull request 275 makes the same fix).
+  The prefill remains in `codes.csv` until a reviewer changes it; an
   explicit caller IRI remains final, `semantic_code_scope="none"` still
   performs no code discovery, and a manual edit or an applied decision closes
   the slot. The frozen target and assessment rows are unchanged, and no
-  ontology term is chosen or changed. Twins of metasalmon's two regressions in
+  ontology term is chosen or changed. Twins of metasalmon's three regressions in
   `tests/test_review_console.py`: the first was RED on this tree before the
   port, with no candidate row for the filled code, and RED again with the
-  queue's exception or the ingester's preservation taken away on its own.
+  queue's exception or the ingester's preservation taken away on its own; the
+  third was RED before the empty-shortlist rule, with the slot's rows gone.
 
 * **Defects in the review-packet contract are fixed before it ships.** Hub
   queue item **B-425**, the metasalmonpy half of **B-424**. B-327 found each
