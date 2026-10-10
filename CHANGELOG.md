@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Add bounded, read-only `capture_catalogue_query()` for public KNB/DataONE metadata. Captures preserve raw pages, hashes and provenance, never overwrite evidence, and leave annotations pending. The mirrored R interface is proposed in the companion MetaSalmon PR. No publication, model calls or version bump.
+* Add bounded, read-only `capture_catalogue_query()` for public KNB/DataONE metadata. Captures preserve raw pages, hashes and provenance, never overwrite evidence, and leave annotations pending. The mirrored R interface is on metasalmon `main` as `capture_catalogue_query()` in `R/catalogue-discovery.R` (metasalmon pull request 227, hub item B-427) [corrected 2026-10-08: this said it was still proposed in a companion pull request]. No publication, model calls or version bump.
 
   The success receipt is installed atomically. Failure bookkeeping retains raw
   evidence on a best effort basis and re-raises the original error or keyboard
@@ -31,8 +31,11 @@
   Its public manual
   redirect flow preserves cookies, origin-bound auth, target-host netrc and
   proxy/CA environment settings without draining bodies or using a private shim.
-  Paired localhost proof passes on Python3.9.6 and3.13.11; both implementation
-  merges remain outstanding.
+  Paired localhost proof passes on Python 3.9.6 and 3.13.11. [corrected
+  2026-10-08: this said both implementation merges remained outstanding; the R
+  half is on metasalmon `main` as `verify_sdp_semantic_iris()` in
+  `R/semantic-iri-verification.R` (metasalmon pull request 244, hub item
+  B-130), and this half is on `main` here.]
 
 **Work that landed after the `0.5.0` number moved, and the reason it is not
 under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
