@@ -1207,9 +1207,10 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
     ``semantic_suggestions.csv`` are replaced by the packet's shortlist carrying
     the merged assessment columns. A slot with a recorded decision keeps its
     rows, as does a hand-picked row; a target the packet does not hold is
-    untouched. Rows are replaced target by target, never slot by slot: a code
-    value of a measurement column has three targets in one slot, and a pass
-    that finalizes one of them must not drop the rows of another, whether it is
+    untouched, and so is one whose packet shortlist came back empty. Rows are
+    replaced target by target, never slot by slot: a code value of a
+    measurement column has three targets in one slot, and a pass that
+    finalizes one of them must not drop the rows of another, whether it is
     still awaiting its second pass or was finalized a pass earlier (hub item
     B-425, the mirror of B-424). A package whose every lookup found nothing has
     no shortlist file, and a retry that gained candidates gives it one.
@@ -1244,8 +1245,27 @@ def _rewrite_suggestions(path: Path, merged: pd.DataFrame, targets: list) -> Opt
     pieces = []
     seen = []
     for address in dict.fromkeys(existing_targets):
-        if address in replace:
-            pieces.extend(record for record, owner in zip(merged_records, merged_targets) if owner == address)
+        replacement = [dict(record) for record, owner in zip(merged_records, merged_targets) if owner == address]
+        # An empty shortlist replaces nothing. Dropping the target's rows would
+        # leave a crosswalk-filled slot, whose IRI is not blank, where neither
+        # review_semantics() nor blank-slot discovery can find it again.
+        if address in replace and replacement:
+            # Prefill provenance belongs to the package, not to the harness or
+            # its retrieved shortlist. Keep the target's original stamp when an
+            # assessment refreshes candidates, so an undecided crosswalk IRI
+            # stays reviewable (hub B-426, the mirror of metasalmon's B-120).
+            original = [record for record, owner in zip(existing_records, existing_targets) if owner == address]
+            for column in ("prefill_origin", "prefill_iri"):
+                if column not in existing.columns:
+                    continue
+                values = list(dict.fromkeys(
+                    record.get(column) for record in original
+                    if record.get(column) is not None and str(record.get(column)) != ""
+                ))
+                if len(values) == 1:
+                    for record in replacement:
+                        record[column] = values[0]
+            pieces.extend(replacement)
             seen.append(address)
         else:
             pieces.extend(record for record, owner in zip(existing_records, existing_targets) if owner == address)

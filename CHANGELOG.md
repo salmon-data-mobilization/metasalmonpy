@@ -234,6 +234,33 @@ and moving it is a separate outward act.
 
 ### Fixed
 
+* **NuSEDS crosswalk-filled code terms now appear in `review_semantics()` with
+  ranked alternatives when semantic seeding retrieves candidates** (hub queue
+  item **B-426**, the mirror of metasalmon's **B-120**). The crosswalk wrote a
+  final `term_iri` before discovery ran, so a code it filled got no suggestion
+  row, and `include_filled=True` could not recover a shortlist that had never
+  been written. `infer_salmon_datapackage_artifacts()` now records which blank
+  code IRIs the call itself filled, blanks only the temporary discovery input
+  for them, and stamps their candidates with two package-owned columns, on the
+  `semantic_suggestions` attribute and in `semantic_suggestions.csv`:
+  `prefill_origin` (`nuseds_crosswalk`) and `prefill_iri`. `review_semantics()`
+  queues such a slot by default while `codes.csv` still holds the prefill and
+  no decision is recorded; `write_semantic_review_packet()` reports the prefill
+  as the slot's current value, with candidates from retrieval; and
+  `ingest_semantic_assessments()` keeps the provenance when it refreshes the
+  shortlist, and leaves a slot's earlier rows in place when the packet's
+  retrieval found nothing for it, so the slot does not vanish from the queue
+  with its IRI still filled (metasalmon pull request 275 makes the same fix).
+  The prefill remains in `codes.csv` until a reviewer changes it; an
+  explicit caller IRI remains final, `semantic_code_scope="none"` still
+  performs no code discovery, and a manual edit or an applied decision closes
+  the slot. The frozen target and assessment rows are unchanged, and no
+  ontology term is chosen or changed. Twins of metasalmon's three regressions in
+  `tests/test_review_console.py`: the first was RED on this tree before the
+  port, with no candidate row for the filled code, and RED again with the
+  queue's exception or the ingester's preservation taken away on its own; the
+  third was RED before the empty-shortlist rule, with the slot's rows gone.
+
 * **Direct opt-in semantic review now keeps enough candidates for the LLM's
   requested shortlist.** Hub **B-302** ports metasalmon's **B-57**: with
   `llm_assess=True`, the first retrieval pass keeps

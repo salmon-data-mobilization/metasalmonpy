@@ -1747,6 +1747,109 @@ def _prefill_legacy_enumeration_method_code_terms(codes, dictionary=None):
     )
 
 
+#: The provenance a crosswalk-filled code slot's candidates carry
+#: (``prefill_origin``), the one value ``review_semantics()`` recognises.
+CROSSWALK_PREFILL_ORIGIN = "nuseds_crosswalk"
+_CROSSWALK_CODE_KEYS = ("dataset_id", "table_id", "column_name", "code_value")
+
+
+def _crosswalk_code_keys(rows: Optional[pd.DataFrame]) -> list:
+    """``.ms_crosswalk_code_keys()``: one key per row from the four code cells.
+
+    The cells are rendered as text, a missing one as the empty string, and
+    joined with a carriage return, as the prefill engine keys its columns.
+    """
+    if rows is None or len(rows) == 0:
+        return []
+    columns = []
+    for name in _CROSSWALK_CODE_KEYS:
+        if name in rows.columns:
+            columns.append(["" if pd.isna(value) else str(value) for value in rows[name]])
+        else:
+            columns.append([""] * len(rows))
+    return ["\r".join(parts) for parts in zip(*columns)]
+
+
+def _crosswalk_code_prefills(
+    before: Optional[pd.DataFrame], after: Optional[pd.DataFrame]
+) -> pd.DataFrame:
+    """``.ms_crosswalk_code_prefills()``: the code rows this call filled from a crosswalk.
+
+    A NuSEDS prefill has provenance only when this call changed a blank code
+    IRI, so the rows are found by comparing ``term_iri`` before and after the
+    three prefills, position by position. The four code keys are the
+    write-back address semantic suggestions use; keeping the prefill IRI
+    beside them lets the review show alternatives without changing the final
+    value already written into ``codes.csv``. Mirrors metasalmon's B-120.
+    """
+    empty = pd.DataFrame(columns=[*_CROSSWALK_CODE_KEYS, "prefill_iri"], dtype="object")
+    if before is None or after is None or len(after) == 0 or len(before) != len(after):
+        return empty
+    if "term_iri" not in before.columns or "term_iri" not in after.columns:
+        return empty
+    old = ["" if pd.isna(value) else str(value).strip(READR_TRIM_CHARS) for value in before["term_iri"]]
+    new = ["" if pd.isna(value) else str(value).strip(READR_TRIM_CHARS) for value in after["term_iri"]]
+    filled = [not was and bool(now) for was, now in zip(old, new)]
+    if not any(filled):
+        return empty
+    out = pd.DataFrame(
+        {
+            name: [after[name].iloc[position] if name in after.columns else None for position, keep in enumerate(filled) if keep]
+            for name in _CROSSWALK_CODE_KEYS
+        },
+        dtype="object",
+    )
+    out["prefill_iri"] = [value for value, keep in zip(new, filled) if keep]
+    return out
+
+
+def _mark_crosswalk_suggestions(
+    suggestions: Optional[pd.DataFrame], prefills: Optional[pd.DataFrame]
+) -> Optional[pd.DataFrame]:
+    """``.ms_mark_crosswalk_suggestions()``: the prefilled code slots' candidates stamped.
+
+    Only candidates for rows this package itself filled get ``prefill_origin``
+    (:data:`CROSSWALK_PREFILL_ORIGIN`) and ``prefill_iri``. The two columns
+    travel in ``semantic_suggestions.csv``, outside the frozen target and
+    assessment rows, so a later review can tell a crosswalk prefill from a
+    caller's equally final IRI. Every other row carries a missing value in
+    both, and a frame with no code slot or no matching row is returned as it
+    came.
+    """
+    if suggestions is None or len(suggestions) == 0 or prefills is None or len(prefills) == 0:
+        return suggestions
+    if "target_sdp_file" not in suggestions.columns or "target_sdp_field" not in suggestions.columns:
+        return suggestions
+    code_slot = [
+        (not pd.isna(file_name) and str(file_name) == "codes.csv")
+        and (not pd.isna(field) and str(field) == "term_iri")
+        for file_name, field in zip(suggestions["target_sdp_file"], suggestions["target_sdp_field"])
+    ]
+    if not any(code_slot):
+        return suggestions
+    positions = {}
+    for position, key in enumerate(_crosswalk_code_keys(prefills)):
+        positions.setdefault(key, position)
+    matched = [
+        positions.get(key) if is_code_slot else None
+        for key, is_code_slot in zip(_crosswalk_code_keys(suggestions), code_slot)
+    ]
+    if all(position is None for position in matched):
+        return suggestions
+    stamped = suggestions.copy()
+    stamped["prefill_origin"] = pd.Series(
+        [pd.NA if position is None else CROSSWALK_PREFILL_ORIGIN for position in matched],
+        index=stamped.index,
+        dtype="object",
+    )
+    stamped["prefill_iri"] = pd.Series(
+        [pd.NA if position is None else prefills["prefill_iri"].iloc[position] for position in matched],
+        index=stamped.index,
+        dtype="object",
+    )
+    return stamped
+
+
 def _select_semantic_seed_codes(
     codes: Optional[pd.DataFrame],
     resource_map: Mapping,
@@ -1866,9 +1969,15 @@ def infer_salmon_datapackage_artifacts(
     # Hub backlog #101/#102 and PARITY row 47: until S10 chunk B, NO crosswalk
     # was wired into this path at all — not even the estimate one R has wired
     # since the crosswalks landed.
+    codes_before_prefill = None if codes is None else codes.copy()
     codes = _prefill_legacy_estimate_method_code_terms(codes, dictionary=dict_df)
     codes = _prefill_legacy_estimate_classification_code_terms(codes, dictionary=dict_df)
     codes = _prefill_legacy_enumeration_method_code_terms(codes, dictionary=dict_df)
+    # Which blank code IRIs this call filled from a crosswalk (hub B-426, the
+    # mirror of metasalmon's B-120). A filled row keeps its final IRI in
+    # codes.csv, and its candidates below are stamped with the provenance that
+    # keeps it in the review queue until a decision or a manual edit.
+    crosswalk_prefills = _crosswalk_code_prefills(codes_before_prefill, codes)
     dataset_meta = (
         normalize_dataset_meta(seed_dataset_meta)
         if seed_dataset_meta is not None
@@ -1885,6 +1994,19 @@ def infer_salmon_datapackage_artifacts(
         semantic_codes = _select_semantic_seed_codes(
             codes, resource_map, semantic_code_scope, dataset_id
         )
+        if (
+            semantic_codes is not None
+            and len(semantic_codes)
+            and len(crosswalk_prefills)
+        ):
+            # Only the temporary discovery input is blanked, so a crosswalk
+            # prefill still gets a ranked shortlist. The package's codes keep
+            # their final crosswalk IRIs; an explicit seed_codes term was never
+            # blank, so it never enters this set.
+            prefilled = set(_crosswalk_code_keys(crosswalk_prefills))
+            blank = [key in prefilled for key in _crosswalk_code_keys(semantic_codes)]
+            semantic_codes = semantic_codes.copy()
+            semantic_codes.loc[blank, "term_iri"] = pd.NA
 
         dict_df = suggest_semantics(
             resource_map,
@@ -1907,7 +2029,10 @@ def infer_salmon_datapackage_artifacts(
             llm_timeout_seconds=llm_timeout_seconds,
             llm_request_fn=llm_request_fn,
         )
-        semantic_suggestions = dict_df.attrs.get("semantic_suggestions")
+        semantic_suggestions = _mark_crosswalk_suggestions(
+            dict_df.attrs.get("semantic_suggestions"), crosswalk_prefills
+        )
+        dict_df.attrs["semantic_suggestions"] = semantic_suggestions
         semantic_llm_assessments = dict_df.attrs.get(
             "semantic_llm_assessments"
         )
