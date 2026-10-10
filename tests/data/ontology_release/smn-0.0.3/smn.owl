@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF xmlns="https://w3id.org/smn#"
+     xml:base="https://w3id.org/smn"
+     xmlns:ns1="http://purl.obolibrary.org/obo/"
+     xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     xmlns:skos="http://www.w3.org/2004/02/skos/core#">
+    <owl:Ontology rdf:about="https://w3id.org/smn">
+        <owl:versionIRI rdf:resource="https://w3id.org/smn/0.0.3"/>
+        <owl:versionInfo>0.0.3</owl:versionInfo>
+    </owl:Ontology>
+
+    <!-- https://w3id.org/smn/Escapement -->
+
+    <owl:Class rdf:about="https://w3id.org/smn/Escapement">
+        <rdfs:subClassOf rdf:resource="https://w3id.org/smn/Abundance"/>
+        <ns1:IAO_0000115 xml:lang="en">The number of mature salmon that   escape
+            the fishery and return to spawn.</ns1:IAO_0000115>
+        <rdfs:isDefinedBy rdf:resource="https://w3id.org/smn"/>
+        <rdfs:label xml:lang="en">Escapement</rdfs:label>
+    </owl:Class>
+
+    <!-- https://w3id.org/smn/Stock -->
+
+    <owl:Class rdf:about="https://w3id.org/smn/Stock">
+        <rdfs:subClassOf rdf:resource="https://w3id.org/smn/Entity"/>
+        <rdfs:label xml:lang="en">Stock</rdfs:label>
+    </owl:Class>
+
+    <!-- https://w3id.org/smn/StatisticalModifierScheme -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/smn/StatisticalModifierScheme">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#ConceptScheme"/>
+        <skos:definition xml:lang="en">Statistical modifiers an I-ADOPT variable can carry.</skos:definition>
+        <skos:prefLabel xml:lang="en">Statistical modifier scheme</skos:prefLabel>
+    </owl:NamedIndividual>
+
+    <!-- https://w3id.org/smn/MeanStatisticalModifier -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/smn/MeanStatisticalModifier">
+        <rdf:type rdf:resource="http://w3id.org/iadopt/ont/StatisticalModifier"/>
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <skos:definition xml:lang="en">The arithmetic mean of the observed values.</skos:definition>
+        <skos:inScheme rdf:resource="https://w3id.org/smn/StatisticalModifierScheme"/>
+        <skos:prefLabel xml:lang="en">Mean</skos:prefLabel>
+    </owl:NamedIndividual>
+
+    <!-- https://w3id.org/smn/BroodYearBasis -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/smn/BroodYearBasis">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <skos:definition xml:lang="en">Interprets a year coordinate as the brood year.</skos:definition>
+        <skos:inScheme rdf:resource="https://w3id.org/smn/YearBasisScheme"/>
+        <skos:prefLabel xml:lang="en">Brood year basis</skos:prefLabel>
+    </owl:NamedIndividual>
+
+    <!-- https://w3id.org/smn/AgeClassValue1 -->
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/smn/AgeClassValue1">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <skos:inScheme rdf:resource="https://w3id.org/smn/AgeClassValueScheme"/>
+        <skos:prefLabel xml:lang="en">Age class value 1</skos:prefLabel>
+    </owl:NamedIndividual>
+
+    <!-- https://w3id.org/smn/Stock, continued -->
+
+    <rdf:Description rdf:about="https://w3id.org/smn/Stock">
+        <rdfs:comment xml:lang="en">A group of salmon managed as one unit.</rdfs:comment>
+    </rdf:Description>
+
+    <!-- http://www.w3.org/ns/sosa/Observation -->
+
+    <owl:Class rdf:about="http://www.w3.org/ns/sosa/Observation"/>
+</rdf:RDF>

@@ -1,0 +1,8 @@
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<https://w3id.org/smn> a owl:Ontology ;
+    owl:versionIRI <https://w3id.org/smn/0.0.3> .
+
+<https://w3id.org/smn/Escapement> a owl:Class ;
+    rdfs:label "Escapement"@en .

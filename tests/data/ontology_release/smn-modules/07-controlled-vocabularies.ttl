@@ -1,0 +1,21 @@
+@prefix smn: <https://w3id.org/smn/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix iop: <http://w3id.org/iadopt/ont/> .
+
+smn:StatisticalModifierScheme a skos:ConceptScheme ;
+    skos:prefLabel "Statistical modifier scheme"@en ;
+    skos:definition "Statistical modifiers an I-ADOPT variable can carry."@en .
+
+smn:MeanStatisticalModifier a skos:Concept, iop:StatisticalModifier ;
+    skos:prefLabel "Mean"@en ;
+    skos:definition "The arithmetic mean of the observed values."@en ;
+    skos:inScheme smn:StatisticalModifierScheme .
+
+smn:BroodYearBasis a skos:Concept ;
+    skos:prefLabel "Brood year basis"@en ;
+    skos:definition "Interprets a year coordinate as the brood year."@en ;
+    skos:inScheme smn:YearBasisScheme .
+
+smn:AgeClassValue1 a skos:Concept ;
+    skos:prefLabel "Age class value 1"@en ;
+    skos:inScheme smn:AgeClassValueScheme .
