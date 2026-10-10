@@ -272,6 +272,16 @@ def test_a_snapshot_that_cannot_be_read_stops_the_call_instead_of_answering_noth
     empty.mkdir()
     with pytest.raises(OntologyReleaseError, match="holds none of the files"):
         find_terms("escapement", sources=["smn"], snapshot_dir={"smn": str(empty)})
+    # A directory where the release file or its manifest should be fails to open
+    # as an unreadable or vanished file does, and is the same release error.
+    file_is_dir = tmp_path / "file-is-dir"
+    (file_is_dir / "smn.owl").mkdir(parents=True)
+    with pytest.raises(OntologyReleaseError, match="Could not read"):
+        find_terms("escapement", sources=["smn"], snapshot_dir={"smn": str(file_is_dir)})
+    manifest_is_dir = _snapshot(tmp_path, "smn-0.0.3", manifest=False)
+    (Path(manifest_is_dir) / "MANIFEST.sha256").mkdir()
+    with pytest.raises(OntologyReleaseError, match="Could not read"):
+        find_terms("escapement", sources=["smn"], snapshot_dir={"smn": manifest_is_dir})
 
 
 def test_release_and_snapshot_dir_are_checked_before_anything_is_searched(no_network):
@@ -301,6 +311,23 @@ def test_pinned_and_latest_results_do_not_share_a_cache_entry(no_network, monkey
     assert len(pinned) > 0
     assert len(latest) == 0
     assert "ontology_release" not in latest.attrs
+
+
+def test_a_cached_result_records_the_copy_of_the_release_this_call_read(no_network, monkeypatch, tmp_path):
+    # The cache identity is the release's bytes, so two copies of one release
+    # share an entry, and the record still names the copy each call read.
+    monkeypatch.setenv("METASALMONPY_CACHE", "1")
+    verified = _snapshot(tmp_path, "smn-0.0.3")
+    unverified = _snapshot(tmp_path, "smn-0.0.3", manifest=False)
+
+    first = find_terms("escapement", sources=["smn"], snapshot_dir={"smn": verified})
+    second = find_terms("escapement", sources=["smn"], snapshot_dir={"smn": unverified})
+
+    assert len(term_search._term_cache) == 1
+    assert first.attrs["ontology_release"]["source"].iloc[0] == verified
+    assert bool(first.attrs["ontology_release"]["manifest_verified"].iloc[0])
+    assert second.attrs["ontology_release"]["source"].iloc[0] == unverified
+    assert not second.attrs["ontology_release"]["manifest_verified"].iloc[0]
 
 
 # ---------------------------------------------------------------------------

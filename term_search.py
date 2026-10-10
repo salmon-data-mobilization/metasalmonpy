@@ -1644,7 +1644,13 @@ def find_terms(
 
     cache_key = (query, role, tuple(sorted(resolved_sources)), expand_query, release_identity)
     if _cache_enabled() and cache_key in _term_cache:
-        return _term_cache[cache_key].copy()
+        cached = _term_cache[cache_key].copy()
+        # The cache identity is the release's bytes, which two copies of one
+        # release share while differing in where they came from and whether a
+        # manifest verified them, so the record is the one this call made.
+        if release_record is not None:
+            cached.attrs["ontology_release"] = release_record
+        return cached
 
     queries = _expand_query(query, role) if expand_query else [query]
     results = []

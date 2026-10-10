@@ -182,6 +182,20 @@ def _find_terms_release_pins(
     return pins
 
 
+def _read_release_path(path: str) -> bytes:
+    """The bytes of one file of a release.
+
+    A file that cannot be opened (one without permission, a directory in its
+    place, or one removed since it was found) is an ``OntologyReleaseError``
+    naming the path, like every other way a pinned read fails.
+    """
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except OSError as exc:
+        raise OntologyReleaseError(f"Could not read {path}: {exc.strerror or exc}") from exc
+
+
 def _read_sha256_manifest(path: str) -> Dict[str, str]:
     """Reads ``MANIFEST.sha256``: the digests, lower-cased, keyed by path.
 
@@ -189,8 +203,7 @@ def _read_sha256_manifest(path: str) -> Dict[str, str]:
     writes them. A line in any other shape, or a path listed twice with two
     digests, is an error: a manifest that cannot be read cannot verify anything.
     """
-    with open(path, "rb") as handle:
-        text = handle.read().decode("utf-8", errors="replace")
+    text = _read_release_path(path).decode("utf-8", errors="replace")
     # The line endings R's readLines() accepts.
     lines = [line for line in re.split(r"\r\n|\r|\n", text) if line.strip(_TRIM)]
     matches = [(line, _MANIFEST_LINE.fullmatch(line)) for line in lines]
@@ -366,8 +379,7 @@ def _resolve_release_file(
         source = f"{entry['iri']}/{version}"
 
     path = os.path.join(directory, name)
-    with open(path, "rb") as handle:
-        data = handle.read()
+    data = _read_release_path(path)
     sha256 = hashlib.sha256(data).hexdigest()
     manifest = os.path.join(directory, "MANIFEST.sha256")
     verified = False
