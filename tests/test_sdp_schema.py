@@ -102,16 +102,18 @@ def test_no_file_still_points_smn_data_pkg_at_the_retired_organization():
     """Nothing may still resolve *smn-data-pkg* under ``dfo-pacific-science``.
 
     Deliberately scoped to the spec repository. Two other old-organization
-    references survive on purpose and are logged as out of scope in the S10
-    execplan: ``ontology_fetch.py``'s default ontology URL (R is stale in the
-    same place and the two paths diverge, so it is a cross-repo coordination
+    references survived on purpose and were logged as out of scope in the S10
+    execplan: ``ontology_fetch.py``'s default ontology URL (R was stale in the
+    same place and the two paths diverged, so it was a cross-repo coordination
     task) and ``term_requests.GCDFO_REPO`` (it matches current R and stays in
-    lockstep until either repo moves first). A blanket ban on the string would
-    have to exempt both, and an exemption list with no expiry is how a guard
-    outlives its cause -- so the guard names the one host it actually owns.
+    lockstep until either repo moves first). The first was resolved on
+    2026-09-26 by hub B-423, which moved the default to smn's w3id.org root as
+    metasalmon has it. A blanket ban on the string would still have to exempt
+    the second, and an exemption list with no expiry is how a guard outlives
+    its cause -- so the guard names the one host it actually owns.
 
-    Retirement condition: widen this to the whole organization name once those
-    two references are resolved in their own streams.
+    Retirement condition: widen this to the whole organization name once
+    ``term_requests.GCDFO_REPO`` is resolved in its own stream.
     """
     stale = []
     needle = "dfo-pacific-science.github.io/smn-data-pkg"
