@@ -2554,6 +2554,111 @@ def test_a_crosswalk_prefill_keeps_its_rows_when_the_packets_retrieval_finds_not
     assert (_queued_slots(path) == CROSSWALK_SLOT).sum() == 2
 
 
+def test_rows_an_empty_shortlist_keeps_carry_the_current_assessment_not_a_superseded_accept(
+    tmp_path, monkeypatch
+):
+    # Codex review of metasalmon pull request 275. The kept rows still carried
+    # an earlier harness's accept, and review_semantics() reads the verdict
+    # from those rows, so it showed the superseded accept instead of the
+    # harness's current answer. metasalmon's twin is the test of the same name
+    # in tests/testthat/test-review-console.R.
+    from metasalmonpy import semantics as sem
+
+    monkeypatch.setattr(
+        sem,
+        "suggest_semantics",
+        functools.partial(sem.suggest_semantics, search_fn=_crosswalk_hits),
+    )
+
+    def nothing(query, role=None, sources=None):
+        return _crosswalk_hits(query, role=role, sources=sources).iloc[0:0]
+
+    resources = {"escapement": pd.DataFrame({"ENUMERATION_METHODS": ["Fence"], "count": [10]})}
+    codes = pd.DataFrame(
+        {
+            "dataset_id": ["demo-1"],
+            "table_id": ["escapement"],
+            "column_name": ["ENUMERATION_METHODS"],
+            "code_value": ["Fence"],
+            "code_label": ["Fence"],
+            "code_description": [None],
+            "term_iri": [None],
+        }
+    )
+    path = Path(
+        create_sdp(
+            resources,
+            path=tmp_path / "crosswalk-superseded-accept",
+            dataset_id="demo-1",
+            seed_codes=codes,
+            semantic_code_scope="all",
+            semantic_max_per_role=2,
+            seed_semantics=True,
+            seed_verbose=False,
+            check_updates=False,
+            overwrite=True,
+        )
+    )
+    assessment_path = path / "review" / "semantic-assessments-pass-1.csv"
+
+    def judge(search_fn, answer):
+        built = write_semantic_review_packet(
+            str(path),
+            search_fn=search_fn,
+            code_scope="all",
+            review_dir=path / "review",
+            top_n=2,
+            overwrite=True,
+            quiet=True,
+        )
+        packet = read_semantic_review_json(built["path"])
+        slot = next(slot for slot in _slots(packet) if slot["target"]["slot_id"] == CROSSWALK_SLOT)
+        _write_crosswalk_harness([answer(slot)], assessment_path, packet["packet_id"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ingest_semantic_assessments(str(path), assessments=assessment_path, search_fn=search_fn, quiet=True)
+        return slot
+
+    first = judge(
+        _crosswalk_hits,
+        lambda slot: _crosswalk_harness_row(
+            slot["target"],
+            llm_decision="accept",
+            llm_confidence=0.9,
+            llm_selected_candidate_index=2,
+            llm_selected_iri=slot["candidates"][1]["iri"],
+            llm_rationale="The second fits.",
+        ),
+    )
+    assert len(first["candidates"]) == 2
+    accepted = semantic_suggestions(str(path))
+    accepted = accepted[accepted["code_value"].map(_text) == "Fence"]
+    assert "accept" in set(accepted["llm_decision"].map(_text))
+    # Read back from semantic_suggestions.csv, where the selection flag is
+    # text, the accept shows under the candidate the harness chose and no other.
+    queue = review_semantics(str(path)).rows
+    assert list(queue.loc[queue["slot_id"] == CROSSWALK_SLOT, "llm_decision"]) == ["", "accept"]
+
+    second = judge(
+        nothing,
+        lambda slot: _crosswalk_harness_row(
+            slot["target"], llm_decision="review", llm_confidence=0.4, llm_rationale="Nothing fits now."
+        ),
+    )
+    assert second["candidates"] == []
+    after = semantic_suggestions(str(path))
+    after = after[after["code_value"].map(_text) == "Fence"]
+    assert list(after["iri"]) == list(accepted["iri"])
+    assert set(after["prefill_origin"]) == {"nuseds_crosswalk"}
+    assert list(after["llm_decision"].map(_text)) == ["review", "review"]
+    assert list(after["llm_rationale"].map(_text)) == ["Nothing fits now.", "Nothing fits now."]
+    assert not any(_text(value).upper() == "TRUE" for value in after["llm_selected"])
+
+    queue = review_semantics(str(path)).rows
+    assert (queue["slot_id"] == CROSSWALK_SLOT).sum() == 2
+    assert "accept" not in set(queue.loc[queue["slot_id"] == CROSSWALK_SLOT, "llm_decision"])
+
+
 def test_semantic_code_scope_none_leaves_crosswalk_prefills_out_of_discovery(
     monkeypatch,
 ):
@@ -2588,3 +2693,120 @@ def test_semantic_code_scope_none_leaves_crosswalk_prefills_out_of_discovery(
     assert list(artifacts["codes"]["term_iri"]) == [CROSSWALK_FENCE_IRI]
     suggestions = artifacts["semantic_suggestions"]
     assert suggestions is None or len(suggestions) == 0
+
+
+# -----------------------------------------------------------------------------
+# A model's verdict in the console
+# -----------------------------------------------------------------------------
+
+
+def _verdict_dictionary(decision, selected, confidence=0.9, rationale="The second candidate fits."):
+    rows = [
+        _suggestion_row(),
+        _suggestion_row(label="Watercourse Designation", iri=WATERCOURSE_IRI, score=3.1),
+    ]
+    for row, chosen in zip(rows, selected):
+        row.update(
+            llm_decision=decision,
+            llm_confidence=confidence,
+            llm_rationale=rationale,
+            llm_selected=chosen,
+        )
+    return _dictionary_with(rows)
+
+
+def _line_of(lines, rank) -> int:
+    return next(i for i, line in enumerate(lines) if line[3:].startswith(f"[{rank}] "))
+
+
+def test_a_model_accept_is_shown_under_the_candidate_it_chose_and_no_other():
+    # An assessment is one row per target, and its merge into the suggestions
+    # copies the decision onto every candidate; the console printed
+    # "llm: accept" under both, so nobody could tell which one was chosen.
+    review = review_semantics(_verdict_dictionary("accept", [False, True]))
+    assert list(review.rows["llm_decision"]) == ["", "accept"]
+    lines = review.render_lines("review")
+    verdicts = [i for i, line in enumerate(lines) if "llm: accept" in line]
+    assert verdicts == [verdicts[0]] and verdicts[0] > _line_of(lines, 2)
+    assert sum("The second candidate fits." in line for line in lines) == 1
+
+
+def test_a_model_decision_other_than_accept_is_shown_once_for_the_slot():
+    review = review_semantics(
+        _verdict_dictionary("review", [False, False], confidence=0.4, rationale="Neither fits well.")
+    )
+    lines = review.render_lines("review")
+    assert [line for line in lines if "llm:" in line] == ["   llm:     review (confidence 0.4)"]
+    assert lines.index("   llm:     review (confidence 0.4)") < _line_of(lines, 1)
+    assert sum("Neither fits well." in line for line in lines) == 1
+
+
+def test_the_candidate_a_model_accepted_stays_in_view_past_max_candidates():
+    review = review_semantics(_verdict_dictionary("accept", [False, True]), max_candidates=1)
+    assert list(review.rows["rank"]) == [1, 2]
+    assert any("llm: accept" in line for line in review.render_lines("review"))
+
+
+def test_suggestions_with_no_selection_flag_keep_the_verdict_on_every_candidate():
+    dictionary = _verdict_dictionary("accept", [None, None])
+    dictionary.attrs["semantic_suggestions"] = dictionary.attrs["semantic_suggestions"].drop(
+        columns="llm_selected"
+    )
+    review = review_semantics(dictionary)
+    assert list(review.rows["llm_decision"]) == ["accept", "accept"]
+
+
+def test_after_ingest_the_console_shows_a_harness_accept_under_its_candidate(tmp_path, monkeypatch):
+    # A package path reads the selection flag back from
+    # semantic_suggestions.csv as the text TRUE or FALSE.
+    from metasalmonpy import semantics as sem
+
+    monkeypatch.setattr(
+        sem,
+        "suggest_semantics",
+        functools.partial(sem.suggest_semantics, search_fn=_crosswalk_hits),
+    )
+    path = Path(
+        create_sdp(
+            {"spawners": pd.DataFrame({"stream_name": ["Goldstream"], "spawner_count": [120]})},
+            path=tmp_path / "pkg",
+            dataset_id="demo-1",
+            seed_semantics=True,
+            seed_verbose=False,
+            check_updates=False,
+        )
+    )
+    built = write_semantic_review_packet(str(path), search_fn=_crosswalk_hits, quiet=True)
+    rows = []
+    for slot in _slots(read_semantic_review_json(Path(built["path"]))):
+        if len(slot["candidates"]) > 1:
+            rows.append(
+                _crosswalk_harness_row(
+                    slot["target"],
+                    llm_decision="accept",
+                    llm_confidence=0.9,
+                    llm_selected_candidate_index=2,
+                    llm_selected_iri=slot["candidates"][1]["iri"],
+                    llm_rationale="The second fits.",
+                )
+            )
+        else:
+            rows.append(
+                _crosswalk_harness_row(
+                    slot["target"], llm_decision="review", llm_confidence=0.2, llm_rationale="Too few."
+                )
+            )
+    _write_crosswalk_harness(rows, path / "review" / "semantic-assessments-pass-1.csv", built["packet_id"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ingest_semantic_assessments(str(path), search_fn=_crosswalk_hits, quiet=True)
+
+    review = review_semantics(str(path), columns=["spawner_count"])
+    variable = review.rows[review.rows["role"] == "variable"]
+    assert list(variable["rank"]) == [1, 2]
+    assert list(variable["llm_decision"]) == ["", "accept"]
+
+
+def test_max_candidates_still_bounds_a_slot_whose_accept_names_no_selected_candidate():
+    review = review_semantics(_verdict_dictionary("accept", [None, None]), max_candidates=1)
+    assert list(review.rows["rank"]) == [1]

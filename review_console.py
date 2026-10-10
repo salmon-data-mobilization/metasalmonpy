@@ -589,8 +589,10 @@ def review_semantics(
     **This never contacts a network or an LLM.** It reads the
     ``semantic_suggestions`` attribute (or ``semantic_suggestions.csv``) that
     :func:`suggest_semantics` / :func:`create_sdp` already produced. When those
-    suggestions carry LLM review -- only possible if they were generated with
-    ``llm_assess=True`` -- this surfaces it; it never generates it.
+    suggestions carry a model's assessment -- ingested from your own harness by
+    :func:`~metasalmonpy.ingest_semantic_assessments`, or made by the deprecated
+    ``llm_assess=True`` -- this shows it, an accept under the candidate it chose
+    and any other decision once for the slot; it never generates one.
 
     Parameters
     ----------
@@ -604,7 +606,8 @@ def review_semantics(
         crosswalk-prefilled code slots with a saved shortlist are shown by
         default until decided.
     max_candidates
-        Maximum candidates shown per slot. ``None`` shows all.
+        Maximum candidates shown per slot. ``None`` shows all. A candidate a
+        model accepted is shown whatever its rank.
     columns
         Optional column names restricting the queue. A value matching no
         column is an error that names the columns that do exist -- filtering
@@ -616,11 +619,52 @@ def review_semantics(
     SemanticReview
     """
     queue = _review_queue(x, include_filled=include_filled, columns=columns)
-    rows = queue["review"]
+    rows, chosen = _review_place_llm_verdicts(queue)
     if max_candidates is not None:
-        rows = rows[rows["rank"] <= int(max_candidates)]
+        # The candidate a model accepted stays in view whatever its rank: it is
+        # the choice a person is asked to confirm.
+        rows = rows[(rows["rank"] <= int(max_candidates)) | chosen]
 
     return SemanticReview(rows.reset_index(drop=True), queue["review_path"])
+
+
+def _review_place_llm_verdicts(queue: dict):
+    """Keep a model's accept on the one candidate it chose.
+
+    An assessment is one row per target, and merging it into the suggestions
+    copies its decision, confidence and rationale onto every candidate of the
+    target; only ``llm_selected`` says which candidate an accept chose. Shown
+    as it came, a harness's accept of candidate 2 printed ``llm: accept`` under
+    every candidate in the slot, and the person confirming it could not tell
+    which one it meant. So an accept stays on the selected candidate's row and
+    is cleared from the others. Any other decision judges the whole shortlist,
+    stays on every row, and is printed once for the slot. Suggestions with no
+    ``llm_selected`` column, and an accept none of whose candidates is
+    selected, are left as they came.
+
+    Returns the rows and, aligned with them, which row is an accepted
+    candidate: the one row per slot that stays shown past ``max_candidates``.
+    """
+    from .semantic_review_packet import _flag
+
+    rows = queue["review"].copy()
+    suggestions = queue["suggestions"]
+    if rows.empty or "llm_selected" not in suggestions.columns:
+        return rows, pd.Series(False, index=rows.index)
+    selected = pd.Series(
+        [
+            _flag(value) is True
+            for value in suggestions["llm_selected"].iloc[queue["source_row"]]
+        ],
+        index=rows.index,
+    )
+    accepted = rows["llm_decision"].map(_text).eq("accept")
+    chosen = accepted & selected
+    clear = accepted & ~selected & rows["slot_id"].isin(set(rows.loc[chosen, "slot_id"]))
+    if clear.any():
+        rows.loc[clear, ["llm_decision", "llm_rationale"]] = ""
+        rows.loc[clear, "llm_confidence"] = float("nan")
+    return rows, chosen
 
 
 def _review_queue(
@@ -1099,6 +1143,16 @@ def _format_score(value) -> str:
     return f"score {rounded:g}"
 
 
+def _review_llm_lines(row, lead: str) -> list:
+    """A model's verdict and its rationale, as the console prints them."""
+    confidence = row["llm_confidence"]
+    return [
+        lead
+        + _text(row["llm_decision"])
+        + ("" if pd.isna(confidence) else f" (confidence {float(confidence):g})")
+    ] + _review_wrap(row["llm_rationale"], indent="            ")
+
+
 def _render_review_lines(review: SemanticReview, object_name: str) -> list:
     rows = review.rows
     if rows.empty:
@@ -1156,6 +1210,15 @@ def _render_review_lines(review: SemanticReview, object_name: str) -> list:
                     "   DECIDED: reject (clears the field)"
                     + (f" — {reason}" if reason else "")
                 )
+        # A model's decision other than accept judges the whole shortlist, so
+        # it is printed once, here, rather than under every candidate; an
+        # accept is printed under the one candidate it chose.
+        verdicts = slot_rows[slot_rows["llm_decision"].map(_text) != ""]
+        slot_verdict = not verdicts.empty and not (
+            verdicts["llm_decision"].map(_text).eq("accept").any()
+        )
+        if slot_verdict:
+            lines.extend(_review_llm_lines(verdicts.iloc[0], "   llm:     "))
         lines.append("")
 
         for position in range(len(slot_rows)):
@@ -1178,23 +1241,8 @@ def _render_review_lines(review: SemanticReview, object_name: str) -> list:
                     candidate["iri"], candidate["source"], candidate["ontology"]
                 )
             )
-            llm_decision = _text(candidate["llm_decision"])
-            if llm_decision:
-                confidence = candidate["llm_confidence"]
-                lines.append(
-                    "       llm: "
-                    + llm_decision
-                    + (
-                        ""
-                        if pd.isna(confidence)
-                        else f" (confidence {float(confidence):g})"
-                    )
-                )
-                lines.extend(
-                    _review_wrap(
-                        candidate["llm_rationale"], indent="            "
-                    )
-                )
+            if not slot_verdict and _text(candidate["llm_decision"]):
+                lines.extend(_review_llm_lines(candidate, "       llm: "))
             # A call is printed only where it runs. A candidate whose IRI names
             # no term is here only to carry a recorded reject, or because the
             # review was not built by :func:`review_semantics`, and

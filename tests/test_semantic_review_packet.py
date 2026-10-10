@@ -860,6 +860,30 @@ def test_apply_semantic_suggestions_llm_applies_only_an_accept():
     assert pd.isna(out.loc[out["column_name"] == "b", "term_iri"].iloc[0])
 
 
+def test_apply_semantic_suggestions_llm_reads_a_selection_flag_held_as_text():
+    # A package's semantic_suggestions.csv, and the dictionary an ingest of a
+    # package path returns, hold llm_selected as the text TRUE or FALSE. Read
+    # with astype(bool), "FALSE" is a non-empty string and so true: every
+    # candidate of an accepted target was selected and the first one applied,
+    # whichever the harness chose. metasalmon's twin is the test of the same
+    # name in tests/testthat/test-semantic-review-packet.R.
+    frame = pd.DataFrame(
+        {
+            "dataset_id": "d1", "table_id": "t1", "column_name": "a", "code_value": None,
+            "dictionary_role": "variable", "target_scope": "column", "target_sdp_file": "column_dictionary.csv",
+            "target_sdp_field": "term_iri", "target_row_key": "d1/t1/a", "search_query": "q",
+            "label": ["A one", "A two"], "iri": ["https://example.org/a1", "https://example.org/a2"],
+            "source": "smn", "ontology": "smn", "definition": "x", "score": [2.0, 1.0],
+            "llm_selected": ["FALSE", "TRUE"], "llm_decision": "accept", "llm_confidence": "0.9",
+        }
+    )
+    dictionary = pd.DataFrame(
+        {"dataset_id": "d1", "table_id": "t1", "column_name": ["a"], "column_role": "measurement", "term_iri": None}
+    )
+    out = apply_semantic_suggestions(dictionary, suggestions=frame, strategy="llm", verbose=False)
+    assert out.loc[out["column_name"] == "a", "term_iri"].iloc[0] == "https://example.org/a2"
+
+
 # -----------------------------------------------------------------------------
 # The sentinel: no model call, and no network except through search_fn
 # -----------------------------------------------------------------------------
