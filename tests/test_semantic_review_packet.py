@@ -871,6 +871,7 @@ PROVIDER_SYMBOLS = (
     ("llm_review", "_request_json_with_retries"),
     ("llm_review", "resolve_llm_config"),
     ("llm_review", "assess_semantic_suggestions"),
+    ("llm_review", "_assess_semantic_suggestions"),
     ("llm_review", "_assess_generic"),
     ("llm_review", "_assess_bundle"),
     ("llm_review", "_generated_retry_query"),
