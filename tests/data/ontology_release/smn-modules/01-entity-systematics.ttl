@@ -1,0 +1,8 @@
+@prefix smn: <https://w3id.org/smn/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+smn:Stock a owl:Class ;
+    rdfs:label "Stock"@en ;
+    rdfs:comment "A group of salmon managed as one unit."@en ;
+    rdfs:subClassOf smn:Entity .

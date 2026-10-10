@@ -94,6 +94,24 @@ and moving it is a separate outward act.
 
 ### Added
 
+* **`find_terms()` and `fetch_salmon_ontology()` read a pinned release of smn
+  or gcdfo** (tern ECOSYSTEM M-12). `find_terms(release={"smn": "0.0.3"})`
+  searches that release instead of the latest ontology. The release is
+  downloaded once per process from its version IRI and checked against its
+  `MANIFEST.sha256` when it has one; `snapshot_dir={"smn": "<dir>"}` reads a
+  local copy of the release directory instead. `attrs["ontology_release"]`
+  records what was searched: the version, the declared `owl:versionIRI`, the
+  file, its SHA-256 and whether a manifest verified it.
+  `fetch_salmon_ontology(release="0.0.3")` returns the release file `accept`
+  prefers, cached under `<cache_dir>/releases/`. A pin never falls back to the
+  latest ontology: a release that cannot be read, or does not match its
+  manifest, raises `OntologyReleaseError`, a new `RuntimeError` subclass. A
+  pinned smn release is read from its RDF/XML, and its terms get the role hints
+  the module reader gives them, except an entity hint that comes only from
+  membership of the `01-entity-systematics` module. metasalmon does the same,
+  and the two are held to one set of fixtures, vendored from metasalmon as
+  `tests/data/ontology_release/`.
+
 * **Model judgement runs outside the package: `write_semantic_review_packet()`
   writes a review packet for a harness to judge and
   `ingest_semantic_assessments()` reads its assessments back.** Hub queue item
