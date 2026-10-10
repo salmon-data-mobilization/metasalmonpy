@@ -1379,12 +1379,24 @@ def _is_missing_status(value: object) -> bool:
 
 
 def _normalize_explicit_sources(sources: Sequence[str]) -> tuple[str, ...]:
+    """An explicit source list, read the way metasalmon reads one.
+
+    Each name is trimmed (``str.strip()``) and lower-cased, a name that is
+    missing or empty after trimming is dropped, and a repeat is dropped after
+    its first appearance, in the caller's order. metasalmon's
+    ``.ms_normalize_explicit_sources()`` (``R/term_search.R``) applies the same
+    rule since hub B-421, trimming exactly the code points ``str.strip()``
+    removes. A missing entry (``None``, NaN, ``pd.NA``) names no source: it
+    used to become the name ``"none"``, ``"nan"`` or ``"<na>"``, searched as
+    nothing and reported as a search that found nothing, where metasalmon drops
+    its ``NA``.
+    """
     values = (sources,) if isinstance(sources, str) else sources
     return tuple(
         dict.fromkeys(
             str(source).strip().lower()
             for source in values
-            if str(source).strip()
+            if not _is_missing_status(source) and str(source).strip()
         )
     )
 
@@ -1397,6 +1409,24 @@ def find_terms(
 ) -> pd.DataFrame:
     """
     Find ontology terms across OLS, NVS, and other vocab sources.
+
+    Parameters
+    ----------
+    query
+        Search text.
+    role
+        Optional I-ADOPT role. It shapes ranking and, when ``sources`` is
+        ``None``, chooses the sources searched.
+    sources
+        Sources to search, or ``None`` (the default) for
+        ``sources_for_role(role)``; with no role that is
+        ``["smn", "gcdfo", "ols", "nvs"]``. A list you supply is a strict
+        allowlist: each name is trimmed and lower-cased, a missing or empty
+        name is dropped, and a repeat is dropped after its first appearance. An
+        empty list returns an empty frame. metasalmon's ``find_terms()`` reads
+        ``sources`` the same way (hub B-420 and B-421).
+    expand_query
+        Search role-aware variants of ``query`` as well as ``query`` itself.
     """
     resolved_sources = (
         tuple(sources_for_role(role))
