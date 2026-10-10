@@ -69,8 +69,9 @@ per slot and role. It never generates one.
 `review_semantics()` accepts a written package path, a dictionary carrying the
 attribute, or the mapping `infer_salmon_datapackage_artifacts()` returns.
 `include_filled=True` also queues slots that already hold a final IRI or already
-carry a decision, `max_candidates=` bounds the shortlist per slot (`None` shows
-all), and `columns=` restricts the queue — a name matching no column is an error
+carry a decision, `max_candidates=` bounds the shortlist of each target, which
+is one slot or, for a code value, one of its roles (`None` shows all), and
+`columns=` restricts the queue — a name matching no column is an error
 naming the columns that do exist, because filtering first and reporting an empty
 queue told a user who mistyped a column name that their package was finished.
 

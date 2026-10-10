@@ -2756,13 +2756,14 @@ def test_suggestions_with_no_selection_flag_keep_the_verdict_on_every_candidate(
     assert list(review.rows["llm_decision"]) == ["accept", "accept"]
 
 
-def _code_verdict_dictionary(verdicts, selected=(False, False, False)):
+def _code_verdict_dictionary(verdicts, selected=(False, False, False), per_role=1):
     """One code of a measurement column, its three targets in one slot.
 
     Codex review of metasalmon pull request 275: a harness judges each target
     on its own, and the console printed the slot's first verdict alone, so a
     ``review`` for the constraint hid a ``request_new_term`` for the entity.
-    metasalmon's twins are the tests of the same names in
+    ``per_role`` gives each target that many candidates; ``selected`` flags a
+    target's first. metasalmon's twins are the tests of the same names in
     tests/testthat/test-review-console.R.
     """
     rows = [
@@ -2773,14 +2774,15 @@ def _code_verdict_dictionary(verdicts, selected=(False, False, False)):
             target_sdp_file="codes.csv",
             target_sdp_field="term_iri",
             target_row_key="demo-1/spawners/spawner_count/-9",
-            label=f"{role} term",
-            iri=f"https://example.org/{role}/-9",
+            label=f"{role} term" if n == 1 else f"{role} term {n}",
+            iri=f"https://example.org/{role}/-9" if n == 1 else f"https://example.org/{role}/-9/{n}",
             llm_decision=decision,
             llm_confidence=0.5,
             llm_rationale=f"Why {role} got {decision} .",
-            llm_selected=chosen,
+            llm_selected=chosen and n == 1,
         )
         for role, decision, chosen in zip(("constraint", "entity", "method"), verdicts, selected)
+        for n in range(1, per_role + 1)
     ]
     return _dictionary_with(rows)
 
@@ -2820,6 +2822,35 @@ def test_an_accept_is_placed_per_target_not_per_slot():
         _code_verdict_dictionary(("accept", "accept", "review"), selected=(True, False, False))
     )
     assert list(review.rows["llm_decision"]) == ["accept", "accept", "review"]
+
+
+def test_max_candidates_caps_each_target_in_a_shared_code_slot():
+    # Codex review of pull request 113: the cap counted the slot's rank, so a
+    # first target with five candidates left the code's other targets no row,
+    # and their verdicts nowhere to print. Ranks stay the slot's, as
+    # accept_suggestion() reads them.
+    review = review_semantics(
+        _code_verdict_dictionary(("review", "request_new_term", "retry_search"), per_role=6), max_candidates=5
+    )
+    shown = review.rows.groupby("role", sort=False)["rank"].apply(list).to_dict()
+    assert shown == {
+        "constraint": [1, 2, 3, 4, 5],
+        "entity": [7, 8, 9, 10, 11],
+        "method": [13, 14, 15, 16, 17],
+    }
+    assert [line for line in review.render_lines("review") if "llm:" in line] == [
+        "   llm:     constraint: review (confidence 0.5)",
+        "   llm:     entity: request_new_term (confidence 0.5)",
+        "   llm:     method: retry_search (confidence 0.5)",
+    ]
+
+
+def test_a_targets_accepted_candidate_stays_in_view_past_its_cap():
+    review = review_semantics(
+        _code_verdict_dictionary(("review", "accept", "review"), selected=(False, True, False), per_role=3),
+        max_candidates=1,
+    )
+    assert list(zip(review.rows["role"], review.rows["rank"])) == [("constraint", 1), ("entity", 4), ("method", 7)]
 
 
 def test_after_ingest_the_console_shows_a_harness_accept_under_its_candidate(tmp_path, monkeypatch):

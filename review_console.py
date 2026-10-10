@@ -606,8 +606,10 @@ def review_semantics(
         crosswalk-prefilled code slots with a saved shortlist are shown by
         default until decided.
     max_candidates
-        Maximum candidates shown per slot. ``None`` shows all. A candidate a
-        model accepted is shown whatever its rank.
+        Maximum candidates shown per target: per slot, and per role where a
+        code value's slot holds its constraint, entity and method targets.
+        ``None`` shows all. A candidate a model accepted is shown whatever its
+        rank.
     columns
         Optional column names restricting the queue. A value matching no
         column is an error that names the columns that do exist -- filtering
@@ -620,10 +622,16 @@ def review_semantics(
     """
     queue = _review_queue(x, include_filled=include_filled, columns=columns)
     rows, chosen = _review_place_llm_verdicts(queue)
-    if max_candidates is not None:
-        # The candidate a model accepted stays in view whatever its rank: it is
-        # the choice a person is asked to confirm.
-        rows = rows[(rows["rank"] <= int(max_candidates)) | chosen]
+    if max_candidates is not None and not rows.empty:
+        # The cap is per target, a slot and role. A code value's slot holds its
+        # constraint, entity and method targets, and capped by the slot's rank,
+        # five candidates for its first target hid the others' rows and their
+        # verdicts with them. ``rank`` stays the slot's, which is what
+        # accept_suggestion() reads. The candidate a model accepted stays in
+        # view whatever its rank: it is the choice a person is asked to confirm.
+        target = rows["slot_id"].map(_text) + "|" + rows["role"].map(_text)
+        position = target.groupby(target, sort=False).cumcount() + 1
+        rows = rows[(position <= int(max_candidates)) | chosen]
 
     return SemanticReview(rows.reset_index(drop=True), queue["review_path"])
 
