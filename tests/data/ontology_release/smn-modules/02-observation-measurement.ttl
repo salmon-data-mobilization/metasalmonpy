@@ -1,0 +1,9 @@
+@prefix smn: <https://w3id.org/smn/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix iao: <http://purl.obolibrary.org/obo/IAO_> .
+
+smn:Escapement a owl:Class ;
+    rdfs:label "Escapement"@en ;
+    iao:0000115 "The number of mature salmon that escape the fishery and return to spawn."@en ;
+    rdfs:subClassOf smn:Abundance .

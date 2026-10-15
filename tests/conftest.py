@@ -131,8 +131,10 @@ def _reset_term_search_session_caches():
     """
     term_search._smn_index_cache.clear()
     term_search._gcdfo_index_cache.clear()
+    term_search._release_index_cache.clear()
     term_search._term_cache.clear()
     yield
     term_search._smn_index_cache.clear()
     term_search._gcdfo_index_cache.clear()
+    term_search._release_index_cache.clear()
     term_search._term_cache.clear()

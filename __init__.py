@@ -88,6 +88,7 @@ from .term_search import benchmark_term_ranking_fixtures, find_terms, sources_fo
 from .term_deduplication import deduplicate_proposed_terms, suggest_facet_schemes
 from .validation import validate_semantics
 from .ontology_fetch import fetch_salmon_ontology
+from .ontology_release import OntologyReleaseError
 from .nuseds import (
     nuseds_enumeration_method_crosswalk,
     nuseds_estimate_classification_crosswalk,
@@ -104,6 +105,7 @@ __all__ = [
     "__version__",
     "LLMDeprecationWarning",
     "MetadataReview",
+    "OntologyReleaseError",
     "SemanticReview",
     "SemanticReviewError",
     "SssomMappingSet",

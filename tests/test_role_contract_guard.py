@@ -191,6 +191,17 @@ def test_the_role_hint_layer_emits_every_role_it_can_flag():
         assert f'"is_{role}"' in hints_source
         assert f'"is_{role}"' in rdf_source
 
+    # smn has two readers -- the module reader for the latest ontology and the
+    # release reader for a pinned one -- and both build every row through
+    # `_smn_index_row()`, the one place an smn row's hints are emitted, so
+    # neither can emit a role the other drops.
+    row_source = inspect.getsource(term_search_smn._smn_index_row)
+    assert "_smn_role_hints(" in row_source
+    for reader in (term_search_smn.parse_smn_ttl_modules, term_search_smn._smn_release_index):
+        reader_source = inspect.getsource(reader)
+        assert "_smn_index_row(" in reader_source, reader.__name__
+        assert '"role_hints"' not in reader_source, reader.__name__
+
 
 def test_the_local_index_role_filter_has_a_column_for_every_role():
     # Without a role column in the allowlist the role falls through to "keep

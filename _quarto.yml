@@ -171,6 +171,7 @@ quartodoc:
       desc: "Fetch ontology sources and report semantic coverage."
       contents:
         - fetch_salmon_ontology
+        - OntologyReleaseError
         - validate_semantics
         - verify_sdp_semantic_iris
         - suggest_facet_schemes

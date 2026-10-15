@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rdf:RDF xmlns:owl="http://www.w3.org/2002/07/owl#"
+     xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+     xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+     xmlns:obo="http://purl.obolibrary.org/obo/"
+     xmlns:skos="http://www.w3.org/2004/02/skos/core#">
+    <owl:Ontology rdf:about="https://w3id.org/gcdfo/salmon">
+        <owl:versionIRI rdf:resource="https://w3id.org/gcdfo/salmon/0.0.9"/>
+    </owl:Ontology>
+
+    <owl:Class rdf:about="https://w3id.org/gcdfo/salmon#ConservationUnit">
+        <rdfs:label xml:lang="en">Conservation unit</rdfs:label>
+        <obo:IAO_0000115 xml:lang="en">A group of wild salmon sufficiently isolated from other groups that, if extirpated, is very unlikely to recolonize naturally.</obo:IAO_0000115>
+    </owl:Class>
+
+    <owl:NamedIndividual rdf:about="https://w3id.org/gcdfo/salmon#VisualCountMethod">
+        <rdf:type rdf:resource="http://www.w3.org/2004/02/skos/core#Concept"/>
+        <skos:prefLabel xml:lang="en">Visual count</skos:prefLabel>
+        <skos:inScheme rdf:resource="https://w3id.org/gcdfo/salmon#EnumerationMethodScheme"/>
+    </owl:NamedIndividual>
+</rdf:RDF>

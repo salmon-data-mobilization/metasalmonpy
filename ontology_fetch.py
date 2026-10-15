@@ -14,7 +14,7 @@ import os
 import sys
 import time
 import warnings
-from typing import Dict, List, Mapping, Optional
+from typing import Dict, List, Mapping, Optional, Union
 
 import requests
 
@@ -43,6 +43,8 @@ def fetch_salmon_ontology(
     cache_dir: Optional[str] = None,
     fallback_urls: Optional[List[str]] = None,
     timeout_seconds: float = 30,
+    release: Optional[str] = None,
+    snapshot_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
 ) -> str:
     """
     Fetch the Salmon Domain Ontology with HTTP caching.
@@ -61,6 +63,15 @@ def fetch_salmon_ontology(
     other, a conditional request carries only the validators that the URL it is
     sent to returned under the same ``accept``, and a 304 answer returns that
     URL's own copy. metasalmon names its cache files the same way.
+
+    With ``release`` or ``snapshot_dir``, it reads a pinned release of smn or
+    gcdfo instead: one file of that release's snapshot, the directory each
+    ontology publishes as ``docs/releases/<version>/``, and nothing newer. The
+    file is the representation ``accept`` prefers among the three a snapshot
+    carries (``text/turtle`` for ``.ttl``, ``application/rdf+xml`` for ``.owl``,
+    ``application/ld+json`` for ``.jsonld``). When the snapshot carries a
+    ``MANIFEST.sha256``, the file must be listed in it with the SHA-256 of its
+    bytes, or the call raises ``OntologyReleaseError``.
 
     Parameters
     ----------
@@ -87,6 +98,24 @@ def fetch_salmon_ontology(
         server's bytes, and the whole transfer: a server that keeps sending,
         slowly, is cut off ``timeout_seconds`` after the request began, as
         curl cuts it off under metasalmon.
+    release : str, optional
+        A release version of the ontology ``url`` names, such as ``"0.0.3"``;
+        ``url`` must then be the smn or gcdfo ontology IRI. The release is
+        downloaded from its version IRI (``https://w3id.org/smn/0.0.3``), or
+        from the snapshot directory on GitHub Pages when that fails, into
+        ``<cache_dir>/releases/<ontology>/<version>/`` together with its
+        ``MANIFEST.sha256``, once: a release does not change, so later calls
+        read that copy. A release that served no manifest when it was
+        downloaded stays unverified in that cache; delete its directory to
+        download it again. ``fallback_urls`` is not used.
+    snapshot_dir : str or os.PathLike, optional
+        A local directory holding a release snapshot of the ontology ``url``
+        names, such as a checkout's ``docs/releases/0.0.3/``. The file is read
+        from it and nothing is downloaded. Give ``release`` or
+        ``snapshot_dir``, not both: this call does not parse the file, so it
+        could not check that the directory holds that release.
+        ``find_terms()`` takes both and checks the snapshot's
+        ``owl:versionIRI``.
 
     Returns
     -------
@@ -96,6 +125,12 @@ def fetch_salmon_ontology(
         URL fails, the path of the eligible copy a URL this call tried returned
         under ``accept``, with a ``UserWarning`` (see Notes).
 
+        With ``release`` or ``snapshot_dir``, the path to the release file
+        read. It never falls back to the latest ontology: a release that cannot
+        be read or does not match its manifest raises. Compute the file's
+        SHA-256 to record exactly what was read; ``find_terms()`` records it
+        for you.
+
     Raises
     ------
     RuntimeError
@@ -104,6 +139,9 @@ def fetch_salmon_ontology(
         another ontology, a copy fetched under another ``accept``, a copy in
         the layout before each URL and representation had its own, and a copy
         known to be stale are never returned; they are left on disk.
+    OntologyReleaseError
+        With ``release`` or ``snapshot_dir``, when the release cannot be read
+        as asked. It is a ``RuntimeError``.
 
     Notes
     -----
@@ -129,6 +167,26 @@ def fetch_salmon_ontology(
     >>> with open(ttl_path, 'r') as f:
     ...     ontology_content = f.read()
     """
+    if release is not None or snapshot_dir is not None:
+        if fallback_urls is not None:
+            warnings.warn(
+                "fallback_urls is not used: a pinned release is read only from its own snapshot.",
+                UserWarning,
+                stacklevel=2,
+            )
+        # Imported here because ontology_release reads bodies through this
+        # module's `_read_body()`, so a top-level import would be circular.
+        from .ontology_release import _fetch_release_file
+
+        return _fetch_release_file(
+            url,
+            accept,
+            _default_cache_dir() if cache_dir is None else cache_dir,
+            timeout_seconds,
+            release,
+            snapshot_dir,
+        )
+
     # The default fallback belongs to the default url alone. It used to follow
     # any url, so a call for smn whose url failed returned gcdfo's body with no
     # warning (hub B-334; metasalmon's twin is B-333, and the two now apply one

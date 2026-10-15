@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -13,7 +15,7 @@ import urllib.parse
 import urllib.request
 import warnings
 import xml.etree.ElementTree as ET
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Union
 
 try:
     import pandas as pd
@@ -25,9 +27,22 @@ try:
 except ImportError as exc:  # pragma: no cover - import guard
     raise ImportError("metasalmonpy requires requests; install via `pip install requests`.") from exc
 
+from .ontology_release import (
+    _RELEASE_REGISTRY,
+    OntologyReleaseError,
+    _find_terms_release_pins,
+    _release_version_from_iri,
+    _resolve_release_file,
+)
 from .term_search_smn import (
+    _DCTERMS_NS,
+    _OWL_NS,
+    _RDF_NS,
+    _RDFS_NS,
+    _SKOS_NS,
     SMN_INDEX_COLUMNS,
     _smn_module_urls,
+    _smn_release_index,
     _smn_role_hints,
     parse_smn_ttl_modules,
 )
@@ -680,12 +695,6 @@ _GCDFO_FALLBACK_URLS = ("https://w3id.org/gcdfo/salmon/",)
 _SMN_IRI_PATTERN = r"^https?://w3id\.org/smn(#|/|$)"
 _GCDFO_IRI_PATTERN = r"^https?://w3id\.org/gcdfo/salmon(#|$)"
 
-_RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-_RDFS_NS = "http://www.w3.org/2000/01/rdf-schema#"
-_OWL_NS = "http://www.w3.org/2002/07/owl#"
-_SKOS_NS = "http://www.w3.org/2004/02/skos/core#"
-_DCTERMS_NS = "http://purl.org/dc/terms/"
-
 
 def _fetch_ontology_text(
     url: str,
@@ -1027,12 +1036,149 @@ def _filter_local_index(index: pd.DataFrame, query: str, role, source: str, onto
     ).drop_duplicates(subset=["iri"], keep="first").reset_index(drop=True)
 
 
-def _search_smn(query: str, role) -> pd.DataFrame:
-    return _filter_local_index(_smn_term_index(), query, role, "smn", "smn")
+def _search_smn(query: str, role, index: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    index = _smn_term_index() if index is None else index
+    return _filter_local_index(index, query, role, "smn", "smn")
 
 
-def _search_gcdfo(query: str, role) -> pd.DataFrame:
-    return _filter_local_index(_gcdfo_term_index(), query, role, "gcdfo", "gcdfo")
+def _search_gcdfo(query: str, role, index: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    index = _gcdfo_term_index() if index is None else index
+    return _filter_local_index(index, query, role, "gcdfo", "gcdfo")
+
+
+# ---------------------------------------------------------------------------
+# Pinned releases (tern ECOSYSTEM M-12). `ontology_release` finds, downloads
+# and checks a release's files; the indexes built from them live here, beside
+# the latest indexes. Mirrors `.ms_release_term_index()` and
+# `.ms_find_terms_pinned_indexes()` (metasalmon's `R/ontology-release.R`).
+# ---------------------------------------------------------------------------
+
+# The columns of `find_terms()`'s `attrs["ontology_release"]`, one row per
+# pinned ontology searched.
+_RELEASE_RECORD_COLUMNS = (
+    "ontology",
+    "version",
+    "version_iri",
+    "file",
+    "sha256",
+    "manifest_verified",
+    "source",
+)
+
+# Parsed release indexes, by ontology and the SHA-256 of the bytes they were
+# parsed from, so a session reads one snapshot's bytes into an index once
+# however many searches pin it.
+_release_index_cache: Dict[str, dict] = {}
+
+# Where `find_terms()` downloads a remote release: a directory of this process's
+# own, made on first use and removed at exit, as metasalmon downloads into the
+# R session's `tempdir()`.
+_release_session_root: Optional[str] = None
+_release_session_lock = threading.Lock()
+
+
+def _release_session_cache_root() -> str:
+    global _release_session_root
+    with _release_session_lock:
+        if _release_session_root is None or not os.path.isdir(_release_session_root):
+            _release_session_root = tempfile.mkdtemp(prefix="metasalmonpy-ontology-releases-")
+            atexit.register(shutil.rmtree, _release_session_root, True)
+        return _release_session_root
+
+
+def _release_term_index(pin: dict, cache_root: str, timeout_seconds: float = 30) -> tuple:
+    """The term index of one pinned release, and the record of which release it is.
+
+    The snapshot is read through its RDF/XML. When it declares an
+    ``owl:versionIRI``, that must be the version pinned; with no version pinned,
+    the declared one is recorded.
+    """
+    ontology = pin["ontology"]
+    entry = _RELEASE_REGISTRY[ontology]
+    resolved = _resolve_release_file(
+        ontology,
+        pin["version"],
+        pin["snapshot_dir"],
+        {"application/rdf+xml": f"{entry['stem']}.owl"},
+        cache_root=cache_root,
+        timeout_seconds=timeout_seconds,
+    )
+
+    key = f"{ontology}@{resolved['sha256']}"
+    cached = _release_index_cache.get(key)
+    if cached is None:
+        try:
+            root = ET.fromstring(resolved["data"])
+        except ET.ParseError as exc:
+            raise OntologyReleaseError(
+                f"The {ontology} snapshot file {resolved['path']} is not readable RDF/XML: {exc}"
+            ) from exc
+        # The first `owl:versionIRI` of an `owl:Ontology` under `rdf:RDF`, as
+        # metasalmon's `xml_find_first()` reads it.
+        declared = None
+        if root.tag == f"{{{_RDF_NS}}}RDF":
+            version_nodes = root.findall(f"{{{_OWL_NS}}}Ontology/{{{_OWL_NS}}}versionIRI")
+            if version_nodes:
+                declared = version_nodes[0].attrib.get(f"{{{_RDF_NS}}}resource")
+        if ontology == "smn":
+            index = _smn_release_index(resolved["data"])
+        else:
+            index = _parse_salmon_rdfxml(resolved["data"], iri_pattern=_GCDFO_IRI_PATTERN)
+        if index.empty:
+            raise OntologyReleaseError(
+                f"The {ontology} snapshot file {resolved['path']} holds no {ontology} terms."
+            )
+        cached = {"index": index, "version_iri": declared}
+        _release_index_cache[key] = cached
+
+    version = pin["version"]
+    declared = cached["version_iri"]
+    if declared is not None:
+        declared_version = _release_version_from_iri(declared, entry["iri"])
+        if version is not None and declared_version != version:
+            raise OntologyReleaseError(
+                f"The {ontology} snapshot is not release {version}: its owl:versionIRI "
+                f"is {declared} (snapshot: {resolved['source']})."
+            )
+        if version is None:
+            version = declared_version
+
+    record = {
+        "ontology": ontology,
+        "version": version,
+        "version_iri": declared,
+        "file": resolved["file"],
+        "sha256": resolved["sha256"],
+        "manifest_verified": resolved["manifest_verified"],
+        "source": resolved["source"],
+    }
+    return cached["index"], record
+
+
+def _find_terms_pinned_indexes(pins: dict, sources: Sequence[str]) -> tuple:
+    """The indexes ``find_terms()`` searches for the pinned ontologies it will query.
+
+    Returns those indexes keyed by ontology, the record of the releases they came
+    from (``None`` when nothing pinned is searched) and the identity of those
+    releases for the result cache. An ontology pinned but not searched is not
+    read. A remote snapshot is downloaded once per process, into
+    ``_release_session_cache_root()``, the way the latest indexes are resolved
+    once per session.
+    """
+    searched = [ontology for ontology in pins if ontology in sources]
+    if not searched:
+        return {}, None, ""
+    indexes: Dict[str, pd.DataFrame] = {}
+    records: List[dict] = []
+    cache_root = _release_session_cache_root()
+    for ontology in searched:
+        index, record = _release_term_index(pins[ontology], cache_root)
+        indexes[ontology] = index
+        records.append(record)
+    identity = ";".join(
+        f"{record['ontology']}={record['version']}@{record['sha256']}" for record in records
+    )
+    return indexes, pd.DataFrame(records, columns=list(_RELEASE_RECORD_COLUMNS)), identity
 
 
 def _expand_query(query: str, role) -> List[str]:
@@ -1406,6 +1552,8 @@ def find_terms(
     role: Optional[str] = None,
     sources: Optional[Sequence[str]] = None,
     expand_query: bool = True,
+    release: Optional[Mapping[str, str]] = None,
+    snapshot_dir: Optional[Mapping[str, Union[str, "os.PathLike[str]"]]] = None,
 ) -> pd.DataFrame:
     """
     Find ontology terms across OLS, NVS, and other vocab sources.
@@ -1427,7 +1575,58 @@ def find_terms(
         ``sources`` the same way (hub B-420 and B-421).
     expand_query
         Search role-aware variants of ``query`` as well as ``query`` itself.
+    release
+        Release versions of smn and gcdfo to search instead of the latest
+        ontology, keyed by ontology: ``{"smn": "0.0.3"}``, or
+        ``{"smn": "0.0.3", "gcdfo": "0.0.9"}``. Each is read from its release
+        snapshot, downloaded from its version IRI
+        (``https://w3id.org/smn/0.0.3``) once per process, and checked against
+        the snapshot's ``MANIFEST.sha256`` when it carries one. A pin never
+        falls back to the latest ontology: a release that cannot be read or
+        does not match its manifest raises ``OntologyReleaseError``. Only smn
+        and gcdfo can be pinned; other sources are searched as they are.
+    snapshot_dir
+        Local release snapshots, keyed by ontology the same way, such as a
+        checkout's ``docs/releases/0.0.3/``. Each is read from disk, with no
+        download. When ``release`` names the same ontology too, a snapshot that
+        declares an ``owl:versionIRI`` must declare that version.
+
+        A pinned smn release is read from its RDF/XML (``smn.owl``), which holds
+        the same terms as the latest ontology's modules, and its terms get the
+        role hints the module reader gives them, with one difference: a release
+        records no module, so a term whose entity hint comes only from belonging
+        to the ``01-entity-systematics`` module has no entity hint in a release.
+
+    Returns
+    -------
+    pandas.DataFrame
+        The ranked candidates, with per-source diagnostics in
+        ``attrs["diagnostics"]``. When ``release`` or ``snapshot_dir`` pins an
+        ontology the call searched, ``attrs["ontology_release"]`` records which
+        release was searched: a DataFrame with one row per pinned ontology and
+        the columns ``ontology``, ``version``, ``version_iri`` (as the snapshot
+        declares it, or ``None``), ``file``, ``sha256`` (of the bytes read),
+        ``manifest_verified`` (``True`` when the snapshot's ``MANIFEST.sha256``
+        vouched for them, ``False`` when it carries none) and ``source`` (the
+        version IRI or the snapshot directory). metasalmon's ``find_terms()``
+        records the same in its ``"ontology_release"`` attribute.
+
+    Examples
+    --------
+    Search smn release 0.0.3 rather than the latest ontology, and record it:
+
+    >>> pinned = find_terms("escapement", sources=["smn"], release={"smn": "0.0.3"})  # doctest: +SKIP
+    >>> pinned.attrs["ontology_release"]  # doctest: +SKIP
+
+    Pin the searches ``suggest_semantics()`` makes:
+
+    >>> def search_fn(query, role=None, sources=None):  # doctest: +SKIP
+    ...     return find_terms(query, role=role, sources=sources, release={"smn": "0.0.3"})
     """
+    # Checked before anything else, so a mistyped pin fails even on a call that
+    # would search nothing.
+    release_pins = _find_terms_release_pins(release, snapshot_dir)
+
     resolved_sources = (
         tuple(sources_for_role(role))
         if sources is None
@@ -1436,9 +1635,22 @@ def find_terms(
     if not resolved_sources or query is None or query == "":
         return _empty_terms(role)
 
-    cache_key = (query, role, tuple(sorted(resolved_sources)), expand_query)
+    # A pinned ontology is read from its release snapshot before any search
+    # runs, so a snapshot that cannot be read or verified stops the call instead
+    # of becoming a source that quietly answered nothing.
+    pinned_indexes, release_record, release_identity = _find_terms_pinned_indexes(
+        release_pins, resolved_sources
+    )
+
+    cache_key = (query, role, tuple(sorted(resolved_sources)), expand_query, release_identity)
     if _cache_enabled() and cache_key in _term_cache:
-        return _term_cache[cache_key].copy()
+        cached = _term_cache[cache_key].copy()
+        # The cache identity is the release's bytes, which two copies of one
+        # release share while differing in where they came from and whether a
+        # manifest verified them, so the record is the one this call made.
+        if release_record is not None:
+            cached.attrs["ontology_release"] = release_record
+        return cached
 
     queries = _expand_query(query, role) if expand_query else [query]
     results = []
@@ -1455,8 +1667,14 @@ def find_terms(
             failures: List[str] = []
             _search_failure_sinks.append(failures)
             try:
-                if src == "smn":
+                # An unpinned search calls the two searches exactly as it always
+                # has, so nothing that stands in for them needs to know about pins.
+                if src == "smn" and "smn" in pinned_indexes:
+                    res = _search_smn(query_variant, role, index=pinned_indexes["smn"])
+                elif src == "smn":
                     res = _search_smn(query_variant, role)
+                elif src == "gcdfo" and "gcdfo" in pinned_indexes:
+                    res = _search_gcdfo(query_variant, role, index=pinned_indexes["gcdfo"])
                 elif src == "gcdfo":
                     res = _search_gcdfo(query_variant, role)
                 elif src == "ols":
@@ -1538,6 +1756,8 @@ def find_terms(
     ]
     diag_df = pd.DataFrame(diagnostics)
     ranked.attrs["diagnostics"] = diag_df
+    if release_record is not None:
+        ranked.attrs["ontology_release"] = release_record
 
     # The degraded-status test is `_search_failed_sources`, read rather than
     # restated, so this warning and `write_sdp_semantic_closure()`'s abort
