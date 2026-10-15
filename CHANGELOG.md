@@ -51,20 +51,6 @@ R change is owed or pending, it describes the state when the entry was written;
   `R/semantic-iri-verification.R` (metasalmon pull request 244, hub item
   B-130), and this half is on `main` here.]
 
-**Work that landed after the `0.5.0` number moved, and the reason it is not
-under that heading.** `## 0.5.0` below is the section hub queue item **B-153**
-closed when it set `__version__` to `0.5.0`, and the commit that made that
-version current is B-153's merge, `67fb486` (#33). On 2026-09-16 `v0.5.0` was
-not tagged and no GitHub Release existed for it, so that section described a
-number that had been *claimed* rather than a release that had shipped. Measured
-2026-09-24, it has shipped: `v0.5.0` was tagged on `67fb486` that day and its
-GitHub Release published. Anything merged after `67fb486` belongs here, because
-filing it under `## 0.5.0` would make this file say a version contains a change
-that the commit making the version current does not. metasalmon's `NEWS.md`
-keeps the same shape with its *(development version)* heading, which is what
-this heading mirrors. **The number does not move here**: it is a parity claim,
-and moving it is a separate outward act.
-
 ### Breaking changes
 
 * **A package's ownership sentinel is now `.sdp-package`, holding the line
@@ -96,15 +82,8 @@ and moving it is a separate outward act.
     `".metasalmonpy-package"` itself no longer finds the file this package
     writes: import the constant instead, or use `".sdp-package"`.
 
-  With metasalmon's development version, a package written by one
-  implementation and rewritten by the other carries one sentinel,
-  `.sdp-package`, where it used to collect one from each (measured in both
-  directions against metasalmon `main` at `94b449b`).
-  `tests/test_package_ownership_sentinel.py` pins the name and the bytes, that
-  a directory carrying only `.sdp-package` is recognised, that one carrying
-  only a per-language sentinel is not, and that a rewrite leaves a
-  per-language sentinel where it was; they are the twins of metasalmon's
-  `tests/testthat/test-package-ownership-sentinel.R`.
+  A package written by one implementation and rewritten by the other now
+  carries one sentinel, `.sdp-package`, where it used to collect one from each.
 
 ### Added
 
@@ -210,19 +189,6 @@ and moving it is a separate outward act.
     `semantics._semantic_discover_targets()`, moved out of
     `suggest_semantics()` unchanged, as metasalmon keeps
     `.ms_semantic_discover_targets()`.
-
-  **Verified against metasalmon, not only against its fixtures.** Every one of
-  the sixteen conformance cases builds the golden pass-1 packet byte for byte
-  here, ingests to the expected record, findings, suggestions and status, and
-  `retry_gain`'s continuation packet is byte-identical too; every
-  `file_errors` variant raises its code. The nine Theme A cases replay through
-  this package's own prefill step, gap detection and term-request renderer to
-  the oracle events metasalmon recorded, event for event, and the recorded
-  events pass the vendored Theme A oracles. `tests/test_semantic_review_parity.py`
-  hands each case across the language boundary both ways -- built in R and
-  ingested here, then its continuation ingested in R, and the reverse -- and
-  passed on every case against metasalmon `main` @ `33e65e4` (R 4.5.2); the
-  `parity` job runs it against metasalmon `main`.
 
 * `detect_semantic_term_gaps(commons_gaps="commons-gaps.json")` reads the
   Salmon Knowledge Commons `okf-check.py --gaps` export (hub B-279, mirroring
@@ -339,11 +305,7 @@ and moving it is a separate outward act.
   explicit caller IRI remains final, `semantic_code_scope="none"` still
   performs no code discovery, and a manual edit or an applied decision closes
   the slot. The frozen target and assessment rows are unchanged, and no
-  ontology term is chosen or changed. Twins of metasalmon's three regressions in
-  `tests/test_review_console.py`: the first was RED on this tree before the
-  port, with no candidate row for the filled code, and RED again with the
-  queue's exception or the ingester's preservation taken away on its own; the
-  third was RED before the empty-shortlist rule, with the slot's rows gone.
+  ontology term is chosen or changed.
 
 * **Direct opt-in semantic review now keeps enough candidates for the LLM's
   requested shortlist.** Hub **B-302** ports metasalmon's **B-57**: with
@@ -746,22 +708,6 @@ and moving it is a separate outward act.
      measured under a UTF-8 locale, written out because Python's `\s` also
      swallows no-break spaces.
 
-     Every other verdict was pinned by **running** R (4.5.2, metasalmon
-     `main` @ `98cb9e6`, UTF-8 locale) over a 32-pair corpus,
-     `tests/data/llm_review/retry-query-corpus.json`, and the port reproduces
-     all of them, including two that are only right because they are R's:
-     TRE reads the `[^\s]` in R's CURIE pattern as "neither a backslash nor
-     the letter s", so `abc:d e` is identifier-like and `smn:species` is not;
-     and `trimws()` strips only space, tab, CR and LF, so a lone vertical tab
-     becomes an empty usable query. Both are reproduced on purpose -- the
-     review record needs one verdict in both packages -- and the code says
-     what retires them. The generator, `r-retry-query-verdicts.R`, sits beside
-     the fixture so the verdicts can be re-measured when R changes.
-
-     Not a `PARITY.md` row: this closes an unregistered difference rather than
-     opening one, and the one deliberate departure from *current* R is the
-     ruled convergence point R itself is moving to.
-
 * **The bundle validators give metasalmon's verdicts on the same input.** Hub
   queue item **B-360**, ruled 2026-09-25 when Brett took every recommendation
   in section 10 of the S16 execplan (decision 9): the two packages converge on
@@ -793,18 +739,6 @@ and moving it is a separate outward act.
   rendering them as empty pieces; findings come in R's order (method,
   constraint, modifier, role type, dimension, pair, redundancy); and every
   regex R runs with `perl = TRUE` runs ASCII-only here too, as PCRE does in R.
-
-  Pinned by `tests/test_validator_parity.py` on
-  `tests/data/validator_parity/cases.json`: 118 dimension inputs, 75 evidence
-  strings, 14 hint strings, 18 role-type candidates, 28 field-anchored evidence
-  cases and 30 whole bundles through the driver, all scored by metasalmon's own
-  functions (`expected-from-r.R` beside them, run against metasalmon `main` at
-  `98cb9e6`) and identical here; the `parity` job re-runs the R script.
-  Measured before the change on the same cases: **74 disagreed with R** — 51
-  of the 118 dimension inputs, 7 of the 34 method-evidence strings, 5 of the 14
-  hint strings, 3 of the 18 role-type candidates and 8 of the 30 bundles.
-  After it, none. This is convergence, not a `PARITY.md` row: the difference
-  was never registered, and after this there is none.
 
 * **`datapackage.json` and `metadata/dataset.csv` spell a typed instant the
   same way, in the form Brett ruled.** A `datetime`/`Timestamp` in
@@ -917,13 +851,6 @@ and moving it is a separate outward act.
      never by scanning `metadata/semantic/`, so an editor backup or an
      unapproved draft there stays local and unread.
 
-  Each class has a failing-before test in `tests/test_validation_hardening.py`,
-  and every expected message was measured by running metasalmon 0.5.0 over the
-  same package directory on disk: for the two issue classes R and Python emit
-  byte-identical messages, pluralisation included. The differential fixture
-  `pk-missing-values` gains a second expected row, because the example's
-  `POP_ID` is declared required — R reports the same pair.
-
 * **`migrate_sdp_methods()`'s nothing-to-migrate report carries the same three
   columns as every other exit.** Its early return built
   `pd.DataFrame(columns=["table_id", "method_iri"])`, so
@@ -934,83 +861,24 @@ and moving it is a separate outward act.
   implementations**; hub queue item **B-144**, the mirror half of metasalmon
   backlog **#112** (hub **B-112**, metasalmon pull request #117).
 
-  **This runs backwards, and the direction is the point.** This package carried
-  the internally consistent three-column frame *first* and gave it up at S10
-  chunk A (pull request 14, 2026-08-22) to mirror R's two-column early return —
-  but R's other two exits had three columns all along, so what chunk A mirrored
-  was an inconsistency rather than a shape. Under the amended mirror contract
-  (Brett, 2026-08-17) which side is right is a ruling and not an implementer's
-  call, so **R was the side that moved** and this restores what was here before
-  chunk A. It is catch-up to a ruling rather than a chosen difference, so it
-  opens no `PARITY.md` row; row **9** is amended in place instead, which is
-  where that row's `1:1` claim lived.
-
-  The comment above the frame moved with it. It read *"Two columns, not three:
-  R's nothing-to-migrate report frame has no `columns` column … and the
-  differential run showed it"* — an accurate report of what the differential
-  saw and a wrong conclusion about what the shape should be, and a fix that left
-  it standing would leave the next reader an explanation for a behaviour that no
-  longer exists.
-
-  Reproduced before the fix and pinned after it by
-  `test_every_migration_exit_reports_the_same_three_table_columns`, which pins
-  **all three** exits — the no-op early return, the populated build and the
-  no-placement empty frame — rather than only the one that was wrong, because
-  pinning one leaves the others free to drift away from it and the failure would
-  look identical. Its R counterpart pins the same three. Measured by running
-  both implementations rather than by reading either: on metasalmon `main`
-  (`9eec204`) all three R exits return `table_id`, `method_iri`, `columns`, all
-  `character`, with `report$tables$columns` empty rather than `NULL` at the
-  no-op exit; here all three now return the same three names at `object` dtype,
-  the type the populated build renders because it joins the bound column names
-  into one string.
+  R was the side that moved: this restores the frame this package had
+  before S10 chunk A, and `PARITY.md` row 9 is amended in place.
 
 * **The test suite runs from a checkout at any path.** The repository root is
   the package, and pytest named it after the directory the checkout sits in, so
   the suite only worked when that directory was called `metasalmonpy`. Hub
-  queue item **B-191**. Measured 2026-09-23 on `3f8349a`, with the package
-  installed editable as CI installs it. From a directory named like a hub
-  worktree (`salmon-data-mobilization-metasalmonpy-B-191`), pytest 8.4.2 and
-  9.1.1 imported the root as a bare `__init__` module and **all 935 tests
-  errored at setup**. pytest 7.4.4 was unaffected. From a directory named
-  `checkout`, the suite went **green against a different tree**: pytest
-  imported the root a second time under that name, and `import metasalmonpy`
-  found whichever copy was installed. With nothing installed, only a directory
-  named `metasalmonpy` loaded the suite at all. CI never saw any of it, because
-  `actions/checkout` names the directory after the repository.
-
-  `tests/conftest.py` now binds `metasalmonpy` to the checkout it lives in by
-  file location. On pytest 8 and later it also collects the checkout root as a
-  plain directory, so pytest never imports it under a name of its own.
-  `tests/__init__.py` is gone, because it made pytest name every test module
-  after the checkout directory. That turns the one relative sibling import, in
-  `tests/test_validation_hardening.py`, into a top-level one.
-  `tests/test_import_route_guard.py` runs a copy of the checkout under both
-  names. It fails on the unfixed tree even from a directory named
-  `metasalmonpy`, which is the view CI now has, and it fails when any one of
-  the three measures above is removed. The wheel's file list is unchanged.
-  This changes how the suite finds the package and nothing the package does,
-  so it opens no `PARITY.md` row.
+  queue item **B-191**. `tests/conftest.py` now binds `metasalmonpy` to the
+  checkout it lives in, `tests/__init__.py` is gone, and
+  `tests/test_import_route_guard.py` runs a copy of the checkout under two
+  directory names. Nothing the package does changes.
 
 * **The documented `pip install -e ".[test]" && pytest -q` runs the whole
   suite.** Hub queue item **B-227**. `tests/test_validation.py` and
-  `tests/test_term_deduplication.py` imported `validation` and
-  `term_deduplication` by top-level name, which resolves only when the checkout
-  root is on `sys.path`. `python -m pytest` from the root puts it there, which
-  is why CI, which runs that form, never saw the problem. Bare `pytest` does
-  not, and neither form does from inside `tests/`. Measured 2026-09-25 on
-  `25dc7f3`, bare `pytest` from the root and either form from inside `tests/`
-  stopped at two collection errors, *No module named 'validation'* and *No
-  module named 'term_deduplication'*, and ran nothing. Both modules now
-  import from `metasalmonpy.validation` and
-  `metasalmonpy.term_deduplication`. Each form, from the root and from inside
-  `tests/`, gives every test the outcome it had under `python -m pytest` from
-  the root. A third job in `.github/workflows/parity.yml`, `bare-pytest`, runs
-  the documented command on every pull request. It failed on the two imports
-  before they changed, so the next top-level import fails a pull request
-  rather than a contributor's first run. The two existing jobs are unchanged.
-  This changes how two test modules import the package and nothing the
-  package does, so it opens no `PARITY.md` row.
+  `tests/test_term_deduplication.py` imported package modules by top-level
+  name, which bare `pytest` cannot resolve, so it stopped at two collection
+  errors; they now import through `metasalmonpy`, and a `bare-pytest` job in
+  `.github/workflows/parity.yml` runs the documented command on every pull
+  request.
 
 * **A measurement column whose values all look like years is no longer typed
   `temporal`.** Ported from metasalmon pull request #152 (backlog **#53**),
@@ -1055,18 +923,6 @@ and moving it is a separate outward act.
   `readr::read_csv()` on the same text gives R a `temporal` column. That was
   true before this change and still is.
 
-  Pinned by `tests/test_year_shaped_measurement_role.py`, the port of
-  `tests/testthat/test-year-shaped-measurement-role.R`. It checks each fixture
-  against `_values_look_yearish()` before asserting its role, and follows one
-  column through `infer_dictionary()` and `suggest_semantics()` to its semantic
-  targets. Its fixtures are `int64`, nullable `Int64`, text and categorical,
-  the storage types this package reads as year-shaped. Measured 2026-09-24 by
-  running metasalmon `main` (`16976b1`) over the same 64 name and value pairs,
-  R and this package now agree on every year-shape verdict and every role,
-  where 18 of the 64 differed before. Over the 1,271 columns in the CSVs of
-  metasalmon, metasalmonpy, smn-data-pkg and salmon-domain-ontology, read with
-  `pd.read_csv()` defaults, no column's role changes.
-
 * **The call `review_semantics()` prints for a measurement column's own slot
   now runs when the column has a code list.** Hub queue item **B-242**, the
   mirror half of metasalmon's **B-151** (metasalmon pull request #153). A
@@ -1101,15 +957,6 @@ and moving it is a separate outward act.
   own slot. Its printed call still refuses as ambiguous, as it did before, and
   never decides the other slot.
 
-  Run through each package's `create_sdp()` on the same inputs, metasalmon
-  `main` (`71a9199`) and this package now print the same arguments for every
-  slot, resolve each printed call to the same slot, and offer the same options
-  when they refuse. This removes
-  `test_a_column_level_slot_sharing_a_role_with_its_codes_is_still_ambiguous`,
-  the pin pull request #28 added with this defect as its retirement condition,
-  and replaces it with mirrors of metasalmon's tests. It is R-shipped-first lag
-  being closed, not a deliberate difference, so it opens no `PARITY.md` row.
-
 * **`apply_salmon_dictionary()` names each code value it turns into a missing
   value.** Hub queue item **B-241**, the mirror half of metasalmon backlog
   **#55** (hub **B-55**, metasalmon pull request #154). A value that is present
@@ -1139,15 +986,6 @@ and moving it is a separate outward act.
   values against the text of `codes.csv` used to blank every one of them
   without a report, where R leaves the column as it is.
 
-  **The other half of #55 owed a test and no fix.** metasalmon's
-  `strict = TRUE` let through a value that its coercion only warns about.
-  `_coerce_series()` has always raised on such a value, through
-  `errors="raise"`, so R moved to where this package already was. Nothing pinned
-  that behaviour, and `ApplyDictionaryFailureReportTests` in
-  `tests/test_dictionary.py` now does, the twin of metasalmon's
-  `tests/testthat/test-edge-cases.R`. This closes R-shipped-first lag and is not
-  a deliberate difference, so it opens no `PARITY.md` row.
-
 * **`accept_suggestion()` refuses an `iri` that is only the `REVIEW:`
   marker.** Hub queue item **B-220**, the mirror half of metasalmon's
   **B-219** (metasalmon pull request #165). It checked that `iri` was not empty
@@ -1165,15 +1003,6 @@ and moving it is a separate outward act.
   nothing followed it. An `iri` with a term after the marker is accepted as
   before and recorded without the marker. `apply_sdp_semantics()` is
   unchanged.
-
-  The two packages' strips still remove different spellings, so they still
-  refuse different ones. metasalmon's also removes a space or a tab before the
-  colon, as in `"REVIEW :"`, which this package records as the IRI verbatim,
-  and this package's also removes some whitespace after the colon that
-  metasalmon's leaves, such as a no-break space. Which spellings both should
-  recognise is hub question **Q-63**, and this
-  change settles none of them. This closes R-shipped-first lag and is not a
-  deliberate difference, so it opens no `PARITY.md` row.
 
 * **`detect_semantic_term_gaps()` no longer reports an ontology gap for a slot
   the reviewer has just filled by hand.** Ported from metasalmon pull request
@@ -1193,9 +1022,6 @@ and moving it is a separate outward act.
   exactly the gap rows the pre-review file did, and a real non-`smn` gap on the
   same slot is still reported. A hand-picked IRI under `w3id.org/smn/` never
   showed the defect, because the detector counts that namespace as `smn`.
-  `HandPickedAcceptGapTests` in `tests/test_term_requests.py` failed on the
-  detector as it stood. R shipped this behaviour first and the difference was
-  not deliberate, so the port opens no `PARITY.md` row.
 
 * **`review_metadata()`, the four `set_sdp_*()` setters and the blank-required
   check in `validate_salmon_datapackage()` read the schema the settings
@@ -1263,11 +1089,6 @@ and moving it is a separate outward act.
   before. That includes hub item **B-176**'s case, ported here as **B-216**: a
   term the reviewer typed, whose type nothing records.
 
-  The twins of metasalmon's tests in `tests/test_review_console.py` failed on
-  the code as it stood: by `iri=` for the unmarked candidate, and by both
-  `iri=` and `rank=` for the marked one. This closes R-shipped-first lag and is
-  not a deliberate difference, so it opens no `PARITY.md` row.
-
 * **`review_metadata()` reports a placeholder in an IRI field once, and the
   call it prints for that row runs.** Hub queue item **B-212**. A
   `MISSING METADATA:`, `MISSING DESCRIPTION:` or `REVIEW REQUIRED:`
@@ -1329,15 +1150,6 @@ and moving it is a separate outward act.
   <https://mapping-commons.github.io/sssom/1.0/spec-intro/#iri-prefixes>),
   unchanged in the SSSOM 1.1 draft.
 
-  This applies B-233's reading of the specification rather than deciding it
-  again, and the two readers now accept the same set. Measured 2026-09-25 on
-  twenty files, among them the canonical fixture, each built-in left out, and
-  built-ins declared padded, quoted, redefined and unused: metasalmon `main`
-  `97db837` and this change gave the same verdict on every one. So it is a
-  port and opens no `PARITY.md` row. `tests/test_sssom.py` carries the twins
-  of the six tests B-233 added, on the same canonical fixture, and 14 of their
-  cases failed on `ba1b54a` before the fix.
-
 * **`suggest_semantics()` searches each distinct query, role and sources
   tuple once, where it searched once per target.** Hub queue item **B-243**,
   the port of metasalmon's **B-56** (backlog #56, metasalmon pull request
@@ -1355,11 +1167,6 @@ and moving it is a separate outward act.
   as `find_terms()` already refuses to cache a degraded lookup. The LLM
   review's retry searches are unchanged.
 
-  `tests/test_semantic_retrieval_dedup.py` is the twin of metasalmon's
-  `tests/testthat/test-semantic-retrieval-dedup.R`, and its dedup assertions
-  failed on `ba1b54a`: 40 calls for the 9 tuples. This closes R-shipped-first
-  lag and is not a deliberate difference, so it opens no `PARITY.md` row.
-
 * **A line under a released `CHANGELOG.md` heading that the release does not
   contain now fails a check.** Hub queue item **B-201**, the pair of the hub's
   **B-200**. AGENTS.md's *Releases* section now carries the rule metasalmon's
@@ -1373,27 +1180,6 @@ and moving it is a separate outward act.
   ancestor of it. The new `changelog-window` workflow runs it on every pull
   request, and AGENTS.md names it as the step before dispatching the Release
   workflow. `MANIFEST.in` keeps it and its tests out of the distributions.
-
-  Replayed over this repository's history, it finds both instances the
-  changelog has held. At `1e9245c` it reports B-144's 37 lines under
-  `## 0.5.0`, which pull request #35 later moved, and 24 lines under
-  `## 0.2.1` from `10d0616`, the calendar fix. Pull request #10 committed that
-  fix after the commit `v0.2.1` names, so the tag does not contain it, and the
-  lines were still under the tagged heading on `main`. Brett ruled on
-  2026-09-25 that the tag stays. The 0.2.1 entry now carries a dated
-  correction saying so, and the check exempts that one commit's lines for as
-  long as the correction names it. With both in place the check passes over
-  `main`; with either missing it does not.
-
-  The script is a port of the hub's copy rather than a vendored one, because
-  the hub's reads this repository only as a sibling checkout and has nowhere
-  to hold a ruling. `tests/test_check_changelog_window.py` compares every
-  definition the two copies share with the hub's `main`, and the workflow runs
-  that comparison, so neither copy can change alone. The tests build a
-  throwaway repository for each shape the hub's tests cover, and replay
-  `1e9245c` and `3f8349a`. Those replays need a full clone with the tags: CI's
-  suite jobs check out one commit and skip them, and the new workflow runs
-  them strictly.
 
 * **`review_metadata()`'s console counts an IRI field reported as a
   placeholder as an IRI, so it points at `review_semantics()` whenever an IRI
@@ -1414,10 +1200,6 @@ and moving it is a separate outward act.
   reported under another reason: a placeholder, or `required` under a selected
   schema that calls an IRI field required. The rows `review_metadata()`
   returns and the calls it prints do not change.
-  `tests/test_sdp_field_setters.py` twins metasalmon's test, with every IRI
-  gap a placeholder, and it failed on the footer as it stood. metasalmon fixed
-  the footer first, so this closes R-shipped-first lag and is not a deliberate
-  difference; it opens no `PARITY.md` row.
 
 * **`create_sdp()` with its defaults no longer raises once two targets get
   search candidates.** Hub queue item **B-370**. Every `find_terms()` answer
@@ -1445,13 +1227,6 @@ and moving it is a separate outward act.
   review's retry merge raised the same way on `main` when the first pass left
   one candidate frame. It completes now, because the frame it merges into no
   longer carries `attrs`.
-
-  `tests/test_search_answer_attrs.py` pins `suggest_semantics()` and
-  `create_sdp()` with its defaults, and failed on `380a7a4`. The lasting
-  outage in `tests/test_semantic_retrieval_dedup.py` now answers with one
-  candidate per target, as metasalmon's twin does, which the crash had
-  prevented. There is no metasalmon half, because R has no counterpart of
-  pandas' `attrs` comparison.
 
 * **`apply_salmon_dictionary()` gives a coded column the labels in
   `codes.csv`'s `code_label`.** Hub queue item **B-274**. metasalmon applies a
@@ -1484,12 +1259,6 @@ and moving it is a separate outward act.
   they are now kept, as text, with a `RuntimeWarning` naming the column. R
   refuses such a data frame, and what this package should do with one is hub
   item **B-397**'s.
-
-  `ApplyDictionaryCodeLabelTests` in `tests/test_dictionary.py` pins each of
-  these and failed on `e089b86`, and `test_apply_salmon_dictionary_with_codes`,
-  which asserted that the categories were the code values, now asserts the
-  labels. There is no metasalmon half and no `PARITY.md` row, because metasalmon
-  already applies the labels.
 
 * **The semantic review no longer records, by any route, an accept whose IRI is
   empty or still a `REVIEW:` marker.** Hub queue item **B-247**, the mirror half
@@ -1527,15 +1296,6 @@ and moving it is a separate outward act.
     every review. A row with no IRI offers nothing to accept, and it is now
     dropped without a message. Fields the review cannot decide are still listed.
 
-  Which spellings count as the marker is unchanged: these checks use the same
-  `_strip_review_iri()` and `_is_review_iri()` as before, so the two packages
-  still refuse different spellings where their strips differ. Which spellings
-  both should recognise is hub question **Q-63**'s, and this change implements
-  none of its ruling. The tests are the twins of B-246's in
-  `tests/testthat/test-review-console.R`, each asserting its spelling premise
-  against this package's own strip and detector. This closes R-shipped-first
-  lag and is not a deliberate difference, so it opens no `PARITY.md` row.
-
 * **A declared `datetime` value that its offset carries before year 1 or after
   year 9999 is read, where reading or validating its package raised.** Hub
   queue item **B-388**. `parse_datetime_token()` builds the wall clock a token
@@ -1548,13 +1308,8 @@ and moving it is a separate outward act.
   column held one, with a message that named neither the column nor the value.
   Measured on `main` `c7be120` under pandas 3.0.6, 2.2.3 and 1.5.3.
 
-  readr reads these tokens. Under R 4.3.3 and readr 2.2.0,
-  `readr::parse_datetime()` and `readr::read_csv()` with a `col_datetime()`
-  column agree, with no parse problem: `0001-01-01T00:00:00+01` is the POSIXct
-  R prints as `"0-12-31 23:00:00 UTC"`, `0001-01-01T00:30:00+01` is
-  `"0-12-31 23:30:00 UTC"`, and `9999-12-31T23:00:00-02` is
-  `"10000-01-01 01:00:00 UTC"`. metasalmon, on its `main` at `9aeb0ec`, reads
-  and validates a package holding each.
+  readr reads these tokens, and metasalmon reads and validates a package
+  holding each.
 
   Such a token now parses to that instant, as a `numpy.datetime64` at
   microsecond resolution. No `datetime` holds it, and pandas 1.5 cannot hold it
@@ -1573,12 +1328,8 @@ and moving it is a separate outward act.
   cycle that starts at the epoch, which leaves the key of every instant a
   `datetime` holds unchanged.
 
-  `tests/test_instant_beyond_datetime_range.py` pins each of these, and 18 of
-  its 21 tests failed on `c7be120`. Two paths do not yet handle such a value:
-  writing it back out, and validating an observation structure that binds its
-  column. Both go through `iso_instant_text()`, and neither is part of this
-  fix. There is no metasalmon half and no `PARITY.md` row, because readr
-  already reads these tokens.
+  Two paths do not yet handle such a value: writing it back out, and
+  validating an observation structure that binds its column.
 
 * **The ICES helpers warn when the request fails, so an empty result no longer
   hides an outage.** Hub queue item **B-378**, the mirror half of metasalmon's
@@ -1614,22 +1365,6 @@ and moving it is a separate outward act.
   `find_terms()` call could record a source that failed as answered. A failure
   now reaches only a sink installed on the thread that signalled it, which is
   the scope an R handler has.
-
-  `IcesFailedRequestTests` in `tests/test_ices_vocab.py` mocks `urlopen` and the
-  curl fallback before any helper runs, and records every URL asked for. For
-  each of the four helpers it pins a refused connection, with curl on `PATH`
-  and without it, an HTTP 503, and an answer of `[]`. For `ices_codes()` it
-  pins the whole message, and that a secret in the request or in the failure
-  does not reach it. It also holds two requests on two threads in an
-  interleaving that lost the warning, and pins that the one that failed warns
-  and the other keeps its rows, and that an empty body read through curl
-  warns. `tests/test_term_search_diagnostics.py` pins that a failure signalled
-  on another thread never reaches this thread's sink, and that the curl
-  fallback records an empty body as a failure.
-  Each of these failed on `c7be120`, apart from the answer of `[]`, which was
-  already silent. The timeout and the answer that is not JSON were measured
-  rather than pinned. It is the port metasalmon's B-377 owed here, and it opens
-  no `PARITY.md` row.
 
 * **A `codes.csv` row with no code value gets no semantic suggestions, and the
   review no longer queues a slot it could not address.** Hub queue item
@@ -1683,18 +1418,8 @@ and moving it is a separate outward act.
   reads byte for byte, and `validate_sdp_sssom()` still accepts a package in
   the earlier form.
 
-  The two packages write byte-identical mapping sets again. The R-written
-  fixtures under `tests/data/sssom/` (`canonical/`, `r-sdp/` and
-  `checksums.json`) were regenerated from metasalmon `main` with B-350, and
-  the byte-parity tests in `tests/test_sssom.py` failed against them on the
-  writer as it stood (8 of 167) before the port and pass after it, with the
-  twins of B-350's twelve tests (11 of which failed before the port; the one
-  that passed checks that the earlier form is still accepted). Beyond the
-  fixtures, 45 further inputs, covering every rule above and every value R's
-  plain-scalar test reads back, gave the same sha256 from both writers.
-  `PARITY.md` row 11 records the window B-350 opened and its closing, and row
-  59, the spelling of a typed in-memory cell, records that the rounding now
-  reaches it. The version number does not move here.
+  The two packages write byte-identical mapping sets again, and `PARITY.md`
+  row 11 records the window B-350 opened and its closing.
 
 * **`fetch_salmon_ontology()` takes `timeout_seconds`, 30 by default, and caches
   in a persistent per-user directory, as metasalmon does.** The follow-ups that
@@ -1809,16 +1534,6 @@ and moving it is a separate outward act.
   its `spec/licence-optional` branch, so this mirrors it and opens no
   `PARITY.md` row.
 
-  **Strict validation still requires a licence for now.** [corrected
-  2026-09-27: no longer, since hub item B-199 re-vendored the bundle from
-  `sdp-0.3.2`; see its entry below.] metasalmonpy reads
-  the requirement from its bundled SDP schema, which moves only with
-  `SDP_SPEC_TAG`, from a specification release (hub item B-199). Until that
-  release arrives here, `validate_salmon_datapackage(require_iris=True)` reports
-  a blank licence as a blank schema-required field rather than as a
-  placeholder, and `review_metadata()` prints the `set_sdp_dataset()` call that
-  fills it.
-
   **A package written before this change keeps its placeholder,** and strict
   validation refuses it, as it always has. State the licence the publisher
   granted, or clear the field with `set_sdp_dataset(path, license=pandas.NA)`,
@@ -1884,33 +1599,11 @@ and moving it is a separate outward act.
     identifier, a license name, or a URL. Leave blank when none has been
     granted."
 
-  **Online and offline sessions now load the same bytes.** Under the default
-  `"auto"` source the loader reads the pinned tag and falls back to the
-  vendored bundle, and under the default settings `review_metadata()` and the
-  `set_sdp_*()` setters read the vendored bundle in the tag's place (hub item
-  B-215). Until now the two differed in `sdp.rules.yaml`, which B-166
-  re-vendored from a later commit than the pin; `sdp-0.3.2` carries those
-  rules, so that exception retires. A new manifest,
+  **Online and offline sessions now load the same bytes.** The vendored
+  bundle matches the pinned tag again, and a new manifest,
   `data/sdp-bundle-manifest.json`, shipped in the wheel, names the tag, its
-  commit and the SHA-256 of each vendored file, the same hashes metasalmon's
-  `inst/extdata/sdp-bundle-manifest.json` names. A new offline test fails
-  when a vendored file, the manifest's file list or the pin disagrees with it,
-  so a partial re-vendor or a hand edit fails without a network, and a second
-  test shows that check failing on each of those. A network test, opt-in as
-  this suite's other one is (`METASALMONPY_RUN_SDP_PIN_TEST=1`), checks that
-  the pinned tag serves every file byte for byte.
-
-  A further new test, `tests/test_temporal_profile_pattern.py`, checks the
-  instant a written package carries against the pattern **read from the
-  vendored bundle**, in both `datapackage.json` and `metadata/dataset.csv`.
-  Every earlier check compared those two files with each other, which is how
-  a typed instant went unseen while both broke the profile. The fixture uses
-  four-digit years, because the pre-1000 spelling is hub item B-161's
-  question. The package R wrote under `tests/data/resource_types/r-package/`
-  moves by one line, `datapackage.json`'s `specVersion`, re-canonicalized by
-  R's own round trip at metasalmon main `0495318`. This is a port of B-198 and
-  opens no `PARITY.md` row: row 38 is amended in place to record that the two
-  pins agree again.
+  commit and the SHA-256 of each vendored file, as metasalmon's does; an
+  offline test fails when a vendored file disagrees with it.
 
 * **The first retrieval pass gives the shortlist metasalmon gives.** Hub queue
   item **B-382**, the last of the S16 convergence items that precede the
@@ -1935,106 +1628,25 @@ and moving it is a separate outward act.
 
   So `suggest_semantics()` returns different shortlists wherever a search
   answer holds IRI-less candidates or an unscored one, and wherever the depth
-  is 0. Pinned both ways. `tests/data/semantics/r-retrieve-candidates.R` now
-  drives metasalmon's retriever at both passes, and this package matches what
-  it gives at both (run on metasalmon `main` @ `33e65e4` under R 4.5.2; pass 2
-  gives exactly the rows and search calls of the fixture B-363 took at
-  `98cb9e6`).
-  `suggest_semantics()`'s pinned output was re-captured with two
-  configurations the existing three never exercised, `rule-shapes-top3` and
-  `rule-shapes-top0`, and both fail on `main` before the change. The existing
-  three came out byte-identical, which is the measurement that a shortlist
-  without one of those shapes does not change.
-
-  Not a new `PARITY.md` row: this closes a difference that was reported to the
-  hub rather than registered. Row 39, which recorded pass 1 as still
-  differing, is amended to say it no longer does.
+  is 0. `PARITY.md` row 39 is amended to say pass 1 no longer differs.
 
 * **A target's shortlist comes through one function, and a second retrieval
   pass merges into the first the way metasalmon merges it.** Hub queue item
-  **B-363**, the metasalmonpy half of the S16 convergence that precedes the
-  shared review-packet contract (S16 execplan, sections 2.3 and 4, ruled by
-  Brett on 2026-09-25).
-
-  The loop `suggest_semantics()` ran inline over its discovered targets is now
-  `semantics._retrieve_semantic_target_candidates(target, source_policy,
-  max_per_role, search_fn, query=None, retrieval_pass=1)`, the counterpart of
-  `.ms_retrieve_semantic_target_candidates()`. It was moved, not changed:
-  `tests/test_semantic_retrieval.py` replays three retrieval configurations
-  over a multi-table fixture -- 26 targets, every role including
-  `statistical_modifier`, all four scopes, the explicit allowlist, a shortlist
-  without a score column, the role-collision block -- against a capture taken
-  on `main` `ba1b54a` before the move, row for row and column for column,
-  including the order and arguments of every `search_fn` call.
-
-  **What changes is the second pass.** `llm_review._retry_candidates()` now
-  retrieves through that same function with `retrieval_pass=2`, so a retry
-  shortlist is filtered by an explicit allowlist on the way out and ranked
-  with the role-hint bonus as pass 1 is; before, it searched and then sorted
-  on the raw score alone, with no allowlist filter and a `(source, iri,
-  label)` key. **On three points the second pass takes R's rule where today's
-  first pass does not, and the difference is deliberate and dated.** Pass 1
-  keeps one row per `(source, iri)`, so IRI-less candidates from one source
-  collapse to one; fills a missing score with 0 before the bonus, so an
-  unscored hinted candidate can outrank a scored one; and caps at
-  `max_per_role` as given. R deduplicates by candidate identity, leaves a
-  missing score missing (it sorts last, bonus or not) and floors the cap at
-  1. Pass 1 keeps today's rule because this item pins `suggest_semantics()`'s
-  output unchanged; pass 2 takes R's, because the second pass is what this
-  item converges and the retry code this replaced already kept distinct
-  IRI-less rows and missing scores -- the first push of this change routed
-  pass 2 through pass 1's rule and lost both, which the Codex review of that
-  push caught. The retriever's docstring names what retires the branch:
-  pass-1 retrieval converging on R, which the packet exporter needs (B-327).
-  Pinned against R by running it: `tests/data/semantics/r-retrieve-candidates.R`
-  drove `.ms_retrieve_semantic_target_candidates()` at pass 2 over four
-  shared cases (`retrieve-candidates-cases.json`; IRI-less rows differing
-  only in `match_type`, an exact IRI-less repeat, a second row for a seen IRI,
-  a missing score with a matching hint, an explicit allowlist with a padded
-  upper-case source, no score column, a zero depth) and the Python second
-  pass gives the same rows in the same order for all four. And the merge is
-  a port of `.ms_merge_semantic_target_candidates()`,
-  `semantics._merge_semantic_target_candidates()`: the two passes bound, sorted
-  in C order on seven keys -- `score` descending (or `role_hint_bonus` when
-  there is no score), then `source`, `ontology`, `label`, `iri`,
-  `retrieval_pass`, `retrieval_query`, missing values last -- deduplicated by
-  R's candidate identity (`_semantic_candidate_identity()`, ported with its
-  rolling text hash so an IRI-less candidate fingerprints as it does in R),
-  and capped at `max(1, max_per_role)`. Before, the merge sorted on score
-  alone and deduplicated on `(source, iri, label)`, so two rows for one IRI
-  with different labels both survived and a tie could land in either order.
-  The candidate gain a retry records in `llm_exploration_candidate_gain` is
-  counted as `.ms_semantic_bundle_retry()` counts it: identities in the merged
-  shortlist the target did not have before.
-
-  Pinned against R by **running** it: `tests/data/semantics/r-merge-candidates.R`
-  drove R's merge and identity over nine shared cases
-  (`merge-candidates-cases.json`; a rescored duplicate across passes, ties
-  broken in C order including a non-ASCII initial and two pass-2 rows for one
-  IRI, no score column, missing scores and strings, IRI-less fingerprints,
-  a zero cap, an empty pass on either side, a column only the second pass
-  carries) under R 4.5.2 with metasalmon `main` @ `98cb9e6`, and the Python
-  merge gives the same rows, the same identities and the same gain for all
-  nine. `PARITY.md` row 39, which said the merge had no counterpart and this
-  package had no retry pass, is amended in place; both halves had gone stale.
-
-  **B-243** (`suggest_semantics()` searching each distinct query, role and
-  sources tuple once per call) touches this loop. It had not landed when this
-  entry was first written, and it landed first, on `main` at `0235487` (pull
-  request #57, 2026-09-25), so this change is the one that took the other in:
-  `main` was merged into the branch, and B-243's once-per-call wrapper is
-  what `suggest_semantics()` now hands the extracted function as its
-  `search_fn`, as `.ms_search_once_per_call()` wraps
-  `.ms_retrieve_semantic_target_candidates()` in R. The pass-1 pin was
-  re-captured on `main` at `0235487` -- after B-243, before the move -- and
-  is identical to the capture at `ba1b54a`, the fixture's 26 targets being 26
-  distinct tuples, so the committed pin stands.
-
-  The three pass-1 differences above were **found and left in place for pass
-  1**, because the item requires pass-1 output unchanged and none is
-  registered; they are reported to the hub as the convergence the packet
-  exporter will need rather than registered here, and the `pass_one` branch
-  in the retriever is the whole of their footprint.
+  **B-363** (S16 execplan, sections 2.3 and 4, ruled by Brett on 2026-09-25).
+  The loop `suggest_semantics()` ran inline is now
+  `semantics._retrieve_semantic_target_candidates()`, the counterpart of
+  `.ms_retrieve_semantic_target_candidates()`, moved without changing its
+  output. A retry's second pass now retrieves through it, so a retry shortlist
+  is filtered by an explicit allowlist and ranked with the role-hint bonus, as
+  pass 1 is. The merge is a port of `.ms_merge_semantic_target_candidates()`:
+  the two passes sorted in C order on seven keys (`score` descending, or
+  `role_hint_bonus` when there is no score, then `source`, `ontology`,
+  `label`, `iri`, `retrieval_pass`, `retrieval_query`, missing values last),
+  deduplicated by R's candidate identity and capped at `max(1, max_per_role)`,
+  where it sorted on score alone and deduplicated on `(source, iri, label)`.
+  The candidate gain a retry records is counted as metasalmon counts it. Both
+  were checked against R by running it, and `PARITY.md` row 39 is amended in
+  place.
 
 * **Context documents become the excerpts metasalmon builds.** Hub queue item
   **B-364**, ruled 2026-09-25 when Brett took every recommendation in section
@@ -2062,19 +1674,11 @@ and moving it is a separate outward act.
   are the union of its roles' picks in role order, deduplicated and cut to the
   limit, as `.ms_semantic_bundle_context_chunks()` builds them.
 
-  Pinned by `tests/test_context_parity.py` on text-only fixtures under
-  `tests/data/context_parity/`: `expected.json` is what metasalmon's own
-  `.ms_collect_context_chunks()` and `.ms_score_context_chunks()` produced for
-  them (`expected-from-r.R` beside it, run against metasalmon `main` at
-  `98cb9e6`), the offline tests hold this package to it, and the `parity` job
-  re-runs the R script so a change on either side turns CI red. Measured
-  before the change on the same fixtures: 23 chunks of at most 1400 collapsed
-  characters against R's 21 of at most 2200; after it, the pool and every
-  scored ranking are identical. Library-specific extraction for PDF, DOCX,
-  spreadsheets and HTML is deliberately outside the pin and is **`PARITY.md`
-  row 62**, twinned in the hub's `knowledge/parity-deviations.md`.
-  `load_context_chunks()` keeps its signature; its `chunk_size` default moves
-  to 2200 and it gains `overlap=200`.
+  `tests/test_context_parity.py` holds this package to what metasalmon's own
+  functions produce on shared fixtures. Library-specific extraction for PDF,
+  DOCX, spreadsheets and HTML is deliberately outside that pin and is
+  **`PARITY.md` row 62**. `load_context_chunks()` keeps its signature; its
+  `chunk_size` default moves to 2200 and it gains `overlap=200`.
 
 * **The vendored SDP rules file carries the reworded SOSA Procedure rules.**
   Hub queue item **B-166**, the twin of the copy metasalmon made in its pull
@@ -2096,13 +1700,7 @@ and moving it is a separate outward act.
   The file's comments name that path, which resolves in smn-data-pkg and not in
   this package.
 
-  **Nothing this package accepts, rejects or reports changes.** `sdp_schema`
-  reads only the file's top-level `version:` and `profile:` scalars, which are
-  unchanged, and no rule `id` or `severity` moved. The remote loader still pins
-  the `sdp-0.3.0` tag, which serves the older wording, so the vendored rules
-  file is now the bundle's one departure from that tag; `sdp_schema`'s module
-  docstring records it and what retires it. This ports metasalmon's change
-  rather than choosing a difference, so it opens no `PARITY.md` row.
+  Nothing this package accepts, rejects or reports changes.
 
 * **A failed `create_sdp()` no longer destroys the sidecar it was rewriting.**
   Hub queue item **B-179**, the mirror half of metasalmon backlog **#111** (hub
@@ -2187,36 +1785,6 @@ and moving it is a separate outward act.
   Apart from the one case above, this ports R's behaviour. That case is
   `PARITY.md` row **64**, and Brett ruled on 2026-09-25 that R moves to match
   (hub B-310).
-
-### Parity evidence
-
-* **Two tests pin that the EML `calendarDate` carries the spelling
-  `metadata/dataset.csv` holds.** Hub queue item **B-245**, the mirror half of
-  the hub's **B-162**: these are the twins of the two tests B-162 added to
-  metasalmon's `tests/testthat/test-canonical-date-render.R`. No behaviour
-  changed. `eml._add_coverage()` writes `temporal_start` and `temporal_end`
-  through `_as_character()`, which reads like a third renderer beside the two
-  writers. B-162 answered for R that it is not one, and the same construction
-  holds here: `write_eml_from_sdp()` reads the package back from disk, where
-  `read_sdp_csv()` reads every column as `str`, so the EML copies the one
-  rendering a writer made. Nothing pinned that.
-
-  The first test writes `datetime.date(999, 1, 1)` and
-  `datetime.date(2024, 12, 31)` through `write_salmon_datapackage()` and
-  exports the package through `write_eml_from_sdp()`, schema check included.
-  Both `calendarDate` values must equal the `dataset.csv` cells and
-  `datapackage.json`'s `temporal`, and read `0999-01-01` and `2024-12-31`. The
-  second writes the text `999-06-05`. That is not an `xs:date`, so the exported
-  call refuses it, and the test builds the coverage from the frame
-  `validate_salmon_datapackage()` returns as `package`, which is the frame the
-  builder receives. Its `calendarDate` must equal the `dataset.csv` cell. Both
-  pass on the code as it stands, and each fails under a mutation that
-  re-renders the value at the two `calendarDate` lines.
-
-  They live in `tests/test_platform_determinism_guard.py`, after the twins of
-  B-115's writer tests, as they do in metasalmon. The first needs the `[eml]`
-  extra and skips without it; the second runs in both dependency legs. The EML
-  behaves here as it does in metasalmon, so this opens no `PARITY.md` row.
 
 ## 0.5.0
 
