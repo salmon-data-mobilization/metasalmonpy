@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.6.0
+
+**Released together with metasalmon 0.6.0** (roadmap S16 step 1, joint by
+ruling, so no catch-up window opened). Model judgement now runs outside the
+package: `write_semantic_review_packet()` writes the shortlists a harness
+judges, and `ingest_semantic_assessments()` reads its answers back through the
+same validators, against the review-packet contract vendored byte for byte from
+metasalmon. The in-package model call (`llm_assess=True`, the eleven `llm_*`
+arguments and `chat_decomposition()`) is deprecated and is removed in 0.7.0.
+A term search can also be pinned to one smn or gcdfo release, and its result
+records the release it read (tern ECOSYSTEM M-12). Where an entry below says an
+R change is owed or pending, it describes the state when the entry was written;
+`PARITY.md` records what is still open.
+
 * Add bounded, read-only `capture_catalogue_query()` for public KNB/DataONE metadata. Captures preserve raw pages, hashes and provenance, never overwrite evidence, and leave annotations pending. The mirrored R interface is on metasalmon `main` as `capture_catalogue_query()` in `R/catalogue-discovery.R` (metasalmon pull request 227, hub item B-427) [corrected 2026-10-08: this said it was still proposed in a companion pull request]. No publication, model calls or version bump.
 
   The success receipt is installed atomically. Failure bookkeeping retains raw
