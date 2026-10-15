@@ -1,5 +1,7 @@
 # Changelog
 
+## Unreleased
+
 ## 0.6.0
 
 **Released together with metasalmon 0.6.0** (roadmap S16 step 1, joint by
