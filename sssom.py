@@ -207,6 +207,7 @@ _REQUIRED_COLUMNS = (
 _JUSTIFICATIONS = tuple(
     "semapv:" + name
     for name in (
+        "AgentBasedMatching",
         "MappingReview",
         "ManualMappingCuration",
         "LogicalReasoning",

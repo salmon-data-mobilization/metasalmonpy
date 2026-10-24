@@ -1787,3 +1787,50 @@ def test_validate_sdp_sssom_still_accepts_a_package_in_the_pre_canonical_byte_fo
         (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
     )
     assert validate_sdp_sssom(sdp) is True
+
+
+def test_agent_based_matching_round_trips_with_exact_justification(tmp_path):
+    """A real agent process must survive both reader and package writer."""
+    source = write_raw(
+        tmp_path / "agent.sssom.tsv",
+        sssom_text().replace("semapv:ManualMappingCuration", "semapv:AgentBasedMatching"),
+    )
+    parsed = read_sssom_mapping_set(source)
+    assert parsed.mappings["mapping_justification"].tolist() == [
+        "semapv:AgentBasedMatching"
+    ]
+    sdp = tmp_path / "sdp-agent"
+    sdp.mkdir()
+    write_sdp_sssom(sdp, mapping_sets=parsed)
+    assert validate_sdp_sssom(sdp) is True
+    manifest = json.loads(
+        (sdp / "metadata" / "semantic" / "mapping-sets.json").read_text(encoding="utf-8")
+    )
+    written = read_sssom_mapping_set(sdp / manifest["mapping_sets"][0]["path"])
+    assert written.mappings["mapping_justification"].tolist() == [
+        "semapv:AgentBasedMatching"
+    ]
+
+
+@pytest.mark.parametrize(
+    "justification",
+    ["semapv:UnknownMatchingProcess", "semapv:AgentBasedMatchingTypo"],
+)
+def test_agent_matching_support_still_rejects_unknown_justifications(
+    tmp_path, justification
+):
+    source = write_raw(
+        tmp_path / "unknown-agent.sssom.tsv",
+        sssom_text().replace("semapv:ManualMappingCuration", justification),
+    )
+    with pytest.raises(ValueError, match="mapping_justification"):
+        read_sssom_mapping_set(source)
+
+    # In-memory writer inputs must pass the same closed validation gate.
+    valid = write_raw(tmp_path / "valid.sssom.tsv", sssom_text())
+    parsed = read_sssom_mapping_set(valid)
+    parsed.mappings["mapping_justification"] = justification
+    sdp = tmp_path / "sdp-unknown-agent"
+    sdp.mkdir()
+    with pytest.raises(ValueError, match="mapping_justification"):
+        write_sdp_sssom(sdp, mapping_sets=parsed)

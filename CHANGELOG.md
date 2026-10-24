@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+* Accept the canonical SEMAPV `AgentBasedMatching` justification in SSSOM
+  readers and writers. Unknown justifications remain invalid; this does not
+  accept or review a mapping. Mirrored with metasalmon.
+
 ## 0.6.0
 
 **Released together with metasalmon 0.6.0** (roadmap S16 step 1, joint by
