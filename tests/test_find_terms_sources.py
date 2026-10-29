@@ -83,8 +83,9 @@ def test_a_missing_source_names_no_source(searched, missing):
     assert searched(sources=[missing])[1] == []
 
 
-def test_an_unknown_source_name_is_kept_searched_as_nothing_and_reported(searched):
-    log, reported = searched(sources=["Unknown", "ols"])
+def test_an_unknown_source_name_is_kept_and_reported_as_unsupported(searched):
+    with pytest.warns(RuntimeWarning, match="Vocabulary lookup was incomplete"):
+        log, reported = searched(sources=["Unknown", "ols"])
     assert log == ["ols"]
     assert reported == ["unknown", "ols"]
 
