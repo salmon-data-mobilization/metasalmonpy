@@ -1492,7 +1492,7 @@ def sources_for_role(role: Optional[str]) -> List[str]:
 # *Retires when:* a failed lookup stops being representable as an empty result --
 # if ``find_terms()`` ever raises or returns a typed failure for a degraded
 # source, there is nothing left to distinguish and this goes with the warning.
-_DEGRADED_STATUSES = ("error", "http_error")
+_DEGRADED_STATUSES = ("error", "http_error", "unsupported")
 
 
 def _search_failed_sources(diagnostics: object) -> List[str]:
@@ -1572,7 +1572,9 @@ def find_terms(
         allowlist: each name is trimmed and lower-cased, a missing or empty
         name is dropped, and a repeat is dropped after its first appearance. An
         empty list returns an empty frame. metasalmon's ``find_terms()`` reads
-        ``sources`` the same way (hub B-420 and B-421).
+        ``sources`` the same way (hub B-420 and B-421). An unknown name is
+        reported with ``status="unsupported"`` and no lookup is performed
+        for it; supported sources in the same call still return their results.
     expand_query
         Search role-aware variants of ``query`` as well as ``query`` itself.
     release
@@ -1601,7 +1603,11 @@ def find_terms(
     -------
     pandas.DataFrame
         The ranked candidates, with per-source diagnostics in
-        ``attrs["diagnostics"]``. When ``release`` or ``snapshot_dir`` pins an
+        ``attrs["diagnostics"]``. Diagnostic status is ``success``,
+        ``http_error``, ``error`` or ``unsupported``; a supported search with
+        no matches remains ``success``. Unsupported and failed lookups warn
+        that the result is incomplete and are not cached.
+        When ``release`` or ``snapshot_dir`` pins an
         ontology the call searched, ``attrs["ontology_release"]`` records which
         release was searched: a DataFrame with one row per pinned ontology and
         the columns ``ontology``, ``version``, ``version_iri`` (as the snapshot
@@ -1665,6 +1671,7 @@ def find_terms(
             # (metasalmon 0.2.2). The sink is per source call, mirroring R's
             # call-local accumulator.
             failures: List[str] = []
+            unsupported = False
             _search_failure_sinks.append(failures)
             try:
                 # An unpinned search calls the two searches exactly as it always
@@ -1693,6 +1700,12 @@ def find_terms(
                     res = _search_worms(query_variant, role)
                 else:
                     res = _empty_terms(role)
+                    unsupported = True
+                status = "success" if not failures else "http_error"
+                error = None if not failures else "; ".join(failures)
+                if unsupported:
+                    status = "unsupported"
+                    error = f"Unsupported vocabulary source {src!r}; no lookup was performed."
                 diagnostics.append(
                     {
                         "source": src,
@@ -1700,10 +1713,10 @@ def find_terms(
                         # A source that returned rows despite a failed side
                         # request is still a partial answer, not a clean
                         # success.
-                        "status": "success" if not failures else "http_error",
+                        "status": status,
                         "count": len(res),
                         "elapsed_secs": round(time.time() - start_time, 2),
-                        "error": None if not failures else "; ".join(failures),
+                        "error": error,
                     }
                 )
                 results.append(res)

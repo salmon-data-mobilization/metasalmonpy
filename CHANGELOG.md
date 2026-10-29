@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+* Unknown `find_terms()` source names now produce `unsupported` diagnostics
+  and an incomplete-lookup warning instead of a successful empty search.
+  Supported results are retained, supported no-match searches remain successful,
+  and mixed unsupported results are not cached. Mirrored with metasalmon.
+
 * Accept the canonical SEMAPV `AgentBasedMatching` justification in SSSOM
   readers and writers. Unknown justifications remain invalid; this does not
   accept or review a mapping. Mirrored with metasalmon.
