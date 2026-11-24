@@ -136,6 +136,15 @@ def _measurement_query(
     if role == "unit":
         if not _is_missing(row.get("unit_label")):
             return _clean_query(row.get("unit_label")), "unit_label"
+        # A unit named at the end of the label or the name, read in that
+        # order, as metasalmon's extract_measurement_header_unit() reads them
+        # (hub item B-441, mirroring B-440).
+        for header in (row.get("column_label"), row.get("column_name")):
+            if _is_missing(header):
+                continue
+            suffix_unit, _stem = _trailing_unit_token(header)
+            if suffix_unit:
+                return suffix_unit, "unit_suffix"
         return ("count", "count_like_fallback") if count_like else ("", "missing_unit_context")
     if role == "constraint":
         # Mirror of R's constraint branch (present since era 0.1.7 but never
@@ -208,14 +217,106 @@ _ORGANISM_RE = re.compile(
 )
 _EXPLICIT_COUNT_RE = re.compile(r"\b(count|counts|number|numbers|num|abundance)\b")
 _INTEGERISH_VALUE_TYPES = ("integer", "int", "number", "numeric", "double")
+# A column that names a physical quantity measures that quantity, whatever
+# organism it is measured on (hub item B-441, mirroring metasalmon's B-440).
+_PHYSICAL_QUANTITY_RE = re.compile(
+    r"\b(length|len|weight|wt|mass|depth|height|width|diameter|girth|distance"
+    r"|temperature|temp)\b"
+)
+
+# A unit named by the last token of a column name or label: `fish_length_mm`,
+# `fork_length_cm`, `weightKg`, `depth_m` (hub item B-441, the mirror of
+# metasalmon's B-440 and its trailing_unit_token()). Without it, a numeric
+# column whose name mentioned fish was taken for a count and seeded the QUDT
+# COUNT unit. Only length and mass units are read; `cms`, `m2` and `km/h` are
+# not.
+#
+# Metres and grams are read only beside a word for the quantity they measure,
+# because a bare `m` or `g` suffix is as often "males" or "group", and
+# `water_meter` is a device. Millimetres, centimetres and kilograms are not
+# ambiguous in a column name, so they need no such word.
+_UNIT_SUFFIX_UNITS = (
+    (re.compile(r"mm|millimet(?:er|re)s?"), "millimeter"),
+    (re.compile(r"cm|centimet(?:er|re)s?"), "centimeter"),
+    (re.compile(r"m|met(?:er|re)s?"), "meter"),
+    (re.compile(r"g|gram(?:me)?s?"), "gram"),
+    (re.compile(r"kg|kilogram(?:me)?s?"), "kilogram"),
+)
+_UNIT_SUFFIX_LENGTH_WORDS = frozenset(
+    {
+        "length", "len", "depth", "height", "width", "distance", "dist",
+        "elevation", "elev", "altitude", "diameter",
+    }
+)
+_UNIT_SUFFIX_MASS_WORDS = frozenset({"weight", "wt", "mass"})
+# Tokens that, just before the last one, make it the denominator of a ratio
+# (`mg_kg`, `eggs_per_kg`) rather than the unit of the whole column.
+_UNIT_SUFFIX_RATIO_LEADS = frozenset(
+    {
+        "per", "ng", "ug", "mg", "g", "kg", "mm", "cm", "m", "km",
+        "ml", "l", "mol", "mmol", "umol", "ppm", "ppt",
+    }
+)
+
+
+def _trailing_unit_token(text) -> tuple[str, list[str]]:
+    """The unit a header's last token names, and the tokens before it.
+
+    Returns ``(unit, stem)``: the normalized unit query (``""`` when there is
+    none) and the lower-cased tokens before the last one, so the variable
+    query can leave the unit token out. Parenthesised text is ignored, and
+    camel case splits, as metasalmon's ``clean_query()`` splits it.
+    """
+    cleaned = re.sub(r"\([^)]*\)", " ", _scalar_text(text))
+    cleaned = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", cleaned)
+    cleaned = re.sub(r"[._]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip().lower()
+    tokens = [token for token in re.split(r"[^a-z0-9]+", cleaned) if token]
+    # A name that is only a unit (`mm`) names no measurement to attach it to.
+    if len(tokens) < 2:
+        return "", tokens
+    stem = tokens[:-1]
+    # A compound unit is a ratio: `mercury_mg/kg` is a concentration, and its
+    # last token is only the denominator, so reading it would draft kilogram
+    # for something that is not a mass. Nothing is read, which leaves the
+    # unit unresolved.
+    if re.search(r"/\s*[a-z0-9]+\s*$", cleaned) or stem[-1] in _UNIT_SUFFIX_RATIO_LEADS:
+        return "", stem
+
+    last = tokens[-1]
+    unit = next(
+        (name for pattern, name in _UNIT_SUFFIX_UNITS if pattern.fullmatch(last)),
+        "",
+    )
+    if unit == "meter" and not _UNIT_SUFFIX_LENGTH_WORDS.intersection(stem):
+        unit = ""
+    elif unit == "gram" and not _UNIT_SUFFIX_MASS_WORDS.intersection(stem):
+        unit = ""
+    return unit, stem
+
+
+def _without_trailing_unit(text: str) -> str:
+    """A header query with its unit suffix left out: `fish_length_mm` is `fish length`.
+
+    The unit is what the unit query reads, not part of what is measured
+    (hub item B-441, mirroring metasalmon's B-440). A header with no unit the
+    reader recognizes is returned unchanged.
+    """
+    unit, stem = _trailing_unit_token(text)
+    return " ".join(stem) if unit else text
 
 
 def _is_count_like_measurement(row, text: str) -> bool:
-    """Mirror ``is_count_like_measurement`` (metasalmon v0.1.7)."""
+    """Mirror ``is_count_like_measurement`` (metasalmon v0.1.7, and B-440)."""
     if not text.strip():
         return False
     value_type = _scalar_text(row.get("value_type")).lower()
     has_explicit_count = _EXPLICIT_COUNT_RE.search(text) is not None
+    # `fish_length_mm` is a length, not a count of fish: searching it as a
+    # count seeded the QUDT COUNT unit and a count variable (hub item B-441,
+    # mirroring B-440). Only an explicit count word overrides it.
+    if _PHYSICAL_QUANTITY_RE.search(text) is not None and not has_explicit_count:
+        return False
     has_total = re.search(r"\btotal\b", text) is not None
     has_organism = _ORGANISM_RE.search(text) is not None
     looks_integer = value_type in _INTEGERISH_VALUE_TYPES
@@ -1093,6 +1194,12 @@ def _semantic_discover_targets(dictionary, codes_df, table_df, dataset_df) -> li
                 row.get("column_name"),
             )
         )
+        if _is_missing(description):
+            # A query read from the label or the name leaves out the unit
+            # suffix the unit query reads, so `fish_length_mm` searches for
+            # `fish length` (hub item B-441, mirroring metasalmon's B-440). A
+            # description is the user's own words and is searched as written.
+            query = _without_trailing_unit(query)
         for col_name, role_name in ROLE_MAP.items():
             if col_name not in dictionary.columns:
                 continue

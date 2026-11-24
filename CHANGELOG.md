@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+* **`create_sdp()` now reads a unit at the end of a column name, leaves
+  administrative dates out of temporal coverage, and flags all-positive
+  western longitudes.** Hub queue item **B-441**, the metasalmonpy half of
+  metasalmon's **B-440** (metasalmon pull request #285). Mirrored with
+  metasalmon; no deliberate difference.
+
+  A measurement column whose name ends in a unit, such as `fish_length_mm`,
+  `fish_weight_g` or `depth_m`, now searches for millimeter, gram or meter.
+  Before this change, a numeric column whose name mentioned fish was taken
+  for a count, so it searched for a count variable and seeded the QUDT
+  `COUNT` unit, and `depth_m` got no unit. A column that names a length,
+  weight, depth or other physical quantity is no longer searched as a count
+  unless its name also says count or number. A one-letter `m` or `g` is read
+  as a unit only beside a length or mass word, because `spawners_m` can mean
+  males. A compound unit such as `mercury_mg/kg`, `mercury_mg_kg` or
+  `eggs_per_kg` is not read, because its last token is only the denominator
+  of a ratio. When the search query comes from the label or name rather than
+  a description, the unit token is left out of it, so `fish_length_mm`
+  searches for `fish length`. The unit IRI is still written as a `REVIEW:`
+  draft for you to confirm.
+
+  Dataset temporal coverage now ignores columns that record when a row was
+  processed, entered, created, modified, loaded, received or checked
+  (`process_date`, `CREATED_DTT`, `DateModified`, `data_entry_date`). Before
+  this change, a 2017 processing date set `temporal_end` for a survey that
+  ended in 1999. A qualified entry date such as `river_entry_date` still
+  counts as an observation. If every date column is administrative, the
+  coverage fields stay blank for you to fill in.
+
+  `dataset.csv` now gets a `REVIEW REQUIRED:` note in `spatial_extent` when
+  every longitude is positive and the extent lies in the mirror image of the
+  North American salmon range (longitude 50 to 180, latitude 30 to 75), where
+  a missing minus sign is likely. The note keeps the inferred extent and
+  never changes its sign, because the same numbers are correct for data from
+  Japan or the Russian Far East. Strict validation refuses the note until you
+  replace it with the confirmed extent.
+
 * Unknown `find_terms()` source names now produce `unsupported` diagnostics
   and an incomplete-lookup warning instead of a successful empty search.
   Supported results are retained, supported no-match searches remain successful,
