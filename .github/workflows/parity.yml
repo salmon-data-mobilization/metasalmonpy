@@ -115,6 +115,16 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -e ".[test]"
       - name: Clone metasalmon
         run: git clone --depth 1 https://github.com/salmon-data-mobilization/metasalmon /tmp/metasalmon
+      # install_deps() takes Posit Package Manager's Linux binary when one
+      # exists, but builds from CRAN source when CRAN is ahead of it, and the
+      # source build needs system headers that setup-r does not install. On
+      # 2026-11-24 CRAN served R's curl 8.2.0 while Package Manager's binaries
+      # were still 8.1.0, so the build failed for want of libcurl's headers
+      # before any test ran. Installing those headers makes the job hold up
+      # whenever the binaries lag. It is not a guard: it hides no failure, and
+      # it stays for as long as metasalmon imports curl.
+      - name: Install system libraries for R source builds
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
       - name: Install metasalmon dependencies
         run: |
           Rscript -e 'install.packages("remotes")'
