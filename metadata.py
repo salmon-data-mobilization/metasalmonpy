@@ -874,6 +874,104 @@ def _parse_dates(series: pd.Series) -> pd.Series:
     return parsed.dropna().dt.date
 
 
+# The words that make a date column administrative: it records when a row was
+# processed, entered, created, modified, loaded or checked, not when the thing
+# it describes was observed. Hub item B-441, the mirror of metasalmon's B-440
+# (``.ms_is_administrative_date_column()``), with the same word lists.
+_ADMIN_DATE_WORDS = frozenset(
+    {
+        "process", "processed", "processing",
+        "create", "created", "creation",
+        "modify", "modified", "modification", "mod",
+        "update", "updated",
+        "edit", "edited",
+        "load", "loaded",
+        "import", "imported",
+        "insert", "inserted",
+        "upload", "uploaded",
+        "submit", "submitted", "submission",
+        "receive", "received", "receipt",
+        "qc", "verify", "verified", "verification",
+        "audit", "audited",
+        "export", "exported",
+    }
+)
+_ENTRY_DATE_WORDS = frozenset({"entry", "entered"})
+# What may stand beside an entry word without qualifying it: the date part
+# itself, and the "data" of "data entry".
+_ENTRY_DATE_FILLER_WORDS = frozenset(
+    {"date", "time", "timestamp", "datetime", "dt", "dtt", "on", "at", "day", "data", "last"}
+)
+
+
+def _strip_date_affix(token: str) -> str:
+    """The token without a glued date part, so ``datecreated`` reads ``created``."""
+    token = re.sub(r"^last", "", token, count=1)
+    token = re.sub(r"^(date|time|dt)", "", token, count=1)
+    return re.sub(r"(date|timestamp|time|dtt|dt|on|at)$", "", token, count=1)
+
+
+def _is_administrative_date_column(name) -> bool:
+    """Whether a column name is an administrative date, not an observation date.
+
+    Temporal coverage reads observation dates only (hub item B-441, mirroring
+    metasalmon's B-440). Glued and camel-cased spellings count too:
+    ``DateCreated``, ``processdate``, ``lastmodified``, ``CREATED_DTT``.
+
+    ``entry`` and ``entered`` are administrative only on their own or as "data
+    entry", because ``river_entry_date`` and ``fw_entry_date`` are when fish
+    entered fresh water, which is an observation.
+    """
+    if name is None:
+        return False
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", str(name))
+    tokens = [token for token in re.split(r"[^a-z0-9]+", spaced.lower()) if token]
+    if not tokens:
+        return False
+    cores = [_strip_date_affix(token) for token in tokens]
+
+    if any(token in _ADMIN_DATE_WORDS or core in _ADMIN_DATE_WORDS for token, core in zip(tokens, cores)):
+        return True
+    is_entry = [
+        token in _ENTRY_DATE_WORDS or core in _ENTRY_DATE_WORDS
+        for token, core in zip(tokens, cores)
+    ]
+    if not any(is_entry):
+        return False
+    # Any other word qualifies the entry (`river`, `fw`), so it is a date
+    # something was observed entering, not a data-entry date.
+    return all(
+        entry or token in _ENTRY_DATE_FILLER_WORDS or core == ""
+        for entry, token, core in zip(is_entry, tokens, cores)
+    )
+
+
+def _longitude_sign_is_suspect(lons, lats) -> bool:
+    """Whether every coordinate lies in the mirror of the North American salmon range.
+
+    Longitudes that are all positive there are the shape a dropped minus sign
+    takes: British Columbia lakes read as lon=122..137, lat=48..60 land in Asia.
+    The same numbers are right for data from Japan or the Russian Far East, so
+    the sign is never flipped; the extent gets a review note the user must
+    resolve (hub item B-441, mirroring metasalmon's B-440 and its
+    ``.ms_longitude_sign_is_suspect()``). The longitude floor of 50 keeps Europe
+    east of Greenwich (Norway, the Baltic) out of the window.
+
+    Retires when: the spatial extent is inferred from coordinates that declare
+    their own sign convention (a geometry with a coordinate reference system,
+    or an explicit hemisphere column), so a bare positive number is no longer
+    the only evidence of where the data are.
+    """
+    return bool(
+        lons
+        and lats
+        and min(lons) >= 50
+        and max(lons) <= 180
+        and min(lats) >= 30
+        and max(lats) <= 75
+    )
+
+
 def infer_dataset_metadata_from_resources(resources: Mapping[str, pd.DataFrame], dataset_id: str = "dataset-1") -> pd.DataFrame:
     dates = []
     lat_values = []
@@ -885,7 +983,15 @@ def infer_dataset_metadata_from_resources(resources: Mapping[str, pd.DataFrame],
         keywords.extend(re.sub(r"_", " ", name).strip() for name in names)
         for col in names:
             lower = col.lower()
-            if re.search(r"date|time|timestamp|dtt|obsdate|survey|year", lower):
+            # Temporal coverage is when the data were observed, so a date that
+            # records when a row was processed, entered or edited is left out:
+            # a `process_date` from 2017 put `temporal_end` eighteen years
+            # after a 1977-1999 survey stopped (hub item B-441, mirroring
+            # metasalmon's B-440). With only such dates there is no coverage to
+            # infer, and the fields stay blank for the user.
+            if re.search(
+                r"date|time|timestamp|dtt|obsdate|survey|year", lower
+            ) and not _is_administrative_date_column(col):
                 dates.extend(_parse_dates(df[col]).tolist())
             if re.search(r"(^|_)lat(itude)?($|_)", lower):
                 lat_values.extend(pd.to_numeric(df[col], errors="coerce").dropna().tolist())
@@ -899,6 +1005,17 @@ def infer_dataset_metadata_from_resources(resources: Mapping[str, pd.DataFrame],
         if lat_values and lon_values
         else pd.NA
     )
+    # A `REVIEW REQUIRED:` note, not a warning, so it stays in dataset.csv
+    # where strict validation, review_metadata() and the setters already find
+    # every unresolved placeholder. The inferred extent stays in the note,
+    # unflipped. The words are metasalmon's.
+    if _longitude_sign_is_suspect(lon_values, lat_values):
+        spatial_extent = (
+            f"REVIEW REQUIRED: every longitude is positive ({spatial_extent}), "
+            "which places the data in the eastern hemisphere. Western-hemisphere "
+            "longitudes are negative, so check the sign in the source data, then "
+            "replace this note with the confirmed extent."
+        )
     unique_keywords = []
     seen = set()
     for keyword in keywords:

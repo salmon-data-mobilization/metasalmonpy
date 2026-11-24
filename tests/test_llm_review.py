@@ -122,23 +122,62 @@ def test_bundle_review_returns_stable_thirty_column_assessments():
     # the six-slot case.
     assert len(assessments) == 5
 
-    # metasalmon v0.1.7 treats this fixture as a count-like measurement: the
-    # description carries the organism token "fish" and the column is numeric,
-    # so `is_count_like_measurement()` fires and both the variable and property
-    # queries become "count". Driving era R's suggest_semantics() with the same
-    # dictionary and a stub search_fn returns exactly that pair of queries. The
-    # deterministic dimension validator then does its job -- a "count" property
-    # against a "millimetre" unit is a mismatch -- and downgrades those two
-    # slots to review. Both facts are parity, not a defect here.
+    # Until hub item B-441 (metasalmon's B-440) this fixture was count-like in
+    # both packages: the description carries the organism token "fish" and the
+    # column is numeric, so both the variable and property queries became
+    # "count", and the dimension validator downgraded the property and the
+    # unit to review against the "millimetre" unit. A column that names a
+    # length is not a count any more, so the two queries are the description
+    # and every slot is accepted. Measured, not assumed: metasalmon with the
+    # same dictionary, stub and bundle answer gives these five decisions and
+    # five selections at 8a410e1, and the old three at cf4cc4c, before B-440.
+    # The count-against-a-length-unit downgrade is pinned by the next test.
+    decisions = dict(zip(assessments["dictionary_role"], assessments["llm_decision"]))
+    assert decisions == {
+        "variable": "accept",
+        "property": "accept",
+        "entity": "accept",
+        "unit": "accept",
+        "constraint": "accept",
+    }
+    assert suggestions["llm_selected"].sum() == 5
+
+
+def test_bundle_review_downgrades_a_count_property_against_a_length_unit():
+    # A column that really is a count, carrying a length unit: the variable
+    # and property queries are "count", and the deterministic dimension
+    # validator downgrades the property and the unit to review. metasalmon
+    # gives the same five decisions and two selections for this dictionary,
+    # stub and bundle answer, before B-440 (cf4cc4c) and after it (8a410e1).
+    data, dictionary = _measurement_dictionary(
+        description="Count of fish caught in the trawl."
+    )
+    data = data.rename(columns={"fork_length": "fish_count"})
+    dictionary.loc[0, "column_name"] = "fish_count"
+    dictionary.loc[0, "column_label"] = "fish_count"
+    calls = []
+
+    result = suggest_semantics(
+        data,
+        dictionary,
+        search_fn=_search_stub(calls),
+        llm_assess=True,
+        llm_request_fn=_accept_bundle,
+    )
+
+    assessments = result.attrs["semantic_llm_assessments"]
+    queries = {role: query for query, role, _sources in calls}
+    assert queries["variable"] == "count"
+    assert queries["property"] == "count"
     decisions = dict(zip(assessments["dictionary_role"], assessments["llm_decision"]))
     assert decisions == {
         "variable": "accept",
         "property": "review",
         "entity": "accept",
         "unit": "review",
-        "constraint": "accept",
+        "constraint": "review",
     }
-    assert suggestions["llm_selected"].sum() == 3
+    assert result.attrs["semantic_suggestions"]["llm_selected"].sum() == 2
 
 
 def test_no_review_targets_returns_empty_schema_without_provider_call():
